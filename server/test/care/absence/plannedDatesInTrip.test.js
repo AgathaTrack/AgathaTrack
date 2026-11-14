@@ -50,7 +50,7 @@ describe('plannedDatesInTrip', () => {
     });
   });
 
-  it('enriches planned care with planned_dates and looked_after_by', () => {
+  it('AB-2 enriches planned care in-trip with occurrence ids and looked_after_by', () => {
     const plannedRow = { health_entry_id: 'e1', name: 'Meds' };
     const items = [{
       health_entry_id: 'e1',

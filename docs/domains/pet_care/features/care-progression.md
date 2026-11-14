@@ -161,10 +161,9 @@ Map milestone and establishment persistence in [DATA_MAP.md](/regulatory/DATA_MA
 | CP-5 — When weight monitoring rhythm in list then establishedRhythmEntryIds includes entry id only for weight family | CARE-PROGRESSION-R-025 | test: flutter_app/test/features/pet_profile/presentation/widgets/care_establishment_helpers_test.dart |
 | CP-1 — When capability contract runs then Server and Flutter capability matrices align | CARE-PROGRESSION-R-008 | test: flutter_app/test/features/pet_care/core/care_family_capability_contract_test.dart |
 | CP-7 — When timeline segment is care milestone then Labels and icon use progression copy | CARE-PROGRESSION-R-025 | test: flutter_app/test/features/pet_profile/presentation/widgets/pet_timeline/pet_timeline_entry_tile_milestone_test.dart |
-| CP-6 — When guardian sees milestone moment on profile or dashboard then Prominent card respects safeguard-first hierarchy | CARE-PROGRESSION-R-024 | none — #1770 |
-| CP-5 — When rhythms list renders Established inline then Marker is secondary to due state | CARE-PROGRESSION-R-025 | none — #1770 |
+| CP-6 — When guardian sees milestone moment on profile or dashboard then Prominent card respects safeguard-first hierarchy | CARE-PROGRESSION-R-024 | test: flutter_app/test/features/pet_care/presentation/pet_care_presentation_policy_test.dart#CIM-13 / CP-6 profileSuggestion suppressed when safeguard active |
+| CP-5 — When rhythms list renders Established inline then Marker is secondary to due state | CARE-PROGRESSION-R-025 | manual — rhythms list Established-vs-due ordering is widget/E2E-only in V1 |
 
-Coverage gaps: [#1770](https://github.com/KanopeeKa/AgathaCheck/issues/1770) (progression presentation E2E: milestone moment, Established inline on rhythms).
 
 ## Still open
 

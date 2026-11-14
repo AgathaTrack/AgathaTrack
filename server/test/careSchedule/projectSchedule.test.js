@@ -149,7 +149,7 @@ describe('projectSchedule', () => {
   });
 
   describe('projection semantics', () => {
-    it('materialised slots win over projected duplicates', () => {
+    it('AB-1 / materialised slots win over projected duplicates and expose occurrence_id', () => {
       const result = projectOne(
         entry({
           frequency: 'monthly',

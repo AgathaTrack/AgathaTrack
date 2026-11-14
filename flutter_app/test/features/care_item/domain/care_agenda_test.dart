@@ -91,18 +91,21 @@ void main() {
     expect(a.today.keys, [CareTimeGroup.morning, CareTimeGroup.anytime]);
   });
 
-  test('a stack is one overdue row with its count (DN-1b)', () {
-    final a = agenda([
-      item('Pill', [
-        occ('y', 9, CareOccurrenceStatus.notRecorded),
-        occ('t', 10, CareOccurrenceStatus.due),
-      ]),
-    ]);
-    expect(a.overdue.single.isStack, isTrue);
-    expect(a.overdue.single.stackCount, 2);
-    expect(a.overdue.single.occurrence?.id, 'y');
-    expect(a.today, isEmpty);
-  });
+  test(
+    'FX-13 / AG-7 a stack is one overdue row with its slot count (DN-1b)',
+    () {
+      final a = agenda([
+        item('Pill', [
+          occ('y', 9, CareOccurrenceStatus.notRecorded),
+          occ('t', 10, CareOccurrenceStatus.due),
+        ]),
+      ]);
+      expect(a.overdue.single.isStack, isTrue);
+      expect(a.overdue.single.stackCount, 2);
+      expect(a.overdue.single.occurrence?.id, 'y');
+      expect(a.today, isEmpty);
+    },
+  );
 
   test('daily care appears only in Today', () {
     final a = agenda([

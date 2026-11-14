@@ -109,7 +109,7 @@ void main() {
   });
 
   test(
-    'DN-5 / DN-5b due completes today; fixed overdue offers Change date',
+    'FX-10 / DN-5b due completes today; fixed overdue offers Change date',
     () {
       final due = decideDone(s([occ('d', 10, CareOccurrenceStatus.due)]));
       expect((due as DoneCompletesToday).offerChangeDate, isFalse);

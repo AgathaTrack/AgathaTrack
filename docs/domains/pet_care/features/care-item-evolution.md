@@ -776,11 +776,10 @@ New FR wording is proposed and needs the FR copy pass.
 | STACK-1 — When overdue and not recorded then `startedOccurrences` includes them; coming up does not | CARE-ITEM-R-008 | test: flutter_app/test/features/care_item/domain/stack_rule_test.dart#overdue and not recorded have started; coming up has not |
 | STALE-1 — When care item read runs catch-up then Stale Sep 30 slots drop on Oct 4 (NR-1) | CARE-ITEM-R-011 | test: server/test/db/careOccurrences.staleOpen.integration.test.js#NR-1 care item read commits catch-up and drops Sep 30 slots on Oct 4 |
 | DOSE-1 — When two pending doses same calendar day then Selector opens; future-day head uses date confirmation not missed stack | CARE-ITEM-R-012 | test: flutter_app/test/features/health_tracking/presentation/widgets/occurrence_stack_sheet_test.dart#DOSE-1 two pending doses same calendar day open the stack selector; test: flutter_app/test/features/health_tracking/presentation/widgets/occurrence_stack_sheet_test.dart#DOSE-1 future-day head uses date flow, not a missed stack sheet |
-| MOB-1 — When mobile row marked done then Item stays in preview with Undo until server refresh completes | CARE-ITEM-R-013 | none — #1770 |
+| MOB-1 — When mobile row marked done then Item stays in preview with Undo until server refresh completes | CARE-ITEM-R-013 | manual — optimistic mobile-row Undo preview has no stable widget harness |
 | NBR-1 — When Care date neighbour replace hops A→B→C then Each screen loads that occurrence; Previous returns to B | CARE-ITEM-R-020 | test: flutter_app/test/features/experience/presentation/care_item/occurrence/occurrence_neighbor_go_router_test.dart#replace neighbour hops reload occurrence data through two next and one previous |
 | PAUSE-1 — When item is paused with open occurrences on Care item view then Paused banner only; no per-occurrence or bulk action keys | CARE-ITEM-R-026 | test: flutter_app/test/features/care_item/presentation/detail/care_item_dates_section_test.dart#paused item with open occurrences shows only the paused banner |
 
-Coverage gaps: [#1770](https://github.com/KanopeeKa/AgathaCheck/issues/1770).
 
 ## Still open
 
