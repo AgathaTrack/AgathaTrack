@@ -117,7 +117,9 @@ Queued: Ready + delivery label + **no assignee**, ordered by priority label then
 | Review | red / green+edits | other bot | In Analysis |
 | Review | green, `body_sha` unchanged this round | `pawpet-bot` | Ready |
 | Review | `round >= cap` (default 4) | `KanopeeKa` | + `needs-owner` |
-| Delivery | ok | *none* | Ready + delivery label |
+| Review reopen | `body_sha` changed after `converged_at`, or delivery rewrite changed body while column Ready | other bot | In Analysis; clear `converged_at`; `round + 1` |
+| Delivery | ok (body unchanged this step) | *none* | Ready + delivery label |
+| Delivery | rewrite changed `body_sha` | other bot | In Analysis before label or before implement queue |
 | Delivery | sensitive | `KanopeeKa` | + `needs-owner` |
 | Implement launch | ok | `pawpet-bot` | In progress + `busy` |
 | Implement launch | fail | `KanopeeKa` | + `needs-owner` |

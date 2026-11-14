@@ -196,6 +196,8 @@ Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, 
 
 Convergence (In Analysis → Ready): Green **and** `body_sha` unchanged in that round (the body is the one the previous agent handed over). Green with a substantive edit — even after an earlier Green — reassigns to the other agent. Round cap **4** — escalate when `round >= 4` (configurable).
 
+**Reopening:** if `body_sha` changes after `converged_at` (owner edit, programme restructure, or Ready delivery rewrite), the column returns to **In Analysis**, `converged_at` clears, `round` increments, and the **other** agent is assigned. Delivery labels already on the issue are intent only until reconvergence. Full table: [github-issue-workflow.md §Reopening In Analysis](../github-issue-workflow.md#reopening-in-analysis-after-convergence-or-during-ready).
+
 Work-in-progress (implement): **2** slots — e.g. one programme + one single PR, or two single PRs. Each product issue **In progress** assigned `pawpet-bot` (with `busy` or an active programme) holds one slot, whatever its delivery method. See dispatcher spec §5.
 
 ### 5.7 Release tracking (Actions only)
