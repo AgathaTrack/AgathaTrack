@@ -2967,20 +2967,9 @@
       "count": { "type": "int" }
     }
   },
-  "occurrenceStackSheetTitle": "Record earlier dates for {name}",
-  "@occurrenceStackSheetTitle": {
-    "placeholders": {
-      "name": { "type": "String" }
-    }
-  },
   "occurrenceZoneMissed": "Overdue",
   "occurrenceZoneDueToday": "Due today",
   "occurrenceZoneComingUp": "Coming up",
-  "occurrenceRecordHead": "Record the latest date",
-  "occurrenceSkipEarlierMissed": "Skip earlier overdue dates when recording",
-  "occurrenceReviewEach": "Review in event view",
-  "occurrenceSkipAllMissed": "Skip all overdue",
-  "occurrenceNotNow": "Not now",
   "completedEventSemanticLabel": "{name}, completed, for {petName}",
   "@completedEventSemanticLabel": {
     "placeholders": {

@@ -7696,11 +7696,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String occurrenceStackSheetTitle(String name) {
-    return 'Record earlier dates for $name';
-  }
-
-  @override
   String get occurrenceZoneMissed => 'Overdue';
 
   @override
@@ -7708,22 +7703,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get occurrenceZoneComingUp => 'Coming up';
-
-  @override
-  String get occurrenceRecordHead => 'Record the latest date';
-
-  @override
-  String get occurrenceSkipEarlierMissed =>
-      'Skip earlier overdue dates when recording';
-
-  @override
-  String get occurrenceReviewEach => 'Review in event view';
-
-  @override
-  String get occurrenceSkipAllMissed => 'Skip all overdue';
-
-  @override
-  String get occurrenceNotNow => 'Not now';
 
   @override
   String completedEventSemanticLabel(String name, String petName) {
