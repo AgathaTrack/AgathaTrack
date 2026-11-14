@@ -122,21 +122,25 @@ Plus **hidden state block** (§4): `round`, `body_sha`, `owner_reason`, `deliver
 
 Do not use title counters — they break `isPlanControlIssue` and human edits.
 
+**Normative storage:** a **bot-authored issue comment** containing the marker (not a fragment in the mutable body — issue bodies have no per-field authorship, and a later bot edit can preserve a forged inline marker). Workers replace their own prior state comment or add a new comment and delete the superseded one.
+
 ```html
-<!-- agent-state: {"round":3,"stuck":0,"last_assignee":"pawpet-claude","body_sha":"…","delivery":"PR","owner_reason":null,"run_id":null} -->
+<!-- agent-state: {"round":3,"stuck":0,"last_assignee":"pawpet-claude","body_sha":"…","delivery":"PR","owner_reason":null,"run_id":null,"verdicts":{"pawpet-claude":"green","pawpet-bot":"green"},"converged_at":"2026-11-14T12:00:00Z"} -->
 ```
 
 | Field | Meaning |
 |-------|---------|
-| `round` | Peer-review rounds completed |
+| `round` | Completed peer-review rounds; **stop when `round >= 4`** (cap is four review rounds, not “exceed 4”) |
 | `stuck` | Monitor relaunches while In progress |
 | `last_assignee` | Previous ball-holder; dispatcher enforces handoff ≠ same agent on review |
 | `body_sha` | Hash at last verdict; convergence when Green and unchanged |
+| `verdicts` | Last **per-agent** verdict (`green` / `red`) — required for execute-plan auto-approve |
+| `converged_at` | ISO timestamp when both agents recorded `green` on the same `body_sha` |
 | `delivery` | Set at delivery step |
 | `owner_reason` | With `needs-owner`: `sensitive-paths`, `no-convergence`, `stuck`, `launch-failed`, `plan-stopped`, `approve`, … |
 | `run_id` | Cursor/Claude run correlation |
 
-Valid only when last body edit is from `pawpet-bot` or `pawpet-claude` (or marker in a bot comment).
+Ignore markers not on a comment whose author is `pawpet-bot` or `pawpet-claude`.
 
 ---
 
@@ -163,14 +167,14 @@ Detailed steps match the prior proposal text for intake, peer review, delivery, 
 - **Handoffs** use **assignment** with the agent’s PAT, not verdict labels.
 - **Planned** is not a board column: delivery runs in **Ready** while `pawpet-bot` is assignee before the delivery label is applied.
 
-Convergence (In Analysis → Ready): Green and `body_sha` unchanged in that round, or two consecutive Greens; else reassign to the other agent. Round cap **4** (configurable).
+Convergence (In Analysis → Ready): Green and `body_sha` unchanged in that round, or two consecutive Greens; else reassign to the other agent. Round cap **4** — escalate when `round >= 4` (configurable).
 
 Work-in-progress (implement): **2** slots — e.g. one programme + up to two single PRs; count issues **In progress** assigned `pawpet-bot` with `busy`, plus active programmes. See dispatcher spec.
 
 ### 5.7 Release tracking (Actions only)
 
-- **In Main / In UAT:** unchanged.
-- **In Prod (new):** notify job in `deploy-prod.yml` mirroring `agent-uat-notify` → close path, tidy `busy`, optional `in-prod` label.
+- **In Main / In UAT:** unchanged until migration consolidates Project status writers (§7).
+- **In Prod (new):** notify job in `deploy-prod.yml` mirroring `agent-uat-notify`, but **only when production actually deployed** — not on `deploy-prod` success with `PROD_DEPLOY_ENABLED=false` / stub-skip paths. Gate on a successful production deploy job plus post-deploy smoke (same bar as human prod promotion). Then set Pawpet **Done** (board column; no `status:*` label), tidy `busy`, close the issue. Optional audit label `in-prod` is non-authoritative.
 
 ---
 
@@ -207,6 +211,7 @@ One **dispatcher** (`issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_di
 - Lanes: triage (deterministic), intake, review, delivery, implement, monitor, release (no agent).
 - Kill switch repo variable `ISSUE_PIPELINE`: `off` (default) / `dry-run` / `on`.
 - Consolidate `triage-human-reviewed.yml`, `agent-dispatch.yml`, `agent-monitor.yml` when lanes go live.
+- **Project status writes:** today `issue-agent-handlers.js` and UAT notify also call `updateProjectStatus` with `GH_PROJECTS_PAT`. Migration must route **all** automated Status updates through the dispatcher (or one shared library invoked only from dispatcher + release handlers) so the board has a single writer path per transition.
 
 Full contract: [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 
@@ -214,10 +219,13 @@ Full contract: [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-s
 
 ## 8. Execute-plan (decision 1b)
 
-Unchanged intent from prior draft:
-
 - **Product issue** stays in the pipeline; **control issue** for the driver; snapshot `source_issue`; release PR `Refs #<product>`.
-- **Auto-approve** in `execute-plan-approve.js` only when policy checks pass (paths, budgets, bot-provenance, convergence, single active plan, driver on).
+- **Auto-approve** in `execute-plan-approve.js` only when policy checks pass:
+  - **Paths:** expand phase `allowed_paths` globs against tracked files; forbidden match → fail (not raw string compare on `agent-paths` alone).
+  - **Provenance:** `-init` branch contains only plan files **and** init commits are authored by `pawpet-bot` (branch tip committer / signed bot provenance — not file-set check alone).
+  - **Convergence:** product issue state comment shows `verdicts` with both bots `green` and matching `body_sha` / `converged_at`.
+  - Budgets, single active plan, `EXECUTE_PLAN_DRIVER` on.
+- **Auto-approve rejection:** set `needs-owner` on the **product** issue **and** remove `autonomous-approved` / add stop signal on the **control** issue so the driver cannot launch workers (execute-plan driver STOP).
 - Escalation: owner review on approval code; decision rows in `execute-plan-v2.md` and `contracts.md`.
 
 ---
@@ -235,10 +243,10 @@ Unchanged intent from prior draft:
 
 ## 10. Security
 
-- **Prompt injection:** allowlisted comment authors (`KanopeeKa`, `pawpet-bot`, `pawpet-claude`); quote comments as data; sanitised issue sections for implement (keep `agent-payload-lib.js` rules).
+- **Prompt injection:** Treat **issue body and state marker as untrusted quoted data** in intake/review prompts (not only comments). Allowlist comment authors (`KanopeeKa`, `pawpet-bot`, `pawpet-claude`); wrap as quoted blocks, never as instructions. Implement lane keeps `agent-payload-lib.js` (structured form sections only).
 - **Owner token:** never in autonomous lanes.
 - **Review independence:** assignee on review lane must differ from `last_assignee` in state block.
-- **Sensitive paths:** dispatcher checks `agent-paths` JSON block against `isForbiddenPath` + `.github/**` + `.cursor/agent-kernel/**`.
+- **Sensitive paths:** The delivery agent's `agent-paths` JSON block is **advisory**. The dispatcher **fail-closes** before implement/approve: expand globs against the repo file tree, run `isForbiddenPath` on every match, reject intersecting `.github/**` and `.cursor/agent-kernel/**`, and reject missing/invalid blocks. Pre-launch, re-check the open PR diff against the same rules (agents must not omit protected paths from the block to bypass the gate).
 
 ---
 

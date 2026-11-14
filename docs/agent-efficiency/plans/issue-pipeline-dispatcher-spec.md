@@ -113,7 +113,7 @@ Queued: Ready + delivery label + **no assignee**, ordered by priority label then
 | Intake | ok | `pawpet-bot` | In Analysis |
 | Review | red / green+edits | other bot | In Analysis |
 | Review | green, converged | `pawpet-bot` | Ready |
-| Review | round > cap | `KanopeeKa` | + `needs-owner` |
+| Review | `round >= cap` (default 4) | `KanopeeKa` | + `needs-owner` |
 | Delivery | ok | *none* | Ready + delivery label |
 | Delivery | sensitive | `KanopeeKa` | + `needs-owner` |
 | Implement launch | ok | `pawpet-bot` | In progress + `busy` |
@@ -145,7 +145,7 @@ Extract from `triage-lib.js`:
 - Runner: `anthropics/claude-code-action` or equivalent workflow job.
 - Trigger: `workflow_call` from dispatcher with `issue_number`, `lane`, `dry_run`.
 - Token: `PAWPET_CLAUDE_TOKEN` or job token if sufficient for assign/write.
-- Output: comment (verdict text), body edits, state block update, assign other bot or advance via PAT callback step.
+- Output: comment (verdict text), body edits (if needed), **new state comment** (§4 in proposal), assign other bot or advance via PAT callback step.
 
 ### 8.2 Cursor (review when `pawpet-bot`, delivery, implement, monitor)
 
@@ -159,16 +159,25 @@ Extract from `triage-lib.js`:
 |-----------|------|
 | `busy` | Set on implement/monitor launch; removed on merge or explicit handoff |
 | Run marker `status: running` | Block second launch for same issue |
-| Stale reclaim | No heartbeat from worker for **3h** (analysis) or **6h** (implement) → comment, clear lock, assign `KanopeeKa` + `needs-owner` reason `stuck` |
+| Worker heartbeat | Worker updates `run_id` lease in state comment every **30 min** while active |
+| Stale reclaim | Reclaim **only** when the recorded run is **terminal** (completed/failed/cancelled per Cursor/Claude API) **or** the heartbeat lease is expired **and** the run API reports non-running. Fixed wall-clock alone is insufficient — long legitimate runs may exceed 3h. After reclaim: comment, clear `busy`, assign `KanopeeKa` + `needs-owner` reason `stuck` |
+
+Delivery path check (before implement / execute-plan approve delegation):
+
+1. Parse `agent-paths` from issue body if present (advisory).
+2. Independently derive paths from delivery template + branch name.
+3. Expand all globs to tracked files; any `isForbiddenPath` hit → `needs-owner` `sensitive-paths` (fail closed if block missing).
 
 ## 10. Project sync
 
 | Direction | Writer | PAT |
 |-----------|--------|-----|
-| Automation → Pawpet Status | Dispatcher / workers | `GH_PROJECTS_PAT` or fine-grained with Projects |
+| Automation → Pawpet Status | Dispatcher tick + thin release helpers (merge/UAT/prod notify call shared `issue_pipeline_project.js`, not ad-hoc handlers) | `GH_PROJECTS_PAT` or fine-grained with Projects |
 | Human board drag | Allowed | Reverse sync optional future: webhook handler not in Actions — document as manual or nightly reconcile |
 
-Status option names must match live Pawpet field (case-insensitive match in scripts).
+**Migration:** remove direct `updateProjectStatus` from legacy paths or delegate them to the shared module so automated transitions do not double-write conflicting Status values.
+
+Status option names must match live Pawpet field (case-insensitive match in scripts). **Done / In Prod** are board options only — not `status:*` repo labels.
 
 ## 11. Observability
 
@@ -208,3 +217,4 @@ Environment: `automation` (same as current agent dispatch).
 | 3 | Flip `ISSUE_PIPELINE=on`; disable `agent-approved` trigger on old dispatch |
 | 4 | Remove `Agent1:*` / `Agent2:*` labels from open issues |
 | 5 | Update `github-issue-workflow.md` to target model; archive `human-reviewed` gate description |
+| 6 | Consolidate Pawpet Status updates: merge/UAT/prod notify use shared project helper; drop duplicate `GH_PROJECTS_PAT` bindings where redundant |
