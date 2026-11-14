@@ -3,7 +3,7 @@ import { sendSupportReceiptEmail } from '../../../services/mailService.js';
 import { getSupportReplyTo } from '../../../config/mail.js';
 import {
   buildGithubIssueBody,
-  buildGithubIssueLabels,
+  buildGithubIssueClassification,
   buildGithubIssueTitle,
 } from './issueContent.js';
 import {
@@ -13,6 +13,7 @@ import {
 import { withTransaction } from '../../db/withTransaction.js';
 import {
   failOutboxRow,
+  markOutboxRowBlocked,
   markOutboxRowSent,
   markOutboxRowSkipped,
   writeGithubIssueNumber,
@@ -44,7 +45,8 @@ export async function processSupportOutboxRow(pool, row) {
 async function loadTicket(pool, ticketId) {
   const res = await pool.query(
     `SELECT id, reference, reporter_email, category, title, description,
-            expected, actual, steps, frequency, context, locale
+            expected, actual, steps, frequency, context, locale,
+            github_issue_number
      FROM support_tickets
      WHERE id = $1`,
     [ticketId],
@@ -84,14 +86,38 @@ async function processGithubIssueRow(pool, row) {
     await markOutboxRowSkipped(pool, row.id);
     return;
   }
+  if (ticket.github_issue_number) {
+    await failOutboxRow(pool, row.id, row.attempts, {
+      retryable: false,
+      message: 'github issue already recorded',
+    });
+    return;
+  }
+  const classification = buildGithubIssueClassification(ticket);
+  if (!classification) {
+    await failOutboxRow(pool, row.id, row.attempts, {
+      retryable: false,
+      message: 'unsupported ticket category',
+    });
+    return;
+  }
   const outcome = await createGithubSupportIssue({
     title: buildGithubIssueTitle(ticket),
     body: buildGithubIssueBody(ticket),
-    labels: buildGithubIssueLabels(ticket),
+    classification,
   });
   if (!outcome.ok) {
+    if (outcome.number) {
+      await withTransaction(pool, async (client) => {
+        await writeGithubIssueNumber(client, ticket.id, outcome.number);
+      });
+    }
+    if (outcome.blocked) {
+      await markOutboxRowBlocked(pool, row.id, outcome.message);
+      return;
+    }
     await failOutboxRow(pool, row.id, row.attempts, {
-      retryable: outcome.retryable,
+      retryable: outcome.number ? false : outcome.retryable,
       message: outcome.message,
     });
     return;
@@ -110,10 +136,10 @@ async function processGithubIssueRow(pool, row) {
         [row.id],
       );
     });
-  } catch (err) {
+  } catch {
     await failOutboxRow(pool, row.id, row.attempts, {
-      retryable: true,
-      message: err?.message || 'issue number write-back failed',
+      retryable: false,
+      message: `issue number write-back failed (#${outcome.number})`,
     });
   }
 }

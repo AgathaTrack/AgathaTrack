@@ -13,11 +13,11 @@ feature_id: support-ticketing
 
 ## Summary / scope
 
-- **Owns:** EN/FR contact hub, private support intake, Postgres tickets, one receipt email, private GitHub issues on @ATSupport, read-only staff queue, retention and erasure hooks.
+- **Owns:** EN/FR contact hub, private support intake, Postgres tickets, one receipt email, private GitHub issues on ATSupport, read-only staff queue, retention and erasure hooks.
 - **Does not own:** In-app ticket history or replies, customer-visible statuses, status-change emails, notification-bell events, diagnostic sessions, AI triage, automatic engineering handover, live chat, public AgathaTrack engineering support issues.
 - **Depends on:** Auth (optional submit), Nodemailer SMTP, private screenshot storage outside `uploads/`, Postgres migrations, AgathaTrackPrivate + built-in board auto-add.
 
-Anyone signed in or not can send a categorised request from the hub. It is stored privately with an `AT-` reference, acknowledged by email, and appears as an issue in **AgathaTrackPrivate** on the **@ATSupport** board. Conversation after the receipt continues by email from `support@`. Engineering work is handed to AgathaTrack by a human with personal content stripped first.
+Anyone signed in or not can send a categorised request from the hub. It is stored privately with an `AT-` reference, acknowledged by email, and appears as an issue in **AgathaTrackPrivate** on the **ATSupport** board. Conversation after the receipt continues by email from `support@`. Engineering work is handed to AgathaTrack by a human with personal content stripped first.
 
 Roadmap: [support-roadmap.md §4](../changes/support-roadmap.md#4-phase-1--contact-foundation-and-ticketing). Product spec source: [issue #2271](https://github.com/AgathaTrack/AgathaTrack/issues/2271). Ops: [support-intake-runbook.md](/docs/ops/support-intake-runbook.md).
 
@@ -40,13 +40,13 @@ Roadmap: [support-roadmap.md §4](../changes/support-roadmap.md#4-phase-1--conta
 | SUPPORT-TICKETING-R-009 | Ticket row: reporter (user or normalised email), category, title, description, bug fields, context, locale, `created_at`, `github_issue_number`; no priority; users cannot read tickets via API. | In delivery |
 | SUPPORT-TICKETING-R-010 | Tables `support_tickets`, `support_attachments`, `support_outbox` (message/status history and links deferred). | In delivery |
 | SUPPORT-TICKETING-R-011 | Design note: diagnostic metadata not in the ticket blob; Phase 3 adds `support_diagnostic_sessions`. | Planned |
-| SUPPORT-TICKETING-R-012 | Customer-visible lifecycle states (deferred beyond Phase 1; @ATSupport columns are internal only). | Planned |
+| SUPPORT-TICKETING-R-012 | Customer-visible lifecycle states (deferred beyond Phase 1; ATSupport columns are internal only). | Planned |
 | SUPPORT-TICKETING-R-013 | DB category is the sender's choice. Staff may correct the GitHub issue type or Support Category afterwards. Priority is the org issue field Priority (Urgent, High, Medium, Low); the worker does not set it. | Planned |
 | SUPPORT-TICKETING-R-014 | Read-only staff at `/staff/support` (list, detail, screenshots, blocked/failed outbox); no reply/assign/close; no menu entry; server enforces `is_support_staff`. | In delivery |
 | SUPPORT-TICKETING-R-015 | Emails on status changes (deferred beyond Phase 1). | Planned |
 | SUPPORT-TICKETING-R-016 | One receipt EN/FR via outbox; subjects `[AT-XXXXXXXX] We received your request` / `[AT-XXXXXXXX] Nous avons reçu votre demande`; Reply-To `support@`; body never repeats user text; `resolveEmailLocale`. | In delivery |
 | SUPPORT-TICKETING-R-017 | Outbox: `receipt`, `github_issue`, `github_issue_delete`; Node `fetch`; create-issue title `[AT-XXXXXXXX] <category>: <title>`; fenced untrusted body + allowlisted context; statuses pending/sent/failed/blocked/disabled; skip receipt/create if ticket gone; redact from stored issue number (title and body `[removed]`, label `redacted`); startup privacy check for repo. GitHub classification on create is SUPPORT-TICKETING-R-023. | In delivery |
-| SUPPORT-TICKETING-R-023 | A form submit creates one private issue and sets org issue type and issue fields, not classification labels. `bug` → type **Support Bug**, Support Category empty. `suggestion`, `account`, and `billing` → type **Support Question** with Support Category **Suggestion**, **Account**, or **Billing**. Source is **form**. Website or App is **Website**. Environment is **UAT** when `APP_ENV=uat` and **Prod** when `APP_ENV=production`; otherwise Environment is left empty. The worker does not set Other, email, other, App, Priority, Effort, Start date, Target date, or @ATSupport Status. Field ids are resolved by name. Task, Bug, and Feature are not used. If the created issue is missing the requested type or a requested field, the outbox row fails and is not retried. | Planned |
+| SUPPORT-TICKETING-R-023 | A form submit creates one private issue and sets org issue type and issue fields, not classification labels. `bug` → type **Support Bug**, Support Category empty. `suggestion`, `account`, and `billing` → type **Support Question** with Support Category **Suggestion**, **Account**, or **Billing**. Source is **form**. Website or App is **Website**. Environment is **UAT** when `APP_ENV=uat` and **Prod** when `APP_ENV=production`; otherwise Environment is left empty. The worker does not set Other, email, other, App, Priority, Effort, Start date, Target date, or ATSupport Status. Field ids are resolved by name. Task, Bug, and Feature are not used. If the created issue is missing the requested type or a requested field, the outbox row fails and is not retried. | In delivery |
 | SUPPORT-TICKETING-R-018 | SQL rate limits: signed-in 3/h and 10/24h per account; signed-out 3/h per IP and 5/24h per normalised email; 429 + `Retry-After`; field max lengths; express-rate-limit backstop only with default key. | In delivery |
 | SUPPORT-TICKETING-R-019 | Daily `support_retention` on `scheduler_daily_runs`; erasure in `acceptAccountErasure` before user delete (tickets, paths, issue numbers, outbox, redact rows); export matches normalised email; hand-created email issues (Source **email**) per runbook. | In delivery |
 | SUPPORT-TICKETING-R-020 | EN/FR UI (`app_*.arb`) and email copy (`server/lib/email/i18n.js`); no machine translation of free text. | In delivery |
@@ -71,10 +71,10 @@ Roadmap: [support-roadmap.md §4](../changes/support-roadmap.md#4-phase-1--conta
 | Given a user exports their data, when they have tickets, then the export includes signed-out tickets with the same normalised email. | SUPPORT-TICKETING-R-019 | test: server/test/gdprUserExport.test.js |
 | Given a user who is not staff, when they call the staff API, then the response is 403; `/staff/support` has no menu entry. | SUPPORT-TICKETING-R-014 | test: server/test/support/staffTickets.test.js |
 | Given French locale, when a ticket is submitted, then form, errors, confirmation, and receipt (including subject) are in French. | SUPPORT-TICKETING-R-016, SUPPORT-TICKETING-R-020 | none — #2271 |
-| Given a bug report, when the outbox creates the issue, then the issue type is Support Bug, Support Category is empty, Source is form, Website or App is Website, and no classification label is applied. | SUPPORT-TICKETING-R-023 | none — #2271 |
-| Given a suggestion, account, or billing request, when the outbox creates the issue, then the issue type is Support Question and Support Category is Suggestion, Account, or Billing. | SUPPORT-TICKETING-R-023 | none — #2271 |
-| Given `APP_ENV=uat` or `APP_ENV=production`, when the issue is created, then Environment is UAT or Prod. Given any other `APP_ENV`, when the issue is created, then Environment is empty and the issue is still created. | SUPPORT-TICKETING-R-023 | none — #2271 |
-| Given GitHub accepts the create but omits the requested type or a requested field, when the worker reads the issue back, then the outbox row is failed and is not retried. | SUPPORT-TICKETING-R-017, SUPPORT-TICKETING-R-023 | none — #2271 |
+| Given a bug report, when the outbox creates the issue, then the issue type is Support Bug, Support Category is empty, Source is form, Website or App is Website, and no classification label is applied. | SUPPORT-TICKETING-R-023 | test: server/test/support/outbox.test.js |
+| Given a suggestion, account, or billing request, when the outbox creates the issue, then the issue type is Support Question and Support Category is Suggestion, Account, or Billing. | SUPPORT-TICKETING-R-023 | test: server/test/support/outbox.test.js |
+| Given `APP_ENV=uat` or `APP_ENV=production`, when the issue is created, then Environment is UAT or Prod. Given any other `APP_ENV`, when the issue is created, then Environment is empty and the issue is still created. | SUPPORT-TICKETING-R-023 | test: server/test/support/outbox.test.js |
+| Given GitHub accepts the create but omits the requested type or a requested field, when the worker reads the issue back, then the outbox row is failed and is not retried. | SUPPORT-TICKETING-R-017, SUPPORT-TICKETING-R-023 | test: server/test/support/outbox.test.js |
 
 ## States & data
 
@@ -104,8 +104,7 @@ In-app replies or ticket history, customer-visible statuses, status-change email
 
 ## Still open
 
-- SUPPORT-TICKETING-R-023 is not in the worker yet. A form submit still queues `category:*`, `env:*`, and `source:form` labels, so the issue type and issue fields stay empty until that code lands.
-- The support token must be allowed to set issue type and issue fields, and to read the org issue-field catalog. A token that cannot do either fails R-023 closed (the create is not marked sent).
+- The support token must be allowed to set issue type and issue fields, and to read the org issue-field catalog. A token that cannot do either fails R-023 closed (the create is not marked sent). UAT has not proved the rotated token yet.
 
 ## Decision log
 
@@ -127,6 +126,7 @@ In-app replies or ticket history, customer-visible statuses, status-change email
 | SUPPORT-TICKETING-D-015 | Engineering handover is human; **AgathaTrack/AgathaTrack** issue from template with `AT-` ref only; Phase 4+ may automate; agent comments removed only when redacted issue deleted | No PII in public engineering backlog after org migration | Live | 2026-11-14 | #2328 |
 | SUPPORT-TICKETING-D-011 | Email stays Nodemailer + SMTP; Brevo not adopted | Closed former Brevo open point | Live | 2026-11-13 | TBD |
 | SUPPORT-TICKETING-D-016 | Form classification uses the AgathaTrack issue types and issue fields: Support Bug, or Support Question plus Support Category. Source is form and Website or App is Website for this client. Labels are not the classification. This replaces the label method in SUPPORT-TICKETING-D-012; the @ATSupport URL in that row stays. | The org catalog is the target operators already see. Priority stays a staff field the worker does not set. | Live | 2026-11-14 | TBD |
+| SUPPORT-TICKETING-D-017 | The org project title is ATSupport (`https://github.com/orgs/AgathaTrack/projects/1`). The `@` prefix in earlier rows is not part of the name. | Confirmed by the operator after the org move. Auto-add and the project URL are unchanged. | Live | 2026-11-14 | TBD |
 
 ## Related
 

@@ -13,9 +13,12 @@ export function getSupportGithubToken() {
   return env('SUPPORT_GITHUB_TOKEN');
 }
 
-export function getAppEnvLabel() {
+/** Org issue field Environment. Empty when APP_ENV is neither uat nor production. */
+export function getSupportEnvironmentValue() {
   const appEnv = env('APP_ENV');
-  return appEnv ? `env:${appEnv}` : 'env:unknown';
+  if (appEnv === 'uat') return 'UAT';
+  if (appEnv === 'production') return 'Prod';
+  return null;
 }
 
 export function isGithubOutboxEnabled() {

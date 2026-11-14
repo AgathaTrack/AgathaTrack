@@ -1,4 +1,4 @@
-import { getAppEnvLabel } from './config.js';
+import { getSupportEnvironmentValue } from './config.js';
 
 const CONTEXT_KEYS = [
   'version',
@@ -10,11 +10,17 @@ const CONTEXT_KEYS = [
   'client_time',
 ];
 
-const CATEGORY_LABEL = {
-  bug: 'category:bug',
-  suggestion: 'category:suggestion',
-  account: 'category:account',
-  billing: 'category:billing',
+const ISSUE_TYPE_BY_CATEGORY = {
+  bug: 'Support Bug',
+  suggestion: 'Support Question',
+  account: 'Support Question',
+  billing: 'Support Question',
+};
+
+const SUPPORT_CATEGORY_BY_CATEGORY = {
+  suggestion: 'Suggestion',
+  account: 'Account',
+  billing: 'Billing',
 };
 
 function formatContextBlock(context) {
@@ -68,7 +74,24 @@ export function buildGithubIssueBody(ticket) {
   ].join('\n');
 }
 
-export function buildGithubIssueLabels(ticket) {
-  const categoryLabel = CATEGORY_LABEL[ticket.category] || `category:${ticket.category}`;
-  return [categoryLabel, getAppEnvLabel(), 'source:form'];
+/**
+ * Issue type and org issue fields for a form submit.
+ * Bug leaves Support Category empty. Other form categories set it.
+ * @returns {{ type: string, fields: { name: string, value: string }[] } | null}
+ */
+export function buildGithubIssueClassification(ticket) {
+  const type = ISSUE_TYPE_BY_CATEGORY[ticket.category];
+  if (!type) return null;
+  const fields = [];
+  const supportCategory = SUPPORT_CATEGORY_BY_CATEGORY[ticket.category];
+  if (supportCategory) {
+    fields.push({ name: 'Support Category', value: supportCategory });
+  }
+  const environment = getSupportEnvironmentValue();
+  if (environment) {
+    fields.push({ name: 'Environment', value: environment });
+  }
+  fields.push({ name: 'Source', value: 'form' });
+  fields.push({ name: 'Website or App', value: 'Website' });
+  return { type, fields };
 }
