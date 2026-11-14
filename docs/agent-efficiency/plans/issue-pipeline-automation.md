@@ -48,9 +48,37 @@ Implementation detail (events, tokens, lanes, locks): [issue-pipeline-dispatcher
 | 1 | Who approves execute-plan programmes started by the pipeline? | **(b) Coded auto-approve policy** in the approve workflow, as the bot, under strict conditions (§8). Never an agent posting the approval line with the owner token. | ISSUE-PIPELINE-D-001 |
 | 2 | Lifecycle of light-plan issues | **Hybrid:** agent session stops at Pre-UAT green; Actions move In Main → In UAT → In Prod and close (§9). | ISSUE-PIPELINE-D-002 |
 | 3 | Repo and Project ownership | **Superseded:** org-owned `AgathaTrack/AgathaTrack`; Pawpet board is the human view of **stage**. Fine-grained repo-scoped PATs and/or a GitHub App with org Projects permission are allowed (§2). | ISSUE-PIPELINE-D-003 → **D-003b** |
-| 4 | Review counters in titles | **Hidden state block** in the issue body, bot-written only (§4). | ISSUE-PIPELINE-D-004 |
+| 4 | Review counters in titles | **Hidden state record** in a bot-authored issue comment, not the title or body (§4). | ISSUE-PIPELINE-D-004 |
 | 5 | Whose turn | **Assignee** is the single “ball in court” signal: `pawpet-claude`, `pawpet-bot`, `KanopeeKa`, or unassigned (automation / queued). Does not replace board column or state block (§3, §6). | ISSUE-PIPELINE-D-005 |
-| 6 | In Analysis vs To do | **No separate “Agent Review” column.** Backlog → **To do** = human (or policy) decision to enter the pipeline. **Assigned** Pawpet collaborator agent = inside automation; **unassigned** To do = outside automation. **In Analysis** = agent peer-review stage. Deterministic triage runs at the **start of To do** (before Claude intake), not as a separate board meaning (§5). | ISSUE-PIPELINE-D-006 |
+| 6 | In Analysis vs To do | **No separate "Agent Review" column.** Backlog → **To do** = human (or policy) decision to enter the pipeline. **Assigned** Pawpet collaborator agent = inside automation; **unassigned** To do = outside automation. **In Analysis** = agent peer-review stage. Deterministic triage runs at the **start of To do** (before Claude intake), not as a separate board meaning (§5). | ISSUE-PIPELINE-D-006 |
+
+---
+
+## Owner's original design (2026-11-13) and how it maps
+
+The owner's brief, kept here so the intent is not lost. It set four questions and specified one workflow per status. The target lanes are in [github-issue-workflow.md §Planned workflows by status](../github-issue-workflow.md#planned-workflows-by-status).
+
+### The four questions
+
+| # | Question | Answer |
+|---|----------|--------|
+| Q1 | How do Cursor and Claude both get access to workflows, the Project, issues and content? | Two machine users on the org repo: `pawpet-bot` (Cursor) and `pawpet-claude` (Claude), each with a fine-grained PAT scoped to this repo. Each lane gets the least access it needs: analysis lanes read code and write issues; implement and monitor lanes also write code and PRs. Only the dispatcher and release jobs write the Pawpet **Status**, using an org Projects token. Claude therefore no longer needs Projects access itself. The owner token stays out of every autonomous lane (§2). |
+| Q2 | One tick per workflow, or a general tick? | **One general dispatcher** that picks a lane per issue (§7), with one concurrency group and cap per lane. Separate per-status ticks would race each other on the same issues. |
+| Q3 | How often? | **Event-driven first** (assignment, labels, allowlisted comments, merged PRs, deploy runs), with a **30-minute heartbeat** as the safety net, matching the execute-plan driver. GitHub cron is best-effort, so nothing below about 15 minutes. |
+| Q4 | Throttle implementation to one or two issues In progress? | Yes: a **work-in-progress limit of 2**, enforced by the dispatcher rather than the prompt. Each product issue In progress + `pawpet-bot` holds one slot, whatever its delivery method. Stuck work keeps its slot. |
+
+### Workflow by workflow
+
+| Original workflow | Kept | Changed, and why |
+|-------------------|------|------------------|
+| **Backlog → To do:** `todo` label moves the issue and is then removed; can also be done by hand | Both paths | The move also **assigns `pawpet-claude`**. Assignment is the trigger, and an unassigned issue in To do stays outside automation (D-006). |
+| **To do (Claude):** info check → `missing-info`; analysis prompt; detailed comment; `Claude:InitialDone`; → In Analysis; `[0]` title counter | Info check, prompt (verbatim in the workflow doc), detailed comment, move to In Analysis | `missing-info` → the existing **`question`** label, plus assigning the author. `Claude:InitialDone` → **assign `pawpet-bot`**. The title counter → `round` in the state comment, because title prefixes break `isPlanControlIssue` and humans edit titles (D-004). Deterministic form triage runs first (D-006). |
+| **Analysis 1/2/3** (Cursor ⇄ Claude; Green → Ready, Red → stay; stale-label clean-up; counter > 5 → `needs-owner`) | Alternating review, fold minor points into the issue, one clear comment, Green/Red verdict, `needs-owner` on no convergence | The three workflows are one mirrored step, so they become **one review lane**. The reviewer is whichever agent is assigned. The verdict is the **reassignment**, so no verdict labels and no stale-label rules are needed (D-005). **Convergence:** under the original rule, one agent could fold the other's points into the body *and* go Green → Ready in the same step, so the other agent never saw the edited text. Ready therefore needs a Green whose reviewer made no substantive body change, so the body that goes to Ready is one the other agent already reviewed. **Limit:** `round >= 4` by default instead of > 5, to cap token cost; configurable. |
+| **Ready 1 — delivery method** (Cursor): PR / light-plan / execute-plan; rewrite the existing issue to the template; restricted files → `needs-owner`; add the method label | All of it | It runs while `pawpet-bot` is assigned in Ready, then unassigns, which queues the issue. Planned paths go in an `agent-paths` block. The dispatcher, not the agent, decides sensitivity, fail-closed against expanded globs (§10). |
+| **Ready 2 — implement** (Cursor, Composer 2.5): PR → `/babysit-plus`; light-plan → `/light-plan`; execute-plan → `/run-as-me` + post `approve-autonomous`; started → In progress, else `needs-owner` | PR and light-plan paths, start check, Composer 2.5, `needs-owner` on a failed launch | **Throttled** (Q4). **execute-plan:** an agent posting `approve-autonomous` with the owner token is forbidden (`run-as-me` skill rule 6) and would let issue text drive autonomous merges. It is replaced by the coded auto-approve policy run as the bot (D-001). |
+| **In progress** (Cursor): second title counter, > 5 → `needs-owner`; PR merged → In Main; relaunch babysit if nothing is watching; restart halted plans without a human | Relaunch-if-ended, `needs-owner` on repeated relaunches | Second counter → `stuck` in the state comment; limit 3 by default, configurable. "Is babysit watching?" is decided from the recorded run's status through the Cursor API, not guessed. PR merged → In Main is **already done by Actions**. **light-plan:** relaunch with `continue light-plan #n`; the session drives its own release through `/babysit-uat`. **execute-plan:** report only. Resuming a stopped plan is owner-only, and pushing to plan branches outside a worker `tick` is forbidden. |
+| **In Main** (Cursor or GitHub): find the UAT deploy containing the merge; is it findable automatically? | Moved by automation | **Yes, it can be found:** `promote-uat` tags `uat-YYMMDD-<PR#>`, the PR body has `Refs #n`, and `deploy-uat.yml` already sets **In UAT**. No note on the issue is needed. |
+| **In UAT** (Cursor or GitHub): find the prod deploy → `In prod` label; then tidy up and close | Tidy-up and close | A **prod notify job** in `deploy-prod.yml` sets **Done** and closes the issue, but only after a real production deploy plus smoke, never on the stub path. The `in-prod` label is optional and non-authoritative. |
 
 ---
 
@@ -160,15 +188,15 @@ Ignore markers not on a comment whose author is `pawpet-bot` or `pawpet-claude`.
 
 ### 5.1–5.6 Lane behaviour (summary)
 
-Detailed steps match the prior proposal text for intake, peer review, delivery, implement, and monitor — with these replacements:
+Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, needs-owner) and the handoff table live in [github-issue-workflow.md §Planned workflows by status](../github-issue-workflow.md#planned-workflows-by-status). Compared with the 2026-11-13 draft:
 
 - **Status moves** use Pawpet **Status** field (bot PAT), not `status:*` labels.
 - **Handoffs** use **assignment** with the agent’s PAT, not verdict labels.
 - **Planned** is not a board column: delivery runs in **Ready** while `pawpet-bot` is assignee before the delivery label is applied.
 
-Convergence (In Analysis → Ready): Green and `body_sha` unchanged in that round, or two consecutive Greens; else reassign to the other agent. Round cap **4** — escalate when `round >= 4` (configurable).
+Convergence (In Analysis → Ready): Green **and** `body_sha` unchanged in that round (the body is the one the previous agent handed over). Green with a substantive edit — even after an earlier Green — reassigns to the other agent. Round cap **4** — escalate when `round >= 4` (configurable).
 
-Work-in-progress (implement): **2** slots — e.g. one programme + up to two single PRs; count issues **In progress** assigned `pawpet-bot` with `busy`, plus active programmes. See dispatcher spec.
+Work-in-progress (implement): **2** slots — e.g. one programme + one single PR, or two single PRs. Each product issue **In progress** assigned `pawpet-bot` (with `busy` or an active programme) holds one slot, whatever its delivery method. See dispatcher spec §5.
 
 ### 5.7 Release tracking (Actions only)
 
@@ -197,7 +225,7 @@ Work-in-progress (implement): **2** slots — e.g. one programme + up to two sin
 3. **Column ≠ assignee** — same agent may be assignee in To do vs In Analysis; column disambiguates.
 4. **`needs-owner` stays a label** — driver reads label, not assignment alone.
 5. **Human reassignment** is allowed; dispatcher logs a comment and follows the new assignee.
-6. **WIP count** includes In progress + `pawpet-bot` + `busy`.
+6. **WIP count:** one slot per product issue In progress + `pawpet-bot` (with `busy` or an active programme).
 
 ---
 

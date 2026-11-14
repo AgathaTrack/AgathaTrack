@@ -44,8 +44,8 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 
 1. If `ISSUE_PIPELINE` is `off`, exit 0.
 2. Load org/project field IDs from secrets (`GH_PROJECT_ID`, `GH_STATUS_FIELD_ID`, org `AgathaTrack`).
-3. For each open issue with label ∉ {support-only exclusions}:
-   - Read Pawpet **Status**, **assignee**, delivery labels, `busy`, `needs-owner`, `manual-only`, state block.
+3. For each open issue with label ∉ {`manual-only`, support-only exclusions} (a `manual-only` issue is skipped before any lane condition is evaluated, whatever its status or assignee):
+   - Read Pawpet **Status**, **assignee**, delivery labels, `busy`, `needs-owner`, state block.
    - Compute **eligible action** at most one per issue (priority table below).
 4. Sort actions by priority label then issue age.
 5. Apply **lane caps**; skip if cap reached.
@@ -56,6 +56,7 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 
 | Order | Condition | Action |
 |-------|-----------|--------|
+| 0 | `manual-only` | None (excluded from every lane) |
 | 1 | `needs-owner` + assignee `KanopeeKa` | None (wait for human) |
 | 2 | Status To do + assignee `pawpet-claude` + no `question` | Triage then intake worker |
 | 3 | Status In Analysis + assignee ∈ bots | Review worker |
@@ -81,16 +82,18 @@ Global dispatcher concurrency: `issue-pipeline-dispatcher` (single runner per re
 
 ```text
 wip_in_use = count(
-  issues where Status = "In progress"
+  distinct product issues where Status = "In progress"
     AND assignee.login = "pawpet-bot"
-    AND has label busy
-) + programme_weight(active light-plan | execute-plan sessions)
+    AND (has label busy OR has an active light-plan | execute-plan programme)
+)
 ```
+
+The counting unit is the **product issue**: each holds exactly one slot, whatever its delivery method. A programme's tracking issue, phase PRs and release PR add nothing on top of it.
 
 | Config | Default |
 |--------|---------|
 | `WIP_MAX` | 2 |
-| Programme weight | light-plan session = 1 slot; execute-plan active = 1 slot |
+| Slots per product issue | 1 (`PR`, `light-plan` or `execute-plan`) |
 
 Queued: Ready + delivery label + **no assignee**, ordered by priority label then `created_at`.
 
@@ -108,11 +111,11 @@ Queued: Ready + delivery label + **no assignee**, ordered by priority label then
 |-----------|---------|---------------|-------------|
 | Triage | pass | `pawpet-claude` | To do (stay) |
 | Triage | fail / question | author or `KanopeeKa` | Backlog |
-| Triage | manual-only | — | In Analysis or Backlog per policy |
+| Any | `manual-only` present (human-set) | unchanged | unchanged — dispatcher skips the issue |
 | Intake | need info | author | Backlog + `question` |
 | Intake | ok | `pawpet-bot` | In Analysis |
 | Review | red / green+edits | other bot | In Analysis |
-| Review | green, converged | `pawpet-bot` | Ready |
+| Review | green, `body_sha` unchanged this round | `pawpet-bot` | Ready |
 | Review | `round >= cap` (default 4) | `KanopeeKa` | + `needs-owner` |
 | Delivery | ok | *none* | Ready + delivery label |
 | Delivery | sensitive | `KanopeeKa` | + `needs-owner` |
@@ -134,7 +137,7 @@ Extract from `triage-lib.js`:
 
 - Issue form section presence and quality checks (existing).
 - Risky keyword → hint only; **delivery** sensitivity uses `agent-paths` block later.
-- Outputs: pass → continue intake; fail → Backlog + `question`; `manual-only` → stop automation.
+- Outputs: pass → continue intake; fail → Backlog + `question`. Triage never sets `manual-only`; only a human does, and the dispatcher then skips the issue (§3).
 
 **Deprecate:** requiring `human-reviewed` for Ready dispatch. Optional: humans add `human-reviewed` only when moving Backlog → To do as audit trail — not read by dispatcher except as optional flag.
 
@@ -205,7 +208,9 @@ Environment: `automation` (same as current agent dispatch).
 | Skeleton | `ISSUE_PIPELINE=dry-run` on fixture issues; assert logged actions |
 | Triage | Unit tests on extracted triage functions |
 | Handoff | Integration: assign bot A → expect assigned event → dry-run tick → assign bot B |
-| WIP | Three Ready issues, `WIP_MAX=2` → only two implement actions |
+| WIP | Three Ready issues, `WIP_MAX=2` → only two implement actions; one active light-plan issue + one Ready `PR` issue → the PR still launches |
+| Exclusion | `manual-only` issue in To do assigned `pawpet-claude` → no action logged |
+| Convergence | Green + body edit after an earlier Green → reassigned to the other agent, not Ready |
 | E2E | Single test issue through dry-run then controlled `on` on a sandbox label `pipeline-e2e` |
 
 ## 14. Migration from live workflow
