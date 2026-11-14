@@ -287,6 +287,20 @@ describe('change date, postpone, type switch', () => {
     expect(read.body.open_occurrences.map((o) => o.scheduled_date)).toEqual(['2026-06-10', '2026-06-11']);
   });
 
+  it('PP-8 paused FX with missed doses is hidden from open slots; tick closes old ones', async () => {
+    const entry = await created(twiceDaily('2026-06-01'), '2026-06-01T07:00');
+    await api.at('2026-06-04T18:01').get(entry.id);
+    const paused = await api.at('2026-06-04T18:05').postpone(entry.id, { until: '2026-06-20' });
+    expect(paused.body.entry.status).toBe('paused');
+    expect(paused.body.entry.open_occurrences).toEqual([]);
+    await tick('2026-06-08T09:00');
+    const rows = await occurrenceRows(harness.pool, entry.id);
+    expect(rows.every((r) => r.status === 'not_recorded' || r.status === 'skipped')).toBe(true);
+    const read = await api.at('2026-06-08T09:00').get(entry.id);
+    expect(read.body.status).toBe('paused');
+    expect(read.body.open_occurrences).toEqual([]);
+  });
+
   it('PP-4 FX pause resume defaults to the first slot on or after now', async () => {
     const entry = await created(twiceDaily('2026-06-05'), '2026-06-05T07:00');
     await api.at('2026-06-10T09:00').postpone(entry.id, { until: null });

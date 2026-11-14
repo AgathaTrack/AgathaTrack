@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +25,18 @@ class _FakeHealthEntriesNotifier extends HealthEntriesNotifier {
   Future<void> refresh() async {}
 }
 
+class _LoadingHealthEntriesNotifier extends HealthEntriesNotifier {
+  _LoadingHealthEntriesNotifier(this._completer);
+
+  final Completer<List<HealthEntry>> _completer;
+
+  @override
+  Future<List<HealthEntry>> build() => _completer.future;
+
+  @override
+  Future<void> refresh() async {}
+}
+
 HealthEntry _entry({
   required String id,
   required DateTime nextDue,
@@ -40,8 +54,14 @@ HealthEntry _entry({
   );
 }
 
-Widget _wrap(List<HealthEntry> entries, {ProviderContainer? container}) {
-  final scope = container ?? _buildContainer(entries);
+Widget _wrap(
+  List<HealthEntry> entries, {
+  ProviderContainer? container,
+  HealthEntriesNotifier Function()? entriesNotifier,
+}) {
+  final scope =
+      container ??
+      _buildContainer(entries, entriesNotifier: entriesNotifier);
   return UncontrolledProviderScope(
     container: scope,
     child: MaterialApp(
@@ -53,11 +73,14 @@ Widget _wrap(List<HealthEntry> entries, {ProviderContainer? container}) {
   );
 }
 
-ProviderContainer _buildContainer(List<HealthEntry> entries) {
+ProviderContainer _buildContainer(
+  List<HealthEntry> entries, {
+  HealthEntriesNotifier Function()? entriesNotifier,
+}) {
   final container = ProviderContainer(
     overrides: [
       healthEntriesNotifierProvider.overrideWith(
-        () => _FakeHealthEntriesNotifier(entries),
+        entriesNotifier ?? () => _FakeHealthEntriesNotifier(entries),
       ),
       petCareEstablishmentsProvider.overrideWith((ref, petId) async => []),
     ],
@@ -139,6 +162,21 @@ void main() {
       find.byKey(const Key('pet_care_action_closed-one-off')),
       findsNothing,
     );
+  });
+
+  testWidgets('AG-11 loading shows progress, not empty copy', (tester) async {
+    final completer = Completer<List<HealthEntry>>();
+    await tester.pumpWidget(
+      _wrap(
+        [],
+        entriesNotifier: () => _LoadingHealthEntriesNotifier(completer),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byKey(const Key('all_care_empty')), findsNothing);
+    expect(find.text('Start their care routine'), findsNothing);
   });
 
   testWidgets('shows empty state when pet has no care items', (tester) async {

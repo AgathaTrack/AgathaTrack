@@ -62,6 +62,39 @@ describe('after it\'s done (D-CSM-022)', () => {
     expect(await invariantViolations(harness.pool, entry.id)).toEqual([]);
   });
 
+  it('AID-5 done 16 days early sets next from the completion date', async () => {
+    const entry = await created({
+      care_family: 'dental',
+      frequency: 'monthly',
+      frequency_interval: 1,
+      next_due_date: '2026-06-05',
+      name: 'Chew',
+    }, '2026-05-01T09:00');
+    const occ = entry.open_occurrences[0];
+    const res = await api.at('2026-05-20T09:00').complete(entry.id, occ.id, {
+      completed_on: '2026-05-20',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.next_due_date).toBe('2026-06-20');
+    expect(res.body.occurrence.completion_timing).toBe('early');
+    expect(openDates(res.body.entry)).toEqual(['2026-06-20:computed:coming_up']);
+  });
+
+  it('AID-7 daily dental not done for three days exposes one overdue occurrence', async () => {
+    const entry = await created({
+      care_family: 'dental',
+      frequency: 'daily',
+      next_due_date: '2026-06-01',
+      name: 'Chew',
+    }, '2026-06-01T09:00');
+    const res = await api.at('2026-06-04T09:00').get(entry.id);
+    expect(res.body.open_occurrences).toHaveLength(1);
+    expect(res.body.open_occurrences[0]).toMatchObject({
+      scheduled_date: '2026-06-01',
+      status: 'overdue',
+    });
+  });
+
   it('AID-2 overdue shows an estimated next date that moves with today', async () => {
     const entry = await created(flea('2026-06-05'), '2026-06-05T09:00');
     const res = await api.at('2026-06-07T09:00').get(entry.id);

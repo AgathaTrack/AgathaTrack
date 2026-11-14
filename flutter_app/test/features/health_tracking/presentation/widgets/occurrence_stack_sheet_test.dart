@@ -245,7 +245,7 @@ void main() {
 
   group('OccurrenceCareActions.showMarkDoneFlow', () {
     testWidgets(
-      'due-today and future pending occurrences use the normal date flow',
+      'DOSE-1 future-day head uses date flow, not a missed stack sheet',
       (tester) async {
         final today = calendarDateOnly(DateTime.now());
         final tomorrow = today.add(const Duration(days: 1));
@@ -306,7 +306,7 @@ void main() {
     );
 
     testWidgets(
-      'multiple due-today doses open stack without treating future doses as missed',
+      'DOSE-1 two pending doses same calendar day open the stack selector',
       (tester) async {
         final now = DateTime.now();
         final today = calendarDateOnly(now);

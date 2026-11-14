@@ -66,7 +66,7 @@ void main() {
     );
   });
 
-  test('DN-3 After it\'s done overdue asks for the date', () {
+  test('AID-11 / DN-3 After it\'s done overdue asks for the date', () {
     final d = decideDone(
       s([occ('o', 5, CareOccurrenceStatus.overdue)], fixed: false),
     );
@@ -97,7 +97,7 @@ void main() {
     );
   });
 
-  test('DN-4 more than half an interval early asks to confirm', () {
+  test('AID-5 / DN-4 more than half an interval early asks to confirm', () {
     expect(
       decideDone(s([occ('m', 30, CareOccurrenceStatus.comingUp)])),
       isA<DoneConfirmsEarly>(),

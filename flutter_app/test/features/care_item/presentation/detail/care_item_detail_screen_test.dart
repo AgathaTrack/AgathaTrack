@@ -131,7 +131,7 @@ void main() {
     );
   }
 
-  testWidgets('shows Care details title while pets load', (tester) async {
+  testWidgets('CIH-2 shows Care details title while pets load', (tester) async {
     final petsCompleter = Completer<List<Pet>>();
     await tester.pumpWidget(
       buildApp(
@@ -145,7 +145,9 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
-  testWidgets('shows Care details title when pet is missing', (tester) async {
+  testWidgets('CIH-2 shows Care details title when pet is missing', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       buildApp(
         initialLocation: '/pet/pet-1/events/entry-1',
@@ -158,7 +160,9 @@ void main() {
     expect(find.text('Pet not found'), findsOneWidget);
   });
 
-  testWidgets('shows Care details title when entry is missing', (tester) async {
+  testWidgets('CIH-2 shows Care details title when entry is missing', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       buildApp(
         initialLocation: '/pet/pet-1/events/missing-entry',
@@ -174,7 +178,7 @@ void main() {
     expect(find.text('Entry not found'), findsOneWidget);
   });
 
-  testWidgets('shows Care details title while entry loads', (tester) async {
+  testWidgets('CIH-2 shows Care details title while entry loads', (tester) async {
     final entriesCompleter = Completer<List<HealthEntry>>();
     await tester.pumpWidget(
       buildApp(
