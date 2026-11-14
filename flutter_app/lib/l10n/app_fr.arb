@@ -1011,7 +1011,7 @@
   "pdfDone": "Fait",
 
   "pdfReportTitle": "Rapport Santé Animal",
-  "pdfAgathaCheck": "AGATHATRACK",
+  "pdfAgathaTrack": "AGATHATRACK",
   "pdfPetProfileSection": "Profil de l'animal",
   "pdfWeightTrackingSection": "Suivi du poids",
   "pdfHealthEventsSection": "Événements santé",
@@ -2816,20 +2816,9 @@
       "count": { "type": "int" }
     }
   },
-  "occurrenceStackSheetTitle": "Enregistrer les dates précédentes pour {name}",
-  "@occurrenceStackSheetTitle": {
-    "placeholders": {
-      "name": { "type": "String" }
-    }
-  },
   "occurrenceZoneMissed": "En retard",
   "occurrenceZoneDueToday": "Aujourd'hui",
   "occurrenceZoneComingUp": "À venir",
-  "occurrenceRecordHead": "Enregistrer la date la plus récente",
-  "occurrenceSkipEarlierMissed": "Ignorer les dates en retard antérieures lors de l'enregistrement",
-  "occurrenceReviewEach": "Voir dans l'événement",
-  "occurrenceSkipAllMissed": "Ignorer tous les retards",
-  "occurrenceNotNow": "Pas maintenant",
   "completedEventSemanticLabel": "{name}, terminé, pour {petName}",
   "@completedEventSemanticLabel": {
     "placeholders": {

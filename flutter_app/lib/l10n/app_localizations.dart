@@ -5015,11 +5015,11 @@ abstract class AppLocalizations {
   /// **'Pet Health Report'**
   String get pdfReportTitle;
 
-  /// No description provided for @pdfAgathaCheck.
+  /// No description provided for @pdfAgathaTrack.
   ///
   /// In en, this message translates to:
   /// **'AGATHATRACK'**
-  String get pdfAgathaCheck;
+  String get pdfAgathaTrack;
 
   /// No description provided for @pdfPetProfileSection.
   ///
@@ -13429,12 +13429,6 @@ abstract class AppLocalizations {
   /// **'{count} overdue'**
   String occurrenceMissedCount(int count);
 
-  /// No description provided for @occurrenceStackSheetTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Record earlier dates for {name}'**
-  String occurrenceStackSheetTitle(String name);
-
   /// No description provided for @occurrenceZoneMissed.
   ///
   /// In en, this message translates to:
@@ -13452,36 +13446,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Coming up'**
   String get occurrenceZoneComingUp;
-
-  /// No description provided for @occurrenceRecordHead.
-  ///
-  /// In en, this message translates to:
-  /// **'Record the latest date'**
-  String get occurrenceRecordHead;
-
-  /// No description provided for @occurrenceSkipEarlierMissed.
-  ///
-  /// In en, this message translates to:
-  /// **'Skip earlier overdue dates when recording'**
-  String get occurrenceSkipEarlierMissed;
-
-  /// No description provided for @occurrenceReviewEach.
-  ///
-  /// In en, this message translates to:
-  /// **'Review in event view'**
-  String get occurrenceReviewEach;
-
-  /// No description provided for @occurrenceSkipAllMissed.
-  ///
-  /// In en, this message translates to:
-  /// **'Skip all overdue'**
-  String get occurrenceSkipAllMissed;
-
-  /// No description provided for @occurrenceNotNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Not now'**
-  String get occurrenceNotNow;
 
   /// No description provided for @completedEventSemanticLabel.
   ///

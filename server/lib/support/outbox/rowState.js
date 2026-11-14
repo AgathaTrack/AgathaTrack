@@ -28,6 +28,21 @@ export async function markOutboxRowSkipped(db, rowId) {
 }
 
 /**
+ * Leave the row retryable later once the catalog or repo gate clears.
+ * @param {import('pg').Pool | import('pg').PoolClient} db
+ */
+export async function markOutboxRowBlocked(db, rowId, message) {
+  await db.query(
+    `UPDATE support_outbox
+     SET status = 'blocked',
+         last_error = $2,
+         updated_at = now()
+     WHERE id = $1`,
+    [rowId, safeOutboxError(message)],
+  );
+}
+
+/**
  * @param {import('pg').Pool | import('pg').PoolClient} db
  */
 export async function failOutboxRow(db, rowId, attempts, { retryable, message }) {

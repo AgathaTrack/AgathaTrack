@@ -2924,7 +2924,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pdfReportTitle => 'Rapport Santé Animal';
 
   @override
-  String get pdfAgathaCheck => 'AGATHATRACK';
+  String get pdfAgathaTrack => 'AGATHATRACK';
 
   @override
   String get pdfPetProfileSection => 'Profil de l\'animal';
@@ -7828,11 +7828,6 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String occurrenceStackSheetTitle(String name) {
-    return 'Enregistrer les dates précédentes pour $name';
-  }
-
-  @override
   String get occurrenceZoneMissed => 'En retard';
 
   @override
@@ -7840,22 +7835,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get occurrenceZoneComingUp => 'À venir';
-
-  @override
-  String get occurrenceRecordHead => 'Enregistrer la date la plus récente';
-
-  @override
-  String get occurrenceSkipEarlierMissed =>
-      'Ignorer les dates en retard antérieures lors de l\'enregistrement';
-
-  @override
-  String get occurrenceReviewEach => 'Voir dans l\'événement';
-
-  @override
-  String get occurrenceSkipAllMissed => 'Ignorer tous les retards';
-
-  @override
-  String get occurrenceNotNow => 'Pas maintenant';
 
   @override
   String completedEventSemanticLabel(String name, String petName) {

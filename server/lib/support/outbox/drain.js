@@ -1,5 +1,6 @@
 import { logger } from '../../logger.js';
 import { SUPPORT_OUTBOX_MAX_ATTEMPTS } from './backoff.js';
+import { refreshSupportIssueCatalogGate } from './issueFieldCatalog.js';
 import { refreshSupportGithubRepoGate } from './repoGate.js';
 import { processSupportOutboxRow } from './processRow.js';
 
@@ -11,6 +12,7 @@ const TABLE_MISSING = '42P01';
  */
 export async function drainSupportOutbox(pool, { limit = 10 } = {}) {
   await refreshSupportGithubRepoGate(pool);
+  await refreshSupportIssueCatalogGate(pool);
 
   let rows;
   try {
