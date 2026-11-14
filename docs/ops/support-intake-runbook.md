@@ -30,11 +30,20 @@ Operator guide for **Phase 1** private support intake. Canonical product rules: 
 | `SUPPORT_REPLY_TO` | `support@agathatrack.com` (set before receipt smoke tests) | Same |
 | `APP_ENV` | `uat` → issue field Environment **UAT** | `production` → Environment **Prod** |
 
-Tokens are fine-grained, scoped to **AgathaTrackPrivate** only (Issues read/write). They can create, edit, and label; they **cannot delete issues** (redaction replaces content; an org admin deletes manually).
+Tokens are **fine-grained PATs** on the **AgathaTrack** org:
+
+| Permission | Resource | Why |
+|------------|----------|-----|
+| Issues — Read and write | Repository **AgathaTrackPrivate** only | Create and edit support issues; add `redacted` on erasure |
+| Issues — Read | Organization **AgathaTrack** | Resolve org **issue types** (Support Bug, Support Question) on create |
+| Issue fields — Read | Organization **AgathaTrack** | Resolve field ids (Support Category, Environment, Source, Website or App) by name |
+| Issue fields — Read and write | Organization **AgathaTrack** | Set classification fields after create (R-023 worker) |
+
+They **cannot delete issues** (redaction replaces content; an org admin deletes manually per D-014). Repository-only Issues scope without org Issue fields (and issue-type) access is insufficient for R-023 — provisioning must include the org rows above.
 
 Do not use `NODE_ENV` as the production/uat signal — use `APP_ENV` for the Environment field. Any other value leaves Environment empty.
 
-The token needs Issues read/write on AgathaTrackPrivate and Issue fields read on the AgathaTrack org, so it can resolve field ids by name and set the type and fields. A token that cannot set them must not be treated as a successful create.
+If the token cannot set issue type or fields, the worker must not treat the create as successful (SUPPORT-TICKETING-R-023).
 
 Local dev / tests: leave `SUPPORT_GITHUB_REPO` empty so GitHub outbox rows stay `disabled`.
 
@@ -51,7 +60,9 @@ Local dev / tests: leave `SUPPORT_GITHUB_REPO` empty so GitHub outbox rows stay 
 
 ## Issue type and fields (form submit)
 
-Org catalog on AgathaTrack. The worker sets these and does not apply classification labels.
+**Target after SUPPORT-TICKETING-R-023** (not live yet). Until that worker ships, form submits still get `category:*`, `env:*`, and `source:form` labels and empty issue types/fields — see [support-ticketing.md § Still open](/docs/domains/customer_support/features/support-ticketing.md#still-open).
+
+When R-023 is live, org catalog on AgathaTrack. The worker sets these and does not apply classification labels.
 
 | Form category | Issue type | Support Category | Source | Website or App | Environment |
 | --- | --- | --- | --- | --- | --- |
@@ -139,7 +150,8 @@ Run after the Phase 3 migration on each environment. Staff read tickets at `/sta
 - [ ] AgathaTrackPrivate private; issue types Support Bug and Support Question; fields Support Category, Environment, Source, Website or App; label `redacted` only for erasure
 - [ ] @ATSupport columns and workflows (item added → New; item closed → Done)
 - [ ] Engineering issue text field and saved views above
-- [ ] Tokens `agathatrack-support-uat` / `agathatrack-support-prod` in GitHub environments (**values** in secrets UI only)
+- [ ] Tokens `agathatrack-support-uat` / `agathatrack-support-prod` in GitHub environments (**values** in secrets UI only) with org issue types + issue fields permissions per table above
+- [ ] Smoke (post R-023): form submit creates issue with expected type and fields, not `category:*` labels
 - [ ] `pawpet-bot` collaborator on AgathaTrackPrivate
 - [ ] Watching AgathaTrackPrivate issues
 - [ ] Mailboxes: `support@`, `legal@`, `partnerships@` (plus existing `contact@`)
