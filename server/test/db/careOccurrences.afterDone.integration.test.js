@@ -226,6 +226,16 @@ describe('postpone, pause, resume (D-CSM-028)', () => {
     expect(openDates(resumed.body.entry)).toEqual(['2026-08-03:planned:coming_up']);
   });
 
+  it('PP-5 postpone with reason absence moves AID care until after the trip', async () => {
+    const entry = await created(flea('2026-06-12'), '2026-06-01T09:00');
+    const res = await api.at('2026-06-10T09:00').postpone(entry.id, {
+      until: '2026-06-16',
+      reason: 'absence',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(openDates(res.body.entry)).toEqual(['2026-06-16:planned:coming_up']);
+  });
+
   it('PP-6 a past date is rejected', async () => {
     const entry = await created(flea('2026-06-05'), '2026-06-01T09:00');
     const res = await api.at('2026-06-10T09:00').postpone(entry.id, { until: '2026-06-01' });

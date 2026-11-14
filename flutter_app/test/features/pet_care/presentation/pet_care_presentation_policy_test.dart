@@ -57,7 +57,7 @@ void main() {
     expect(rec?.id, 'pending');
   });
 
-  test('AC-SP-01 profileSuggestion suppressed when safeguard active', () {
+  test('CIM-13 / CP-6 profileSuggestion suppressed when safeguard active', () {
     final rec = policy.profileSuggestion([
       _rec(id: 'pending'),
     ], activeSafeguard: _safeguard(id: 'sg-1'));

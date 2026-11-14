@@ -218,9 +218,8 @@ Benchmark curation, evidence traces, and production safeguard persistence must a
 | CIM-10 — When safeguard card renders then Single-signal copy names weight family | CARE-INTELLIGENCE-R-011 | test: flutter_app/test/features/care_intelligence/presentation/widgets/care_safeguard_card_test.dart |
 | CIM-11 — When weight provenance enums parsed then Flutter aligns with server contract | CARE-INTELLIGENCE-R-020 | test: flutter_app/test/features/care_intelligence/weight_provenance_test.dart |
 | CIM-12 — When pet profile suggestion section loads then Provider surfaces suggestion state | CARE-INTELLIGENCE-R-009 | test: flutter_app/test/features/care_intelligence/presentation/providers/care_recommendations_provider_test.dart |
-| CIM-13 — When guardian sees production safeguard then Presentation respects safeguard-first slot order | CARE-INTELLIGENCE-R-010 | none — #1770 |
+| CIM-13 — When guardian sees production safeguard then Presentation respects safeguard-first slot order | CARE-INTELLIGENCE-R-010 | test: flutter_app/test/features/pet_care/presentation/pet_care_presentation_policy_test.dart#CIM-13 / CP-6 profileSuggestion suppressed when safeguard active |
 
-Coverage gaps: [#1770](https://github.com/KanopeeKa/AgathaCheck/issues/1770) (safeguard and suggestion E2E on dashboard/profile).
 
 ## Still open
 

@@ -73,7 +73,7 @@ describe('awayPlan presentation', () => {
 
   describe('buildPlannedCareItems', () => {
     // Test case 1 (AWD-2 delivery plan): twice-daily medication -> one row.
-    it('collapses a twice-daily medication into one recurring_calendar row with both times', () => {
+    it('AB-3 collapses a twice-daily medication into one recurring_calendar row with both times', () => {
       const entryRow = entry({
         frequency: 'daily',
         recurrence_anchor: 'from_due_date',
