@@ -294,7 +294,10 @@ void main() {
       await _pumpSection(tester, entry);
 
       expect(find.byKey(const Key('care_item_estimated_next')), findsOneWidget);
-      expect(find.byKey(const Key('care_item_upcoming_overdue-1')), findsNothing);
+      expect(
+        find.byKey(const Key('care_item_upcoming_overdue-1')),
+        findsNothing,
+      );
       expect(find.byKey(const Key('care_item_bulk_mark_done')), findsNothing);
     },
   );

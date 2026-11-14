@@ -79,16 +79,16 @@ void main() {
       final entry = baseEntry(status: 'completed');
       expect(careItemStripChip(entry), isNotNull);
       final l = lookupAppLocalizations(const Locale('en'));
-      expect(
-        careItemStripChipLabel(l, entry),
-        l.careItemEndedStatus,
-      );
+      expect(careItemStripChipLabel(l, entry), l.careItemEndedStatus);
       expect(careItemStripChipLabel(l, entry), isNot('Archived'));
     });
 
     test('CIH-5 closed labels use Ended or Closed by you, never Archived', () {
       final l = lookupAppLocalizations(const Locale('en'));
-      expect(formatHealthEntryClosedStatusLabel(l, null), l.careItemEndedStatus);
+      expect(
+        formatHealthEntryClosedStatusLabel(l, null),
+        l.careItemEndedStatus,
+      );
       expect(
         formatHealthEntryClosedStatusLabel(l, 'stopped_by_user'),
         l.careItemClosedByYou,

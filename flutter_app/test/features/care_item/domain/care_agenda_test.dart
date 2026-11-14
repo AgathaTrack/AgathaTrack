@@ -154,10 +154,7 @@ void main() {
       ], fixed: false),
     ]);
     expect(names(a.overdue), ['Overdue flea']);
-    expect(
-      a.today.values.expand(names).toList(),
-      ['Due today'],
-    );
+    expect(a.today.values.expand(names).toList(), ['Due today']);
     expect(names(a.dueSoon), ['Due soon']);
   });
 

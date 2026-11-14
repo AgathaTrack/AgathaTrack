@@ -178,7 +178,9 @@ void main() {
     expect(find.text('Entry not found'), findsOneWidget);
   });
 
-  testWidgets('CIH-2 shows Care details title while entry loads', (tester) async {
+  testWidgets('CIH-2 shows Care details title while entry loads', (
+    tester,
+  ) async {
     final entriesCompleter = Completer<List<HealthEntry>>();
     await tester.pumpWidget(
       buildApp(

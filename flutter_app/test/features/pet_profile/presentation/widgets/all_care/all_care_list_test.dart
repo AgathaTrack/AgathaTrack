@@ -60,8 +60,7 @@ Widget _wrap(
   HealthEntriesNotifier Function()? entriesNotifier,
 }) {
   final scope =
-      container ??
-      _buildContainer(entries, entriesNotifier: entriesNotifier);
+      container ?? _buildContainer(entries, entriesNotifier: entriesNotifier);
   return UncontrolledProviderScope(
     container: scope,
     child: MaterialApp(
