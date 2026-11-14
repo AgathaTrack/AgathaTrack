@@ -42,34 +42,49 @@ void main() {
     expect(text, l.careContextCoverageHasItemsToReview(3));
   });
 
-  test('handoverContactLines uses pet people relationships', () {
-    final lines = AwayPlanCopy.handoverContactLines(
-      l,
-      const PetPeople(
-        petId: 'p1',
-        petName: 'Buddy',
-        scope: 'owner',
-        owner: PetPeopleOwner(userId: 'u1', displayName: 'Alex'),
-        householdMembers: const [],
-        relationships: [
-          PetRelationship(
-            id: 'r1',
-            petId: 'p1',
-            contactId: 'c1',
-            relationshipKind: RelationshipKind.primaryVet,
-            isPrimary: true,
-            active: true,
-            contactKind: 'organisation',
-            contactName: 'Greenhill',
-            contactPhone: '555-0100',
-          ),
-        ],
-      ),
-    );
-    expect(lines, hasLength(1));
-    expect(lines.single, contains('Greenhill'));
-    expect(lines.single, contains('555-0100'));
-  });
+  test(
+    'APC-17 / handoverContactLines lists emergency contacts and vets from pet people',
+    () {
+      final lines = AwayPlanCopy.handoverContactLines(
+        l,
+        const PetPeople(
+          petId: 'p1',
+          petName: 'Buddy',
+          scope: 'owner',
+          owner: PetPeopleOwner(userId: 'u1', displayName: 'Alex'),
+          householdMembers: const [],
+          relationships: [
+            PetRelationship(
+              id: 'r1',
+              petId: 'p1',
+              contactId: 'c1',
+              relationshipKind: RelationshipKind.primaryVet,
+              isPrimary: true,
+              active: true,
+              contactKind: 'organisation',
+              contactName: 'Greenhill',
+              contactPhone: '555-0100',
+            ),
+            PetRelationship(
+              id: 'r2',
+              petId: 'p1',
+              contactId: 'c2',
+              relationshipKind: RelationshipKind.emergencyContact,
+              isPrimary: false,
+              active: true,
+              contactKind: 'person',
+              contactName: 'Sam',
+              contactPhone: '555-0199',
+            ),
+          ],
+        ),
+      );
+      expect(lines, hasLength(2));
+      expect(lines.any((line) => line.contains('Greenhill')), isTrue);
+      expect(lines.any((line) => line.contains('Sam')), isTrue);
+      expect(lines.any((line) => line.contains('555-0199')), isTrue);
+    },
+  );
 
   test('petCarerLabel maps shared_user and note_only carers', () {
     expect(

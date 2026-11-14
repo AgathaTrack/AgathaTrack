@@ -350,7 +350,7 @@ Instructions are not yet on the wire; defer until the field exists.
 - When no resolved past occurrences qualify, the module shows **No history yet** (no **See history**).
 - **No inline shortcuts** (e.g. Unmark done) in the list; changes, including undoing Done, happen on the occurrence's screen (D-CIE-040).
 - Each row is one pill: `{due dd MMM yy}` or `{due} at {HH:mm}` – **icon** `{close dd MMM yy when applicable}` — ✓ (green) for Done, ⏭ (grey) for Skipped / Not given, ? (grey) with no close date for Not recorded. No status words on the row; screen readers get full meaning via semantics (CARE-ITEM-R-023).
-- Attribution (**who recorded, when**) lives on the Care date screen footer (CARE-ITEM-R-022), not on History rows — narrows [#2056](https://github.com/AgathaTrack/AgathaTrack/issues/2056).
+- Attribution (**who recorded, when**) lives on the Care date screen footer (CARE-ITEM-R-022), not on History rows — narrows [#2056](https://github.com/KanopeeKa/AgathaCheck/issues/2056).
 - A row opens that occurrence's record (inline or from the pop-up; pop-up closes first).
 - An unresolved overdue occurrence never appears here.
 - A **Not recorded** dose offers **Record as given** (D-CSM-023) from its occurrence screen; it becomes Done; nothing else changes.
@@ -767,20 +767,19 @@ New FR wording is proposed and needs the FR copy pass.
 | Given / When / Then | Requirement | Coverage |
 |---------------------|-------------|----------|
 | CIH-1 — When strip shows Finished chip then `status == completed` maps to Finished (proxy for shipped header programme) | CARE-ITEM-R-001 | test: flutter_app/test/features/care_item/presentation/detail/care_item_context_strip_test.dart#Finished when status is completed |
-| CIH-2 — When route is loading, error, or pet not found then App bar still shows `careItemScreenTitle` | CARE-ITEM-R-001 | none — #1770 |
+| CIH-2 — When route is loading, error, or pet not found then App bar still shows `careItemScreenTitle` | CARE-ITEM-R-001 | test: flutter_app/test/features/care_item/presentation/detail/care_item_detail_screen_test.dart#CIH-2 shows Care details title while pets load; test: flutter_app/test/features/care_item/presentation/detail/care_item_detail_screen_test.dart#CIH-2 shows Care details title when pet is missing; test: flutter_app/test/features/care_item/presentation/detail/care_item_detail_screen_test.dart#CIH-2 shows Care details title while entry loads |
 | CIH-3 — When item paused then Strip shows Paused chip | CARE-ITEM-R-002 | test: flutter_app/test/features/care_item/presentation/detail/care_item_context_strip_test.dart#Paused when status is paused |
 | CIH-4 — When active then No strip status chip | CARE-ITEM-R-002 | test: flutter_app/test/features/care_item/presentation/detail/care_item_context_strip_test.dart#null when active |
-| CIH-5 — When series closed or completed then Finished chip only; never Archived without `closed_reason` | CARE-ITEM-R-002 | none — #1770 |
+| CIH-5 — When series closed or completed then Finished chip only; never Archived without `closed_reason` | CARE-ITEM-R-002 | test: flutter_app/test/features/care_item/presentation/detail/care_item_context_strip_test.dart#CIH-1 / CIH-5 Finished when status is completed; test: flutter_app/test/features/care_item/presentation/detail/care_item_context_strip_test.dart#CIH-5 closed labels use Ended or Closed by you, never Archived |
 | AG-3 — When Overdue items in agenda then Listed first in Today | CARE-ITEM-R-003 | test: flutter_app/test/features/care_item/domain/care_agenda_test.dart#AG overdue first, then today by time group, due soon, upcoming |
 | AG-7 — When Fixed-schedule stack then One row with count + Review | CARE-ITEM-R-005 | test: flutter_app/test/features/care_item/domain/care_agenda_test.dart#a stack is one overdue row with its count (DN-1b) |
 | STACK-1 — When overdue and not recorded then `startedOccurrences` includes them; coming up does not | CARE-ITEM-R-008 | test: flutter_app/test/features/care_item/domain/stack_rule_test.dart#overdue and not recorded have started; coming up has not |
 | STALE-1 — When care item read runs catch-up then Stale Sep 30 slots drop on Oct 4 (NR-1) | CARE-ITEM-R-011 | test: server/test/db/careOccurrences.staleOpen.integration.test.js#NR-1 care item read commits catch-up and drops Sep 30 slots on Oct 4 |
-| DOSE-1 — When two pending doses same calendar day then Selector opens; future-day head uses date confirmation not missed stack | CARE-ITEM-R-012 | none — #1770 |
-| MOB-1 — When mobile row marked done then Item stays in preview with Undo until server refresh completes | CARE-ITEM-R-013 | none — #1770 |
+| DOSE-1 — When two pending doses same calendar day then Selector opens; future-day head uses date confirmation not missed stack | CARE-ITEM-R-012 | manual — occurrence_stack_sheet widget test removed on main; stack selector coverage deferred |
+| MOB-1 — When mobile row marked done then Item stays in preview with Undo until server refresh completes | CARE-ITEM-R-013 | manual — optimistic mobile-row Undo preview has no stable widget harness |
 | NBR-1 — When Care date neighbour replace hops A→B→C then Each screen loads that occurrence; Previous returns to B | CARE-ITEM-R-020 | test: flutter_app/test/features/experience/presentation/care_item/occurrence/occurrence_neighbor_go_router_test.dart#replace neighbour hops reload occurrence data through two next and one previous |
 | PAUSE-1 — When item is paused with open occurrences on Care item view then Paused banner only; no per-occurrence or bulk action keys | CARE-ITEM-R-026 | test: flutter_app/test/features/care_item/presentation/detail/care_item_dates_section_test.dart#paused item with open occurrences shows only the paused banner |
 
-Coverage gaps: [#1770](https://github.com/AgathaTrack/AgathaTrack/issues/1770).
 
 ## Still open
 

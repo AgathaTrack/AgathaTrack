@@ -103,6 +103,34 @@ describe('fixed schedule (D-CSM-023)', () => {
     expect(after).toMatchObject({ status: 'skipped' });
   });
 
+  it('FX-9 monthly injection not logged keeps one overdue head and next month slot', async () => {
+    const entry = await created({
+      care_family: 'medication', frequency: 'monthly', next_due_date: '2026-06-03', name: 'Injection',
+    }, '2026-06-03T07:00');
+    await tick('2026-06-10T09:00');
+    const read = await api.at('2026-06-10T09:00').get(entry.id);
+    const open = read.body.open_occurrences;
+    expect(open.filter((o) => ['overdue', 'not_recorded'].includes(o.status))).toHaveLength(1);
+    expect(open.map((o) => o.scheduled_date)).toEqual(
+      expect.arrayContaining(['2026-06-03', '2026-07-03']),
+    );
+  });
+
+  it('FX-11 repeat end date stops new slots and the item can finish', async () => {
+    const entry = await created({
+      care_family: 'medication', frequency: 'daily', next_due_date: '2026-06-08',
+      schedule_times: ['08:00'], repeat_end_date: '2026-06-10', name: 'Short course',
+    }, '2026-06-08T07:00');
+    await tick('2026-06-12T09:00');
+    const read = await api.at('2026-06-12T09:00').get(entry.id);
+    expect(read.body.open_occurrences.every((o) => o.scheduled_date <= '2026-06-10')).toBe(true);
+    for (const occ of [...read.body.open_occurrences]) {
+      await api.at('2026-06-12T10:00').skip(entry.id, occ.id);
+    }
+    const finished = await api.at('2026-06-12T10:01').get(entry.id);
+    expect(finished.body.open_occurrences).toEqual([]);
+  });
+
   it('FX-12 bulk stack: complete one slot and skip another', async () => {
     const entry = await created(twiceDaily('2026-06-01'), '2026-06-01T07:00');
     const read = await api.at('2026-06-02T19:00').get(entry.id);
@@ -216,6 +244,19 @@ describe('next-date choice (D-CSM-026)', () => {
     expect(rows.find((r) => r.id === morning.id).status).toBe('pending');
     expect(rows.find((r) => r.id === evening.id).status).toBe('pending');
   });
+
+  it('UN-3 FX dose done then undo reopens the slot only', async () => {
+    const entry = await created(twiceDaily('2026-06-05'), '2026-06-05T07:00');
+    const morning = entry.open_occurrences[0];
+    const done = await api.at('2026-06-05T09:00').complete(entry.id, morning.id, {});
+    expect(done.statusCode).toBe(200);
+    const undone = await api.at('2026-06-05T09:01').undo(entry.id, { undo_token: done.body.undo_token });
+    expect(undone.statusCode).toBe(200);
+    const rows = await occurrenceRows(harness.pool, entry.id);
+    expect(rows.find((r) => r.id === morning.id).status).toBe('pending');
+    expect(done.body.entry.open_occurrences.length).toBeGreaterThanOrEqual(1);
+    expect(undone.body.entry.open_occurrences.some((o) => o.id === morning.id)).toBe(true);
+  });
 });
 
 describe('change date, postpone, type switch', () => {
@@ -246,6 +287,43 @@ describe('change date, postpone, type switch', () => {
     expect(read.body.open_occurrences.map((o) => o.scheduled_date)).toEqual(['2026-06-10', '2026-06-11']);
   });
 
+  it('PP-8 paused FX with missed doses is hidden from open slots; tick closes old ones', async () => {
+    const entry = await created(twiceDaily('2026-06-01'), '2026-06-01T07:00');
+    await api.at('2026-06-04T18:01').get(entry.id);
+    const paused = await api.at('2026-06-04T18:05').postpone(entry.id, { until: '2026-06-20' });
+    expect(paused.body.entry.status).toBe('paused');
+    expect(paused.body.entry.open_occurrences).toEqual([]);
+    await tick('2026-06-08T09:00');
+    const rows = await occurrenceRows(harness.pool, entry.id);
+    expect(rows.every((r) => r.status === 'not_recorded' || r.status === 'skipped')).toBe(true);
+    const read = await api.at('2026-06-08T09:00').get(entry.id);
+    expect(read.body.status).toBe('paused');
+    expect(read.body.open_occurrences).toEqual([]);
+  });
+
+  it('PP-4 FX pause resume defaults to the first slot on or after now', async () => {
+    const entry = await created(twiceDaily('2026-06-05'), '2026-06-05T07:00');
+    await api.at('2026-06-10T09:00').postpone(entry.id, { until: null });
+    const paused = await api.at('2026-06-19T09:00').get(entry.id);
+    expect(paused.body.status).toBe('paused');
+    expect(paused.body.resume_default_date).toBe('2026-06-19');
+    const resumed = await api.at('2026-06-20T08:00').resume(entry.id, {});
+    expect(resumed.statusCode).toBe(200);
+    const firstSlot = resumed.body.entry.open_occurrences[0];
+    expect(firstSlot.scheduled_date).toBe('2026-06-20');
+    expect(['due', 'coming_up', 'pending']).toContain(firstSlot.status);
+  });
+
+  it('PL-7 FX planned extra one-off dose is independent planned', async () => {
+    const entry = await created(twiceDaily('2026-06-05'), '2026-06-05T07:00');
+    const res = await api.at('2026-06-05T10:00').plan(entry.id, { scheduled_date: '2026-06-07' });
+    expect([200, 201]).toContain(res.statusCode);
+    const entryBody = res.body.entry ?? res.body;
+    const extra = entryBody.open_occurrences.find((o) => o.scheduled_date === '2026-06-07');
+    expect(extra).toMatchObject({ origin: 'planned', status: 'coming_up' });
+    expect(entryBody.open_occurrences.filter((o) => o.scheduled_date === '2026-06-05')).toHaveLength(2);
+  });
+
   it('TS-1 switching to after it\'s done closes the stack and computes from the last dose', async () => {
     const entry = await created({ care_family: 'medication', frequency: 'daily', next_due_date: '2026-06-01', name: 'Switch' }, '2026-06-01T07:00');
     await api.at('2026-06-01T09:00').complete(entry.id, entry.open_occurrences[0].id, {});
@@ -259,6 +337,97 @@ describe('change date, postpone, type switch', () => {
     ]);
     const rows = await occurrenceRows(harness.pool, entry.id);
     expect(rows.filter((r) => r.status === 'not_recorded').length).toBeGreaterThan(0);
+  });
+
+  it('TS-1b switching to after it\'s done keeps a planned date as the only open occurrence', async () => {
+    const entry = await created({
+      care_family: 'medication', frequency: 'daily', next_due_date: '2026-06-01', name: 'Switch planned',
+    }, '2026-06-01T07:00');
+    await api.at('2026-06-03T09:00').complete(entry.id, entry.open_occurrences[0].id, {});
+    const planned = await api.at('2026-06-03T09:05').plan(entry.id, { scheduled_date: '2026-06-20' });
+    expect(planned.statusCode).toBe(201);
+    const plannedOcc = planned.body.entry.open_occurrences.find((o) => o.scheduled_date === '2026-06-20');
+    const res = await api.at('2026-06-03T09:10').put(entry.id, {
+      name: 'Switch planned', care_family: 'medication', frequency: 'daily', recurrence_anchor: 'from_completion',
+      next_due_date: '2026-06-02',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.open_occurrences).toEqual([
+      expect.objectContaining({ id: plannedOcc.id, scheduled_date: '2026-06-20', origin: 'planned' }),
+    ]);
+    expect(res.body.open_occurrences.filter((o) => o.origin === 'computed')).toHaveLength(0);
+  });
+
+  it('TS-2 switching to fixed schedule keeps a planned future date as anchor', async () => {
+    const entry = await created({
+      care_family: 'parasite_prevention', frequency: 'monthly', next_due_date: '2026-06-05', name: 'Flea',
+    }, '2026-06-01T09:00');
+    const occ = entry.open_occurrences[0];
+    const moved = await api.at('2026-06-01T09:00').reschedule(entry.id, occ.id, { scheduled_date: '2026-07-01' });
+    expect(moved.statusCode).toBe(200);
+    const res = await api.at('2026-06-01T09:05').put(entry.id, {
+      name: 'Flea', care_family: 'parasite_prevention', frequency: 'monthly', recurrence_anchor: 'from_due_date',
+      next_due_date: '2026-07-01',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.recurrence_anchor).toBe('from_due_date');
+    expect(res.body.open_occurrences.map((o) => o.scheduled_date)).toEqual(['2026-07-01']);
+    expect(new Set(res.body.open_occurrences.map((o) => o.id)).size).toBe(1);
+  });
+
+  it('TS-3 weekly fixed schedule cadence change with following scope rebuilds from today', async () => {
+    const entry = await created({
+      care_family: 'medication', frequency: 'weekly', next_due_date: '2026-06-08', name: 'Weekly',
+    }, '2026-06-01T07:00');
+    const res = await api.at('2026-06-10T09:00').put(entry.id, {
+      name: 'Weekly', care_family: 'medication', frequency: 'weekly', frequency_interval: 2,
+      recurrence_anchor: 'from_due_date', next_due_date: '2026-06-10', cadence_scope: 'following',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.frequency_interval).toBe(2);
+    expect(res.body.schedule_anchor_date).toBe('2026-06-10');
+    const dates = res.body.open_occurrences.map((o) => o.scheduled_date);
+    expect(dates).toContain('2026-06-10');
+    expect(new Set(dates).size).toBe(dates.length);
+  });
+
+  it('OR-1 tick does not add a computed row when the only open date is planned', async () => {
+    const entry = await created({
+      care_family: 'parasite_prevention', frequency: 'monthly', next_due_date: '2026-06-05', name: 'Flea',
+    }, '2026-06-01T09:00');
+    const occ = entry.open_occurrences[0];
+    const moved = await api.at('2026-06-01T09:00').reschedule(entry.id, occ.id, { scheduled_date: '2026-06-20' });
+    expect(moved.body.entry.open_occurrences).toHaveLength(1);
+    await tick('2026-06-15T09:00');
+    const read = await api.at('2026-06-15T09:00').get(entry.id);
+    expect(read.body.open_occurrences).toHaveLength(1);
+    expect(read.body.open_occurrences[0]).toMatchObject({ scheduled_date: '2026-06-20', origin: 'planned' });
+  });
+
+  it('OR-2 following reschedule rebuilds schedule slots but keeps a planned extra dose', async () => {
+    const entry = await created(twiceDaily('2026-06-05'), '2026-06-05T07:00');
+    const planned = await api.at('2026-06-05T10:00').plan(entry.id, { scheduled_date: '2026-06-07' });
+    const extraId = planned.body.entry.open_occurrences.find((o) => o.scheduled_date === '2026-06-07').id;
+    const anchor = planned.body.entry.open_occurrences.find((o) => o.scheduled_date === '2026-06-05' && o.scheduled_time === '08:00');
+    const res = await api.at('2026-06-05T11:00').reschedule(entry.id, anchor.id, {
+      scheduled_date: '2026-06-06', scope: 'following',
+    });
+    expect(res.statusCode).toBe(200);
+    const extraStill = res.body.entry.open_occurrences.find((o) => o.id === extraId);
+    expect(extraStill).toMatchObject({ scheduled_date: '2026-06-07', origin: 'planned' });
+    expect(res.body.entry.open_occurrences.filter((o) => o.origin === 'schedule').length).toBeGreaterThan(0);
+  });
+
+  it('FX-10 completing the next dose early marks early timing without shifting other slots', async () => {
+    const entry = await created(twiceDaily('2026-06-05'), '2026-06-05T07:00');
+    const read = await api.at('2026-06-05T20:00').get(entry.id);
+    const tomorrowMorning = read.body.open_occurrences.find(
+      (o) => o.scheduled_date === '2026-06-06' && o.scheduled_time === '08:00',
+    );
+    const res = await api.at('2026-06-05T20:00').complete(entry.id, tomorrowMorning.id, {});
+    expect(res.statusCode).toBe(200);
+    expect(res.body.occurrence.completion_timing).toBe('early');
+    expect(res.body.entry.open_occurrences.some((o) => o.scheduled_date === '2026-06-05' && o.scheduled_time === '18:00')).toBe(true);
   });
 });
 

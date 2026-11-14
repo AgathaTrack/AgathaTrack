@@ -34,7 +34,7 @@ describe('absence pet lifecycle helpers', () => {
     expect(capturedSql).toContain('health_entries');
   });
 
-  it('cancelEmptyActiveAbsences cancels absences with no pets', async () => {
+  it('AP-11 / cancelEmptyActiveAbsences cancels absences with no pets', async () => {
     const updates = [];
     const client = {
       query: async (sql, params) => {

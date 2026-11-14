@@ -260,6 +260,48 @@ void main() {
     expect(find.text('Not recorded (open)'), findsNothing);
   });
 
+  testWidgets(
+    'AID-10 estimated next is subtitle only, not an actionable upcoming row',
+    (tester) async {
+      final today = careToday();
+      final schedule = CareItemSchedule(
+        entryId: 'flea',
+        petId: 'pet-1',
+        name: 'Flea',
+        careFamily: 'parasite_prevention',
+        isFixedSchedule: false,
+        status: 'active',
+        openOccurrences: [
+          OpenOccurrence(
+            id: 'overdue-1',
+            date: today.subtract(const Duration(days: 2)),
+            status: CareOccurrenceStatus.overdue,
+            origin: CareOccurrenceOrigin.computed,
+          ),
+        ],
+        asOf: careAsOfNow(),
+        estimatedNext: EstimatedNext(
+          date: today.add(const Duration(days: 30)),
+          basis: 'done_today',
+        ),
+      );
+      final entry = scheduledEntry(
+        id: 'flea',
+        name: 'Flea',
+        fixed: false,
+        open: schedule.openOccurrences,
+      ).copyWith(schedule: schedule);
+      await _pumpSection(tester, entry);
+
+      expect(find.byKey(const Key('care_item_estimated_next')), findsOneWidget);
+      expect(
+        find.byKey(const Key('care_item_upcoming_overdue-1')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('care_item_bulk_mark_done')), findsNothing);
+    },
+  );
+
   testWidgets('single started row has no bulk bar', (tester) async {
     final today = careToday();
     final entry = scheduledEntry(
