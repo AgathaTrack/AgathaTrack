@@ -17,7 +17,7 @@ Operator guide for **Phase 1** private support intake. Canonical product rules: 
 |------|--------|
 | Support issues repo | **AgathaTrack/AgathaTrackPrivate** (private; support requests only) |
 | Engineering repo | **AgathaTrack/AgathaTrack** (public; no user text from support) |
-| Support board | [@ATSupport](https://github.com/orgs/AgathaTrack/projects/1) (org project) |
+| Support board | [ATSupport](https://github.com/orgs/AgathaTrack/projects/1) (org project) |
 | Issue feed | Built-in auto-add: repo AgathaTrackPrivate, filter `is:issue` — **confirmed**. No `actions/add-to-project` workflow and no board PAT unless auto-add later fails (record risk first). |
 | Pawpet engineering board | [Pawpet](https://github.com/orgs/AgathaTrack/projects/2) — engineering issues only; support issues must not appear there |
 
@@ -47,7 +47,7 @@ If the token cannot set issue type or fields, the worker must not treat the crea
 
 Local dev / tests: leave `SUPPORT_GITHUB_REPO` empty so GitHub outbox rows stay `disabled`.
 
-## @ATSupport board columns
+## ATSupport board columns
 
 | Column | Meaning | Moved by |
 |--------|---------|----------|
@@ -105,14 +105,14 @@ AT-XXXXXXXX (category: <bug|suggestion|account|billing>)
 ## Links
 
 - Private support issue: **do not paste URL or body** — use the AT- reference only in AgathaTrack.
-- Engineering issue URL: fill the **Engineering issue** field on the @ATSupport card after creation.
+- Engineering issue URL: fill the **Engineering issue** field on the ATSupport card after creation.
 
 ## Acceptance
 
 <!-- What “done” means for engineering. -->
 ```
 
-After creation, put the AgathaTrack issue URL in the card's **Engineering issue** field on @ATSupport.
+After creation, put the AgathaTrack issue URL in the card's **Engineering issue** field on ATSupport.
 
 ## Redacted issues (D-014)
 
@@ -148,7 +148,7 @@ Run after the Phase 3 migration on each environment. Staff read tickets at `/sta
 ## Prerequisites checklist (operator)
 
 - [ ] AgathaTrackPrivate private; issue types Support Bug and Support Question; fields Support Category, Environment, Source, Website or App; label `redacted` only for erasure
-- [ ] @ATSupport columns and workflows (item added → New; item closed → Done)
+- [ ] ATSupport columns and workflows (item added → New; item closed → Done)
 - [ ] Engineering issue text field and saved views above
 - [ ] Tokens `agathatrack-support-uat` / `agathatrack-support-prod` in GitHub environments (**values** in secrets UI only) with org issue types + issue fields permissions per table above
 - [ ] Smoke (post R-023): form submit creates issue with expected type and fields, not `category:*` labels
