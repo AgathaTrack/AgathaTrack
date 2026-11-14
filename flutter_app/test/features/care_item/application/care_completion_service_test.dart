@@ -57,7 +57,7 @@ void main() {
       },
     );
 
-    test('DN-3 sends the chosen date as a calendar day', () async {
+    test('AID-11 / DN-3 sends the chosen date as a calendar day', () async {
       final recorder = RecordingClient((_) => jsonResponse(commandJson()));
       await serviceFor(recorder).complete(
         request(

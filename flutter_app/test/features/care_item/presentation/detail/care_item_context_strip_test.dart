@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pet_profile_app/core/providers/api_base_url_provider.dart';
 import 'package:pet_profile_app/features/experience/presentation/care_item/detail/care_item_context_strip.dart';
+import 'package:pet_profile_app/features/health_tracking/presentation/widgets/health_entry_lifecycle_list_status.dart';
 import 'package:pet_profile_app/features/experience/presentation/care_item/detail/care_item_pet_context_tile.dart';
 import 'package:pet_profile_app/features/health_tracking/domain/entities/health_entry.dart';
 import 'package:pet_profile_app/features/health_tracking/presentation/widgets/care_family/care_family_icon.dart';
@@ -72,6 +73,30 @@ void main() {
   group('careItemStripChip', () {
     test('Closed when status is closed', () {
       expect(careItemStripChip(baseEntry(status: 'closed')), isNotNull);
+    });
+
+    test('CIH-1 / CIH-5 Finished when status is completed', () {
+      final entry = baseEntry(status: 'completed');
+      expect(careItemStripChip(entry), isNotNull);
+      final l = lookupAppLocalizations(const Locale('en'));
+      expect(careItemStripChipLabel(l, entry), l.careItemEndedStatus);
+      expect(careItemStripChipLabel(l, entry), isNot('Archived'));
+    });
+
+    test('CIH-5 closed labels use Ended or Closed by you, never Archived', () {
+      final l = lookupAppLocalizations(const Locale('en'));
+      expect(
+        formatHealthEntryClosedStatusLabel(l, null),
+        l.careItemEndedStatus,
+      );
+      expect(
+        formatHealthEntryClosedStatusLabel(l, 'stopped_by_user'),
+        l.careItemClosedByYou,
+      );
+      expect(
+        formatHealthEntryClosedStatusLabel(l, 'stopped_by_user'),
+        isNot(contains('Archived')),
+      );
     });
 
     test('Paused when status is paused', () {

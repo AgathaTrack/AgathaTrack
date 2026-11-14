@@ -119,6 +119,45 @@ void main() {
     expect(a.dueSoon, isEmpty);
   });
 
+  test(
+    'AID-7 daily dental missed several days is one overdue row, not a stack',
+    () {
+      final a = agenda([
+        item(
+          'Dental chew',
+          [
+            occ(
+              'o',
+              7,
+              CareOccurrenceStatus.overdue,
+              origin: CareOccurrenceOrigin.computed,
+            ),
+          ],
+          fixed: false,
+          daily: true,
+        ),
+      ]);
+      expect(a.overdue, hasLength(1));
+      expect(a.overdue.single.isStack, isFalse);
+      expect(a.overdue.single.occurrence?.id, 'o');
+    },
+  );
+
+  test('AG-8 one pet agenda mirrors buildCareAgenda section buckets', () {
+    final a = agenda([
+      item('Overdue flea', [
+        occ('f', 5, CareOccurrenceStatus.overdue),
+      ], fixed: false),
+      item('Due today', [occ('d', 10, CareOccurrenceStatus.due)]),
+      item('Due soon', [
+        occ('s', 13, CareOccurrenceStatus.comingUp),
+      ], fixed: false),
+    ]);
+    expect(names(a.overdue), ['Overdue flea']);
+    expect(a.today.values.expand(names).toList(), ['Due today']);
+    expect(names(a.dueSoon), ['Due soon']);
+  });
+
   test('paused and ended items are left out', () {
     final a = agenda([
       item('P', [occ('p', 5, CareOccurrenceStatus.overdue)], status: 'paused'),
