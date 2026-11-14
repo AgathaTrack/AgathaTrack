@@ -3,11 +3,8 @@ title: Issue pipeline automation — proposal
 owner: Documentation Team
 audience: both
 status: proposed
-status_since: 2026-11-14
 last_updated: 2026-11-14
 tags: [agent-efficiency, github-issues, automation, security]
-folds_into: [docs/agent-efficiency/github-issue-workflow.md, docs/agent-efficiency/github-labels.md, .cursor/skills/light-plan/SKILL.md, docs/agent-efficiency/plans/execute-plan-v2/contracts.md]
-companion: [issue-pipeline-dispatcher-spec.md]
 ---
 
 # Issue pipeline automation — proposal
@@ -17,6 +14,8 @@ Automate engineering issues from intake through production: **Pawpet** board col
 **Repository:** [`AgathaTrack/AgathaTrack`](https://github.com/AgathaTrack/AgathaTrack) (org-owned, free plan). **Board:** org Project [**Pawpet**](https://github.com/orgs/AgathaTrack/projects/2).
 
 Grounded in manual Agent1/Agent2 review on 2026-11-13 (#311, #1672, #1770, #2116, #2139, #2175), org migration (#2324, #2328, #2330), and automation already on `main`. **Analysis and target design only** until stacked build PRs land.
+
+**Folds into (on build):** `github-issue-workflow.md`, `github-labels.md`, light-plan skill, execute-plan v2 contracts.
 
 Implementation detail (events, tokens, lanes, locks): [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 
