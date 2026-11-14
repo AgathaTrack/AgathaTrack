@@ -7,364 +7,307 @@ status_since: 2026-11-14
 last_updated: 2026-11-14
 tags: [agent-efficiency, github-issues, automation, security]
 folds_into: [docs/agent-efficiency/github-issue-workflow.md, docs/agent-efficiency/github-labels.md, .cursor/skills/light-plan/SKILL.md, docs/agent-efficiency/plans/execute-plan-v2/contracts.md]
+companion: [issue-pipeline-dispatcher-spec.md]
 ---
 
 # Issue pipeline automation — proposal
 
-This proposal automates the issue flow end to end: Backlog → To do → In Analysis → Ready → In Progress → In Main → In UAT → In Prod. Claude and Cursor review each issue in alternating rounds until they agree. The pipeline then picks a delivery method, implements under a work-in-progress limit, and tracks the release in GitHub Actions.
+Automate engineering issues from intake through production: **Pawpet** board columns show **stage**, **assignee** shows **whose turn**, and a hidden **state block** holds round count and machine fields. Claude (`pawpet-claude`) and Cursor (`pawpet-bot`) alternate on review; Cursor chooses delivery and implements under a work-in-progress limit; GitHub Actions track release.
 
-The proposal is based on the manual Agent1/Agent2 review rounds run on 2026-11-13 (issues #311, #1672, #1770, #2116, #2139, #2175) and on the automation already in the repo. It is analysis only; nothing here is built yet.
+**Repository:** [`AgathaTrack/AgathaTrack`](https://github.com/AgathaTrack/AgathaTrack) (org-owned, free plan). **Board:** org Project [**Pawpet**](https://github.com/orgs/AgathaTrack/projects/2).
 
-**Owner decisions (2026-11-13):**
+Grounded in manual Agent1/Agent2 review on 2026-11-13 (#311, #1672, #1770, #2116, #2139, #2175), org migration (#2324, #2328, #2330), and automation already on `main`. **Analysis and target design only** until stacked build PRs land.
 
-| # | Question | Decision |
-|---|---|---|
-| 1 | Who approves execute-plan programmes started by the pipeline? | **(b) Coded auto-approve policy** in the approve workflow, run as the bot, under strict conditions (§8). Never an agent posting the approval line with the owner token. |
-| 2 | Lifecycle of light-plan issues | **Hybrid:** the agent session stops at Pre-UAT green; Actions move the issue through In Main → In UAT → In Prod and close it (§9). |
-| 3 | Move repo and Project to a GitHub organisation? | **Not now** — stay user-owned; labels are the source of truth for status (§2). |
+Implementation detail (events, tokens, lanes, locks): [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 
-## 1. What already exists
+## Recorded elsewhere
 
-About half of the planned pipeline is already in the repo. The new design should extend these pieces rather than duplicate them.
+| What | Where | Status |
+|------|-------|--------|
+| Agent review rounds on the six issues | Issue comments and bodies | Recorded |
+| Delivery method per issue | Issue body + `PR` / `light-plan` label | Recorded |
+| This proposal (architecture, gaps, decisions) | This file (+ dispatcher spec) | **This PR** |
+| Org migration (repo, Pawpet, status values) | `main`: #2324, #2328, #2330, `github-issue-workflow.md` | Live |
+| Live triage (`human-reviewed` → Ready) | `triage-human-reviewed.yml`, `github-issue-workflow.md` | Live until dispatcher replaces it |
 
-| Piece | File | What it does today |
-|---|---|---|
-| Deterministic triage | `.github/workflows/triage-human-reviewed.yml`, `.github/scripts/triage-lib.js` | On `human-reviewed`: checks the issue form sections, flags risky keywords as `manual-only`, otherwise adds `agent-approved` and sets **Ready** |
-| Agent dispatch | `.github/workflows/agent-dispatch.yml` | Launches one Cursor agent at a time (`concurrency: agent-dispatch`) for Ready + `agent-approved` + `human-reviewed` issues |
-| Sanitised payload | `.github/scripts/agent-payload-lib.js` | Builds the agent prompt from issue form sections only; **raw comments are never sent** |
-| Agent monitor | `.github/workflows/agent-monitor.yml` | Polls Cursor runs through the run marker `<!-- cursor-agent-run: … -->` (manual dispatch only) |
-| Merge → In Main | `.github/workflows/issue-agent-pr-merge.yml`, `.github/scripts/issue-agent-handlers.js` | On a merged `cursor/**` PR with `Refs #n`: removes `busy`, reopens, sets **In Main**, records the expected `uat-YYMMDD-PR#` tag. Skips plan control issues. |
-| UAT tag and deploy | `promote-uat.yml`, `deploy-uat.yml` (`agent-uat-notify`) | Tags the merge, deploys, sets **In UAT** when every gate passes |
-| Prod deploy | `deploy-prod.yml` | Deploys after Prod ready; **no issue notify** |
-| Execute-plan v2 | `execute-plan-approve.yml`, `execute-plan-driver.yml` (30-minute cron) | Owner approval, then a driver that runs `tick` and launches workers; kill switch `EXECUTE_PLAN_DRIVER` |
-| Forbidden paths | `.github/scripts/agent-safety-lib.js`, `agent-pr-safety-gate.yml` | Fails agent PRs touching `db/migrations/**`, `server/config/security.js`, `infra/**`, `/auth/`, `/billing/`, `/secrets?/` |
+**Programme status (2026-11-14):**
 
-## 2. Access and identities
+| Issue | Status |
+|-------|--------|
+| #2139 | Delivered; closed after UAT validation (`uat-261114-2319`) |
+| #1770 | Light-plan paused (`busy`); resume `continue light-plan #1770` on `cursor/ac-coverage-1770-integration-bc17` |
+| #2175, #1672, #2116, #311 | Ready + `PR`; not started |
 
-### 2.1 Labels are the source of truth for status
+**Collateral to retire after build:** `Agent1:*`, `Agent2:*`, `AgentReview-*`, ad-hoc `Claude Validated` — replaced by assignee handoffs and comments.
 
-Agents never write to the GitHub Project.
+---
 
-- One status label per state, exactly one per issue: `status:backlog`, `status:todo`, `status:analysis`, `status:planned`, `status:ready`, `status:in-progress`, `status:in-main`, `status:in-uat`, `status:done`.
-- A **Project sync** workflow runs on `issues: labeled` and sets the Project **Status** field. It is the only job holding `GH_PROJECTS_PAT`, in the `automation` environment.
-- A reverse sync (board move → label) is optional, needed only if humans keep moving cards by hand.
+## Owner decisions
 
-What this solves:
+| # | Question | Decision | Log ID |
+|---|----------|----------|--------|
+| 1 | Who approves execute-plan programmes started by the pipeline? | **(b) Coded auto-approve policy** in the approve workflow, as the bot, under strict conditions (§8). Never an agent posting the approval line with the owner token. | ISSUE-PIPELINE-D-001 |
+| 2 | Lifecycle of light-plan issues | **Hybrid:** agent session stops at Pre-UAT green; Actions move In Main → In UAT → In Prod and close (§9). | ISSUE-PIPELINE-D-002 |
+| 3 | Repo and Project ownership | **Superseded:** org-owned `AgathaTrack/AgathaTrack`; Pawpet board is the human view of **stage**. Fine-grained repo-scoped PATs and/or a GitHub App with org Projects permission are allowed (§2). | ISSUE-PIPELINE-D-003 → **D-003b** |
+| 4 | Review counters in titles | **Hidden state block** in the issue body, bot-written only (§4). | ISSUE-PIPELINE-D-004 |
+| 5 | Whose turn | **Assignee** is the single “ball in court” signal: `pawpet-claude`, `pawpet-bot`, `KanopeeKa`, or unassigned (automation / queued). Does not replace board column or state block (§3, §6). | ISSUE-PIPELINE-D-005 |
+| 6 | In Analysis vs To do | **No separate “Agent Review” column.** Backlog → **To do** = human (or policy) decision to enter the pipeline. **Assigned** Pawpet collaborator agent = inside automation; **unassigned** To do = outside automation. **In Analysis** = agent peer-review stage. Deterministic triage runs at the **start of To do** (before Claude intake), not as a separate board meaning (§5). | ISSUE-PIPELINE-D-006 |
 
-- Claude no longer needs Projects access; its current gap ("sees labels, not status") disappears.
-- No agent token needs the `project` scope.
-- The `project_secrets_missing` failures from `github_issue_workflow.js set-status` stop mattering for agents.
+---
 
-### 2.2 Identities
+## 1. What already exists on `main`
 
-| Actor | Identity | Token |
-|---|---|---|
-| Cursor agents | `pawpet-bot` (existing) | Classic PAT, `repo` only. Pushes and PRs go through the Cursor GitHub App. |
-| Claude agents | **New machine user `pawpet-claude`** | Classic PAT, `repo` only; collaborator on AgathaCheck **only**, because a classic PAT reaches every repo the account can access. When Claude runs in Actions (`claude-code-action`), the workflow `GITHUB_TOKEN` with `issues: write` and `pull-requests: write` may be enough. |
-| Deterministic workflows | `GITHUB_TOKEN` | Plus `GH_PROJECTS_PAT` in the Project sync job only |
-| Owner | `OWNER_GH_TOKEN` | Humans only. No autonomous lane holds it. |
+Extend these; do not duplicate.
 
-A separate Claude login gives:
+| Piece | Location | Today |
+|-------|----------|--------|
+| Deterministic triage | `triage-human-reviewed.yml`, `triage-lib.js` | On `human-reviewed`: form checks → **Ready** + `agent-approved` or Backlog / `manual-only` |
+| Cursor dispatch | `agent-dispatch.yml` | Single-threaded Ready + `agent-approved` + `human-reviewed` |
+| Payload / safety | `agent-payload-lib.js`, `agent-safety-lib.js` | Sanitised prompts; forbidden paths |
+| Monitor | `agent-monitor.yml` | Polls run marker (manual dispatch) |
+| Merge → In Main | `issue-agent-pr-merge.yml`, `issue-agent-handlers.js` | Merged `cursor/**` + `Refs #n`; skips plan control issues |
+| UAT | `promote-uat.yml`, `deploy-uat.yml` | Tag, deploy, **In UAT** notify |
+| Prod | `deploy-prod.yml` | Deploy only — **no issue notify** |
+| Execute-plan v2 | `execute-plan-approve.yml`, driver cron | Owner/MEMBER approve; `EXECUTE_PLAN_DRIVER` kill switch |
 
-- an audit trail of which agent did what;
-- separate revocation and rate limits;
-- **enforced review independence:** the dispatcher can require that a review comment's author differs from the previous round's author.
+**Constraint (unchanged):** GitHub Actions cannot trigger on Project v2 status changes (`projects_v2_item` is webhook-only). Something Actions *can* trigger on must drive the pipeline: **assignment**, labels, or comments. The board stays the display, synced by automation.
 
-### 2.3 Least privilege per lane
+### 1.1 Current setup by Pawpet status
 
-| Lane | Contents | Issues | Pull requests |
-|---|---|---|---|
-| Intake, review, delivery | read | write | none |
-| Implement, monitor | write | write | write |
-| Release tracking | none (Actions only) | write | read |
+| Status | What moves issues today | Agent |
+|--------|-------------------------|-------|
+| Backlog | Issue forms; triage returns incomplete issues | — |
+| To do | Manual only | — |
+| In Analysis | `human-reviewed` → triage workflow | None (deterministic only) |
+| Ready | `agent-dispatch.yml` | Cursor |
+| In progress | Dispatch; `agent-monitor.yml` manual | Cursor |
+| In Main | `issue-agent-pr-merge.yml` | — |
+| In UAT | `deploy-uat.yml` `agent-uat-notify` | — |
+| Done | Manual or validation comment (#2139) | — |
+| Prod (deploy) | `deploy-prod.yml` | Does not touch issues |
 
-Enforce this through the token and launch settings, not prompt instructions.
+---
 
-### 2.4 Token hygiene
+## 2. Access and identities (post–org migration)
 
-- Every PAT has an expiry of about 90 days and a rotation reminder.
-- `OWNER_GH_TOKEN` is a dashboard secret today, so it reaches every Cloud VM. Narrow it to the runs that need it, or keep owner-only actions inside Actions environments with required reviewers.
-- No agent token gets the `workflow` scope (as today). Changes to workflows and to the safety library go through owner review (`agent-pr-safety-gate`, `guard-rail-change-alert`).
+| Actor | Login | Token notes |
+|-------|-------|-------------|
+| Cursor workers | `pawpet-bot` | Classic or **fine-grained PAT** scoped to this repo; pushes/PRs via Cursor GitHub App |
+| Claude workers | `pawpet-claude` | Fine-grained PAT or `claude-code-action` with workflow token where sufficient |
+| Dispatcher / board sync | Bot PAT(s) with **org Project** read/write | `GH_PROJECTS_PAT` or fine-grained + Projects; not on every Cloud VM |
+| Owner escalation | `KanopeeKa` | Assignment + `needs-owner`; execute-plan approve accepts MEMBER + owner login (#2324) |
+| Deterministic steps | `GITHUB_TOKEN` | Cannot chain-trigger other workflows — handoffs use bot PAT (§6.4) |
 
-## 3. Architecture: one dispatcher with lanes
+**Token hygiene:** Narrow `OWNER_GH_TOKEN` off default Cloud VMs; prefer repo-scoped fine-grained tokens now that the repo is org-owned. No agent token gets `workflow` scope.
 
-Use one general dispatcher, the pattern `scripts/execute_plan_runtime.js tick` already proves.
+---
 
-- **Dispatcher:** a plain Node script in Actions. It reads labels, the state marker (§4), PRs, CI runs and agent runs, then decides **one next action per issue**. It launches a narrow worker (Cursor API or Claude) for that one issue and step.
-- **Workers** never filter "all issues in status X". They do one step and end. This removes most prompt drift and double processing.
-- **Lanes**, each with its own concurrency group and per-tick cap:
+## 3. Target model: three visible signals
 
-| Lane | Agent | Cap per tick |
-|---|---|---|
-| Intake | Claude | 2 |
-| Review | Cursor and Claude, alternating | 2 per agent |
-| Delivery | Cursor | 1 |
-| Implement | Cursor (Composer 2.5) | Work-in-progress limit (§6) |
-| Monitor | Cursor | 2 |
-| Release tracking | No agent (Actions) | — |
+| Signal | Role | Values |
+|--------|------|--------|
+| **Board column (Pawpet Status)** | Stage in the lifecycle | Backlog, To do, In Analysis, Ready, In progress, In Main, In UAT, Done (+ Prod tracking via notify) |
+| **Assignee** | Whose turn | `pawpet-claude`, `pawpet-bot`, `KanopeeKa`, or *nobody* (queued / Actions-only stages) |
+| **Delivery label** | How to implement | `PR`, `light-plan`, `execute-plan` (on **Ready** after delivery step) |
 
-- **Per-issue lock:** reuse the `busy` label plus a run marker holding the agent ID and start time. Reclaim a stale lock after a set time (for example 3 hours for analysis lanes).
-- **Kill switch and dry run:** a repo variable (for example `ISSUE_PIPELINE`) with `off` (default) / `dry-run` / `on`, checked first, like `EXECUTE_PLAN_DRIVER`.
-- **Consolidation:** fold `triage-human-reviewed.yml`, `agent-dispatch.yml` and `agent-monitor.yml` into the dispatcher, or retire them. Otherwise two dispatchers compete for the same Ready issues.
+Plus **hidden state block** (§4): `round`, `body_sha`, `owner_reason`, `delivery`, run ids.
 
-## 4. State marker instead of title counters
+**Retire** verdict labels (`Claude:*`, `Cursor:*`, `review:*`) when assignee handoffs land: Green with edits or Red → reassign to the other agent; Green with no substantive body change → advance column and unassign.
 
-The proposed `[x]` and `[x][y]` title counters break existing automation. `isPlanControlIssue` in `.github/scripts/issue-agent-handlers.js` matches `/^(?:\[)?(?:light-plan|execute-plan)\b/i`; a title like `[0] light-plan: …` no longer matches, so the merge handler treats a programme issue as a product ticket. Titles are also edited by humans and fire `edited` events.
+**Keep** `needs-owner` **label** for execute-plan driver STOP compatibility; mirror reason in the state block.
 
-Use one hidden marker, written only by the bot identities, at the end of the issue body:
+---
 
-```
-<!-- agent-state: {"round":3,"stuck":0,"last_reviewer":"cursor","verdict":"red","body_sha":"…","delivery":"PR","owner_reason":null} -->
+## 4. Hidden state block
+
+Do not use title counters — they break `isPlanControlIssue` and human edits.
+
+```html
+<!-- agent-state: {"round":3,"stuck":0,"last_assignee":"pawpet-claude","body_sha":"…","delivery":"PR","owner_reason":null,"run_id":null} -->
 ```
 
 | Field | Meaning |
-|---|---|
-| `round` | Review rounds so far (replaces the first title counter) |
-| `stuck` | Monitor relaunches while In Progress (replaces the second title counter) |
-| `last_reviewer` | `claude` or `cursor`; the next reviewer is the other one |
-| `verdict` | Latest verdict |
-| `body_sha` | Hash of the agreed body text at the last verdict; used for the convergence rule (§5.3) |
-| `delivery` | `PR`, `light-plan` or `execute-plan` once chosen |
-| `owner_reason` | Why `needs-owner` was set (§7) |
+|-------|---------|
+| `round` | Peer-review rounds completed |
+| `stuck` | Monitor relaunches while In progress |
+| `last_assignee` | Previous ball-holder; dispatcher enforces handoff ≠ same agent on review |
+| `body_sha` | Hash at last verdict; convergence when Green and unchanged |
+| `delivery` | Set at delivery step |
+| `owner_reason` | With `needs-owner`: `sensitive-paths`, `no-convergence`, `stuck`, `launch-failed`, `plan-stopped`, `approve`, … |
+| `run_id` | Cursor/Claude run correlation |
 
-Optionally mirror `round` in a numeric Project field for a board view.
+Valid only when last body edit is from `pawpet-bot` or `pawpet-claude` (or marker in a bot comment).
 
-## 5. Workflows by status
+---
 
-### 5.1 Backlog → To do
+## 5. Target setup by status and assignee
 
-- Adding `todo` (or `status:todo`) moves the issue to **To do**. With labels as status, `status:todo` *is* the move, so no separate "remove `todo`" step is needed.
-- It can still be done by hand on the board if the reverse sync exists.
+| Pawpet status | Assignee (whose turn) | Step |
+|---------------|----------------------|------|
+| Backlog | — | Intake from forms; triage may return here |
+| To do | `pawpet-claude` (when in pipeline) | **Gate:** issue must be assigned to a Pawpet agent collaborator to enter automation. **Triage** (deterministic, no LLM) at lane start — successor to today’s `human-reviewed` gate. Then Claude intake: enough information? Plan sketch. Insufficient → `question`, assign author/owner |
+| In Analysis | Alternate `pawpet-bot` ⇄ `pawpet-claude` | Peer review. Red, or Green with edits → other agent. Green, no substantive body change → **Ready**, assign `pawpet-bot` for delivery. Round limit → assign `KanopeeKa`, `needs-owner` |
+| Ready (no delivery label) | `pawpet-bot` | Delivery: method, template, planned paths block; sensitive paths → owner |
+| Ready (+ `PR` \| `light-plan` \| `execute-plan`) | *Unassigned* | Queued until WIP slot free |
+| In progress | `pawpet-bot` | Implement or monitor (light-plan `continue`; execute-plan report-only) |
+| In Main → In UAT → In Prod → Done | *Unassigned* | Existing merge/UAT handlers + **new prod notify** (§5.7) |
+| Any | `KanopeeKa` | `needs-owner` + reason in state block |
 
-### 5.2 To do — intake (Claude)
+**Human workflow:** Moving Backlog → To do and assigning an agent is the explicit “go”. Unassigned To do items are visible but **not** picked up by the dispatcher.
 
-For one issue:
+### 5.1–5.6 Lane behaviour (summary)
 
-1. **Information check.** Read the body and comments from allowed authors only (§10.1). If the information is not enough, add `question` with one comment saying what is missing, and stop. Reuse `question` rather than adding `missing-info`; the existing triage flow already uses it.
-   - **Re-entry:** when the author updates the issue (or an allowed author comments), the dispatcher removes `question` and re-queues intake.
-2. **Analysis.** Review the context and requirement, adjust the description, and write the plan. The spec and plan cover tests, documentation (canonical doc), logging, monitoring, security, database and migrations. If a screen is touched, apply the `ui-design-deep` skill guidelines.
-3. **Handoff.** Post a detailed review comment for the second agent, write the marker (`round: 0`, `last_reviewer: "claude"`), and move to **In Analysis**.
+Detailed steps match the prior proposal text for intake, peer review, delivery, implement, and monitor — with these replacements:
 
-### 5.3 In Analysis — one alternating peer-review step
+- **Status moves** use Pawpet **Status** field (bot PAT), not `status:*` labels.
+- **Handoffs** use **assignment** with the agent’s PAT, not verdict labels.
+- **Planned** is not a board column: delivery runs in **Ready** while `pawpet-bot` is assignee before the delivery label is applied.
 
-The proposed "Analysis 1/2/3" workflows are one step mirrored. Replace them with one peer-review step where the reviewer is whichever agent did not write last.
+Convergence (In Analysis → Ready): Green and `body_sha` unchanged in that round, or two consecutive Greens; else reassign to the other agent. Round cap **4** (configurable).
 
-For one issue:
+Work-in-progress (implement): **2** slots — e.g. one programme + up to two single PRs; count issues **In progress** assigned `pawpet-bot` with `busy`, plus active programmes. See dispatcher spec.
 
-1. If `round` exceeds the limit (**4** recommended; 5 costs many tokens), set `needs-owner` with reason `no-convergence` and stop.
-2. Review the previous comment and plan. Fold minor points into the issue body; address every question raised.
-3. Post a clear comment with the verdict and the updated plan.
-4. Set the single verdict label `review:green` or `review:red` (replacing the previous one), update the marker, and increment `round`.
+### 5.7 Release tracking (Actions only)
 
-**Convergence rule:** move to **Planned** only when the reviewer says Green **and** made no substantive body change in that round (`body_sha` unchanged), or after two consecutive Greens. Otherwise the turn passes to the other agent.
+- **In Main / In UAT:** unchanged.
+- **In Prod (new):** notify job in `deploy-prod.yml` mirroring `agent-uat-notify` → close path, tidy `busy`, optional `in-prod` label.
 
-Why:
+---
 
-- In the proposed flow, Cursor folds Claude's points into the body *and* goes Green → Ready in the same step, so Claude never sees the edited text.
-- "Analysis 2" filters on Cursor:Green issues still In Analysis, but Cursor:Green already moved them to Ready, so that path is empty.
-- Keeping both `Claude:*` and `Cursor:*` labels side by side produces contradictory pairs (for example `Claude:Red` + `Cursor:Green`) the dispatcher must interpret. One verdict label plus the marker is unambiguous; history lives in comments.
+## 6. Assignee model
 
-### 5.4 Planned — delivery method (Cursor)
+**Verdict:** adopt assignee as the single “whose turn” signal (ISSUE-PIPELINE-D-005).
 
-"Analysis converged" and "delivery method chosen" are separate states. Without that split, Implement can pick up an issue before Delivery has run.
+| Benefit | Why |
+|---------|-----|
+| Works today | Both bots are collaborators on the org repo |
+| Native trigger | `issues: assigned` is an Actions event |
+| Simple queues | Each agent queries `assignee:@me` |
+| Board visibility | Pawpet already shows assignees |
+| Review independence | Handoff to the other login ⇒ never self-review |
+| Fewer labels | Replaces `Claude:*` / `Cursor:*` / round verdict labels |
 
-For one issue:
+**Pitfalls to design for:**
 
-1. Choose `PR`, `light-plan` or `execute-plan`:
-   - **PR:** one verifiable outcome, one reviewable diff.
-   - **light-plan:** 2–4 sequential phases, no owner check-ins between phases.
-   - **execute-plan:** more phases, or when scope and budget guarantees are needed.
-2. Rewrite the existing issue to the template for that method. Do not create a new issue (execute-plan exception in §8).
-   - **PR:** issue form sections (Summary, Objective, Scope, Out of Scope, Definition of Done, Priority, Affected Area, Security or Sensitive Area), branch name, `Refs #n`.
-   - **light-plan:** title `light-plan: …`, one-sentence goal, integration and dev branches, `- [ ] P<n> — <outcome> — scope: <paths>` checklist.
-   - **execute-plan:** plan file per `docs/agent-efficiency/plan-template.md` (§8).
-3. Write a machine-readable **planned paths** block:
+1. **`GITHUB_TOKEN` reassignment does not chain workflows** — handoffs use `pawpet-bot` or `pawpet-claude` PAT, or explicit `workflow_dispatch`; 30-minute heartbeat is the safety net.
+2. **Exactly one assignee** — dispatcher enforces; workers exit if assignee changed before write.
+3. **Column ≠ assignee** — same agent may be assignee in To do vs In Analysis; column disambiguates.
+4. **`needs-owner` stays a label** — driver reads label, not assignment alone.
+5. **Human reassignment** is allowed; dispatcher logs a comment and follows the new assignee.
+6. **WIP count** includes In progress + `pawpet-bot` + `busy`.
 
-   ````
-   ```json agent-paths
-   { "paths": ["e2e/playwright/pages/**", "flutter_app/lib/l10n/**"] }
-   ```
-   ````
+---
 
-4. The **dispatcher** (not the agent) checks those paths against `isForbiddenPath` plus `.github/**` and `.cursor/agent-kernel/**`. A match sets `needs-owner` with reason `sensitive-paths`. Otherwise it adds the delivery label and moves to **Ready**.
+## 7. Architecture
 
-`triage-lib.js` flags risk from **keywords in the body** ("migration", "roles", "permissions"). That over-flags: #2116 mentions migrations but touches no file under `db/migrations/`. Decide sensitivity from planned paths, and keep the keyword check only as a hint.
+One **dispatcher** (`issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_dispatcher.js`), patterned on `execute_plan_runtime.js tick`:
 
-### 5.5 Ready — implement (Cursor, Composer 2.5)
+- Reads board status, assignee, labels, state block, PRs, CI, Cursor runs.
+- **One action per issue per tick**; launches a narrow worker (Claude action or Cursor API).
+- Lanes: triage (deterministic), intake, review, delivery, implement, monitor, release (no agent).
+- Kill switch repo variable `ISSUE_PIPELINE`: `off` (default) / `dry-run` / `on`.
+- Consolidate `triage-human-reviewed.yml`, `agent-dispatch.yml`, `agent-monitor.yml` when lanes go live.
 
-Filter: **Ready** + delivery label + no `needs-owner` + a free work-in-progress slot (§6).
+Full contract: [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 
-| Label | Action |
-|---|---|
-| `PR` | Implement on the named branch, open the PR with `Refs #n`, then drive it with `/babysit-plus` |
-| `light-plan` | Start `/light-plan` on the issue |
-| `execute-plan` | Run `init` from the plan file; the approve workflow applies the auto-approve policy (§8) |
+---
 
-Set **In Progress** and `busy` at launch, and record the agent ID in the run marker. If the launch fails, set `needs-owner` with reason `launch-failed`.
+## 8. Execute-plan (decision 1b)
 
-### 5.6 In Progress — monitor (Cursor)
+Unchanged intent from prior draft:
 
-Filter: **In Progress** without `needs-owner`. If `stuck` exceeds the limit (for example 3), set `needs-owner` with reason `stuck`.
+- **Product issue** stays in the pipeline; **control issue** for the driver; snapshot `source_issue`; release PR `Refs #<product>`.
+- **Auto-approve** in `execute-plan-approve.js` only when policy checks pass (paths, budgets, bot-provenance, convergence, single active plan, driver on).
+- Escalation: owner review on approval code; decision rows in `execute-plan-v2.md` and `contracts.md`.
 
-| Label | Action |
-|---|---|
-| `PR` | PR merged → nothing to do (Actions moves the issue to In Main). Otherwise, if the recorded agent run has ended without merging, relaunch `/babysit-plus` and increment `stuck`. |
-| `light-plan` | If the session has ended before Pre-UAT green, relaunch with `continue light-plan #n` and increment `stuck`. Do **not** start `/babysit-plus` on the release PR; light-plan drives it through `/babysit-uat`. |
-| `execute-plan` | Report only. Humans and agents must not run `/babysit-*` on plan PRs or push to plan branches outside a worker `tick` (execute-plan skill). A stopped plan needs `resume-autonomous`, which is owner-only, so a stop sets `needs-owner` with reason `plan-stopped`. |
-
-"Is babysit watching?" is not observable today. The run marker makes it observable: the dispatcher checks the recorded agent's status through the Cursor API (what `agent-monitor` was built for) and relaunches only when the run ended without the expected outcome.
-
-### 5.7 In Main → In UAT → In Prod (Actions only)
-
-No agent is needed.
-
-- **In Main:** `issue-agent-pr-merge.yml` already handles merged PRs with `Refs #n` and records the expected `uat-YYMMDD-PR#` tag.
-- **In UAT:** `deploy-uat.yml` `agent-uat-notify` already sets it when every UAT gate passes.
-- **In Prod (new):** add a notify job to `deploy-prod.yml`, mirroring `agent-uat-notify`. It adds `in-prod`, sets **Done**, tidies labels (`busy`, lane labels) and closes the issue.
-
-The link between deploy and issue is the PR number in the UAT tag plus `Refs #n` in the PR body, so no extra note on the issue is needed.
-
-## 6. Work-in-progress limit
-
-Enforce it in the dispatcher, not in prompts.
-
-| Delivery | Slots |
-|---|---|
-| `PR` | 1 |
-| `light-plan` | 2 (one session holds for hours, through Pre-UAT) |
-| `execute-plan` | 2 |
-
-- **Capacity: 2.** In practice, either one programme or up to two single PRs.
-- **What holds a slot:** issues In Progress, or with `busy`, or with an open PR or programme. In Progress issues stuck with `needs-owner` still hold their slot, so stuck work does not silently free capacity.
-- **Order:** priority label, then age.
-- **Release:** a slot frees when the issue leaves In Progress and `busy` is removed. The merge event re-runs the dispatcher, so the next issue starts without waiting for the heartbeat.
-
-## 7. `needs-owner` with a reason
-
-`needs-owner` today would mean "sensitive paths", "no convergence", "stuck", "launch failed" and "approval needed". On an execute-plan control issue the driver also treats `needs-owner` as a **STOP** (`scripts/lib/execute_plan_control.js`).
-
-- Keep `needs-owner` as the single "human please look" label, and record `owner_reason` in the marker: `sensitive-paths`, `no-convergence`, `stuck`, `launch-failed`, `plan-stopped`, `approve`.
-- Never set `needs-owner` on an execute-plan **control** issue for a pipeline reason; set it on the product issue.
-- Agents never remove `needs-owner` (run-as-me rule 6); the owner removes it in the web interface.
-
-## 8. Execute-plan: product issue, control issue and auto-approve (decision 1b)
-
-### 8.1 Two issues
-
-`init` always creates a new control issue, which conflicts with "rewrite the existing issue".
-
-- The **product issue** (the one in the pipeline) stays in the pipeline and links to the control issue.
-- The **control issue** belongs to the driver, which closes it when the programme finishes.
-- The plan snapshot records `source_issue`, and the driver writes `Refs #<source_issue>` in the release PR body, so the product issue follows In Main → In UAT → In Prod (§5.7).
-
-### 8.2 Coded auto-approve policy
-
-The approve workflow (`.github/scripts/execute-plan-approve.js`, trusted `main` code) approves on its own, as the bot, only when **all** of these hold:
-
-- **Paths:** no phase `allowed_paths` or `companions` match `isForbiddenPath`, `.github/**` or `.cursor/agent-kernel/**`, and there is no `approved_sensitive_paths` field.
-- **Window and size:** approval window of 7 days or less, default budgets, at most 6 phases.
-- **Provenance:** the plan file was committed by the bot on the `-init` branch, and that branch contains only the two plan files (the existing `init` guard).
-- **Review:** the product issue's marker shows convergence (both agents Green) and the issue has no `needs-owner`.
-- **Concurrency:** at most one auto-approved plan active at a time, and only while `EXECUTE_PLAN_DRIVER` is `on`.
-
-It then posts an `auto-approved by policy` acknowledgement with the hash, for audit. A plan that fails any condition gets `needs-owner` with reason `approve` on the product issue. `revoke-autonomous` and `resume-autonomous` stay owner-only.
-
-**Never:** an agent posting `approve-autonomous` with `OWNER_GH_TOKEN`. The approval line is the owner's sign-off on the frozen plan hash; letting an agent that reads issue text approve its own plan opens a prompt-injection route to autonomous merges.
-
-**Escalation:** this changes approval behaviour and the execute-plan v2 contracts. The implementing PR needs owner review and decision-log rows in `execute-plan-v2.md` and `execute-plan-v2/contracts.md`.
+---
 
 ## 9. Light-plan lifecycle (decision 2)
 
-| Option | What happens | Downside |
-|---|---|---|
-| A. Keep today's rule | Issue closes at Pre-UAT green | Two lifecycles on one board; UAT and Prod tracking can't see programmes; "done" may not be live |
-| B. Full lifecycle in the agent | Session waits for UAT and Prod | Sessions open for hours or days; costs money and holds a slot |
-| **C. Hybrid (chosen)** | Agent stops at Pre-UAT green; Actions move the issue to In UAT and In Prod, then close it | A few rule changes (below) |
+| Change | Detail |
+|--------|--------|
+| Release PR | `Refs #n` not `Closes #n` |
+| Session end | Pre-UAT green → remove `busy`, do not close issue |
+| `issue-agent-handlers.js` | In Main for `light-plan:` titles; still skip execute-plan control only |
+| Prod notify | §5.7 |
 
-Why C:
-
-- One lifecycle for all three delivery methods, so release tracking has one rule.
-- No agent waits on deploys; UAT and Prod tracking cost no agent time.
-- A closed issue really is in production.
-- Slots free when the light-plan removes `busy` after Pre-UAT green, not at production.
-
-Changes required:
-
-1. **Light-plan skill:** the release PR uses `Refs #n` instead of `Closes #n`. The final step posts the merge SHA and Pre-UAT run link and removes `busy`, but does not close the issue. `/e2e-debug` remedial work after merge stays in the session.
-2. **`issue-agent-handlers.js`:** stop excluding `light-plan:` issues from In Main; exclude only execute-plan control issues.
-3. **`deploy-prod.yml`:** the prod notify job from §5.7.
-4. **Docs:** `github-issue-workflow.md` §plan control issue and its decision log.
-
-`promote-uat` already tags `uat-YYMMDD-<PR#>` with the release PR number, so `Refs #n` on the release PR is all the notify jobs need.
+---
 
 ## 10. Security
 
-### 10.1 Prompt injection from issues and comments
+- **Prompt injection:** allowlisted comment authors (`KanopeeKa`, `pawpet-bot`, `pawpet-claude`); quote comments as data; sanitised issue sections for implement (keep `agent-payload-lib.js` rules).
+- **Owner token:** never in autonomous lanes.
+- **Review independence:** assignee on review lane must differ from `last_assignee` in state block.
+- **Sensitive paths:** dispatcher checks `agent-paths` JSON block against `isForbiddenPath` + `.github/**` + `.cursor/agent-kernel/**`.
 
-`agent-payload-lib.js` deliberately never sends raw comments to agents. The review loop depends on comments, so reverse that carefully:
+---
 
-- pass only comments from an allowlist (`KanopeeKa`, `pawpet-bot`, `pawpet-claude`);
-- wrap them as quoted data in the prompt, never as instructions;
-- ignore or summarise text from other users;
-- treat the state marker as valid only when written by a bot identity (check the last editor of the body, or keep the marker in a bot-authored comment).
+## 11. Gaps (build backlog)
 
-### 10.2 Other controls
+| # | Gap | Size | Notes |
+|---|-----|------|-------|
+| 1 | Proposal on `main` | Docs | Merge this PR after review |
+| 2 | In Analysis dual meaning until triage moves | Decision | **D-006** — triage at To do start |
+| 3 | No dispatcher | Large | Skeleton dry-run → lanes |
+| 4 | No Claude runner | Medium | `claude-code-action` or agreed runner + `pawpet-claude` token |
+| 5 | Delivery not automated | Medium | Ready + `pawpet-bot` assignee |
+| 6 | No WIP limit; dispatch ignores programme load | Medium | Fold dispatch + monitor into dispatcher |
+| 7 | No prod notify | Small | `deploy-prod.yml` |
+| 8 | Light-plan `Closes` + `isPlanControlIssue` skip | Small | **D-002** |
+| 9 | Execute-plan auto-approve + `source_issue` | Medium | **D-001** |
+| 10 | Label clutter | Small | Retire after assignee model |
+| 11 | Tokens on Cloud VMs | Small | Fine-grained repo PATs |
+| 12 | #1770 paused | Ops | `continue light-plan #1770` |
 
-- **Owner token:** out of every autonomous lane (§2.4, §8.2).
-- **Workflow changes:** no `workflow` scope on agent tokens; owner review on `.github/**` and the safety library.
-- **Budgets:** a daily ceiling on agent launches per agent, the existing CI retry budget (`autonomous-pr-policy.md` §CI retry budget), and the kill switch.
-- **Review independence:** the dispatcher rejects a verdict whose comment author equals the previous round's author.
+---
 
-## 11. Tick frequency
+## 12. Delivery order (stacked PRs)
 
-Event-driven first, with a heartbeat as the safety net.
+One verifiable outcome per PR.
 
-- **Events:** `issues: labeled/edited`, `issue_comment` from allowed authors, `pull_request_target: closed`, `workflow_run` for CI, Pre-UAT and deploys.
-- **Heartbeat:** every 30 minutes, matching the execute-plan driver. GitHub cron is best-effort and often delayed, so do not go below about 15 minutes.
-- **Optional cost saver:** run intake and review as a nightly batch; keep implement and monitor event-driven.
+1. **Docs:** merge this proposal (and align `github-issue-workflow.md` in a follow-up when behaviour ships).
+2. **Small / independent:** prod notify; light-plan lifecycle (§9).
+3. **Dispatcher skeleton:** kill switch, dry-run, state block, assignee + column sync, lock — no workers.
+4. **To do lane:** deterministic triage at To do + Claude intake + assignment handoffs.
+5. **In Analysis lane:** alternating review + convergence.
+6. **Delivery lane:** templates, paths block, sensitive-path gate.
+7. **Implement + monitor:** WIP limit; retire legacy dispatch/monitor/triage workflows.
+8. **Execute-plan:** auto-approve + `source_issue` (owner review).
 
-## 12. End-to-end flow
+**Operational:** resume #1770 before or in parallel with pipeline build — not blocked on dispatcher.
+
+---
+
+## 13. End-to-end flow (target)
 
 ```
-Backlog ──todo──▶ To do ──[Claude intake]──▶ In Analysis
-   ▲                 │ not enough info → question (author updates → back)
-   │                 ▼
-   │     peer review alternates Cursor ⇄ Claude, round++ in marker
-   │     converged (Green, no body change) → Planned
-   │     round > 4 → needs-owner (no-convergence)
-   │
-Planned ──[Cursor delivery: PR | light-plan | execute-plan + paths block]──▶ Ready
-   │     sensitive paths → needs-owner (sensitive-paths)
-   │     execute-plan → init → auto-approve policy, else needs-owner (approve)
-   ▼
-Ready ──[implement, work-in-progress limit]──▶ In Progress (busy + run marker)
-In Progress ──[monitor: relaunch ended runs; plans → report / needs-owner]──
-merge (Actions) ▶ In Main ▶ deploy-uat notify ▶ In UAT ▶ deploy-prod notify (new) ▶ in-prod + Done + close
+Backlog
+  │ human/policy: To do + assign pawpet-claude
+  ▼
+To do ──[deterministic triage]──▶ (fail → Backlog / manual-only)
+  │ pass ──[Claude intake]──▶ In Analysis (assign other agent)
+  ▼
+In Analysis ⇄ bot/claude peer review (assignee alternates)
+  │ converged ──▶ Ready, assign pawpet-bot
+  ▼
+Ready ──[delivery]──▶ Ready + PR|light-plan|execute-plan, unassign
+  │ sensitive / approve fail ──▶ KanopeeKa + needs-owner
+  ▼
+Ready (queued) ──[implement, WIP]──▶ In progress, pawpet-bot, busy
+In progress ──[monitor]──▶ …
+merge (Actions) ──▶ In Main ──▶ In UAT ──▶ In Prod notify ──▶ Done + close
 ```
 
-## 13. Delivery order (stacked PRs)
-
-Each step is one PR with its own verifiable outcome.
-
-1. **Labels as status:** create the `status:*` labels and the Project sync workflow (`GH_PROJECTS_PAT` in `automation` only). Backfill labels from the current board.
-2. **Dispatcher skeleton:** kill switch, dry-run mode, state marker read/write, per-issue lock. Dry run only.
-3. **Intake and review lanes:** Claude intake (with the `pawpet-claude` identity), alternating peer review, convergence rule, round limit.
-4. **Delivery lane:** templates, planned-paths block, sensitive-path check in the dispatcher.
-5. **Implement and monitor lanes:** work-in-progress limit, run markers, relaunch rules. Retire or fold `agent-dispatch.yml`, `agent-monitor.yml` and `triage-human-reviewed.yml`.
-6. **Release tracking:** prod notify job in `deploy-prod.yml`; light-plan lifecycle change (§9).
-7. **Execute-plan auto-approve and `source_issue`** (§8) — needs owner review.
-
-## Open points
-
-- Allowed comment authors beyond the three identities (other collaborators?).
-- Exact round and `stuck` limits after the first weeks of data.
-- Whether intake and review run as a nightly batch or on events.
+---
 
 ## Decision log
 
 | ID | Decision | Rationale | Status | Date |
-|---|---|---|---|---|
-| ISSUE-PIPELINE-D-001 | Execute-plan programmes started by the pipeline use a coded auto-approve policy in the approve workflow, run as the bot | Keeps approval in trusted code with hard conditions; no agent holds the owner token | Proposed | 2026-11-13 |
-| ISSUE-PIPELINE-D-002 | Light-plan issues follow In Main → In UAT → In Prod through Actions; the agent session stops at Pre-UAT green | One lifecycle for all delivery methods; no agent waits on deploys | Proposed | 2026-11-13 |
-| ISSUE-PIPELINE-D-003 | Stay user-owned; status labels are the source of truth and one Actions job syncs the Project | Removes Projects access from agent tokens; Claude needs only issue access | Proposed | 2026-11-13 |
-| ISSUE-PIPELINE-D-004 | Review state lives in a bot-written body marker, not title counters | Title prefixes break `isPlanControlIssue` and are edited by humans | Proposed | 2026-11-14 |
+|----|----------|-----------|--------|------|
+| ISSUE-PIPELINE-D-001 | Coded auto-approve for pipeline-started execute-plan | Trusted code, bot identity; no owner token in agents | Proposed | 2026-11-13 |
+| ISSUE-PIPELINE-D-002 | Light-plan issues follow In Main → UAT → Prod via Actions | One lifecycle; agent stops at Pre-UAT green | Proposed | 2026-11-13 |
+| ISSUE-PIPELINE-D-003 | ~~User-owned; status labels source of truth~~ | — | **Superseded** | 2026-11-13 |
+| ISSUE-PIPELINE-D-003b | Org-owned repo; Pawpet **column** = stage; org-scoped token may sync board | Org migration #2324+; Claude/Cursor can read/write Status | Proposed | 2026-11-14 |
+| ISSUE-PIPELINE-D-004 | State in bot-written body marker | Title prefixes break plan control detection | Proposed | 2026-11-14 |
+| ISSUE-PIPELINE-D-005 | **Assignee** = whose turn; handoffs replace verdict labels | Native trigger, board visibility, review independence | Proposed | 2026-11-14 |
+| ISSUE-PIPELINE-D-006 | To do + agent assignee = pipeline entry; In Analysis = peer review; triage at To do start | Backlog→To do is human go; no extra board column | Proposed | 2026-11-14 |
