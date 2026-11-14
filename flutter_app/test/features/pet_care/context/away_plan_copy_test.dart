@@ -65,12 +65,24 @@ void main() {
               contactName: 'Greenhill',
               contactPhone: '555-0100',
             ),
+            PetRelationship(
+              id: 'r2',
+              petId: 'p1',
+              contactId: 'c2',
+              relationshipKind: RelationshipKind.emergencyContact,
+              isPrimary: false,
+              active: true,
+              contactKind: 'person',
+              contactName: 'Sam',
+              contactPhone: '555-0199',
+            ),
           ],
         ),
       );
-      expect(lines, hasLength(1));
-      expect(lines.single, contains('Greenhill'));
-      expect(lines.single, contains('555-0100'));
+      expect(lines, hasLength(2));
+      expect(lines.any((line) => line.contains('Greenhill')), isTrue);
+      expect(lines.any((line) => line.contains('Sam')), isTrue);
+      expect(lines.any((line) => line.contains('555-0199')), isTrue);
     },
   );
 
