@@ -28,11 +28,13 @@ Operator guide for **Phase 1** private support intake. Canonical product rules: 
 | `SUPPORT_GITHUB_REPO` | `AgathaTrack/AgathaTrackPrivate` | Same slug |
 | `SUPPORT_GITHUB_TOKEN` | Fine-grained PAT name: `agathatrack-support-uat` | `agathatrack-support-prod` |
 | `SUPPORT_REPLY_TO` | `support@agathatrack.com` (set before receipt smoke tests) | Same |
-| `APP_ENV` | `uat` | `production` |
+| `APP_ENV` | `uat` → issue field Environment **UAT** | `production` → Environment **Prod** |
 
 Tokens are fine-grained, scoped to **AgathaTrackPrivate** only (Issues read/write). They can create, edit, and label; they **cannot delete issues** (redaction replaces content; an org admin deletes manually).
 
-Do not use `NODE_ENV` as the production/uat signal for support labelling — use `APP_ENV`.
+Do not use `NODE_ENV` as the production/uat signal — use `APP_ENV` for the Environment field. Any other value leaves Environment empty.
+
+The token needs Issues read/write on AgathaTrackPrivate and Issue fields read on the AgathaTrack org, so it can resolve field ids by name and set the type and fields. A token that cannot set them must not be treated as a successful create.
 
 Local dev / tests: leave `SUPPORT_GITHUB_REPO` empty so GitHub outbox rows stay `disabled`.
 
@@ -41,31 +43,36 @@ Local dev / tests: leave `SUPPORT_GITHUB_REPO` empty so GitHub outbox rows stay 
 | Column | Meaning | Moved by |
 |--------|---------|----------|
 | New | New issue from auto-add | Automatic |
-| Triaged | Read; fix `category:*` if needed; set priority | Operator |
+| Triaged | Read; correct issue type or Support Category if needed; set Priority | Operator |
 | Waiting on user | Emailed for more information | Operator |
-| In progress | Handled directly or engineering link filled | Operator |
+| In Progress | Handled directly or engineering link filled | Operator |
 | Engineering done | Linked AgathaTrack issue closed or fix deployed; user not told yet | Operator (later phase may automate) |
 | Done | User told by email; issue closed | Automatic on close |
 
-## Labels (AgathaTrackPrivate)
+## Issue type and fields (form submit)
 
-- `category:bug`, `category:suggestion`, `category:account`, `category:billing`
-- `env:uat`, `env:production`, `env:unknown`
-- `source:form`, `source:email`
-- `priority:high`, `priority:normal`, `priority:low`
-- `redacted` (after erasure/retention redact — see below)
+Org catalog on AgathaTrack. The worker sets these and does not apply classification labels.
 
-**No `support` label** — every issue in this repo is a support request.
+| Form category | Issue type | Support Category | Source | Website or App | Environment |
+| --- | --- | --- | --- | --- | --- |
+| bug | Support Bug | empty | form | Website | UAT or Prod from `APP_ENV` |
+| suggestion | Support Question | Suggestion | form | Website | same |
+| account | Support Question | Account | form | Website | same |
+| billing | Support Question | Billing | form | Website | same |
+
+Support Category options also include **Other**. Source options also include **email** and **other**. Website or App also includes **App**. The form worker does not set those. App is for a later native client. Priority, Effort, Start date, and Target date stay empty for the worker. Issue types Task, Bug, and Feature are not used for intake.
+
+The only label the worker adds is `redacted`, on erasure. Do not create `category:*`, `env:*`, or `source:*` labels for this flow.
 
 ## Saved views
 
 | View | Filter / intent |
 |------|-----------------|
-| Triage | Status New or Triaged, grouped by category |
+| Triage | Status New or Triaged |
 | Waiting on user | Column Waiting on user |
 | Handed to engineering | **Engineering issue** project field is set |
 | Redacted: delete | `label:redacted` — delete these issues within 7 days |
-| From email | `label:source:email` |
+| From email | Source is **email** |
 
 ## Engineering issue template (AgathaTrack)
 
@@ -108,9 +115,9 @@ Until you delete the issue, original text may remain in GitHub edit history.
 
 **Agent comments** on a support issue may contain personal data. They are removed **only when you delete the redacted issue**, not when the issue is merely redacted.
 
-## Hand-created `source:email` issues
+## Hand-created email issues
 
-Email that bypasses the web form: create an issue in AgathaTrackPrivate with template **Support request from email** (default label `source:email` only).
+Email that bypasses the web form: create an issue in AgathaTrackPrivate. Set Source to **email**. Choose issue type Support Bug or Support Question. When the type is Support Question, set Support Category. Do not rely on a `source:email` label.
 
 - No Postgres ticket row — retention is manual on a 12-month clock.
 - Erasure requests for these issues: handle manually (redact + delete per D-014).
@@ -129,7 +136,7 @@ Run after the Phase 3 migration on each environment. Staff read tickets at `/sta
 
 ## Prerequisites checklist (operator)
 
-- [ ] AgathaTrackPrivate private; labels including `env:unknown` and `redacted`; no `support` label
+- [ ] AgathaTrackPrivate private; issue types Support Bug and Support Question; fields Support Category, Environment, Source, Website or App; label `redacted` only for erasure
 - [ ] @ATSupport columns and workflows (item added → New; item closed → Done)
 - [ ] Engineering issue text field and saved views above
 - [ ] Tokens `agathatrack-support-uat` / `agathatrack-support-prod` in GitHub environments (**values** in secrets UI only)
