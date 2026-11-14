@@ -15,7 +15,6 @@ tags: [agent-efficiency,plans]
 | [execute-plan-v2.md](./execute-plan-v2.md) | Execute-plan v2 build spec — run to merged + deployed on UAT without stops (work packages, contracts, prompts) |
 | [issue-pipeline-automation.md](./issue-pipeline-automation.md) | Target issue pipeline (Pawpet board + assignee model) — proposal |
 | [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md) | Dispatcher implementation contract (companion to issue-pipeline-automation) |
-| [issue-pipeline-automation.md](./issue-pipeline-automation.md) | Proposal — automated issue pipeline (Claude/Cursor review loop, delivery method, implementation under a work-in-progress limit, release tracking) |
 
 Policies, execute-plan schema, and skills references: [/docs/agent-efficiency/](/docs/agent-efficiency/) (parent folder).
 
