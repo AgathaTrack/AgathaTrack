@@ -77,17 +77,22 @@ test('handleMergedPr enqueues UAT queue when PR has no linked issues', async (t)
   assert.equal(saved[0].prNumber, 361);
 });
 
-test('isPlanControlIssue matches plan titles only', () => {
-  const planTitles = [
-    'light-plan: truthful-outcomes release debt (Plan B)',
-    'Light-plan: Health Issues UI — care-desk alignment',
+test('isPlanControlIssue matches execute-plan titles only', () => {
+  const executePlanTitles = [
     'execute-plan: All care by care item (all-care-by-item-c455)',
     'Execute-plan: documentation-migration-csm-514a',
     'execute-plan v2: drill-2 cancel path for API-launched workers',
     '[execute-plan] away-plan-care-review-ux',
   ];
-  for (const title of planTitles) {
+  for (const title of executePlanTitles) {
     assert.equal(isPlanControlIssue({ title }), true, title);
+  }
+  const lightPlanTitles = [
+    'light-plan: truthful-outcomes release debt (Plan B)',
+    'Light-plan: Health Issues UI — care-desk alignment',
+  ];
+  for (const title of lightPlanTitles) {
+    assert.equal(isPlanControlIssue({ title }), false, title);
   }
   assert.equal(
     isPlanControlIssue({
@@ -131,18 +136,43 @@ function stubQueue(t, method) {
   });
 }
 
-test('handleMergedPr reopens a plan issue without UAT status', async (t) => {
+test('handleMergedPr sets In Main for light-plan tracking issues', async (t) => {
   stubQueue(t, 'syncEnqueueAfterMerge');
   const { calls, io } = recordingIo(
     { title: 'light-plan: truthful-outcomes release debt (Plan B)', state: 'CLOSED' },
-    'Closes #2258',
+    'Refs #2258',
   );
 
   const result = await handleMergedPr({
     owner: 'KanopeeKa',
     repo: 'AgathaTrack',
     prNumber: 2280,
-    prBody: 'Release\n\nCloses #2258',
+    prBody: 'Release\n\nRefs #2258',
+    mergeSha: '639cb48148a47a6edfcde28d880a3f582f772e46',
+    token: 'test-token',
+    projectsPat: 'projects-pat',
+    projectId: 'project',
+    statusFieldId: 'status-field',
+    io,
+  });
+
+  assert.deepEqual(calls, ['labels', 'reopen', 'status', 'comment']);
+  assert.equal(result.results[0].status, 'In Main');
+  assert.equal(result.results[0].issueNumber, 2258);
+});
+
+test('handleMergedPr reopens execute-plan control without UAT status', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  const { calls, io } = recordingIo(
+    { title: 'execute-plan: drill-2', state: 'CLOSED' },
+    'Refs #2259',
+  );
+
+  const result = await handleMergedPr({
+    owner: 'KanopeeKa',
+    repo: 'AgathaTrack',
+    prNumber: 2281,
+    prBody: 'Release\n\nRefs #2259',
     mergeSha: '639cb48148a47a6edfcde28d880a3f582f772e46',
     token: 'test-token',
     projectsPat: 'projects-pat',
@@ -153,14 +183,14 @@ test('handleMergedPr reopens a plan issue without UAT status', async (t) => {
 
   assert.deepEqual(calls, ['labels', 'reopen']);
   assert.equal(result.results[0].status, 'reopened-plan-control');
-  assert.equal(result.results[0].issueNumber, 2258);
+  assert.equal(result.results[0].issueNumber, 2259);
 });
 
-test('handleUatWorkflowResult does not reopen a closed plan issue', async (t) => {
+test('handleUatWorkflowResult sets In UAT for light-plan tracking issues', async (t) => {
   stubQueue(t, 'syncDeployResult');
   const { calls, io } = recordingIo(
     { title: 'light-plan: truthful-outcomes release debt (Plan B)', state: 'CLOSED' },
-    'Closes #2258',
+    'Refs #2258',
   );
 
   const result = await handleUatWorkflowResult({
@@ -176,8 +206,8 @@ test('handleUatWorkflowResult does not reopen a closed plan issue', async (t) =>
     io,
   });
 
-  assert.deepEqual(calls, []);
-  assert.equal(result.results[0].status, 'skipped-plan-control');
+  assert.deepEqual(calls, ['reopen', 'status', 'comment']);
+  assert.equal(result.results[0].status, 'In UAT');
   assert.equal(result.results[0].issueNumber, 2258);
 });
 
@@ -206,7 +236,7 @@ test('handleUatWorkflowResult still reopens a closed product issue', async (t) =
   assert.equal(result.results[0].issueNumber, 122);
 });
 
-test('handleProdDeployResult closes product issue and skips plan control', async () => {
+test('handleProdDeployResult closes linked issues including light-plan programmes', async () => {
   const calls = [];
   const io = {
     fetchPullsForCommit: async () => [
@@ -248,7 +278,7 @@ test('handleProdDeployResult closes product issue and skips plan control', async
   assert.equal(result.results.find((r) => r.issueNumber === 50).status, 'closed');
   assert.equal(
     result.results.find((r) => r.issueNumber === 2342).status,
-    'skipped-plan-control',
+    'closed',
   );
-  assert.deepEqual(calls, ['status', 'labels', 'close', 'comment']);
+  assert.deepEqual(calls, ['status', 'labels', 'close', 'comment', 'status', 'labels', 'close', 'comment']);
 });
