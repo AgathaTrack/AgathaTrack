@@ -220,6 +220,15 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       (io && io.fetchPipelineIssueForProject) ||
       ((o, r, t, c, n) => fetchPipelineIssueForProject(o, r, t, c, n));
     const row = await fetchOne(owner, repo, token, config, issueNumber);
+    if (!row) {
+      console.log(
+        JSON.stringify({
+          event: 'pipeline_issue_not_on_project',
+          issue: Number(issueNumber),
+          reason: 'no open item for GH_PROJECT_ID',
+        }),
+      );
+    }
     issues = row ? [row] : [];
   } else {
     issues = await listIssues(owner, repo, token, config);

@@ -64,6 +64,17 @@ test('fetchPipelineIssueForProject maps Pawpet status for scoped dispatcher tick
   assert.deepEqual(row.assignees, ['pawpet-claude']);
 });
 
+test('fetchPipelineIssueForProject reads projectItems with the projects PAT', async () => {
+  let usedToken;
+  await fetchPipelineIssueForProject('AgathaTrack', 'AgathaTrack', 'actions-token', config, 2337, {
+    fetchIssue: async (_o, _r, _n, tokenArg) => {
+      usedToken = tokenArg;
+      return { number: 2337, projectItems: { nodes: [] } };
+    },
+  });
+  assert.equal(usedToken, config.projectsPat);
+});
+
 test('fetchPipelineIssueForProject ignores closed project items', async () => {
   const row = await fetchPipelineIssueForProject(
     'AgathaTrack',

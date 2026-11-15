@@ -110,7 +110,8 @@ async function fetchPipelineIssueForProject(
 ) {
   const readIssue = deps.fetchIssue || fetchIssue;
   const readProjectItem = deps.fetchProjectV2Item || fetchProjectV2Item;
-  const full = await readIssue(owner, repo, issueNumber, token);
+  // GITHUB_TOKEN cannot read org Projects v2, so projectItems comes back empty with it.
+  const full = await readIssue(owner, repo, issueNumber, config.projectsPat || token);
   const projectItems = full.projectItems?.nodes || [];
   const onProject = projectItems.find((item) => item.project?.id === config.projectId);
   if (!onProject?.id) {
