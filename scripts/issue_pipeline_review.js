@@ -11,7 +11,6 @@ const { defaultState, DEFAULT_ROUND_CAP, DELIVERY_LABELS } = require('./issue_pi
 const OWNER_LOGIN = 'KanopeeKa';
 
 const REVIEW_MARKER = '<!-- pipeline-review -->';
-const BOTS = ['pawpet-claude', 'pawpet-bot'];
 
 function otherBot(login) {
   if (login === 'pawpet-claude') {
