@@ -76,7 +76,7 @@ Each step is one **lane**. The dispatcher picks the lane from the column and the
 The owner decides an issue should go ahead. There are two equivalent ways:
 
 - **On the board:** move the issue to **To do** and assign `pawpet-claude`.
-- **With the `todo` label** (for other workflows, or from a phone): an Actions job moves the issue to **To do**, removes `todo`, and assigns `pawpet-claude` using the bot token, so the assignment triggers the intake lane.
+- **With the `todo` label** (for other workflows, or from a phone): [`issue-pipeline-todo.yml`](../.github/workflows/issue-pipeline-todo.yml) moves the issue to **To do**, removes `todo`, and assigns `pawpet-claude` with the bot PAT (issues with `pipeline-beta`, or all issues once `ISSUE_PIPELINE=on`).
 
 Nothing in Backlog is picked up automatically.
 
