@@ -72,7 +72,6 @@ jobs:
           GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
           ISSUE_PIPELINE: ${{ vars.ISSUE_PIPELINE }}
-          EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |

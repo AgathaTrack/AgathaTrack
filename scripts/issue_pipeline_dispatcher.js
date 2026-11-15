@@ -21,6 +21,7 @@ const {
   applyReviewStub,
   applyNeedsOwnerConvergence,
 } = require('./issue_pipeline_review');
+const { applyDeliveryStub } = require('./issue_pipeline_delivery');
 
 const BOTS = new Set(['pawpet-claude', 'pawpet-bot']);
 const OWNER_LOGIN = 'KanopeeKa';
@@ -282,6 +283,14 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
           state,
           liveBodySha: bodySha(issueRow?.body || ''),
           reviewer: row.assignee,
+        });
+      } else if (row.action === 'delivery') {
+        const issueRow = issues.find((i) => i.number === row.issue);
+        const { state } = await loadIssueState(owner, repo, row.issue, token);
+        run = await applyDeliveryStub({
+          ...baseRun,
+          state,
+          liveBodySha: bodySha(issueRow?.body || ''),
         });
       }
       if (run) {
