@@ -265,6 +265,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
 
   const dryRun = pipelineMode !== 'on';
   const assignToken = process.env.EXECUTE_PLAN_BOT_TOKEN;
+  const writeToken = assignToken || token;
   const executed = [];
   for (const row of actions) {
     const payload = {
@@ -279,7 +280,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
         owner,
         repo,
         issueNumber: row.issue,
-        token,
+        token: writeToken,
         projectsPat: config.projectsPat,
         projectId: config.projectId,
         statusFieldId: config.statusFieldId,
