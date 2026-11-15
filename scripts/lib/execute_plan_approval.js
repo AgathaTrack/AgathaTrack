@@ -48,8 +48,17 @@ function parseControlComment(body) {
   return null;
 }
 
+function isPipelineBotApprove({ comment, snapshot, config }) {
+  const login = comment.user && comment.user.login;
+  return (
+    login === config.bot_login
+    && Number.isInteger(snapshot.source_issue)
+    && snapshot.source_issue > 0
+  );
+}
+
 /** @returns {{ valid: boolean, reason: null|string, verb: string|null, until: string|null }} */
-function validateControlComment({ comment, snapshot, config }) {
+function validateControlComment({ comment, snapshot, config, pipelineBotApprove: pipelineBotApproveOpt }) {
   const parsed = parseControlComment(comment && comment.body);
   if (!parsed) return { valid: false, reason: 'plan', verb: null, until: null };
   const { verb } = parsed;
@@ -57,8 +66,14 @@ function validateControlComment({ comment, snapshot, config }) {
   const result = (reason) => ({ valid: reason === null, reason, verb, until });
 
   const login = comment.user && comment.user.login;
-  if (!config.owners.includes(login) || !isOwnerAssociation(comment.author_association)) return result('not-owner');
-  if (login === config.bot_login) return result('bot');
+  const pipelineBotApprove = pipelineBotApproveOpt === true || isPipelineBotApprove({ comment, snapshot, config });
+  if (pipelineBotApprove) {
+    if (login !== config.bot_login) return result('not-owner');
+    if (verb !== 'approve') return result('bot');
+  } else {
+    if (!config.owners.includes(login) || !isOwnerAssociation(comment.author_association)) return result('not-owner');
+    if (login === config.bot_login) return result('bot');
+  }
   if (comment.created_at !== comment.updated_at) return result('edited');
   if (parsed.plan !== snapshot.plan_id) return result('plan');
   if (verb !== 'revoke' && parsed.hash !== snapshot.approval_hash.replace(/^sha256:/, '')) return result('hash');
@@ -95,7 +110,12 @@ function findControlComments(comments, snapshot, config, { accepted }) {
   for (const comment of ordered) {
     const parsed = parseControlComment(comment.body);
     if (!parsed) continue;
-    const res = validateControlComment({ comment, snapshot, config });
+    const res = validateControlComment({
+      comment,
+      snapshot,
+      config,
+      pipelineBotApprove: isPipelineBotApprove({ comment, snapshot, config }),
+    });
     if (parsed.verb === 'revoke') {
       if (res.valid) revokeAt = comment.created_at;
     } else if (parsed.verb === 'resume') {
@@ -136,6 +156,7 @@ module.exports = {
   computeApprovalHash,
   findControlComments,
   isOwnerAssociation,
+  isPipelineBotApprove,
   parseControlComment,
   validateControlComment,
   formatAuthorizationRejection,

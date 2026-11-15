@@ -20,6 +20,7 @@ const TOP_KEYS = [
   'integration_branch', 'control_issue', 'created_at', 'approved_until', 'settings',
   'protected_paths_version', 'phases', 'approval_hash',
 ];
+const OPTIONAL_SNAPSHOT_KEYS = ['source_issue'];
 const BUDGET_KEYS = ['ci_per_phase', 'launches_per_phase', 'remedial_rounds', 'sync_attempts', 'daily_launches'];
 const PHASE_EXCEPTIONS = new Set(['tests', 'docs']);
 const FORBIDDEN_HEADINGS = new Set(['contract', 'rules', 'process']);
@@ -126,7 +127,14 @@ function validateSnapshotV2(snapshot, { planMarkdown } = {}) {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) fail('snapshot must be an object');
   if (snapshot.schema_version !== 2) fail('schema_version must be 2');
   for (const key of Object.keys(snapshot)) {
-    if (!TOP_KEYS.includes(key)) fail(`unknown snapshot field "${key}"`);
+    if (!TOP_KEYS.includes(key) && !OPTIONAL_SNAPSHOT_KEYS.includes(key)) {
+      fail(`unknown snapshot field "${key}"`);
+    }
+  }
+  if (snapshot.source_issue !== undefined) {
+    if (!Number.isInteger(snapshot.source_issue) || snapshot.source_issue < 1) {
+      fail('source_issue must be a positive integer when present');
+    }
   }
   for (const key of TOP_KEYS) {
     if (snapshot[key] === undefined) fail(`missing snapshot field "${key}"`);
@@ -250,7 +258,10 @@ function isoSeconds(date) {
   return `${date.toISOString().slice(0, 19)}Z`;
 }
 
-function buildSnapshotFromPlan({ planId, planMarkdown, controlIssue, now, windowDays = V2_DEFAULTS.window_days, integrationSuffix, settings = {} }) {
+function buildSnapshotFromPlan({
+  planId, planMarkdown, controlIssue, now, windowDays = V2_DEFAULTS.window_days, integrationSuffix, settings = {},
+  sourceIssue,
+}) {
   if (!PLAN_ID_RE.test(planId || '')) fail(`plan_id must match ${PLAN_ID_RE}`);
   if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > V2_CAPS.window_days) {
     fail(`window_days must be an integer from 1 to ${V2_CAPS.window_days}`);
@@ -296,6 +307,9 @@ function buildSnapshotFromPlan({ planId, planMarkdown, controlIssue, now, window
       return phase;
     }),
   };
+  if (sourceIssue !== undefined && sourceIssue !== null && Number(sourceIssue) > 0) {
+    snapshot.source_issue = Number(sourceIssue);
+  }
   snapshot.approval_hash = computeApprovalHash(snapshot);
   return snapshot;
 }

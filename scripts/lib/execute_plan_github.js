@@ -330,6 +330,7 @@ function createGitHubClient(opts) {
     },
     /** Commit SHA a branch, tag (annotated tags are peeled) or SHA resolves to. */
     getCommitSha: async (ref) => (await rest('GET', `/commits/${String(ref).split('/').map(enc).join('/')}`)).sha,
+    getCommit: (ref) => rest('GET', `/commits/${String(ref).split('/').map(enc).join('/')}`),
     listTags: ({ pages } = {}) => paginate('/tags', { pages }),
     getBranch: (branch) => rest('GET', `/branches/${enc(branch)}`, { nullOn404: true }),
     createRef: (ref, sha) => rest('POST', '/git/refs', { body: { ref, sha } }),
