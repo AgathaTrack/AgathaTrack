@@ -60,8 +60,9 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 | 1 | `needs-owner` + assignee `KanopeeKa` | None (wait for human) |
 | 2 | Status To do + assignee `pawpet-claude` + no `question` | Triage then intake worker |
 | 3 | Status In Analysis + assignee ∈ bots | Review worker |
-| 4 | Status Ready + assignee `pawpet-bot` + no delivery label | Delivery worker |
-| 5 | Status Ready + delivery label + unassigned + WIP slot | Implement launch |
+| 3a | Live `body_sha` ≠ state `body_sha`, or **In Analysis** with a delivery label, or **Ready** + delivery label without `converged_at` for current body | Reopen worker: **In Analysis**, strip delivery labels, reset `verdicts`, clear `converged_at`, assign other bot (or `needs-owner` if at round cap) |
+| 4 | Status Ready + assignee `pawpet-bot` + no delivery label + `converged_at` for current `body_sha` | Delivery worker |
+| 5 | Status Ready + delivery label + unassigned + WIP slot + live `body_sha` = state `body_sha` + `converged_at` set | Implement launch |
 | 6 | Status In progress + assignee `pawpet-bot` | Monitor tick |
 | 7 | Merged PR linked (`Refs #n`) | Hand off to existing merge handler if not already |
 
@@ -116,8 +117,10 @@ Queued: Ready + delivery label + **no assignee**, ordered by priority label then
 | Intake | ok | `pawpet-bot` | In Analysis |
 | Review | red / green+edits | other bot | In Analysis |
 | Review | green, `body_sha` unchanged this round | `pawpet-bot` | Ready |
-| Review | `round >= cap` (default 4) | `KanopeeKa` | + `needs-owner` |
-| Delivery | ok | *none* | Ready + delivery label |
+| Review | `round >= cap` (default 6) | `KanopeeKa` | + `needs-owner` |
+| Review reopen | `body_sha` changed after `converged_at`, or delivery rewrite changed body | other bot or `KanopeeKa` if at cap | In Analysis; strip delivery labels; clear `converged_at`; reset `verdicts`; `round + 1` unless cap → `needs-owner` |
+| Delivery | ok (body unchanged this step) | *none* | Ready + delivery label |
+| Delivery | rewrite changed `body_sha` | other bot (reopen record; **no** label this pass) | In Analysis |
 | Delivery | sensitive | `KanopeeKa` | + `needs-owner` |
 | Implement launch | ok | `pawpet-bot` | In progress + `busy` |
 | Implement launch | fail | `KanopeeKa` | + `needs-owner` |

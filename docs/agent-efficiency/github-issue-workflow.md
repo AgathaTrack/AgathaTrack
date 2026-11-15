@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-14
+last_updated: 2026-11-15
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -96,7 +96,7 @@ Nothing in Backlog is picked up automatically.
 
 **Trigger:** assigned to either agent while the issue is in **In Analysis**.
 
-1. If `round >= 4` (configurable default), add `needs-owner` (`owner_reason: no-convergence`), assign `KanopeeKa`, and stop.
+1. If `round >= 6` (configurable default), add `needs-owner` (`owner_reason: no-convergence`), assign `KanopeeKa`, and stop.
 2. Review the previous comment and the plan. Fold minor points into the body, and answer every question raised.
 3. Post one comment with the verdict (**Green** or **Red**) and the updated plan.
 4. Update the state comment: `round + 1`, this agent's verdict, and `body_sha`.
@@ -106,9 +106,39 @@ Nothing in Backlog is picked up automatically.
 
 This replaces the `Agent1:*` / `Agent2:*` / `AgentReview-*` labels used in the manual rounds.
 
+**Substantive body change:** any change to `body_sha` (SHA-256 of the normalised body, first 16 hex — see dispatcher skeleton acceptance). A typo fix counts; there is no “minor edit” exception.
+
+#### Reopening In Analysis (after convergence or during Ready)
+
+Peer review can end with **Ready** only when the latest Green left `body_sha` unchanged. If the plan changes after that, the issue **stays in In Analysis** and **reassigns to the other agent** until both agents Green the same `body_sha` again.
+
+| Situation | Column | Assignee | State comment |
+|-----------|--------|----------|---------------|
+| Agent or owner edits the issue body and `body_sha` changes after `converged_at` was set | **In Analysis** | The agent who did **not** last edit the body (`≠ last_assignee`) | See **reopen record** below |
+| **Ready** delivery rewrite changes `body_sha` (templates, checklist, delivery method, programme restructure) | **In Analysis** | `pawpet-claude` if `pawpet-bot` wrote the body; else `pawpet-bot` | Same |
+| Owner changes product direction mid-review (e.g. child issues → single-issue light-plan) | **In Analysis** | Whichever agent did not own the rewrite | Same; prior convergence is **void** |
+
+**Reopen record** (every row above):
+
+1. **Remove** delivery labels (`PR`, `light-plan`, `execute-plan`) so the issue cannot match the implement queue until delivery runs again after reconvergence.
+2. Clear `converged_at`.
+3. Set `body_sha` to the current body hash.
+4. **Reset `verdicts`** (empty object or omit) — stale Greens were for the old hash; reconvergence needs **two fresh Greens** on the new `body_sha`.
+5. On reopen: if the edit was an **owner product decision** (not an agent verdict edit), reset `round` to **0** and assign the other agent. If an **agent** reopen would push `round` to **≥ cap** (default 6), assign `KanopeeKa`, `needs-owner` (`no-convergence-reopen`), and stop. Otherwise `round + 1` and assign the other agent.
+
+**Invariants**
+
+1. Do not set the board column to **Ready** until the handoff row “Converged” applies to the **current** `body_sha` and **both** agents have a fresh `green` in `verdicts` for that hash.
+2. Do not add a delivery label until **after** reconvergence and the Ready delivery step (no label while **In Analysis**).
+3. Do not start implement until the column is **Ready**, `converged_at` is set for the current `body_sha`, delivery label present, unassigned, and path check passed.
+4. Agents performing a **delivery rewrite** who change `body_sha` must complete the reopen record **before** any label is re-applied; they assign the other agent, not themselves for implement.
+5. Humans set Pawpet **Status** when bots cannot; **In Analysis** whenever this section applies.
+
+**Example:** analysis converged, then an agent rewrote the body for a single-issue light-plan. Reopen: **In Analysis**, strip `light-plan`, assign `pawpet-claude`, reset `verdicts`, clear `converged_at` — the label returns only after delivery post-reconvergence.
+
 ### Ready — delivery (`pawpet-bot`)
 
-**Trigger:** **Ready**, assigned to `pawpet-bot`, no delivery label yet.
+**Trigger:** **Ready**, assigned to `pawpet-bot`, no delivery label yet, and **`converged_at` set on the current `body_sha`** (if the body changed since the last convergence, the issue must be In Analysis again — see above).
 
 1. **Choose the method:**
    - `PR` — one verifiable outcome, one reviewable diff.
@@ -122,9 +152,13 @@ This replaces the `Agent1:*` / `Agent2:*` / `AgentReview-*` labels used in the m
 4. **Path check (dispatcher, fail-closed):** expand the globs against tracked files and check them with `isForbiddenPath`, plus `.github/**` and `.cursor/agent-kernel/**`. A hit, or a missing or invalid block, → `needs-owner` (`sensitive-paths`) and assign `KanopeeKa`.
 5. **Pass** → add the delivery label and unassign. The issue is now queued.
 
+If step 2 **changes `body_sha`**, **do not** add the label in this pass. Run the **reopen record** first (In Analysis, strip any delivery labels, reset `verdicts`, assign the other agent). Re-add the label only after reconvergence and a later successful delivery pass with an unchanged `body_sha`.
+
 ### Ready (queued) → In progress — implement (`pawpet-bot`)
 
 **Trigger:** the dispatcher, when a work-in-progress slot is free. The limit is **2** slots, taken in priority-label order, then by age. Each product issue that is In progress and assigned to `pawpet-bot` holds one slot, whatever its delivery method; a programme's phase and release PRs add nothing on top.
+
+**Guards:** no launch when live `body_sha` ≠ state comment `body_sha`, when `converged_at` is absent for the current body, when the column is not **Ready**, or when a delivery label is present while the issue is **In Analysis** (reopen lane must run first).
 
 The dispatcher assigns `pawpet-bot`, adds `busy`, sets **In progress**, writes the run marker, and launches the work:
 
@@ -167,8 +201,9 @@ A lock is reclaimed only when the recorded run has ended or its heartbeat lease 
 | To do | Intake done | In Analysis | `pawpet-bot` |
 | In Analysis | Red, or Green with edits | In Analysis | The other agent |
 | In Analysis | Converged | Ready | `pawpet-bot` |
-| In Analysis | `round >= 4` | unchanged + `needs-owner` | `KanopeeKa` |
-| Ready | Delivery OK | Ready + delivery label | nobody (queued) |
+| In Analysis | `round >= 6` | unchanged + `needs-owner` | `KanopeeKa` |
+| In Analysis / Ready | Body or delivery rewrite (`body_sha` changed) after convergence | In Analysis | The other agent |
+| Ready | Delivery OK (no `body_sha` change this step) | Ready + delivery label | nobody (queued) |
 | Ready | Sensitive paths | unchanged + `needs-owner` | `KanopeeKa` |
 | Ready (queued) | Slot free | In progress + `busy` | `pawpet-bot` |
 | In progress | Merged | In Main | nobody |
