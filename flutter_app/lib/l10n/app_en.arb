@@ -878,6 +878,7 @@
   "petNeuterNotApplicable": "Not applicable",
   "petNeuterSubtitle": "Helps track health reminders for mammals",
   "petNeuterTooltip": "Whether your pet has been surgically sterilised. Recording the date helps your vet track recovery.",
+  "petNeuterQuestionA11y": "Neutered or spayed?",
   "petFormSelectDate": "Select date",
   "petFormBasicDetails": "Basic details",
   "petFormHealthDetails": "Health details",

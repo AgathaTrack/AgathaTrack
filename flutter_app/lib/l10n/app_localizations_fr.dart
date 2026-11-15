@@ -2154,6 +2154,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Indique si votre animal a été stérilisé chirurgicalement. La date aide votre vétérinaire à suivre la convalescence.';
 
   @override
+  String get petNeuterQuestionA11y => 'Animal stérilisé ?';
+
+  @override
   String get petFormSelectDate => 'Sélectionner une date';
 
   @override

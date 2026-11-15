@@ -771,6 +771,7 @@
   "petNeuterNotApplicable": "Non applicable",
   "petNeuterSubtitle": "Aide à suivre les rappels de santé pour les mammifères",
   "petNeuterTooltip": "Indique si votre animal a été stérilisé chirurgicalement. La date aide votre vétérinaire à suivre la convalescence.",
+  "petNeuterQuestionA11y": "Animal stérilisé ?",
   "petFormSelectDate": "Sélectionner une date",
   "petFormBasicDetails": "Informations de base",
   "petFormHealthDetails": "Santé",

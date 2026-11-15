@@ -3751,6 +3751,12 @@ abstract class AppLocalizations {
   /// **'Whether your pet has been surgically sterilised. Recording the date helps your vet track recovery.'**
   String get petNeuterTooltip;
 
+  /// No description provided for @petNeuterQuestionA11y.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutered or spayed?'**
+  String get petNeuterQuestionA11y;
+
   /// No description provided for @petFormSelectDate.
   ///
   /// In en, this message translates to:

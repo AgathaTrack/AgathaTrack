@@ -86,60 +86,74 @@ class PetFormNeuteredSection extends StatelessWidget {
         message: l.petNeuterTooltip,
         semanticsIdentifier: 'pet_neuter_info',
       ),
+      // The Yes/No/Unknown group and the date button supply their own semantics; the default
+      // text-field wrapper would merge the field label over all of them.
+      isTextField: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SegmentedButton<PetNeuterSelection>(
-            key: const Key('pet_neuter_segmented'),
-            showSelectedIcon: true,
-            style: const ButtonStyle(
-              padding: WidgetStatePropertyAll(
-                EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            label: l.petNeuterQuestionA11y,
+            child: SegmentedButton<PetNeuterSelection>(
+              key: const Key('pet_neuter_segmented'),
+              showSelectedIcon: true,
+              style: const ButtonStyle(
+                padding: WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                ),
               ),
+              segments: [
+                ButtonSegment(
+                  value: PetNeuterSelection.yes,
+                  label: Text(l.petNeuterYes),
+                ),
+                ButtonSegment(
+                  value: PetNeuterSelection.no,
+                  label: Text(l.petNeuterNo),
+                ),
+                ButtonSegment(
+                  value: PetNeuterSelection.unknown,
+                  label: Text(l.petNeuterUnknown),
+                ),
+              ],
+              selected: {selection ?? PetNeuterSelection.unknown},
+              onSelectionChanged: (values) {
+                _onSelectionChanged(values.first);
+              },
             ),
-            segments: [
-              ButtonSegment(
-                value: PetNeuterSelection.yes,
-                label: Text(l.petNeuterYes),
-              ),
-              ButtonSegment(
-                value: PetNeuterSelection.no,
-                label: Text(l.petNeuterNo),
-              ),
-              ButtonSegment(
-                value: PetNeuterSelection.unknown,
-                label: Text(l.petNeuterUnknown),
-              ),
-            ],
-            selected: {selection ?? PetNeuterSelection.unknown},
-            onSelectionChanged: (values) {
-              _onSelectionChanged(values.first);
-            },
           ),
           if (selection == PetNeuterSelection.yes) ...[
             const SizedBox(height: 12),
-            InkWell(
-              key: const Key('pet_neutered_date_field'),
-              onTap: onPickNeuteredDate,
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: l.date,
-                  suffixIcon: neuteredDate != null
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
-                          tooltip: l.clearDate,
-                          onPressed: onClearNeuteredDate,
-                        )
-                      : const Icon(Icons.calendar_today, size: 18),
-                ),
-                child: Text(
-                  neuteredDate != null
-                      ? formatCalendarDateMedium(neuteredDate!)
-                      : l.petFormSelectDate,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: neuteredDate != null
-                        ? null
-                        : theme.colorScheme.onSurfaceVariant,
+            // A button named by its merged "Date" + value text. No ExcludeSemantics: the clear
+            // IconButton must stay a separate, reachable node.
+            Semantics(
+              container: true,
+              button: true,
+              child: InkWell(
+                key: const Key('pet_neutered_date_field'),
+                onTap: onPickNeuteredDate,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: l.date,
+                    suffixIcon: neuteredDate != null
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            tooltip: l.clearDate,
+                            onPressed: onClearNeuteredDate,
+                          )
+                        : const Icon(Icons.calendar_today, size: 18),
+                  ),
+                  child: Text(
+                    neuteredDate != null
+                        ? formatCalendarDateMedium(neuteredDate!)
+                        : l.petFormSelectDate,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: neuteredDate != null
+                          ? null
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
