@@ -265,6 +265,9 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
 
   const dryRun = pipelineMode !== 'on';
   const assignToken = process.env.EXECUTE_PLAN_BOT_TOKEN;
+  const writeToken = assignToken || token;
+  const runTodoLane =
+    (io && io.runTodoLanePipeline) || ((args) => runTodoLanePipeline(args));
   const executed = [];
   for (const row of actions) {
     const payload = {
@@ -279,7 +282,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
         owner,
         repo,
         issueNumber: row.issue,
-        token,
+        token: writeToken,
         projectsPat: config.projectsPat,
         projectId: config.projectId,
         statusFieldId: config.statusFieldId,
@@ -288,7 +291,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       };
       let run;
       if (row.action === 'triage-intake') {
-        run = await runTodoLanePipeline(baseRun);
+        run = await runTodoLane(baseRun);
       } else if (row.action === 'reopen-analysis') {
         const issueRow = issues.find((i) => i.number === row.issue);
         const { state } = await loadIssueState(owner, repo, row.issue, token);
