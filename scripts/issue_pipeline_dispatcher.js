@@ -15,6 +15,12 @@ const {
 } = require('./issue_pipeline_project');
 const { isPipelineIssue } = require('./issue_pipeline_gate');
 const { runTodoLanePipeline } = require('./issue_pipeline_intake');
+const { loadIssueState } = require('./issue_pipeline_state_load');
+const {
+  applyReopenAnalysis,
+  applyReviewStub,
+  applyNeedsOwnerConvergence,
+} = require('./issue_pipeline_review');
 
 const BOTS = new Set(['pawpet-claude', 'pawpet-bot']);
 const OWNER_LOGIN = 'KanopeeKa';
@@ -206,10 +212,11 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       continue;
     }
     const liveBodySha = bodySha(issue.body);
+    const { state } = await loadIssueState(owner, repo, issue.number, token);
     const action = computeEligibleAction({
       ...issue,
       liveBodySha,
-      state: defaultState(),
+      state,
     });
     if (!action) {
       continue;
@@ -236,8 +243,8 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       workers_enabled: pipelineMode === 'on',
       ...row,
     };
-    if (pipelineMode === 'on' && row.action === 'triage-intake') {
-      const run = await runTodoLanePipeline({
+    if (pipelineMode === 'on') {
+      const baseRun = {
         owner,
         repo,
         issueNumber: row.issue,
@@ -247,9 +254,40 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
         statusFieldId: config.statusFieldId,
         assignToken,
         dryRun: false,
-      });
-      executed.push({ issue: row.issue, run });
-      payload.executed = run;
+      };
+      let run;
+      if (row.action === 'triage-intake') {
+        run = await runTodoLanePipeline(baseRun);
+      } else if (row.action === 'reopen-analysis') {
+        const issueRow = issues.find((i) => i.number === row.issue);
+        const { state } = await loadIssueState(owner, repo, row.issue, token);
+        run = await applyReopenAnalysis({
+          ...baseRun,
+          state,
+          liveBodySha: bodySha(issueRow?.body || ''),
+        });
+      } else if (row.action === 'needs-owner-convergence') {
+        const issueRow = issues.find((i) => i.number === row.issue);
+        const { state } = await loadIssueState(owner, repo, row.issue, token);
+        run = await applyNeedsOwnerConvergence({
+          ...baseRun,
+          state,
+          liveBodySha: bodySha(issueRow?.body || ''),
+        });
+      } else if (row.action === 'review') {
+        const issueRow = issues.find((i) => i.number === row.issue);
+        const { state } = await loadIssueState(owner, repo, row.issue, token);
+        run = await applyReviewStub({
+          ...baseRun,
+          state,
+          liveBodySha: bodySha(issueRow?.body || ''),
+          reviewer: row.assignee,
+        });
+      }
+      if (run) {
+        executed.push({ issue: row.issue, run });
+        payload.executed = run;
+      }
     }
     console.log(JSON.stringify(payload));
   }
