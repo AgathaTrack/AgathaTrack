@@ -407,6 +407,7 @@ module.exports = {
   listProjectIssues,
   PROJECT_ITEMS_PAGE_SIZE,
   searchEligibleIssues,
+  fetchAllIssueComments,
   upsertMarkerComment,
   setLabels,
   assignIssue,
