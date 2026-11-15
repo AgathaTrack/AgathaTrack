@@ -158,43 +158,103 @@ async function updateProjectStatus({
   );
 }
 
-async function listProjectIssues({ projectId, statusFieldId, projectsPat }) {
+const PROJECT_ITEMS_PAGE_SIZE = 100;
+
+async function fetchProjectV2Item({ itemId, statusFieldId, projectsPat }) {
   const data = await graphql(
     projectsPat,
-    `query($projectId: ID!) {
-      node(id: $projectId) {
-        ... on ProjectV2 {
-          items(first: 100) {
+    `query($itemId: ID!) {
+      node(id: $itemId) {
+        ... on ProjectV2Item {
+          id
+          fieldValues(first: 20) {
             nodes {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field { ... on ProjectV2SingleSelectField { id name } }
+              }
+            }
+          }
+          content {
+            ... on Issue {
               id
-              fieldValues(first: 20) {
-                nodes {
-                  ... on ProjectV2ItemFieldSingleSelectValue {
-                    name
-                    field { ... on ProjectV2SingleSelectField { id name } }
-                  }
-                }
-              }
-              content {
-                ... on Issue {
-                  id
-                  number
-                  title
-                  body
-                  url
-                  state
-                  labels(first: 30) { nodes { name } }
-                }
-              }
+              number
+              title
+              body
+              url
+              state
+              labels(first: 30) { nodes { name } }
             }
           }
         }
       }
     }`,
-    { projectId },
+    { itemId },
   );
 
-  const items = data.node?.items?.nodes || [];
+  const item = data.node;
+  if (!item?.content) {
+    return null;
+  }
+  return {
+    projectItemId: item.id,
+    status: getIssueProjectStatus(item, statusFieldId),
+    issue: item.content,
+  };
+}
+
+async function listProjectIssues({ projectId, statusFieldId, projectsPat }) {
+  const items = [];
+  let after = null;
+  while (true) {
+    const data = await graphql(
+      projectsPat,
+      `query($projectId: ID!, $after: String) {
+        node(id: $projectId) {
+          ... on ProjectV2 {
+            items(first: ${PROJECT_ITEMS_PAGE_SIZE}, after: $after) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                id
+                fieldValues(first: 20) {
+                  nodes {
+                    ... on ProjectV2ItemFieldSingleSelectValue {
+                      name
+                      field { ... on ProjectV2SingleSelectField { id name } }
+                    }
+                  }
+                }
+                content {
+                  ... on Issue {
+                    id
+                    number
+                    title
+                    body
+                    url
+                    state
+                    labels(first: 30) { nodes { name } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }`,
+      { projectId, after },
+    );
+
+    const page = data.node?.items;
+    const nodes = page?.nodes || [];
+    items.push(...nodes);
+    if (!page?.pageInfo?.hasNextPage) {
+      break;
+    }
+    after = page.pageInfo.endCursor;
+  }
+
   return items
     .map((item) => {
       const issue = item.content;
@@ -343,7 +403,9 @@ module.exports = {
   getStatusOptionId,
   ensureProjectItem,
   updateProjectStatus,
+  fetchProjectV2Item,
   listProjectIssues,
+  PROJECT_ITEMS_PAGE_SIZE,
   searchEligibleIssues,
   upsertMarkerComment,
   setLabels,

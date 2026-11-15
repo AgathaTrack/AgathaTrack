@@ -209,6 +209,7 @@ run_governance() {
   node --test scripts/validate_eslint.test.js
   node --test scripts/github_issue_workflow.test.js
   node --test scripts/issue_pipeline_dispatcher.test.js
+  node --test scripts/issue_pipeline_project.test.js
   node --test scripts/issue_pipeline_triage.test.js
   node --test scripts/issue_pipeline_review.test.js
   node --test scripts/issue_pipeline_delivery.test.js

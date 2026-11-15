@@ -12,6 +12,7 @@ const {
   loadProjectSecrets,
   assertPipelineStatusOptions,
   listPipelineIssues,
+  fetchPipelineIssueForProject,
 } = require('./issue_pipeline_project');
 const { isPipelineIssue } = require('./issue_pipeline_gate');
 const { runTodoLanePipeline } = require('./issue_pipeline_intake');
@@ -209,9 +210,19 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
 
   await assertOptions(config.projectsPat, config.statusFieldId);
 
-  let issues = await listIssues(owner, repo, token, config);
+  const resolveIssueState =
+    (io && io.loadIssueState) ||
+    ((o, r, n, t) => loadIssueState(o, r, n, t));
+
+  let issues;
   if (issueNumber) {
-    issues = issues.filter((issue) => issue.number === Number(issueNumber));
+    const fetchOne =
+      (io && io.fetchPipelineIssueForProject) ||
+      ((o, r, t, c, n) => fetchPipelineIssueForProject(o, r, t, c, n));
+    const row = await fetchOne(owner, repo, token, config, issueNumber);
+    issues = row ? [row] : [];
+  } else {
+    issues = await listIssues(owner, repo, token, config);
   }
 
   const wipMax = Number(process.env.WIP_MAX || 2);
@@ -223,7 +234,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       continue;
     }
     const liveBodySha = bodySha(issue.body);
-    const { state } = await loadIssueState(owner, repo, issue.number, token);
+    const { state } = await resolveIssueState(owner, repo, issue.number, token);
     const action = computeEligibleAction({
       ...issue,
       liveBodySha,
