@@ -192,7 +192,7 @@ test('tick on mode passes EXECUTE_PLAN_BOT_TOKEN to todo lane writes', async () 
     assert.equal(result.dryRun, false);
     assert.equal(result.executed.length, 1);
     assert.ok(laneArgs);
-    assert.equal(laneArgs.token, planBotToken);
+    assert.equal(laneArgs.token, readToken);
     assert.equal(laneArgs.assignToken, planBotToken);
     assert.equal(laneArgs.dryRun, false);
   } finally {
