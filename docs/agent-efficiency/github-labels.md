@@ -51,6 +51,16 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 
 ---
 
+## Issue pipeline programmes
+
+| Label | Purpose |
+|-------|---------|
+| `owner-programme` | Owner-applied only. A standing programme issue (for example `light-plan:` #2342) whose phase/release PRs may use `/run-as-me` when the session opts in. Bots never add this label. Confirm the `labeled` event actor is an owner in `.github/execute-plan.config.json` → `owners` before relying on it — see [run-as-me skill](../../.cursor/skills/run-as-me/SKILL.md). |
+| `light-plan` | Sequential programme; tracking issue uses a `light-plan:` title and phase checklist |
+| `pipeline-beta` | (Planned) Sandbox issues for dry-run / controlled `ISSUE_PIPELINE=on` soak |
+
+---
+
 ## Pull request labels
 
 | Label | Purpose |
