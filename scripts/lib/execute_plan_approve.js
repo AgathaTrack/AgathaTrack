@@ -7,7 +7,14 @@
  * `clients` = { bot, read, deps? } as in execute_plan_driver_actions.js; `read` (GITHUB_TOKEN) dispatches the driver.
  */
 
-const { parseControlComment, validateControlComment, findControlComments, formatAuthorizationRejection } = require('./execute_plan_approval');
+const {
+  parseControlComment,
+  validateControlComment,
+  findControlComments,
+  formatAuthorizationRejection,
+  isPipelineBotApprove,
+} = require('./execute_plan_approval');
+const { evaluatePipelineApprovePolicy } = require('./execute_plan_pipeline_approve');
 const { loadSnapshotAtRef } = require('./execute_plan_snapshot_v2');
 const { loadPlanContext, CONFIG_PATH } = require('./execute_plan_observe');
 const { formatStatusComment, STATUS_MARKER, parseStatusComment } = require('./execute_plan_status');
@@ -34,6 +41,21 @@ async function loadConfig(client) {
 async function reject(bot, issueNumber, verb, reason) {
   await bot.createComment(issueNumber, `${verb}-autonomous rejected: ${reason}`);
   return done(true, `rejected: ${reason}`);
+}
+
+async function rejectPipelineApprove(clients, { issue, snapshot, reason }, { dry, log }) {
+  if (dry) return done(false, `would reject: pipeline ${reason}`);
+  const { bot } = clients;
+  const sourceN = snapshot.source_issue;
+  await bot.createComment(issue.number, `approve-autonomous rejected: pipeline policy (${reason})`);
+  if (Number.isInteger(sourceN) && sourceN > 0) {
+    await bot.addLabels(sourceN, ['needs-owner']);
+  }
+  const labels = labelNames(issue);
+  if (labels.includes('autonomous-approved')) await bot.removeLabel(issue.number, 'autonomous-approved');
+  await bot.addLabels(issue.number, ['autonomous-revoked']);
+  log(`plan ${snapshot.plan_id}: pipeline auto-approve failed (${reason}); needs-owner on #${sourceN}`);
+  return done(true, `rejected: pipeline ${reason}`);
 }
 
 async function gateAuthorization(clients, ctx, { issue, comment, parsed, now, log, dry, runId }) {
@@ -86,7 +108,7 @@ async function gateAuthorization(clients, ctx, { issue, comment, parsed, now, lo
   return null;
 }
 
-async function handleApprove(clients, { issue, comment, parsed, config }, { now, log, dry, runId }) {
+async function handleApprove(clients, { issue, comment, parsed, config }, { now, log, dry, runId, killSwitch = 'on' }) {
   const { bot, read } = clients;
   const rejectWith = (reason) => (dry ? done(false, `would reject: ${reason}`) : reject(bot, issue.number, 'approve', reason));
 
@@ -101,7 +123,23 @@ async function handleApprove(clients, { issue, comment, parsed, config }, { now,
   } catch (e) {
     return rejectWith(e.message);
   }
-  const res = validateControlComment({ comment, snapshot, config });
+
+  const pipelineBot = isPipelineBotApprove({ comment, snapshot, config });
+  if (pipelineBot) {
+    const policy = await evaluatePipelineApprovePolicy(read, {
+      snapshot,
+      config,
+      initSha: sha,
+      killSwitch,
+      planId: parsed.plan,
+      controlIssueNumber: issue.number,
+    });
+    if (!policy.ok) {
+      return rejectPipelineApprove(clients, { issue, snapshot, reason: policy.reason }, { dry, log });
+    }
+  }
+
+  const res = validateControlComment({ comment, snapshot, config, pipelineBotApprove: pipelineBot });
   if (!res.valid) {
     if (IGNORED_REASONS.has(res.reason)) return done(false, `ignored: ${res.reason}`);
     const detail = formatAuthorizationRejection({
@@ -208,7 +246,7 @@ async function handleControlComment(clients, event, { now = isoNow(), killSwitch
   if (event.action !== 'created') return done(false, `ignored action ${event.action}`);
 
   if (parsed.verb === 'approve') {
-    const res = await handleApprove(clients, { issue, comment, parsed, config }, { now, log, dry, runId });
+    const res = await handleApprove(clients, { issue, comment, parsed, config }, { now, log, dry, runId, killSwitch: sw });
     return res.handled && res.detail === 'approved' ? pass(parsed.plan) : res;
   }
 

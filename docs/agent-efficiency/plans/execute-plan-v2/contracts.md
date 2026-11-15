@@ -56,6 +56,7 @@ GitHub (state-machine §4). This exact object is the worked example of the hash 
 | `release_branch` | Always `"main"`. (Renamed from v1 `base_branch`, whose v1 validation rules do not apply to v2.) |
 | `integration_branch` | `^cursor/<plan_id>-integration-[a-z0-9]{4}$`, so `ci.yml:10-13` and the integration ruleset apply. |
 | `control_issue` | Issue number created by `init` before the hash is computed. |
+| `source_issue` | Optional. Product issue number when `init` was started from the issue pipeline (`SOURCE_ISSUE_NUMBER`). Included in `approval_hash`. Enables bot `approve-autonomous` under `execute_plan_pipeline_approve.js` (D-001). Omitted for owner-initiated programmes. |
 | `created_at` | ISO-8601 UTC, set by `init`. |
 | `approved_until` | `created_at + window_days`; window ≤ 14 days (cap in code). Must equal the `until` of the **approve** comment (§3.3). |
 | `settings.budgets.*` | Integers ≥ 1, each ≤ the cap in `V2_CAPS` (`scripts/lib/execute_plan_constants.js`); validation rejects higher values. |

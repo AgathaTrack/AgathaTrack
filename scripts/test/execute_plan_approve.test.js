@@ -130,12 +130,75 @@ test('approve: integration branch at another sha → rejected', async () => {
 });
 
 test('not owner → ignored, no comment', async () => {
-  for (const over of [{ user: { login: 'mallory' } }, { author_association: 'CONTRIBUTOR' }, { user: { login: 'pawpet-bot' } }]) {
+  for (const over of [{ user: { login: 'mallory' } }, { author_association: 'CONTRIBUTOR' }]) {
     const s = setup();
     const res = await run(s, event(mkComment(APPROVE, over)));
     assert.equal(res.handled, false);
     assert.deepEqual(s.writes, []);
   }
+});
+
+test('pawpet-bot without source_issue → ignored', async () => {
+  const s = setup();
+  const res = await run(s, event(mkComment(APPROVE, { user: { login: 'pawpet-bot' } })));
+  assert.equal(res.handled, false);
+  assert.deepEqual(s.writes, []);
+});
+
+test('pawpet-bot pipeline approve (policy pass) → approved', async () => {
+  const pipelineSnap = buildSnapshotFromPlan({
+    planId: PLAN_ID,
+    planMarkdown: PLAN_MD,
+    controlIssue: 9,
+    now: '2026-10-16T09:00:30Z',
+    sourceIssue: 100,
+  });
+  const productBody = 'product issue';
+  const { bodySha } = require('../issue_pipeline_state');
+  const shaProduct = bodySha(productBody);
+  const stateComment = {
+    body: `<!-- agent-state: ${JSON.stringify({
+      body_sha: shaProduct,
+      verdicts: { 'pawpet-claude': 'green', 'pawpet-bot': 'green' },
+      converged_at: '2026-11-15T00:00:00.000Z',
+    })} -->`,
+    created_at: '2026-11-15T01:00:00Z',
+  };
+  const readExtras = {
+    blobShaMapForRef: async () => new Map([['a/file', 'sha']]),
+    getCommit: async () => ({ author: { login: 'pawpet-bot' } }),
+    getIssue: async () => ({ body: productBody }),
+    listIssues: async () => [],
+  };
+  const pipelineApprove = `approve-autonomous ${PLAN_ID} ${pipelineSnap.approval_hash} until ${pipelineSnap.approved_until}`;
+  const s = setup({ snapshotAtSha: pipelineSnap, issueComments: [stateComment] });
+  Object.assign(s.clients.read, readExtras);
+  const res = await run(s, event(mkComment(pipelineApprove, { user: { login: 'pawpet-bot' }, author_association: 'NONE' })));
+  assert.deepEqual(res, { handled: true, detail: 'driver pass dispatched' });
+  assert.deepEqual(s.writes.find((w) => w[0] === 'addLabels'), ['addLabels', 9, ['autonomous-approved', `plan:${PLAN_ID}`]]);
+});
+
+test('pawpet-bot pipeline approve policy fail → needs-owner on product + autonomous-revoked', async () => {
+  const pipelineSnap = buildSnapshotFromPlan({
+    planId: PLAN_ID,
+    planMarkdown: PLAN_MD,
+    controlIssue: 9,
+    now: '2026-10-16T09:00:30Z',
+    sourceIssue: 100,
+  });
+  const s = setup({ snapshotAtSha: pipelineSnap });
+  Object.assign(s.clients.read, {
+    blobShaMapForRef: async () => new Map([['a/file', 'sha']]),
+    getCommit: async () => ({ author: { login: 'pawpet-bot' } }),
+    getIssue: async () => ({ body: 'product' }),
+    listIssueComments: async () => [],
+  });
+  const pipelineApprove = `approve-autonomous ${PLAN_ID} ${pipelineSnap.approval_hash} until ${pipelineSnap.approved_until}`;
+  const res = await run(s, event(mkComment(pipelineApprove, { user: { login: 'pawpet-bot' }, author_association: 'NONE' })));
+  assert.equal(res.handled, true);
+  assert.match(res.detail, /rejected: pipeline/);
+  assert.deepEqual(s.writes.find((w) => w[0] === 'addLabels' && w[1] === 100), ['addLabels', 100, ['needs-owner']]);
+  assert.ok(s.writes.some((w) => w[0] === 'addLabels' && w[2]?.includes('autonomous-revoked')));
 });
 
 test('invalid hash → exactly one rejected comment with expected hash', async () => {

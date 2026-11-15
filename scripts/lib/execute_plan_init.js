@@ -90,7 +90,10 @@ async function runInit({ client, planId, windowDays = V2_DEFAULTS.window_days, d
   const planMarkdown = fsImpl.readFileSync(path.join(cwd, planRel), 'utf8');
   warnCrossPlanWaitPhrases(planMarkdown);
   const parsed = parsePlanMarkdown(planMarkdown);
-  const build = (controlIssue) => buildSnapshotFromPlan({ planId, planMarkdown, controlIssue, now, windowDays });
+  const sourceIssue = Number(process.env.SOURCE_ISSUE_NUMBER) || undefined;
+  const build = (controlIssue) => buildSnapshotFromPlan({
+    planId, planMarkdown, controlIssue, now, windowDays, sourceIssue,
+  });
 
   if (dryRun) {
     const snapshot = build(0);
@@ -114,19 +117,37 @@ async function runInit({ client, planId, windowDays = V2_DEFAULTS.window_days, d
   git.pushUpstream();
   const sha = git.headSha();
   const line = approvalLine(snapshot);
-  await client.updateIssue(issue.number, {
-    body: [
-      renderIssueBody(snapshot, snapshot.approval_hash),
-      `Init branch: cursor/${planId}-init @ ${sha}`,
-      '',
-      'Owner: post this exact line as a comment to approve:',
-      '',
-      '```',
-      line,
-      '```',
-    ].join('\n'),
-  });
-  return { snapshot, approvalLine: line, output: line, issue: issue.number };
+  const bodyLines = [
+    renderIssueBody(snapshot, snapshot.approval_hash),
+    snapshot.source_issue ? `Product issue: #${snapshot.source_issue}` : null,
+    `Init branch: cursor/${planId}-init @ ${sha}`,
+    '',
+    snapshot.source_issue
+      ? 'Pipeline: bot will post `approve-autonomous` when policy passes (D-001).'
+      : 'Owner: post this exact line as a comment to approve:',
+    '',
+    snapshot.source_issue ? null : '```',
+    snapshot.source_issue ? null : line,
+    snapshot.source_issue ? null : '```',
+  ].filter((row) => row !== null);
+  await client.updateIssue(issue.number, { body: bodyLines.join('\n') });
+
+  let pipelineApprovePosted = false;
+  if (snapshot.source_issue && typeof client.getAuthenticatedUser === 'function'
+    && typeof client.createComment === 'function') {
+    const me = await client.getAuthenticatedUser();
+    if (me && me.login === 'pawpet-bot') {
+      await client.createComment(issue.number, line);
+      pipelineApprovePosted = true;
+    }
+  }
+  return {
+    snapshot,
+    approvalLine: line,
+    output: line,
+    issue: issue.number,
+    pipelineApprovePosted,
+  };
 }
 
 function realGit(cwd = process.cwd()) {
