@@ -22,10 +22,13 @@ function parseLinkedIssues(prBody) {
   return [...new Set(matches.map((m) => Number(m.replace(/\D/g, ''))))];
 }
 
-/** Programme tracking issue (`light-plan:` / `execute-plan:`), not a product UAT ticket. */
+/**
+ * Execute-plan control issue (driver programme), not a UAT ticket.
+ * Light-plan tracking issues follow product release tracking (ISSUE-PIPELINE-D-002).
+ */
 function isPlanControlIssue(issue) {
   const title = String(issue?.title || '').trim();
-  return /^(?:\[)?(?:light-plan|execute-plan)\b/i.test(title);
+  return /^(?:\[)?execute-plan\b/i.test(title);
 }
 
 function ioOr(io) {

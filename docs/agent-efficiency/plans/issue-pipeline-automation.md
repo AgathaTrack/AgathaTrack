@@ -342,7 +342,7 @@ merge (Actions) ──▶ In Main ──▶ In UAT ──▶ In Prod notify ─�
 | ID | Decision | Rationale | Status | Date |
 |----|----------|-----------|--------|------|
 | ISSUE-PIPELINE-D-001 | Coded auto-approve for pipeline-started execute-plan | Trusted code, bot identity; no owner token in agents | Proposed | 2026-11-13 |
-| ISSUE-PIPELINE-D-002 | Light-plan issues follow In Main → UAT → Prod via Actions | One lifecycle; agent stops at Pre-UAT green | Proposed | 2026-11-13 |
+| ISSUE-PIPELINE-D-002 | Light-plan issues follow In Main → UAT → Prod via Actions | One lifecycle; agent stops at Pre-UAT green | Live | 2026-11-15 |
 | ISSUE-PIPELINE-D-003 | ~~User-owned; status labels source of truth~~ | — | **Superseded** | 2026-11-13 |
 | ISSUE-PIPELINE-D-003b | Org-owned repo; Pawpet **column** = stage; org-scoped token may sync board | Org migration #2324+; Claude/Cursor can read/write Status | Proposed | 2026-11-14 |
 | ISSUE-PIPELINE-D-004 | State in bot-written body marker | Title prefixes break plan control detection | Proposed | 2026-11-14 |

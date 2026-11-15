@@ -186,7 +186,7 @@ A lock is reclaimed only when the recorded run has ended or its heartbeat lease 
 
 - **In Main / In UAT:** the existing merge and UAT handlers ([§Merge → UAT automation](#merge--uat-automation)).
 - **Done (planned):** a prod notify job in `deploy-prod.yml`. It runs only after a real production deploy plus post-deploy smoke, never on the stub path (`PROD_DEPLOY_ENABLED` not `true`). It sets **Done**, removes `busy`, and closes the issue.
-- **Light-plan issues (planned, D-002):** the release PR uses `Refs #n`, and the session stops at Pre-UAT green without closing the issue. Light-plan issues then follow In Main → In UAT → Done like product issues.
+- **Light-plan issues (D-002, live):** the release PR uses `Refs #n`, and the session stops at Pre-UAT green without closing the issue (`busy` removed). Light-plan tracking issues then follow In Main → In UAT → Done like product issues (merge/UAT/prod handlers in `issue-agent-handlers.js`). Execute-plan **control** issues remain the exception (no UAT ticket).
 
 ### Needs you (any status)
 
@@ -358,7 +358,7 @@ When an agent PR merges to `main`:
 
 When UAT deploy finishes, the **Notify linked agent issue** job in `deploy-uat.yml` sets **In UAT** (or adds `question` on failure).
 
-A **plan control issue** is not a UAT ticket. The title starts with `light-plan` or `execute-plan` (`Light-plan:`, `Execute-plan:`, and `[execute-plan]` count). Light-plan closes it when Pre-UAT is green; the release PR says `Closes #<issue>`, so GitHub closes it at merge. The merge handler reopens that one close so the programme can finish Pre-UAT, and it does not set **In Main** or post the UAT-tracking comment. Deploy UAT notify leaves the plan issue untouched, so the Pre-UAT close stays closed. Product issues linked with `Refs` / `Fixes` still reopen for UAT. **Planned (D-002):** light-plan issues stop being skipped here and follow In Main → In UAT → Done ([§In Main → In UAT → Done](#in-main--in-uat--done-actions-unassigned)).
+An **execute-plan control issue** is not a UAT ticket (title starts with `execute-plan`, including `[execute-plan]`). The merge handler reopens it after an accidental `Closes` at release merge but does **not** set **In Main** or post the UAT-tracking comment; UAT notify skips it. **Light-plan** tracking issues (`light-plan:` title) are UAT-tracked like product issues: release PR `Refs #n`, session ends at Pre-UAT green without closing; merge handler sets **In Main**; UAT notify sets **In UAT**; prod notify sets **Done** and closes (ISSUE-PIPELINE-D-002).
 
 Manual UAT rerun: **Actions → Deploy UAT (uat.agathatrack.com) → Run workflow** with `deploy_ref` = your UAT tag (e.g. `uat-260709-122`).
 - UAT promotion tag: `uat-YYMMDD-PR#` (created automatically on merge to `main`)

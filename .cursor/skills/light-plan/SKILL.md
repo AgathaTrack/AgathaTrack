@@ -1,6 +1,6 @@
 ---
 name: light-plan
-description: Single-agent sequential plan — phase PRs merge-committed one by one into an integration branch, one release PR to main after a full self-review, then /babysit-uat through Pre-UAT and tracking-issue close. Stays in session while CI or Pre-UAT is still running. Use for 2–4 phases. /execute-plan when you need scope/budget guarantees or a longer programme.
+description: Single-agent sequential plan — phase PRs merge-committed one by one into an integration branch, one release PR to main after a full self-review, then /babysit-uat through Pre-UAT green (issue stays open; Actions track In Main → In UAT → Done). Stays in session while CI or Pre-UAT is still running. Use for 2–4 phases. /execute-plan when you need scope/budget guarantees or a longer programme.
 disable-model-invocation: true
 ---
 
@@ -10,7 +10,7 @@ Minimal sequential programme — tracking issue only; no execute-plan runtime. P
 
 ## Run to completion
 
-- `/light-plan` delivers a release squash-merged to `main`, Pre-UAT green on that SHA, and the tracking issue closed.
+- `/light-plan` delivers a release squash-merged to `main` and Pre-UAT green on that SHA. The release PR uses `Refs #<issue>` (not `Closes`). Remove `busy` after Pre-UAT green; **do not** close the tracking issue — merge/UAT/prod handlers move it **In Main** → **In UAT** → **Done** ([`github-issue-workflow.md`](../../../docs/agent-efficiency/github-issue-workflow.md) §D-002).
 - Do not end the turn or ask the owner at a step boundary (setup done, phase merged, checklist tick, sync PR, waiting on CI — `gh pr checks --watch`; waiting on review — `node scripts/babysit_pr_reviews.js wait --pr <url>`).
 - End the turn only for stops in §Stop and ask, blocked `./scripts/pre-push.sh` in §Final self-review, or Done (§Release). Leaving merge, Pre-UAT, or issue close for a later session is not an ending.
 - Put status on the tracking issue (checklist ticks with PR links). Never ask for acknowledgement.
@@ -64,7 +64,7 @@ Record under `## Self-review` on the release PR.
 
 ## Release
 
-Open integration → `main` only now. Body: goal, phase links, `## Self-review`, `## Docs`, `Closes #<issue>`. Read and follow [`/babysit-uat`](../babysit-uat/SKILL.md) in the same turn (builds on [`/babysit-plus`](../babysit-plus/SKILL.md); remedial via [`/e2e-debug`](../e2e-debug/SKILL.md) when needed). On this release, do not run `babysit_sync_base.sh --push`: a `MERGEABLE` head squash-merges while `BEHIND`. Programme-owned merges: [`AGENTS.md`](../../../AGENTS.md) §Autonomy and merging.
+Open integration → `main` only now. Body: goal, phase links, `## Self-review`, `## Docs`, `Refs #<issue>` (**not** `Closes`). Read and follow [`/babysit-uat`](../babysit-uat/SKILL.md) in the same turn (builds on [`/babysit-plus`](../babysit-plus/SKILL.md); remedial via [`/e2e-debug`](../e2e-debug/SKILL.md) when needed). On this release, do not run `babysit_sync_base.sh --push`: a `MERGEABLE` head squash-merges while `BEHIND`. Programme-owned merges: [`AGENTS.md`](../../../AGENTS.md) §Autonomy and merging.
 
 Re-read this section before opening that PR, and again before any user-facing message while the programme is unfinished. Until Done, take the first matching action. Do not describe it and stop.
 
@@ -76,13 +76,13 @@ Re-read this section before opening that PR, and again before any user-facing me
 | `mergeable` is `CONFLICTING`, or preflight exit `4` | One PR that merges `main` into integration and resolves the conflict. Light-merge it, then watch the release again. |
 | Release head moved because that conflict PR merged | Watch CI on the new head. |
 | Merged, Pre-UAT not yet green | `./scripts/babysit_uat_watch_preuat.sh <merge_sha> --json --timeout-min 90`. Failure → Phase 3–4, then watch again. |
-| Pre-UAT green | Tick the checklist, comment the merge SHA and pre-UAT run URL, `gh issue close <n>`. |
+| Pre-UAT green | Tick the checklist, comment the merge SHA and pre-UAT run URL, remove `busy` (`node scripts/github_issue_workflow.js` or `gh issue edit` labels). **Do not** `gh issue close` — Actions reopen on merge and advance **In Main** / **In UAT** / **Done**. |
 
-Done when that last row has happened. A later message that only says `/babysit-plus` or "merge it" still owes the Pre-UAT watch and the issue close. If this conversation is woken by a CI subscription, the first action is the matching row — the wake is not an owner question.
+Done when that last row has happened. A later message that only says `/babysit-plus` or "merge it" still owes the Pre-UAT watch and the `busy` removal. If this conversation is woken by a CI subscription, the first action is the matching row — the wake is not an owner question.
 
-That close is the end of the programme. Pre-UAT is the gate; do not wait for Deploy UAT notify, and do not reopen the tracking issue so it can sit in UAT. Product issues keep that reopen path (`docs/agent-efficiency/github-issue-workflow.md`).
+Pre-UAT green ends the **agent session**; UAT deploy and prod notify close the issue via Actions. Do not wait for Deploy UAT notify in-session unless you are babysitting a product issue outside a programme.
 
-Do not end the turn while the release PR is open or Pre-UAT / issue close is unfinished, except [§Stop and ask](#stop-and-ask). Never ask the owner to merge, to run `/babysit-uat`, or to pick the work up in another session.
+Do not end the turn while the release PR is open or Pre-UAT is unfinished, except [§Stop and ask](#stop-and-ask). Never ask the owner to merge, to run `/babysit-uat`, or to pick the work up in another session.
 
 ## Recovery
 
