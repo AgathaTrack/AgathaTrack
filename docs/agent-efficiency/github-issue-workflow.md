@@ -94,6 +94,8 @@ Nothing in Backlog is picked up automatically.
 
 ### In Analysis — peer review (alternating `pawpet-bot` ⇄ `pawpet-claude`)
 
+**Live (P5, soak stub):** [`issue-pipeline-review.yml`](../.github/workflows/issue-pipeline-review.yml) and `scripts/issue_pipeline_review.js` implement `body_sha` convergence, reopen record, and round cap (`>= 6` → `needs-owner`). Dispatcher loads state from `<!-- agent-state: … -->` comments. Full LLM review workers replace the env-driven stub when wired.
+
 **Trigger:** assigned to either agent while the issue is in **In Analysis**.
 
 1. If `round >= 6` (configurable default), add `needs-owner` (`owner_reason: no-convergence`), assign `KanopeeKa`, and stop.
