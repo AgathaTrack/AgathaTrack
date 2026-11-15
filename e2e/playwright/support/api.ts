@@ -356,6 +356,40 @@ export async function tryLogin(
   return { ok: res.ok, status: res.status };
 }
 
+/**
+ * Log in through `POST /auth/login` and return a full {@link TestUser} (token and id included).
+ * Unlike {@link tryLogin} this throws on a non-2xx response; use it to recover an account that
+ * an earlier signup attempt already created.
+ */
+export async function loginUser(
+  baseURL: string,
+  creds: { email: string; password: string; firstName?: string; lastName?: string },
+): Promise<TestUser> {
+  const res = await apiFetch(apiUrl('/auth/login', baseURL), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: creds.email, password: creds.password }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`login failed (${res.status}): ${body}`);
+  }
+
+  const json = await res.json<{
+    access_token: string;
+    user: { id: string; first_name?: string; last_name?: string };
+  }>();
+  return {
+    email: creds.email,
+    password: creds.password,
+    firstName: json.user.first_name ?? creds.firstName ?? 'E2E',
+    lastName: json.user.last_name ?? creds.lastName ?? 'User',
+    accessToken: json.access_token,
+    userId: json.user.id,
+  };
+}
+
 export async function createPet(
   baseURL: string,
   token: string,
