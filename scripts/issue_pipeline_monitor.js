@@ -25,7 +25,6 @@ async function applyMonitorTick({
       dryRun: true,
       action: 'monitor',
       issueNumber,
-      apiKeyPresent: Boolean(apiKey),
       stubOk,
     };
   }

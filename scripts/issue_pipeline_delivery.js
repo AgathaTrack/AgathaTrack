@@ -11,7 +11,7 @@ const {
 } = require('../.github/scripts/github-project-lib');
 const { isForbiddenPath } = require('../.github/scripts/agent-safety-lib');
 const { globToRegExp } = require('./lib/execute_plan_schema');
-const { bodySha, defaultState, DELIVERY_LABELS } = require('./issue_pipeline_state');
+const { defaultState, DELIVERY_LABELS } = require('./issue_pipeline_state');
 const { applyReopenAnalysis } = require('./issue_pipeline_review');
 
 const OWNER_LOGIN = 'KanopeeKa';

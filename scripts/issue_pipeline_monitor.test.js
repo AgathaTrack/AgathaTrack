@@ -14,4 +14,5 @@ test('applyMonitorTick dry-run does not call API', async () => {
   });
   assert.equal(result.dryRun, true);
   assert.equal(result.action, 'monitor');
+  assert.equal('apiKeyPresent' in result, false);
 });

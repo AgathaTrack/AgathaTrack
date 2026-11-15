@@ -7,12 +7,7 @@ const {
   updateProjectStatus,
   upsertMarkerComment,
 } = require('../.github/scripts/github-project-lib');
-const {
-  bodySha,
-  defaultState,
-  DEFAULT_ROUND_CAP,
-  DELIVERY_LABELS,
-} = require('./issue_pipeline_state');
+const { defaultState, DEFAULT_ROUND_CAP, DELIVERY_LABELS } = require('./issue_pipeline_state');
 const OWNER_LOGIN = 'KanopeeKa';
 
 const REVIEW_MARKER = '<!-- pipeline-review -->';
