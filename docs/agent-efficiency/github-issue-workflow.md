@@ -176,6 +176,8 @@ A failed launch → `needs-owner` (`launch-failed`) and assign `KanopeeKa`.
 
 ### In progress — monitor (`pawpet-bot`)
 
+**Automation (issue pipeline P7):** `scripts/issue_pipeline_implement.js` re-runs the delivery path gate, moves **Ready** → **In progress**, assigns `pawpet-bot`, sets `busy`, and writes the Cursor run marker (`PIPELINE_IMPLEMENT_LAUNCH=true` for live API). `scripts/issue_pipeline_monitor.js` wraps `monitor-cursor-agent.js`; both run from the dispatcher when `ISSUE_PIPELINE=on`. Until **P7b cutover**, `agent-dispatch.yml` / `agent-monitor.yml` stay live for issues **without** `pipeline-beta`; sandbox issues use the new lanes only.
+
 **Trigger:** the heartbeat and run events. If `stuck >= 3`, add `needs-owner` (`stuck`).
 
 | Delivery label | Action |
