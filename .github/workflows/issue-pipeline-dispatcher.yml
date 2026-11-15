@@ -1,0 +1,83 @@
+name: Issue pipeline dispatcher
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Optional issue number to scope tick
+        required: false
+      dry_run:
+        description: Ignored when ISSUE_PIPELINE is off; tick still respects repo variable
+        type: boolean
+        default: false
+  issues:
+    types: [assigned, labeled, edited]
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [closed]
+  workflow_run:
+    workflows:
+      - 'Deploy UAT (uat.agathatrack.com)'
+      - 'Deploy Production (agathatrack.com)'
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: issue-pipeline-dispatcher
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    name: issue-pipeline-dispatcher relay
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch dispatcher on main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run issue-pipeline-dispatcher.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+  dispatch:
+    name: issue-pipeline-dispatcher
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    environment: automation
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Tick pipeline dispatcher
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
+          GH_PROJECTS_PAT: ${{ secrets.GH_PROJECTS_PAT }}
+          GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
+          GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
+          ISSUE_PIPELINE: ${{ vars.ISSUE_PIPELINE }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ ! -f scripts/issue_pipeline_dispatcher.js ]; then
+            echo "issue_pipeline_dispatcher.js is not on main yet; nothing to do"
+            exit 0
+          fi
+          node scripts/issue_pipeline_dispatcher.js

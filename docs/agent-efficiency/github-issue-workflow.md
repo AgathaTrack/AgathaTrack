@@ -12,7 +12,7 @@ This document describes how issues are filed, triaged, and moved through deliver
 
 It covers two layers:
 
-- **Planned — issue pipeline.** The Pawpet board column is the stage, the **assignee** is whose turn it is, and agents work by lane. The decisions behind it (ISSUE-PIPELINE-D-001…D-006) are in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md), and the dispatcher contract is in [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md). **Not built yet.** Each build PR moves its lane from Planned to Live in this doc.
+- **Issue pipeline (in build).** The Pawpet board column is the stage, the **assignee** is whose turn it is, and agents work by lane. Decisions: [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md); dispatcher contract: [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md). **Live (skeleton):** `issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_{dispatcher,state,project}.js` with repo variable `ISSUE_PIPELINE` (`off` default, `dry-run`, `on`). Workers and lane automation are not live until later phases; legacy `human-reviewed` / `agent-dispatch` remain in force while `ISSUE_PIPELINE` is `off`.
 - **Live — today.** The `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch, and Actions track merge and UAT. See [§Live workflow](#live-workflow-until-the-dispatcher-ships).
 
 ## Issue forms
@@ -76,7 +76,7 @@ Each step is one **lane**. The dispatcher picks the lane from the column and the
 The owner decides an issue should go ahead. There are two equivalent ways:
 
 - **On the board:** move the issue to **To do** and assign `pawpet-claude`.
-- **With the `todo` label** (for other workflows, or from a phone): an Actions job moves the issue to **To do**, removes `todo`, and assigns `pawpet-claude` using the bot token, so the assignment triggers the intake lane.
+- **With the `todo` label** (for other workflows, or from a phone): [`issue-pipeline-todo.yml`](../.github/workflows/issue-pipeline-todo.yml) moves the issue to **To do**, removes `todo`, and assigns `pawpet-claude` with the bot PAT (issues with `pipeline-beta`, or all issues once `ISSUE_PIPELINE=on`).
 
 Nothing in Backlog is picked up automatically.
 
@@ -93,6 +93,8 @@ Nothing in Backlog is picked up automatically.
 **Re-entry after `question`:** once the author has answered, the owner moves the issue back to To do and assigns `pawpet-claude`.
 
 ### In Analysis — peer review (alternating `pawpet-bot` ⇄ `pawpet-claude`)
+
+**Live (P5, soak stub):** [`issue-pipeline-review.yml`](../.github/workflows/issue-pipeline-review.yml) and `scripts/issue_pipeline_review.js` implement `body_sha` convergence, reopen record, and round cap (`>= 6` → `needs-owner`). Dispatcher loads state from `<!-- agent-state: … -->` comments. Full LLM review workers replace the env-driven stub when wired.
 
 **Trigger:** assigned to either agent while the issue is in **In Analysis**.
 
@@ -152,6 +154,8 @@ Peer review can end with **Ready** only when the latest Green left `body_sha` un
 4. **Path check (dispatcher, fail-closed):** expand the globs against tracked files and check them with `isForbiddenPath`, plus `.github/**` and `.cursor/agent-kernel/**`. A hit, or a missing or invalid block, → `needs-owner` (`sensitive-paths`) and assign `KanopeeKa`.
 5. **Pass** → add the delivery label and unassign. The issue is now queued.
 
+**Automation (issue pipeline P6):** `scripts/issue_pipeline_delivery.js` parses the fenced `agent-paths` JSON, expands globs with `git ls-files`, and fail-closes with `isForbiddenPath` plus `.github/**` and `.cursor/agent-kernel/**`. The dispatcher row **delivery** calls it when `ISSUE_PIPELINE=on`; `issue-pipeline-delivery.yml` is the manual/soak entry. Template rewrites stay agent-driven until a later phase — the stub labels via `PIPELINE_DELIVERY_METHOD` when the body and path gate are already valid.
+
 If step 2 **changes `body_sha`**, **do not** add the label in this pass. Run the **reopen record** first (In Analysis, strip any delivery labels, reset `verdicts`, assign the other agent). Re-add the label only after reconvergence and a later successful delivery pass with an unchanged `body_sha`.
 
 ### Ready (queued) → In progress — implement (`pawpet-bot`)
@@ -172,6 +176,8 @@ A failed launch → `needs-owner` (`launch-failed`) and assign `KanopeeKa`.
 
 ### In progress — monitor (`pawpet-bot`)
 
+**Automation (issue pipeline P7):** `scripts/issue_pipeline_implement.js` re-runs the delivery path gate, moves **Ready** → **In progress**, assigns `pawpet-bot`, sets `busy`, and writes the Cursor run marker (`PIPELINE_IMPLEMENT_LAUNCH=true` for live API). `scripts/issue_pipeline_monitor.js` wraps `monitor-cursor-agent.js`; both run from the dispatcher when `ISSUE_PIPELINE=on`. Until **P7b cutover**, `agent-dispatch.yml` / `agent-monitor.yml` stay live for issues **without** `pipeline-beta`; sandbox issues use the new lanes only.
+
 **Trigger:** the heartbeat and run events. If `stuck >= 3`, add `needs-owner` (`stuck`).
 
 | Delivery label | Action |
@@ -186,7 +192,7 @@ A lock is reclaimed only when the recorded run has ended or its heartbeat lease 
 
 - **In Main / In UAT:** the existing merge and UAT handlers ([§Merge → UAT automation](#merge--uat-automation)).
 - **Done (planned):** a prod notify job in `deploy-prod.yml`. It runs only after a real production deploy plus post-deploy smoke, never on the stub path (`PROD_DEPLOY_ENABLED` not `true`). It sets **Done**, removes `busy`, and closes the issue.
-- **Light-plan issues (planned, D-002):** the release PR uses `Refs #n`, and the session stops at Pre-UAT green without closing the issue. Light-plan issues then follow In Main → In UAT → Done like product issues.
+- **Light-plan issues (D-002, live):** the release PR uses `Refs #n`, and the session stops at Pre-UAT green without closing the issue (`busy` removed). Light-plan tracking issues then follow In Main → In UAT → Done like product issues (merge/UAT/prod handlers in `issue-agent-handlers.js`). Execute-plan **control** issues remain the exception (no UAT ticket).
 
 ### Needs you (any status)
 
@@ -358,7 +364,7 @@ When an agent PR merges to `main`:
 
 When UAT deploy finishes, the **Notify linked agent issue** job in `deploy-uat.yml` sets **In UAT** (or adds `question` on failure).
 
-A **plan control issue** is not a UAT ticket. The title starts with `light-plan` or `execute-plan` (`Light-plan:`, `Execute-plan:`, and `[execute-plan]` count). Light-plan closes it when Pre-UAT is green; the release PR says `Closes #<issue>`, so GitHub closes it at merge. The merge handler reopens that one close so the programme can finish Pre-UAT, and it does not set **In Main** or post the UAT-tracking comment. Deploy UAT notify leaves the plan issue untouched, so the Pre-UAT close stays closed. Product issues linked with `Refs` / `Fixes` still reopen for UAT. **Planned (D-002):** light-plan issues stop being skipped here and follow In Main → In UAT → Done ([§In Main → In UAT → Done](#in-main--in-uat--done-actions-unassigned)).
+An **execute-plan control issue** is not a UAT ticket (title starts with `execute-plan`, including `[execute-plan]`). The merge handler reopens it after an accidental `Closes` at release merge but does **not** set **In Main** or post the UAT-tracking comment; UAT notify skips it. **Light-plan** tracking issues (`light-plan:` title) are UAT-tracked like product issues: release PR `Refs #n`, session ends at Pre-UAT green without closing; merge handler sets **In Main**; UAT notify sets **In UAT**; prod notify sets **Done** and closes (ISSUE-PIPELINE-D-002).
 
 Manual UAT rerun: **Actions → Deploy UAT (uat.agathatrack.com) → Run workflow** with `deploy_ref` = your UAT tag (e.g. `uat-260709-122`).
 - UAT promotion tag: `uat-YYMMDD-PR#` (created automatically on merge to `main`)
