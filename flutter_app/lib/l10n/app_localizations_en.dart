@@ -2127,6 +2127,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Whether your pet has been surgically sterilised. Recording the date helps your vet track recovery.';
 
   @override
+  String get petNeuterQuestionA11y => 'Neutered or spayed?';
+
+  @override
   String get petFormSelectDate => 'Select date';
 
   @override

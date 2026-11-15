@@ -13,6 +13,8 @@
     "sourceMap": false
   },
   "include": [
+    "playwright/support/create-live-uat-user.ts",
+    "playwright/support/create-live-uat-user.test.ts",
     "playwright/support/care-clock.ts",
     "playwright/support/care-clock.test.ts",
     "playwright/support/care-zone.ts",

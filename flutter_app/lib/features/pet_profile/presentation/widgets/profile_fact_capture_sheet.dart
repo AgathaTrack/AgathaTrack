@@ -76,53 +76,68 @@ Future<void> showProfileFactCaptureSheet(
               children: [
                 Text(title, style: Theme.of(ctx).textTheme.titleMedium),
                 const SizedBox(height: 12),
-                SegmentedButton<PetNeuterSelection>(
-                  segments: [
-                    ButtonSegment(
-                      value: PetNeuterSelection.yes,
-                      label: Text(l.petNeuterYes),
-                    ),
-                    ButtonSegment(
-                      value: PetNeuterSelection.no,
-                      label: Text(l.petNeuterNo),
-                    ),
-                    ButtonSegment(
-                      value: PetNeuterSelection.unknown,
-                      label: Text(l.petNeuterUnknown),
-                    ),
-                  ],
-                  selected: {selection},
-                  onSelectionChanged: (values) {
-                    setState(() => selection = values.first);
-                  },
+                Semantics(
+                  container: true,
+                  explicitChildNodes: true,
+                  label: topic == ProfileFactCaptureTopic.neuter
+                      ? l.petNeuterQuestionA11y
+                      : l.profileFactCaptureChipTitle,
+                  child: SegmentedButton<PetNeuterSelection>(
+                    key: const Key('profile_fact_capture_segmented'),
+                    segments: [
+                      ButtonSegment(
+                        value: PetNeuterSelection.yes,
+                        label: Text(l.petNeuterYes),
+                      ),
+                      ButtonSegment(
+                        value: PetNeuterSelection.no,
+                        label: Text(l.petNeuterNo),
+                      ),
+                      ButtonSegment(
+                        value: PetNeuterSelection.unknown,
+                        label: Text(l.petNeuterUnknown),
+                      ),
+                    ],
+                    selected: {selection},
+                    onSelectionChanged: (values) {
+                      setState(() => selection = values.first);
+                    },
+                  ),
                 ),
                 if (topic == ProfileFactCaptureTopic.neuter &&
                     selection == PetNeuterSelection.yes) ...[
                   const SizedBox(height: 12),
-                  InkWell(
-                    key: const Key('profile_fact_capture_neuter_date'),
-                    onTap: () async {
-                      final initial =
-                          neuteredDate ?? calendarDateOnly(DateTime.now());
-                      final picked = await showCalendarDatePicker(
-                        context: ctx,
-                        initialDate: initial,
-                        firstDate: DateTime(1990),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) {
-                        setState(() => neuteredDate = picked);
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: l.date,
-                        suffixIcon: const Icon(Icons.calendar_today, size: 18),
-                      ),
-                      child: Text(
-                        neuteredDate != null
-                            ? formatCalendarDateMedium(neuteredDate!)
-                            : l.petFormSelectDate,
+                  Semantics(
+                    container: true,
+                    button: true,
+                    child: InkWell(
+                      key: const Key('profile_fact_capture_neuter_date'),
+                      onTap: () async {
+                        final initial =
+                            neuteredDate ?? calendarDateOnly(DateTime.now());
+                        final picked = await showCalendarDatePicker(
+                          context: ctx,
+                          initialDate: initial,
+                          firstDate: DateTime(1990),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setState(() => neuteredDate = picked);
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: l.date,
+                          suffixIcon: const Icon(
+                            Icons.calendar_today,
+                            size: 18,
+                          ),
+                        ),
+                        child: Text(
+                          neuteredDate != null
+                              ? formatCalendarDateMedium(neuteredDate!)
+                              : l.petFormSelectDate,
+                        ),
                       ),
                     ),
                   ),

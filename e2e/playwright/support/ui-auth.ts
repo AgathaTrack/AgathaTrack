@@ -3,6 +3,7 @@ import { LandingPage } from '../pages/landing.page';
 import { PetListPage } from '../pages/pet-list.page';
 import type { TestUser } from './api';
 import { isLiveUatTarget } from './hosting';
+import { createLiveUatUser } from './create-live-uat-user';
 import { refreshFlutterAccessibility } from './flutter';
 import { normalizeStoredToken } from './normalize-stored-token';
 
@@ -70,37 +71,27 @@ export async function createTestUser(
     lastName: string;
   }> = {},
 ): Promise<TestUser> {
-  const { signupUser, getCurrentUser } = await import('./api');
+  const { signupUser, getCurrentUser, loginUser } = await import('./api');
 
   if (!isLiveUatTarget(baseURL)) {
     return signupUser(baseURL, overrides);
   }
 
-  // Track the first successful API signup even when verification fails.
-  // If getCurrentUser is blocked (WAF, cold-start) but the account was created,
-  // use that user rather than falling back to UI signup which can be blocked by
-  // the consent banner, form latency, or other live-UAT issues.
-  let firstCreatedUser: TestUser | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const user = await signupUser(baseURL, overrides);
-      if (!firstCreatedUser) firstCreatedUser = user;
-      const profile = await getCurrentUser(baseURL, user.accessToken);
-      if (profile?.email === user.email) {
-        return user;
-      }
-    } catch (err) {
-      console.warn(
-        `[createTestUser] browser-fetch attempt ${attempt + 1}/3 failed:`,
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-    await page.waitForTimeout(1_500);
-  }
-
-  // Prefer the API-created user when available: avoids WAF / consent-banner
-  // pitfalls in the UI signup path that can leave the browser on /landing.
-  if (firstCreatedUser) return firstCreatedUser;
-
-  return signupUserViaUi(page, overrides);
+  // Live UAT: one account per call. Signup is retried only while it throws, verification is
+  // retried without signing up again, and UI signup is the last resort (it can be blocked by the
+  // consent banner or form latency, so an API-created user is preferred even if unverified).
+  return createLiveUatUser(
+    {
+      signup: (creds) => signupUser(baseURL, creds),
+      verify: async (user) => {
+        const profile = await getCurrentUser(baseURL, user.accessToken);
+        return profile?.email === user.email;
+      },
+      login: (creds) => loginUser(baseURL, creds),
+      uiFallback: (creds) => signupUserViaUi(page, creds),
+      wait: (ms) => page.waitForTimeout(ms),
+      warn: (message) => console.warn(message),
+    },
+    overrides,
+  );
 }
