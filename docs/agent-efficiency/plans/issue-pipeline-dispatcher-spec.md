@@ -222,7 +222,7 @@ Environment: `automation` (same as current agent dispatch).
 |------|--------|
 | 1 | Ship dispatcher `dry-run` parallel to existing workflows |
 | 2 | Enable triage-at-To-do for issues with label `pipeline-beta` |
-| 3 | Flip `ISSUE_PIPELINE=on`; disable `agent-approved` trigger on old dispatch |
+| 3 | Flip `ISSUE_PIPELINE=on`; legacy workflows skip when `vars.ISSUE_PIPELINE == 'on'` (`triage-human-reviewed.yml`, `agent-dispatch.yml`, `agent-monitor.yml`) |
 | 4 | Remove `Agent1:*` / `Agent2:*` labels from open issues |
 | 5 | Update `github-issue-workflow.md` to target model; archive `human-reviewed` gate description |
 | 6 | Consolidate Pawpet Status updates: merge/UAT/prod notify use shared project helper; drop duplicate `GH_PROJECTS_PAT` bindings where redundant |
