@@ -96,7 +96,7 @@ Nothing in Backlog is picked up automatically.
 
 **Trigger:** assigned to either agent while the issue is in **In Analysis**.
 
-1. If `round >= 4` (configurable default), add `needs-owner` (`owner_reason: no-convergence`), assign `KanopeeKa`, and stop.
+1. If `round >= 6` (configurable default), add `needs-owner` (`owner_reason: no-convergence`), assign `KanopeeKa`, and stop.
 2. Review the previous comment and the plan. Fold minor points into the body, and answer every question raised.
 3. Post one comment with the verdict (**Green** or **Red**) and the updated plan.
 4. Update the state comment: `round + 1`, this agent's verdict, and `body_sha`.
@@ -124,7 +124,7 @@ Peer review can end with **Ready** only when the latest Green left `body_sha` un
 2. Clear `converged_at`.
 3. Set `body_sha` to the current body hash.
 4. **Reset `verdicts`** (empty object or omit) — stale Greens were for the old hash; reconvergence needs **two fresh Greens** on the new `body_sha`.
-5. If `round` is already **at or above the cap** (default 4) when reopening, do **not** start another review round → assign `KanopeeKa`, `needs-owner` (`no-convergence-reopen`), and stop. Otherwise `round + 1` and assign the other agent.
+5. On reopen: if the edit was an **owner product decision** (not an agent verdict edit), reset `round` to **0** and assign the other agent. If an **agent** reopen would push `round` to **≥ cap** (default 6), assign `KanopeeKa`, `needs-owner` (`no-convergence-reopen`), and stop. Otherwise `round + 1` and assign the other agent.
 
 **Invariants**
 
@@ -201,7 +201,7 @@ A lock is reclaimed only when the recorded run has ended or its heartbeat lease 
 | To do | Intake done | In Analysis | `pawpet-bot` |
 | In Analysis | Red, or Green with edits | In Analysis | The other agent |
 | In Analysis | Converged | Ready | `pawpet-bot` |
-| In Analysis | `round >= 4` | unchanged + `needs-owner` | `KanopeeKa` |
+| In Analysis | `round >= 6` | unchanged + `needs-owner` | `KanopeeKa` |
 | In Analysis / Ready | Body or delivery rewrite (`body_sha` changed) after convergence | In Analysis | The other agent |
 | Ready | Delivery OK (no `body_sha` change this step) | Ready + delivery label | nobody (queued) |
 | Ready | Sensitive paths | unchanged + `needs-owner` | `KanopeeKa` |

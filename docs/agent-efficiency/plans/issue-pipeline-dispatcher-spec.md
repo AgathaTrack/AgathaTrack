@@ -117,7 +117,7 @@ Queued: Ready + delivery label + **no assignee**, ordered by priority label then
 | Intake | ok | `pawpet-bot` | In Analysis |
 | Review | red / green+edits | other bot | In Analysis |
 | Review | green, `body_sha` unchanged this round | `pawpet-bot` | Ready |
-| Review | `round >= cap` (default 4) | `KanopeeKa` | + `needs-owner` |
+| Review | `round >= cap` (default 6) | `KanopeeKa` | + `needs-owner` |
 | Review reopen | `body_sha` changed after `converged_at`, or delivery rewrite changed body | other bot or `KanopeeKa` if at cap | In Analysis; strip delivery labels; clear `converged_at`; reset `verdicts`; `round + 1` unless cap → `needs-owner` |
 | Delivery | ok (body unchanged this step) | *none* | Ready + delivery label |
 | Delivery | rewrite changed `body_sha` | other bot (reopen record; **no** label this pass) | In Analysis |
