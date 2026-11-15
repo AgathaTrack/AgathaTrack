@@ -115,3 +115,40 @@ test('tick exits early when ISSUE_PIPELINE off', async () => {
   assert.equal(result.skipped, true);
   assert.deepEqual(result.actions, []);
 });
+
+test('tick with issue_number uses direct Pawpet lookup', async () => {
+  let listedFullProject = false;
+  const result = await tick({
+    owner: 'AgathaTrack',
+    repo: 'AgathaTrack',
+    token: 't',
+    issueNumber: 2337,
+    mode: 'dry-run',
+    io: {
+      projectSecrets: {
+        projectsPat: 'pat',
+        projectId: 'PVT_proj',
+        statusFieldId: 'SF_status',
+      },
+      assertPipelineStatusOptions: async () => [],
+      loadIssueState: async () => ({ state: {} }),
+      fetchPipelineIssueForProject: async () => ({
+        number: 2337,
+        title: 'Soak',
+        body: 'body',
+        labels: ['pipeline-beta'],
+        status: 'To do',
+        assignees: ['pawpet-claude'],
+      }),
+      listPipelineIssues: async () => {
+        listedFullProject = true;
+        return [];
+      },
+    },
+  });
+  assert.equal(listedFullProject, false);
+  assert.equal(result.issueCount, 1);
+  assert.equal(result.actions.length, 1);
+  assert.equal(result.actions[0].issue, 2337);
+  assert.equal(result.actions[0].action, 'triage-intake');
+});

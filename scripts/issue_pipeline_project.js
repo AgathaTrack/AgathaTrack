@@ -2,6 +2,7 @@
 
 const {
   listProjectIssues,
+  fetchProjectV2Item,
   graphql,
   fetchIssue,
 } = require('../.github/scripts/github-project-lib');
@@ -70,6 +71,18 @@ async function assertPipelineStatusOptions(projectsPat, statusFieldId) {
   return options;
 }
 
+function mapPipelineIssueRow(row, full) {
+  return {
+    number: full.number,
+    title: full.title,
+    body: full.body || '',
+    url: full.url,
+    labels: (full.labels?.nodes || []).map((node) => node.name),
+    status: normalizeStatusName(row.status),
+    assignees: (full.assignees?.nodes || []).map((node) => node.login),
+  };
+}
+
 async function listPipelineIssues(owner, repo, token, config) {
   const rows = await listProjectIssues({
     projectId: config.projectId,
@@ -79,17 +92,39 @@ async function listPipelineIssues(owner, repo, token, config) {
   const issues = [];
   for (const row of rows) {
     const full = await fetchIssue(owner, repo, row.issue.number, token);
-    issues.push({
-      number: full.number,
-      title: full.title,
-      body: full.body || '',
-      url: full.url,
-      labels: (full.labels?.nodes || []).map((node) => node.name),
-      status: normalizeStatusName(row.status),
-      assignees: (full.assignees?.nodes || []).map((node) => node.login),
-    });
+    issues.push(mapPipelineIssueRow(row, full));
   }
   return issues;
+}
+
+/**
+ * Resolve one issue on Pawpet without scanning the full project item list (#2302).
+ */
+async function fetchPipelineIssueForProject(
+  owner,
+  repo,
+  token,
+  config,
+  issueNumber,
+  deps = {},
+) {
+  const readIssue = deps.fetchIssue || fetchIssue;
+  const readProjectItem = deps.fetchProjectV2Item || fetchProjectV2Item;
+  const full = await readIssue(owner, repo, issueNumber, token);
+  const projectItems = full.projectItems?.nodes || [];
+  const onProject = projectItems.find((item) => item.project?.id === config.projectId);
+  if (!onProject?.id) {
+    return null;
+  }
+  const row = await readProjectItem({
+    itemId: onProject.id,
+    statusFieldId: config.statusFieldId,
+    projectsPat: config.projectsPat,
+  });
+  if (!row?.issue || row.issue.state !== 'OPEN') {
+    return null;
+  }
+  return mapPipelineIssueRow(row, full);
 }
 
 module.exports = {
@@ -98,4 +133,6 @@ module.exports = {
   loadProjectSecrets,
   assertPipelineStatusOptions,
   listPipelineIssues,
+  fetchPipelineIssueForProject,
+  mapPipelineIssueRow,
 };
