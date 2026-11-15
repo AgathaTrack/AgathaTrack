@@ -114,19 +114,27 @@ Peer review can end with **Ready** only when the latest Green left `body_sha` un
 
 | Situation | Column | Assignee | State comment |
 |-----------|--------|----------|---------------|
-| Agent or owner edits the issue body and `body_sha` changes after `converged_at` was set | **In Analysis** | The agent who did **not** last edit the body (`≠ last_assignee`) | `round + 1`, clear `converged_at`, set new `body_sha` |
-| **Ready** delivery rewrite changes `body_sha` (templates, checklist, delivery method, programme restructure) | **In Analysis** | `pawpet-claude` if `pawpet-bot` wrote the body; else `pawpet-bot` | Same as above |
+| Agent or owner edits the issue body and `body_sha` changes after `converged_at` was set | **In Analysis** | The agent who did **not** last edit the body (`≠ last_assignee`) | See **reopen record** below |
+| **Ready** delivery rewrite changes `body_sha` (templates, checklist, delivery method, programme restructure) | **In Analysis** | `pawpet-claude` if `pawpet-bot` wrote the body; else `pawpet-bot` | Same |
 | Owner changes product direction mid-review (e.g. child issues → single-issue light-plan) | **In Analysis** | Whichever agent did not own the rewrite | Same; prior convergence is **void** |
-| `light-plan` / `PR` / `execute-plan` label applied **before** reconvergence on the current body | **In Analysis** | Continue alternating review | Label is **delivery intent only**; it does not mean Ready or In progress |
+
+**Reopen record** (every row above):
+
+1. **Remove** delivery labels (`PR`, `light-plan`, `execute-plan`) so the issue cannot match the implement queue until delivery runs again after reconvergence.
+2. Clear `converged_at`.
+3. Set `body_sha` to the current body hash.
+4. **Reset `verdicts`** (empty object or omit) — stale Greens were for the old hash; reconvergence needs **two fresh Greens** on the new `body_sha`.
+5. If `round` is already **at or above the cap** (default 4) when reopening, do **not** start another review round → assign `KanopeeKa`, `needs-owner` (`no-convergence-reopen`), and stop. Otherwise `round + 1` and assign the other agent.
 
 **Invariants**
 
-1. Do not set the board column to **Ready** until the handoff row “Converged” applies to the **current** `body_sha`.
-2. Do not start implement (`busy`, **In progress**) until the column is **Ready**, delivery is complete (label + rewritten body if required), and path check passed when the dispatcher enforces it.
-3. Agents performing a **delivery rewrite** who change `body_sha` must **not** leave the issue assigned to themselves for implement; they reopen analysis and assign the other agent.
-4. Humans set Pawpet **Status** when bots cannot; In Analysis is the correct column whenever the table above applies.
+1. Do not set the board column to **Ready** until the handoff row “Converged” applies to the **current** `body_sha` and **both** agents have a fresh `green` in `verdicts` for that hash.
+2. Do not add a delivery label until **after** reconvergence and the Ready delivery step (no label while **In Analysis**).
+3. Do not start implement until the column is **Ready**, `converged_at` is set for the current `body_sha`, delivery label present, unassigned, and path check passed.
+4. Agents performing a **delivery rewrite** who change `body_sha` must complete the reopen record **before** any label is re-applied; they assign the other agent, not themselves for implement.
+5. Humans set Pawpet **Status** when bots cannot; **In Analysis** whenever this section applies.
 
-**Example:** analysis reached Ready on a child-issue programme; the owner chose one issue with a light-plan checklist; an agent rewrote the body and added `light-plan`. Column **In Analysis**, assign `pawpet-claude`, `round` incremented, `converged_at` cleared — even though the delivery label is already present.
+**Example:** analysis converged, then an agent rewrote the body for a single-issue light-plan. Reopen: **In Analysis**, strip `light-plan`, assign `pawpet-claude`, reset `verdicts`, clear `converged_at` — the label returns only after delivery post-reconvergence.
 
 ### Ready — delivery (`pawpet-bot`)
 
@@ -144,11 +152,13 @@ Peer review can end with **Ready** only when the latest Green left `body_sha` un
 4. **Path check (dispatcher, fail-closed):** expand the globs against tracked files and check them with `isForbiddenPath`, plus `.github/**` and `.cursor/agent-kernel/**`. A hit, or a missing or invalid block, → `needs-owner` (`sensitive-paths`) and assign `KanopeeKa`.
 5. **Pass** → add the delivery label and unassign. The issue is now queued.
 
-If step 2 **changes `body_sha`**, treat that as a delivery rewrite that **reopens In Analysis** before adding the label (or immediately after: clear convergence, assign the other agent, owner sets **In Analysis**). Do not queue for implement until reconverged.
+If step 2 **changes `body_sha`**, **do not** add the label in this pass. Run the **reopen record** first (In Analysis, strip any delivery labels, reset `verdicts`, assign the other agent). Re-add the label only after reconvergence and a later successful delivery pass with an unchanged `body_sha`.
 
 ### Ready (queued) → In progress — implement (`pawpet-bot`)
 
 **Trigger:** the dispatcher, when a work-in-progress slot is free. The limit is **2** slots, taken in priority-label order, then by age. Each product issue that is In progress and assigned to `pawpet-bot` holds one slot, whatever its delivery method; a programme's phase and release PRs add nothing on top.
+
+**Guards:** no launch when live `body_sha` ≠ state comment `body_sha`, when `converged_at` is absent for the current body, when the column is not **Ready**, or when a delivery label is present while the issue is **In Analysis** (reopen lane must run first).
 
 The dispatcher assigns `pawpet-bot`, adds `busy`, sets **In progress**, writes the run marker, and launches the work:
 

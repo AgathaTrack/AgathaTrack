@@ -161,7 +161,7 @@ Do not use title counters — they break `isPlanControlIssue` and human edits.
 | `stuck` | Monitor relaunches while In progress |
 | `last_assignee` | Previous ball-holder; dispatcher enforces handoff ≠ same agent on review |
 | `body_sha` | Hash at last verdict; convergence when Green and unchanged |
-| `verdicts` | Last **per-agent** verdict (`green` / `red`) — required for execute-plan auto-approve |
+| `verdicts` | Last **per-agent** verdict (`green` / `red`) for the current `body_sha`; **cleared on reopen** so stale Greens cannot satisfy convergence |
 | `converged_at` | ISO timestamp when both agents recorded `green` on the same `body_sha` |
 | `delivery` | Set at delivery step |
 | `owner_reason` | With `needs-owner`: `sensitive-paths`, `no-convergence`, `stuck`, `launch-failed`, `plan-stopped`, `approve`, … |
@@ -196,7 +196,7 @@ Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, 
 
 Convergence (In Analysis → Ready): Green **and** `body_sha` unchanged in that round (the body is the one the previous agent handed over). Green with a substantive edit — even after an earlier Green — reassigns to the other agent. Round cap **4** — escalate when `round >= 4` (configurable).
 
-**Reopening:** if `body_sha` changes after `converged_at` (owner edit, programme restructure, or Ready delivery rewrite), the column returns to **In Analysis**, `converged_at` clears, `round` increments, and the **other** agent is assigned. Delivery labels already on the issue are intent only until reconvergence. Full table: [github-issue-workflow.md §Reopening In Analysis](../github-issue-workflow.md#reopening-in-analysis-after-convergence-or-during-ready).
+**Reopening:** if `body_sha` changes after `converged_at`, strip delivery labels, reset `verdicts`, clear `converged_at`, return to **In Analysis**, and assign the other agent (or `needs-owner` if already at round cap). Two fresh Greens required on the new hash. Dispatcher row **3a** and implement row **5** guards. Full table: [github-issue-workflow.md §Reopening In Analysis](../github-issue-workflow.md#reopening-in-analysis-after-convergence-or-during-ready).
 
 Work-in-progress (implement): **2** slots — e.g. one programme + one single PR, or two single PRs. Each product issue **In progress** assigned `pawpet-bot` (with `busy` or an active programme) holds one slot, whatever its delivery method. See dispatcher spec §5.
 
