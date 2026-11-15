@@ -152,3 +152,54 @@ test('tick with issue_number uses direct Pawpet lookup', async () => {
   assert.equal(result.actions[0].issue, 2337);
   assert.equal(result.actions[0].action, 'triage-intake');
 });
+
+test('tick on mode passes EXECUTE_PLAN_BOT_TOKEN to todo lane writes', async () => {
+  const planBotToken = 'plan-bot-write-token';
+  const readToken = 'actions-read-token';
+  const priorPlanBot = process.env.EXECUTE_PLAN_BOT_TOKEN;
+  process.env.EXECUTE_PLAN_BOT_TOKEN = planBotToken;
+  let laneArgs;
+  try {
+    const result = await tick({
+      owner: 'AgathaTrack',
+      repo: 'AgathaTrack',
+      token: readToken,
+      issueNumber: 2337,
+      mode: 'on',
+      io: {
+        projectSecrets: {
+          projectsPat: 'pat',
+          projectId: 'PVT_proj',
+          statusFieldId: 'SF_status',
+        },
+        assertPipelineStatusOptions: async () => [],
+        loadIssueState: async () => ({ state: {} }),
+        fetchPipelineIssueForProject: async () => ({
+          number: 2337,
+          title: 'Soak',
+          body: 'body',
+          labels: [],
+          status: 'To do',
+          assignees: ['pawpet-claude'],
+        }),
+        listPipelineIssues: async () => [],
+        runTodoLanePipeline: async (baseRun) => {
+          laneArgs = baseRun;
+          return { lane: 'todo', dryRun: false };
+        },
+      },
+    });
+    assert.equal(result.dryRun, false);
+    assert.equal(result.executed.length, 1);
+    assert.ok(laneArgs);
+    assert.equal(laneArgs.token, planBotToken);
+    assert.equal(laneArgs.assignToken, planBotToken);
+    assert.equal(laneArgs.dryRun, false);
+  } finally {
+    if (priorPlanBot === undefined) {
+      delete process.env.EXECUTE_PLAN_BOT_TOKEN;
+    } else {
+      process.env.EXECUTE_PLAN_BOT_TOKEN = priorPlanBot;
+    }
+  }
+});
