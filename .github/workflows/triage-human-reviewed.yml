@@ -11,7 +11,9 @@ permissions:
 jobs:
   triage:
     name: Deterministic issue triage
-    if: github.event.label.name == 'human-reviewed'
+    if: >-
+      vars.ISSUE_PIPELINE != 'on' &&
+      github.event.label.name == 'human-reviewed'
     runs-on: ubuntu-latest
     environment: automation
     timeout-minutes: 10

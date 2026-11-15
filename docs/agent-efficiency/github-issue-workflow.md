@@ -12,8 +12,8 @@ This document describes how issues are filed, triaged, and moved through deliver
 
 It covers two layers:
 
-- **Issue pipeline (in build).** The Pawpet board column is the stage, the **assignee** is whose turn it is, and agents work by lane. Decisions: [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md); dispatcher contract: [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md). **Live (skeleton):** `issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_{dispatcher,state,project}.js` with repo variable `ISSUE_PIPELINE` (`off` default, `dry-run`, `on`). Workers and lane automation are not live until later phases; legacy `human-reviewed` / `agent-dispatch` remain in force while `ISSUE_PIPELINE` is `off`.
-- **Live — today.** The `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch, and Actions track merge and UAT. See [§Live workflow](#live-workflow-until-the-dispatcher-ships).
+- **Issue pipeline (assignee-driven).** The Pawpet board column is the stage, the **assignee** is whose turn it is, and agents work by lane. Decisions: [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md); dispatcher contract: [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md). **Automation:** `issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_{dispatcher,state,project}.js` with repo variable `ISSUE_PIPELINE` (`off` default, `dry-run`, `on`). With `ISSUE_PIPELINE=on`, lanes run live and [`triage-human-reviewed.yml`](../.github/workflows/triage-human-reviewed.yml), [`agent-dispatch.yml`](../.github/workflows/agent-dispatch.yml), and [`agent-monitor.yml`](../.github/workflows/agent-monitor.yml) no longer run (cutover §14.3).
+- **Legacy label flow** (`off` / soak): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipelineon).
 
 ## Issue forms
 
@@ -236,7 +236,9 @@ A lock is reclaimed only when the recorded run has ended or its heartbeat lease 
 | `Agent1:*`, `Agent2:*`, `AgentReview-*`, `Claude Validated` | Retired: the verdict is the reassignment, and the reasoning is in the comment |
 | `blocked` | Replaced by `needs-owner` (`launch-failed` / `stuck`) |
 
-## Live workflow (until the dispatcher ships)
+## Live workflow (legacy, until `ISSUE_PIPELINE=on`)
+
+When `ISSUE_PIPELINE` is `on`, this section is **historical only** — use [§Planned workflows by status](#planned-workflows-by-status) and the dispatcher instead. After cutover, remove stale `human-reviewed` / `agent-approved` / `Agent1:*` labels from open issues (spec §14.4).
 
 ```
 Backlog → In Analysis (+ human-reviewed) → [Auto Check] → Ready → In progress → In Main → In UAT → Done
@@ -264,7 +266,7 @@ To re-run triage after updating an issue, re-add `human-reviewed` (triage clears
 
 ## Cursor agent execution layer
 
-**Live.** The planned implement and monitor lanes replace `agent-dispatch.yml` and `agent-monitor.yml`; until then, the rules here apply.
+**Legacy dispatch** applies while `ISSUE_PIPELINE` is not `on`. With `ISSUE_PIPELINE=on`, implement and monitor run only through `issue-pipeline-dispatcher.yml` (and lane workflows for manual soak).
 
 GitHub remains the source of truth. Cursor Cloud Agents are workers that implement `agent-approved` issues.
 
