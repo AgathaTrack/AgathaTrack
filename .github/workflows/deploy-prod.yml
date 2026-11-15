@@ -612,3 +612,44 @@ jobs:
 
   # Future: add @smoke Playwright against PROD_BASE_URL once a dedicated smoke
   # test account or cleanup strategy is in place (live signup pollutes prod DB).
+
+  agent-prod-notify:
+    name: Notify linked agent issues (prod)
+    needs:
+      - resolve-trigger
+      - gate-prod-deploy
+      - deploy
+      - smoke
+      - promote-release-tag
+    if: >-
+      needs.resolve-trigger.outputs.proceed == 'true' &&
+      needs.gate-prod-deploy.outputs.prod_deploy_enabled == 'true' &&
+      needs.deploy.result == 'success' &&
+      needs.smoke.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: automation
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            .github/scripts
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Update linked issues after production deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PROJECTS_PAT: ${{ secrets.GH_PROJECTS_PAT }}
+          GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
+          GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
+          HANDLER_MODE: prod-result
+          COMMIT_SHA: ${{ needs.resolve-trigger.outputs.commit_sha }}
+          PROD_TAG: ${{ needs.promote-release-tag.outputs.prod_tag }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/scripts/issue-agent-handlers.js

@@ -8,6 +8,7 @@ const {
   upsertMarkerComment,
   assignIssue,
   reopenIssue,
+  closeIssue,
   rest,
   parseRepo,
 } = require('./github-project-lib');
@@ -36,6 +37,11 @@ function ioOr(io) {
     updateProjectStatus: io?.updateProjectStatus || updateProjectStatus,
     upsertMarkerComment: io?.upsertMarkerComment || upsertMarkerComment,
     assignIssue: io?.assignIssue || assignIssue,
+    closeIssue: io?.closeIssue || closeIssue,
+    fetchPullsForCommit:
+      io?.fetchPullsForCommit ||
+      ((owner, repo, sha, tok) =>
+        rest('GET', `/repos/${owner}/${repo}/commits/${sha}/pulls`, tok)),
   };
 }
 
@@ -415,6 +421,91 @@ Assigned @${ASSIGNEE} for investigation. The \`question\` label was added and \`
   return { prNumber: parsed.prNumber, results, queueSync };
 }
 
+/**
+ * After a real production deploy + smoke (never stub/skip). Closes linked product issues.
+ */
+async function handleProdDeployResult({
+  owner,
+  repo,
+  commitSha,
+  prodTag,
+  workflowUrl,
+  token,
+  projectsPat,
+  projectId,
+  statusFieldId,
+  io,
+}) {
+  const api = ioOr(io);
+  const pulls = await api.fetchPullsForCommit(owner, repo, commitSha, token);
+  const prList = Array.isArray(pulls) ? pulls : [];
+  if (prList.length === 0) {
+    console.log(`No PRs linked to commit ${commitSha} — prod notify skipped.`);
+    return { skipped: true, reason: 'no pull requests for commit' };
+  }
+
+  const seen = new Set();
+  const results = [];
+  for (const pr of prList) {
+    const prNumber = pr.number;
+    const issueNumbers = parseLinkedIssues(pr.body || '');
+    for (const issueNumber of issueNumbers) {
+      if (seen.has(issueNumber)) {
+        continue;
+      }
+      seen.add(issueNumber);
+
+      const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+      if (isPlanControlIssue(issue)) {
+        results.push({ issueNumber, prNumber, status: 'skipped-plan-control' });
+        console.log(
+          `Issue #${issueNumber}: plan control issue — prod notify skipped (not closed)`,
+        );
+        continue;
+      }
+
+      if (projectsPat && projectId && statusFieldId) {
+        const refreshedIssue = await api.fetchIssue(owner, repo, issueNumber, token);
+        await api.updateProjectStatus({
+          issue: refreshedIssue,
+          projectId,
+          statusFieldId,
+          statusName: 'Done',
+          projectsPat,
+        });
+      }
+
+      await api.setLabels(owner, repo, issueNumber, ['in-prod'], ['busy'], token);
+      await api.closeIssue(owner, repo, issueNumber, token);
+
+      await api.upsertMarkerComment({
+        owner,
+        repo,
+        issueNumber,
+        marker: '<!-- agent-prod-result -->',
+        body: `<!-- agent-prod-result -->
+## Production deployment completed
+
+Commit \`${commitSha}\` (PR #${prNumber}) is live after deploy-prod smoke passed.
+
+- Prod tag: \`${prodTag || 'n/a'}\`
+- Workflow: ${workflowUrl}
+- Project status: **Done**
+- Issue closed; \`busy\` removed.`,
+        token,
+      });
+
+      results.push({ issueNumber, prNumber, status: 'closed' });
+      console.log(`Issue #${issueNumber}: Done + closed after prod deploy (PR #${prNumber})`);
+    }
+  }
+
+  if (results.length === 0) {
+    return { skipped: true, reason: 'no linked product issues' };
+  }
+  return { commitSha, prodTag, results };
+}
+
 async function main() {
   const mode = process.env.HANDLER_MODE;
   const repository = process.env.GITHUB_REPOSITORY;
@@ -477,6 +568,22 @@ async function main() {
     return;
   }
 
+  if (mode === 'prod-result') {
+    const result = await handleProdDeployResult({
+      owner,
+      repo,
+      commitSha: process.env.COMMIT_SHA,
+      prodTag: process.env.PROD_TAG || '',
+      workflowUrl: process.env.WORKFLOW_URL,
+      token,
+      projectsPat,
+      projectId,
+      statusFieldId,
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
   throw new Error(`Unknown HANDLER_MODE: ${mode}`);
 }
 
@@ -496,4 +603,5 @@ module.exports = {
   handleUatWorkflowResult,
   syncUatQueueDeployResult,
   postCoordinationIssueUatResult,
+  handleProdDeployResult,
 };
