@@ -36,6 +36,16 @@ Cursor-created PRs are unchanged** — they go through the Cursor GitHub App (`c
    `tick` refuses to run while `OWNER_GH_TOKEN` is set.
 8. The next chat defaults back to the bot (dashboard `GH_TOKEN`).
 
+## `owner-programme` (standing programmes)
+
+Some tracking issues carry the **`owner-programme`** label (owner-applied only; bots never add it). That label is **not** a substitute for `/run-as-me` in the chat — it means PRs for that programme may use owner `gh` when the session also opts in.
+
+Before relying on the label in a phase that requires it (for example `.github/workflows/**` on #2342):
+
+1. Confirm the issue still has `owner-programme`.
+2. Verify the label was applied by an owner login listed in `.github/execute-plan.config.json` → `owners` (for example `KanopeeKa`), using issue timeline/`labeled` events — label presence alone is not proof.
+3. Session message must still include `/run-as-me` (or equivalent) for owner token use.
+
 ## If `OWNER_GH_TOKEN` is missing
 
 Stop and ask the user to add it under Cursor → Cloud Agents → Secrets (owner classic PAT, `repo` only — see

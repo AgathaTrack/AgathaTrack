@@ -12,7 +12,7 @@ This document describes how issues are filed, triaged, and moved through deliver
 
 It covers two layers:
 
-- **Planned — issue pipeline.** The Pawpet board column is the stage, the **assignee** is whose turn it is, and agents work by lane. The decisions behind it (ISSUE-PIPELINE-D-001…D-006) are in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md), and the dispatcher contract is in [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md). **Not built yet.** Each build PR moves its lane from Planned to Live in this doc.
+- **Issue pipeline (in build).** The Pawpet board column is the stage, the **assignee** is whose turn it is, and agents work by lane. Decisions: [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md); dispatcher contract: [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md). **Live (skeleton):** `issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_{dispatcher,state,project}.js` with repo variable `ISSUE_PIPELINE` (`off` default, `dry-run`, `on`). Workers and lane automation are not live until later phases; legacy `human-reviewed` / `agent-dispatch` remain in force while `ISSUE_PIPELINE` is `off`.
 - **Live — today.** The `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch, and Actions track merge and UAT. See [§Live workflow](#live-workflow-until-the-dispatcher-ships).
 
 ## Issue forms
