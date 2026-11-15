@@ -13,6 +13,8 @@ const {
   assertPipelineStatusOptions,
   listPipelineIssues,
 } = require('./issue_pipeline_project');
+const { isPipelineIssue } = require('./issue_pipeline_gate');
+const { runTodoLanePipeline } = require('./issue_pipeline_intake');
 
 const BOTS = new Set(['pawpet-claude', 'pawpet-bot']);
 const OWNER_LOGIN = 'KanopeeKa';
@@ -200,6 +202,9 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
 
   const planned = [];
   for (const issue of issues) {
+    if (!isPipelineIssue(issue.labels, pipelineMode)) {
+      continue;
+    }
     const liveBodySha = bodySha(issue.body);
     const action = computeEligibleAction({
       ...issue,
@@ -221,18 +226,43 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
   const actions = applyLaneCaps(planned, wipMax, wipInUse);
 
   const dryRun = pipelineMode !== 'on';
+  const assignToken = process.env.EXECUTE_PLAN_BOT_TOKEN;
+  const executed = [];
   for (const row of actions) {
     const payload = {
       event: 'pipeline_action',
       mode: pipelineMode,
       dry_run: dryRun,
-      workers_enabled: false,
+      workers_enabled: pipelineMode === 'on',
       ...row,
     };
+    if (pipelineMode === 'on' && row.action === 'triage-intake') {
+      const run = await runTodoLanePipeline({
+        owner,
+        repo,
+        issueNumber: row.issue,
+        token,
+        projectsPat: config.projectsPat,
+        projectId: config.projectId,
+        statusFieldId: config.statusFieldId,
+        assignToken,
+        dryRun: false,
+      });
+      executed.push({ issue: row.issue, run });
+      payload.executed = run;
+    }
     console.log(JSON.stringify(payload));
   }
 
-  return { mode: pipelineMode, dryRun, actions, wipInUse, wipMax, issueCount: issues.length };
+  return {
+    mode: pipelineMode,
+    dryRun,
+    actions,
+    executed,
+    wipInUse,
+    wipMax,
+    issueCount: issues.length,
+  };
 }
 
 async function main() {
