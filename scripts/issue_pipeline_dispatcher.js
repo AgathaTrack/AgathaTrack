@@ -22,6 +22,8 @@ const {
   applyNeedsOwnerConvergence,
 } = require('./issue_pipeline_review');
 const { applyDeliveryStub } = require('./issue_pipeline_delivery');
+const { canQueueImplement, applyImplementLaunch } = require('./issue_pipeline_implement');
+const { applyMonitorTick } = require('./issue_pipeline_monitor');
 
 const BOTS = new Set(['pawpet-claude', 'pawpet-bot']);
 const OWNER_LOGIN = 'KanopeeKa';
@@ -122,11 +124,22 @@ function computeEligibleAction(ctx, options = {}) {
   }
 
   if (status === 'Ready' && hasDeliveryLabel(labels) && !assignee) {
+    const implement = canQueueImplement({
+      status,
+      labels,
+      assignees: ctx.assignees || [],
+      state,
+      liveBodySha: ctx.liveBodySha,
+    });
+    if (!implement.ok) {
+      return null;
+    }
     return {
       priority: 5,
       action: 'implement-launch',
       lane: 'implement',
       reason: 'ready-queued',
+      delivery: implement.method,
     };
   }
 
@@ -142,10 +155,7 @@ function countWipInUse(issues) {
     if (issue.status !== 'In progress') {
       return false;
     }
-    if (primaryAssignee(issue.assignees) !== 'pawpet-bot') {
-      return false;
-    }
-    return hasLabel(issue.labels, 'busy');
+    return primaryAssignee(issue.assignees) === 'pawpet-bot';
   }).length;
 }
 
@@ -292,6 +302,10 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
           state,
           liveBodySha: bodySha(issueRow?.body || ''),
         });
+      } else if (row.action === 'implement-launch') {
+        run = await applyImplementLaunch(baseRun);
+      } else if (row.action === 'monitor') {
+        run = await applyMonitorTick(baseRun);
       }
       if (run) {
         executed.push({ issue: row.issue, run });

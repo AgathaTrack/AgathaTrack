@@ -75,13 +75,24 @@ test('Ready queued issue schedules implement when unassigned', () => {
   assert.equal(action.action, 'implement-launch');
 });
 
+test('In progress pawpet-bot schedules monitor', () => {
+  const action = computeEligibleAction({
+    labels: ['PR', 'busy'],
+    status: 'In progress',
+    assignees: ['pawpet-bot'],
+    liveBodySha: 'abc',
+    state: { body_sha: 'abc', converged_at: '2026-11-15T00:00:00Z' },
+  });
+  assert.equal(action.action, 'monitor');
+});
+
 test('countWipInUse counts in-progress busy pawpet-bot', () => {
   const n = countWipInUse([
     { status: 'In progress', assignees: ['pawpet-bot'], labels: ['busy'] },
     { status: 'In progress', assignees: ['pawpet-bot'], labels: [] },
     { status: 'Ready', assignees: [], labels: ['busy'] },
   ]);
-  assert.equal(n, 1);
+  assert.equal(n, 2);
 });
 
 test('applyLaneCaps limits implement launches by WIP', () => {
