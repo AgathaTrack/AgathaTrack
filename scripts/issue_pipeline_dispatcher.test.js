@@ -52,6 +52,18 @@ test('To do + pawpet-claude schedules triage-intake', () => {
   assert.equal(action.lane, 'triage');
 });
 
+test('Ready converged pawpet-bot without delivery label schedules delivery', () => {
+  const action = computeEligibleAction({
+    labels: [],
+    status: 'Ready',
+    assignees: ['pawpet-bot'],
+    liveBodySha: 'abc',
+    state: { body_sha: 'abc', converged_at: '2026-11-15T00:00:00Z' },
+  });
+  assert.equal(action.action, 'delivery');
+  assert.equal(action.lane, 'delivery');
+});
+
 test('Ready queued issue schedules implement when unassigned', () => {
   const action = computeEligibleAction({
     labels: ['PR'],

@@ -154,6 +154,8 @@ Peer review can end with **Ready** only when the latest Green left `body_sha` un
 4. **Path check (dispatcher, fail-closed):** expand the globs against tracked files and check them with `isForbiddenPath`, plus `.github/**` and `.cursor/agent-kernel/**`. A hit, or a missing or invalid block, → `needs-owner` (`sensitive-paths`) and assign `KanopeeKa`.
 5. **Pass** → add the delivery label and unassign. The issue is now queued.
 
+**Automation (issue pipeline P6):** `scripts/issue_pipeline_delivery.js` parses the fenced `agent-paths` JSON, expands globs with `git ls-files`, and fail-closes with `isForbiddenPath` plus `.github/**` and `.cursor/agent-kernel/**`. The dispatcher row **delivery** calls it when `ISSUE_PIPELINE=on`; `issue-pipeline-delivery.yml` is the manual/soak entry. Template rewrites stay agent-driven until a later phase — the stub labels via `PIPELINE_DELIVERY_METHOD` when the body and path gate are already valid.
+
 If step 2 **changes `body_sha`**, **do not** add the label in this pass. Run the **reopen record** first (In Analysis, strip any delivery labels, reset `verdicts`, assign the other agent). Re-add the label only after reconvergence and a later successful delivery pass with an unchanged `body_sha`.
 
 ### Ready (queued) → In progress — implement (`pawpet-bot`)
