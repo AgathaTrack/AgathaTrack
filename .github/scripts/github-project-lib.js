@@ -311,6 +311,12 @@ async function reopenIssue(owner, repo, issueNumber, token) {
   });
 }
 
+async function closeIssue(owner, repo, issueNumber, token) {
+  await rest('PATCH', `/repos/${owner}/${repo}/issues/${issueNumber}`, token, {
+    state: 'closed',
+  });
+}
+
 async function triggerWorkflowDispatch({
   owner,
   repo,
@@ -343,6 +349,7 @@ module.exports = {
   setLabels,
   assignIssue,
   reopenIssue,
+  closeIssue,
   triggerWorkflowDispatch,
   parseRepo,
   hasLabel,

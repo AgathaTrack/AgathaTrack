@@ -9,6 +9,7 @@ const {
   parseUatTag,
   handleMergedPr,
   handleUatWorkflowResult,
+  handleProdDeployResult,
 } = require('./issue-agent-handlers');
 
 test('parseLinkedIssues accepts refs fixes closes resolves', () => {
@@ -203,4 +204,51 @@ test('handleUatWorkflowResult still reopens a closed product issue', async (t) =
   assert.deepEqual(calls, ['reopen', 'comment']);
   assert.equal(result.results[0].status, 'In UAT');
   assert.equal(result.results[0].issueNumber, 122);
+});
+
+test('handleProdDeployResult closes product issue and skips plan control', async () => {
+  const calls = [];
+  const io = {
+    fetchPullsForCommit: async () => [
+      { number: 100, body: 'Release\n\nFixes #50\nRefs #2342' },
+    ],
+    fetchIssue: async (_o, _r, n) => ({
+      number: n,
+      title: n === 2342 ? 'light-plan: pipeline' : 'Bug fix',
+      labels: { nodes: [{ name: 'busy' }] },
+    }),
+    updateProjectStatus: async () => {
+      calls.push('status');
+    },
+    setLabels: async () => {
+      calls.push('labels');
+    },
+    closeIssue: async () => {
+      calls.push('close');
+    },
+    upsertMarkerComment: async () => {
+      calls.push('comment');
+    },
+  };
+
+  const result = await handleProdDeployResult({
+    owner: 'AgathaTrack',
+    repo: 'AgathaTrack',
+    commitSha: 'abc'.repeat(14).slice(0, 40),
+    prodTag: 'v1.2.3',
+    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/1',
+    token: 'test',
+    projectsPat: 'pat',
+    projectId: 'pid',
+    statusFieldId: 'sid',
+    io,
+  });
+
+  assert.equal(result.results.length, 2);
+  assert.equal(result.results.find((r) => r.issueNumber === 50).status, 'closed');
+  assert.equal(
+    result.results.find((r) => r.issueNumber === 2342).status,
+    'skipped-plan-control',
+  );
+  assert.deepEqual(calls, ['status', 'labels', 'close', 'comment']);
 });
