@@ -68,6 +68,21 @@ function printProjects(ownerLabel, projects) {
         console.log(`    - ${option.name}: ${option.id}`);
       }
     }
+
+    const syncedField = project.fields.nodes.find(
+      (field) => field.name?.toLowerCase() === 'synced stage',
+    );
+    if (syncedField) {
+      const envKey =
+        project.title?.toLowerCase() === 'pawpet'
+          ? 'GH_PAWPET_SYNCED_STAGE_FIELD_ID'
+          : project.title?.toLowerCase() === 'atsupport'
+            ? 'GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID'
+            : 'GH_SYNCED_STAGE_FIELD_ID';
+      console.log(`  ${envKey}=${syncedField.id}`);
+    } else {
+      console.log('  Synced stage text field: not found (add for stage-mirror #2345)');
+    }
     console.log('');
   }
 }

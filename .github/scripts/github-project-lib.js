@@ -108,6 +108,69 @@ function getIssueProjectStatus(item, statusFieldId) {
   return null;
 }
 
+function getProjectItemTextField(item, textFieldId) {
+  for (const fieldValue of item.fieldValues?.nodes || []) {
+    if (fieldValue.field?.id === textFieldId && typeof fieldValue.text === 'string') {
+      return fieldValue.text;
+    }
+  }
+  return '';
+}
+
+async function updateProjectItemTextField({
+  projectId,
+  itemId,
+  fieldId,
+  text,
+  projectsPat,
+}) {
+  await graphql(
+    projectsPat,
+    `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $text: String!) {
+      updateProjectV2ItemFieldValue(
+        input: {
+          projectId: $projectId
+          itemId: $itemId
+          fieldId: $fieldId
+          value: { text: $text }
+        }
+      ) {
+        projectV2Item { id }
+      }
+    }`,
+    { projectId, itemId, fieldId, text: text ?? '' },
+  );
+}
+
+async function assertProjectTextField(projectsPat, fieldId, expectedName) {
+  const data = await graphql(
+    projectsPat,
+    `query($fieldId: ID!) {
+      node(id: $fieldId) {
+        ... on ProjectV2Field {
+          id
+          name
+          dataType
+        }
+      }
+    }`,
+    { fieldId },
+  );
+  const field = data.node;
+  if (!field?.id) {
+    throw new Error(`Project text field ${fieldId} not found`);
+  }
+  if (field.dataType !== 'TEXT') {
+    throw new Error(`Project field "${field.name}" is not TEXT (got ${field.dataType})`);
+  }
+  if (expectedName && field.name?.toLowerCase() !== expectedName.toLowerCase()) {
+    throw new Error(
+      `Project field name mismatch: expected "${expectedName}", got "${field.name}"`,
+    );
+  }
+  return field;
+}
+
 async function ensureProjectItem(issue, projectId, projectsPat) {
   const existing = issue.projectItems.nodes.find((item) => item.project.id === projectId);
   if (existing) return existing.id;
@@ -203,7 +266,27 @@ async function fetchProjectV2Item({ itemId, statusFieldId, projectsPat }) {
   };
 }
 
-async function listProjectIssues({ projectId, statusFieldId, projectsPat }) {
+const PROJECT_ITEM_FIELD_VALUES_FRAGMENT = `
+  fieldValues(first: 30) {
+    nodes {
+      ... on ProjectV2ItemFieldSingleSelectValue {
+        name
+        field { ... on ProjectV2SingleSelectField { id name } }
+      }
+      ... on ProjectV2ItemFieldTextValue {
+        text
+        field { ... on ProjectV2Field { id name } }
+      }
+    }
+  }
+`;
+
+async function listProjectIssues({
+  projectId,
+  statusFieldId,
+  projectsPat,
+  syncedFieldId = null,
+}) {
   const items = [];
   let after = null;
   while (true) {
@@ -219,14 +302,7 @@ async function listProjectIssues({ projectId, statusFieldId, projectsPat }) {
               }
               nodes {
                 id
-                fieldValues(first: 20) {
-                  nodes {
-                    ... on ProjectV2ItemFieldSingleSelectValue {
-                      name
-                      field { ... on ProjectV2SingleSelectField { id name } }
-                    }
-                  }
-                }
+                ${PROJECT_ITEM_FIELD_VALUES_FRAGMENT}
                 content {
                   ... on Issue {
                     id
@@ -235,6 +311,7 @@ async function listProjectIssues({ projectId, statusFieldId, projectsPat }) {
                     body
                     url
                     state
+                    repository { name owner { login } }
                     labels(first: 30) { nodes { name } }
                   }
                 }
@@ -259,11 +336,15 @@ async function listProjectIssues({ projectId, statusFieldId, projectsPat }) {
     .map((item) => {
       const issue = item.content;
       if (!issue || issue.state !== 'OPEN') return null;
-      return {
+      const row = {
         projectItemId: item.id,
         status: getIssueProjectStatus(item, statusFieldId),
         issue,
       };
+      if (syncedFieldId) {
+        row.syncedStage = getProjectItemTextField(item, syncedFieldId);
+      }
+      return row;
     })
     .filter(Boolean);
 }
@@ -425,4 +506,7 @@ module.exports = {
   parseRepo,
   hasLabel,
   getIssueProjectStatus,
+  getProjectItemTextField,
+  updateProjectItemTextField,
+  assertProjectTextField,
 };
