@@ -3,6 +3,7 @@
 
 const {
   fetchIssue,
+  fetchAllIssueComments,
   updateProjectStatus,
   setLabels,
   upsertMarkerComment,
@@ -11,10 +12,69 @@ const {
   closeIssue,
   rest,
   parseRepo,
+  listProjectIssues,
 } = require('./github-project-lib');
 const { resolveCoordinationIssue } = require('../../scripts/lib/uat_queue_sync');
 
 const ASSIGNEE = process.env.AGENT_ASSIGNEE || 'KanopeeKa';
+const TRUSTED_UAT_BRANCH_AUTHORS = new Set(['pawpet-bot', 'pawpet-claude']);
+const UAT_BRANCH_MARKER = '<!-- agent-uat-branch -->';
+const MERGE_COMMIT_RE = /Merge commit:\s*`([0-9a-f]{40})`/i;
+
+function isLightPlanTrackingIssue(issue) {
+  return /^light-plan:/i.test(String(issue?.title || '').trim());
+}
+
+function lightPlanHasOpenChecklistItems(body) {
+  const text = String(body || '');
+  const idx = text.search(/(^|\n)#{2,4}\s*checklist/i);
+  if (idx === -1) {
+    return false;
+  }
+  return /^- \[ \]/m.test(text.slice(idx));
+}
+
+function parseTrustedMergeCommitFromComments(comments) {
+  let latest = null;
+  for (const comment of comments || []) {
+    const author = comment.user?.login;
+    const body = comment.body || '';
+    if (!body.includes(UAT_BRANCH_MARKER)) {
+      continue;
+    }
+    if (author && !TRUSTED_UAT_BRANCH_AUTHORS.has(author)) {
+      continue;
+    }
+    const match = MERGE_COMMIT_RE.exec(body);
+    if (!match) {
+      continue;
+    }
+    const updatedAt = comment.updated_at || comment.created_at || '';
+    if (!latest || updatedAt >= latest.updatedAt) {
+      latest = { mergeSha: match[1], updatedAt, commentId: comment.id };
+    }
+  }
+  return latest?.mergeSha || null;
+}
+
+async function deployContainsMergeCommit(owner, repo, mergeSha, deploySha, token, compareFn) {
+  if (!mergeSha || !deploySha || mergeSha === deploySha) {
+    return mergeSha === deploySha;
+  }
+  try {
+    const cmp = await (compareFn || ((a, b, c, d, t) =>
+      rest('GET', `/repos/${a}/${b}/compare/${c}...${d}`, t)))(
+      owner,
+      repo,
+      mergeSha,
+      deploySha,
+      token,
+    );
+    return cmp.status === 'behind' || cmp.status === 'identical';
+  } catch {
+    return false;
+  }
+}
 
 function parseLinkedIssues(prBody) {
   const matches =
@@ -34,6 +94,12 @@ function isPlanControlIssue(issue) {
 function ioOr(io) {
   return {
     fetchIssue: io?.fetchIssue || fetchIssue,
+    fetchAllIssueComments: io?.fetchAllIssueComments || fetchAllIssueComments,
+    listProjectIssues: io?.listProjectIssues || listProjectIssues,
+    compareCommits:
+      io?.compareCommits ||
+      ((o, r, base, head, tok) =>
+        rest('GET', `/repos/${o}/${r}/compare/${base}...${head}`, tok)),
     fetchPullRequest: io?.fetchPullRequest || fetchPullRequest,
     setLabels: io?.setLabels || setLabels,
     reopenIssue: io?.reopenIssue || reopenIssue,
@@ -427,6 +493,55 @@ Assigned @${ASSIGNEE} for investigation. The \`question\` label was added and \`
 /**
  * After a real production deploy + smoke (never stub/skip). Closes linked product issues.
  */
+async function closeIssueAfterProd({
+  api,
+  owner,
+  repo,
+  issueNumber,
+  issue,
+  commitSha,
+  prodTag,
+  workflowUrl,
+  token,
+  projectsPat,
+  projectId,
+  statusFieldId,
+  mergeSha,
+}) {
+  if (projectsPat && projectId && statusFieldId) {
+    const refreshedIssue = await api.fetchIssue(owner, repo, issueNumber, token);
+    await api.updateProjectStatus({
+      issue: refreshedIssue,
+      projectId,
+      statusFieldId,
+      statusName: 'Done',
+      projectsPat,
+    });
+  }
+
+  await api.setLabels(owner, repo, issueNumber, ['in-prod'], ['busy'], token);
+  await api.closeIssue(owner, repo, issueNumber, token);
+
+  await api.upsertMarkerComment({
+    owner,
+    repo,
+    issueNumber,
+    marker: '<!-- agent-prod-result -->',
+    body: `<!-- agent-prod-result -->
+## Production deployment completed
+
+Deploy commit \`${commitSha}\` includes delivery merge \`${mergeSha}\`.
+
+- Prod tag: \`${prodTag || 'n/a'}\`
+- Workflow: ${workflowUrl}
+- Project status: **Done**
+- Issue closed; \`busy\` removed.`,
+    token,
+  });
+
+  return { issueNumber, mergeSha, status: 'closed' };
+}
+
 async function handleProdDeployResult({
   owner,
   repo,
@@ -440,66 +555,126 @@ async function handleProdDeployResult({
   io,
 }) {
   const api = ioOr(io);
-  const pulls = await api.fetchPullsForCommit(owner, repo, commitSha, token);
-  const prList = Array.isArray(pulls) ? pulls : [];
-  if (prList.length === 0) {
-    console.log(`No PRs linked to commit ${commitSha} — prod notify skipped.`);
-    return { skipped: true, reason: 'no pull requests for commit' };
-  }
-
-  const seen = new Set();
   const results = [];
-  for (const pr of prList) {
-    const prNumber = pr.number;
-    const issueNumbers = parseLinkedIssues(pr.body || '');
-    for (const issueNumber of issueNumbers) {
-      if (seen.has(issueNumber)) {
-        continue;
-      }
-      seen.add(issueNumber);
 
-      const issue = await api.fetchIssue(owner, repo, issueNumber, token);
-      if (isPlanControlIssue(issue)) {
-        results.push({ issueNumber, prNumber, status: 'skipped-plan-control' });
-        console.log(
-          `Issue #${issueNumber}: plan control issue — prod notify skipped (not closed)`,
-        );
-        continue;
-      }
+  if (projectsPat && projectId && statusFieldId) {
+    const board = await api.listProjectIssues({ projectId, statusFieldId, projectsPat });
+    for (const entry of board) {
+    if (entry.status !== 'In UAT') {
+      continue;
+    }
+    const issueNumber = entry.issue?.number;
+    if (!issueNumber) {
+      continue;
+    }
+    const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+    if (isPlanControlIssue(issue)) {
+      results.push({ issueNumber, status: 'skipped-plan-control' });
+      continue;
+    }
 
-      if (projectsPat && projectId && statusFieldId) {
-        const refreshedIssue = await api.fetchIssue(owner, repo, issueNumber, token);
-        await api.updateProjectStatus({
-          issue: refreshedIssue,
-          projectId,
-          statusFieldId,
-          statusName: 'Done',
-          projectsPat,
-        });
-      }
+    const comments = await api.fetchAllIssueComments(owner, repo, issueNumber, token);
+    const mergeSha = parseTrustedMergeCommitFromComments(comments);
+    if (!mergeSha) {
+      results.push({ issueNumber, status: 'skipped-no-merge-comment' });
+      continue;
+    }
 
-      await api.setLabels(owner, repo, issueNumber, ['in-prod'], ['busy'], token);
-      await api.closeIssue(owner, repo, issueNumber, token);
+    const contained = await deployContainsMergeCommit(
+      owner,
+      repo,
+      mergeSha,
+      commitSha,
+      token,
+      (a, b, c, d, t) => api.compareCommits(a, b, c, d, t),
+    );
+    if (!contained) {
+      results.push({ issueNumber, status: 'skipped-not-in-deploy' });
+      continue;
+    }
 
+    if (isLightPlanTrackingIssue(issue) && lightPlanHasOpenChecklistItems(issue.body)) {
       await api.upsertMarkerComment({
         owner,
         repo,
         issueNumber,
         marker: '<!-- agent-prod-result -->',
         body: `<!-- agent-prod-result -->
-## Production deployment completed
+## Production deploy — tracking issue left open
 
-Commit \`${commitSha}\` (PR #${prNumber}) is live after deploy-prod smoke passed.
-
-- Prod tag: \`${prodTag || 'n/a'}\`
-- Workflow: ${workflowUrl}
-- Project status: **Done**
-- Issue closed; \`busy\` removed.`,
+Deploy commit \`${commitSha}\` contains merge \`${mergeSha}\`, but the programme checklist still has open items.`,
         token,
       });
+      results.push({ issueNumber, status: 'skipped-open-checklist' });
+      continue;
+    }
 
-      results.push({ issueNumber, prNumber, status: 'closed' });
-      console.log(`Issue #${issueNumber}: Done + closed after prod deploy (PR #${prNumber})`);
+    results.push(
+      await closeIssueAfterProd({
+        api,
+        owner,
+        repo,
+        issueNumber,
+        issue,
+        commitSha,
+        prodTag,
+        workflowUrl,
+        token,
+        projectsPat,
+        projectId,
+        statusFieldId,
+        mergeSha,
+      }),
+    );
+      console.log(`Issue #${issueNumber}: Done + closed (merge ${mergeSha} in deploy ${commitSha})`);
+    }
+
+    if (results.length === 0) {
+      return { skipped: true, reason: 'no in-uat issues processed' };
+    }
+    return { commitSha, prodTag, results };
+  }
+
+  const pulls = await api.fetchPullsForCommit(owner, repo, commitSha, token);
+  const prList = Array.isArray(pulls) ? pulls : [];
+  if (prList.length === 0) {
+    return { skipped: true, reason: 'no project config and no pull requests for commit' };
+  }
+
+  const seen = new Set();
+  for (const pr of prList) {
+    const issueNumbers = parseLinkedIssues(pr.body || '');
+    for (const issueNumber of issueNumbers) {
+      if (seen.has(issueNumber)) {
+        continue;
+      }
+      seen.add(issueNumber);
+      const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+      if (isPlanControlIssue(issue)) {
+        results.push({ issueNumber, status: 'skipped-plan-control' });
+        continue;
+      }
+      if (isLightPlanTrackingIssue(issue) && lightPlanHasOpenChecklistItems(issue.body)) {
+        results.push({ issueNumber, status: 'skipped-open-checklist' });
+        continue;
+      }
+      results.push(
+        await closeIssueAfterProd({
+          api,
+          owner,
+          repo,
+          issueNumber,
+          issue,
+          commitSha,
+          prodTag,
+          workflowUrl,
+          token,
+          projectsPat,
+          projectId,
+          statusFieldId,
+          mergeSha: commitSha,
+        }),
+      );
     }
   }
 
@@ -600,6 +775,10 @@ if (require.main === module) {
 module.exports = {
   parseLinkedIssues,
   isPlanControlIssue,
+  isLightPlanTrackingIssue,
+  lightPlanHasOpenChecklistItems,
+  parseTrustedMergeCommitFromComments,
+  deployContainsMergeCommit,
   uatTagName,
   parseUatTag,
   handleMergedPr,

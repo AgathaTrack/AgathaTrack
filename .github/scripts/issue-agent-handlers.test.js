@@ -10,6 +10,9 @@ const {
   handleMergedPr,
   handleUatWorkflowResult,
   handleProdDeployResult,
+  parseTrustedMergeCommitFromComments,
+  lightPlanHasOpenChecklistItems,
+  isLightPlanTrackingIssue,
 } = require('./issue-agent-handlers');
 
 test('parseLinkedIssues accepts refs fixes closes resolves', () => {
@@ -236,37 +239,65 @@ test('handleUatWorkflowResult still reopens a closed product issue', async (t) =
   assert.equal(result.results[0].issueNumber, 122);
 });
 
-test('handleProdDeployResult closes linked issues including light-plan programmes', async () => {
+test('parseTrustedMergeCommitFromComments ignores non-bot authors', () => {
+  const mergeSha = 'a'.repeat(40);
+  const sha = parseTrustedMergeCommitFromComments([
+    {
+      user: { login: 'mallory' },
+      body: `<!-- agent-uat-branch -->\nMerge commit: \`${mergeSha}\``,
+      created_at: '2026-11-16T12:00:00Z',
+    },
+    {
+      user: { login: 'pawpet-bot' },
+      body: `<!-- agent-uat-branch -->\nMerge commit: \`${mergeSha}\``,
+      updated_at: '2026-11-16T11:00:00Z',
+      created_at: '2026-11-16T10:00:00Z',
+    },
+  ]);
+  assert.equal(sha, mergeSha);
+});
+
+test('lightPlanHasOpenChecklistItems detects open programme items', () => {
+  const body = '## Checklist\n\n- [x] P1 done\n- [ ] P2 open\n';
+  assert.equal(lightPlanHasOpenChecklistItems(body), true);
+  assert.equal(isLightPlanTrackingIssue({ title: 'light-plan: foo' }), true);
+});
+
+test('handleProdDeployResult closes In UAT issues when merge is in deploy', async () => {
+  const mergeSha = 'b'.repeat(40);
+  const deploySha = 'c'.repeat(40);
   const calls = [];
   const io = {
-    fetchPullsForCommit: async () => [
-      { number: 100, body: 'Release\n\nFixes #50\nRefs #2342' },
+    listProjectIssues: async () => [
+      { status: 'In UAT', issue: { number: 50 } },
+      { status: 'Ready', issue: { number: 99 } },
     ],
-    fetchIssue: async (_o, _r, n) => ({
-      number: n,
-      title: n === 2342 ? 'light-plan: pipeline' : 'Bug fix',
+    fetchAllIssueComments: async () => [
+      {
+        user: { login: 'pawpet-bot' },
+        body: `<!-- agent-uat-branch -->\nMerge commit: \`${mergeSha}\``,
+        updated_at: '2026-11-16T12:00:00Z',
+      },
+    ],
+    fetchIssue: async () => ({
+      number: 50,
+      title: 'Bug fix',
+      body: 'Done',
       labels: { nodes: [{ name: 'busy' }] },
     }),
-    updateProjectStatus: async () => {
-      calls.push('status');
-    },
-    setLabels: async () => {
-      calls.push('labels');
-    },
-    closeIssue: async () => {
-      calls.push('close');
-    },
-    upsertMarkerComment: async () => {
-      calls.push('comment');
-    },
+    compareCommits: async () => ({ status: 'behind' }),
+    updateProjectStatus: async () => calls.push('status'),
+    setLabels: async () => calls.push('labels'),
+    closeIssue: async () => calls.push('close'),
+    upsertMarkerComment: async () => calls.push('comment'),
   };
 
   const result = await handleProdDeployResult({
     owner: 'AgathaTrack',
     repo: 'AgathaTrack',
-    commitSha: 'abc'.repeat(14).slice(0, 40),
+    commitSha: deploySha,
     prodTag: 'v1.2.3',
-    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/1',
+    workflowUrl: 'https://example.com/runs/1',
     token: 'test',
     projectsPat: 'pat',
     projectId: 'pid',
@@ -274,11 +305,42 @@ test('handleProdDeployResult closes linked issues including light-plan programme
     io,
   });
 
-  assert.equal(result.results.length, 2);
-  assert.equal(result.results.find((r) => r.issueNumber === 50).status, 'closed');
-  assert.equal(
-    result.results.find((r) => r.issueNumber === 2342).status,
-    'closed',
-  );
-  assert.deepEqual(calls, ['status', 'labels', 'close', 'comment', 'status', 'labels', 'close', 'comment']);
+  assert.equal(result.results[0].status, 'closed');
+  assert.deepEqual(calls, ['status', 'labels', 'close', 'comment']);
+});
+
+test('handleProdDeployResult skips light-plan with open checklist', async () => {
+  const mergeSha = 'd'.repeat(40);
+  const io = {
+    listProjectIssues: async () => [{ status: 'In UAT', issue: { number: 2363 } }],
+    fetchAllIssueComments: async () => [
+      {
+        user: { login: 'pawpet-claude' },
+        body: `<!-- agent-uat-branch -->\nMerge commit: \`${mergeSha}\``,
+        updated_at: '2026-11-16T12:00:00Z',
+      },
+    ],
+    fetchIssue: async () => ({
+      number: 2363,
+      title: 'light-plan: repair',
+      body: '#### Checklist\n\n- [ ] P5 open\n',
+    }),
+    compareCommits: async () => ({ status: 'identical' }),
+    upsertMarkerComment: async () => {},
+  };
+
+  const result = await handleProdDeployResult({
+    owner: 'AgathaTrack',
+    repo: 'AgathaTrack',
+    commitSha: mergeSha,
+    prodTag: 'v1',
+    workflowUrl: 'url',
+    token: 'test',
+    projectsPat: 'pat',
+    projectId: 'pid',
+    statusFieldId: 'sid',
+    io,
+  });
+
+  assert.equal(result.results[0].status, 'skipped-open-checklist');
 });
