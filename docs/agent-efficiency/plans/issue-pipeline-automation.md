@@ -3,7 +3,7 @@ title: Issue pipeline automation — proposal
 owner: Documentation Team
 audience: both
 status: proposed
-last_updated: 2026-11-14
+last_updated: 2026-11-16
 tags: [agent-efficiency, github-issues, automation, security]
 ---
 
@@ -103,15 +103,15 @@ Extend these; do not duplicate.
 
 | Status | What moves issues today | Agent |
 |--------|-------------------------|-------|
-| Backlog | Issue forms; triage returns incomplete issues | — |
-| To do | Manual only | — |
-| In Analysis | `human-reviewed` → triage workflow | None (deterministic only) |
-| Ready | `agent-dispatch.yml` | Cursor |
-| In progress | Dispatch; `agent-monitor.yml` manual | Cursor |
+| Backlog | Issue forms; triage / pipeline intake failures | — |
+| To do | Manual; `issue-pipeline-todo.yml` on `todo`; pipeline intake when assigned `pawpet-claude` (`pipeline-beta` / `ISSUE_PIPELINE=on`) | Claude stub |
+| In Analysis | Legacy: `human-reviewed` → triage. Pipeline: dispatcher review lane | Bot stubs |
+| Ready | Legacy dispatch **or** pipeline delivery + queued implement | Cursor |
+| In progress | Legacy monitor **or** pipeline implement + monitor | Cursor |
 | In Main | `issue-agent-pr-merge.yml` | — |
-| In UAT | `deploy-uat.yml` `agent-uat-notify` | — |
-| Done | Manual or validation comment (#2139) | — |
-| Prod (deploy) | `deploy-prod.yml` | Does not touch issues |
+| In UAT | `deploy-uat.yml` notify | — |
+| Done | Prod notify on board **In UAT** (repair P5) or manual | — |
+| Prod (deploy) | `deploy-prod.yml` | Feeds prod notify |
 
 ---
 
@@ -345,6 +345,24 @@ merge (Actions) ──▶ In Main ──▶ In UAT ──▶ In Prod notify ─�
 | ISSUE-PIPELINE-D-002 | Light-plan issues follow In Main → UAT → Prod via Actions | One lifecycle; agent stops at Pre-UAT green | Live | 2026-11-15 |
 | ISSUE-PIPELINE-D-003 | ~~User-owned; status labels source of truth~~ | — | **Superseded** | 2026-11-13 |
 | ISSUE-PIPELINE-D-003b | Org-owned repo; Pawpet **column** = stage; org-scoped token may sync board | Org migration #2324+; Claude/Cursor can read/write Status | Proposed | 2026-11-14 |
-| ISSUE-PIPELINE-D-004 | State in bot-written body marker | Title prefixes break plan control detection | Proposed | 2026-11-14 |
+| ISSUE-PIPELINE-D-004 | State in dedicated `<!-- pipeline-state -->` comment (bot PAT; newest `updated_at` wins) | Title prefixes break plan control detection; lane comments no longer embed JSON | **Live** (integration) | 2026-11-16 |
 | ISSUE-PIPELINE-D-005 | **Assignee** = whose turn; handoffs replace verdict labels | Native trigger, board visibility, review independence | Proposed | 2026-11-14 |
 | ISSUE-PIPELINE-D-006 | To do + agent assignee = pipeline entry; In Analysis = peer review; triage at To do start | Backlog→To do is human go; no extra board column | Proposed | 2026-11-14 |
+| ISSUE-PIPELINE-D-007 | Owner body edit during In Analysis / Ready reopen | GraphQL `userContentEdits` round reset deferred; column-scoped reopen + trust allowlist shipped (repair #2363 §3.3) | **In delivery** (partial) | 2026-11-16 |
+| ISSUE-PIPELINE-D-008 | `agent-paths` gate applies in delivery **and** implement lanes | Review rounds do not re-expand paths; fail-closed before label + before launch (repair #2363 §4.2) | **Live** (integration) | 2026-11-16 |
+
+---
+
+## 6. Owner soak (post-repair)
+
+After integration merges (#2363), production cutover is **owner-operated** — agents document; they do not flip repo variables on live traffic without instruction.
+
+| Step | Owner action | Success signal |
+|------|--------------|----------------|
+| 1 | Set `ISSUE_PIPELINE` to `dry-run` | Dispatcher logs planned actions; legacy dispatch unchanged |
+| 2 | Tag one or two sandbox issues with `pipeline-beta`; set `ISSUE_PIPELINE=on` only after reviewing dry-run logs | Board handoffs on beta issues only |
+| 3 | Watch **Actions → Issue pipeline dispatcher → schedule** runs | Each run logs `pipeline_health`; staleness warning if gap > 2h since last completed schedule |
+| 4 | Fix open repair debt (#2337, #2345, #2342) before widening beta | No `needs-owner` surprises on programme issues |
+| 5 | Remove `pipeline-beta` gate and leave `ISSUE_PIPELINE=on` | Legacy triage/dispatch workflows skip (spec §14.3) |
+
+Scheduled ticks use cron `7,37 * * * *` (off the half-hour). Missing heartbeats surface in `pipeline_health.schedule.stale`.
