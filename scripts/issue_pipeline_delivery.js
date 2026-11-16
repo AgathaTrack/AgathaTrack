@@ -5,19 +5,20 @@ const { execFileSync } = require('child_process');
 const {
   fetchIssue,
   assignIssue,
+  setIssueAssignees,
   setLabels,
   rest,
   upsertMarkerComment,
 } = require('../.github/scripts/github-project-lib');
-const { isForbiddenPath } = require('../.github/scripts/agent-safety-lib');
 const { globToRegExp } = require('./lib/execute_plan_schema');
 const { defaultState, DELIVERY_LABELS } = require('./issue_pipeline_state');
 const { applyReopenAnalysis } = require('./issue_pipeline_review');
+const { upsertPipelineState } = require('./issue_pipeline_state_load');
 
 const OWNER_LOGIN = 'KanopeeKa';
 const DELIVERY_MARKER = '<!-- pipeline-delivery -->';
 const VALID_METHODS = new Set(['PR', 'light-plan', 'execute-plan']);
-const PROTECTED_GLOBS = ['.github/**', '.cursor/agent-kernel/**'];
+const { evaluatePlannedPathGlobs, PROTECTED_GLOBS } = require('./lib/pipeline_path_gate');
 
 const AGENT_PATHS_FENCE = /```agent-paths\s*\n([\s\S]*?)```/i;
 const AGENT_PATHS_COMMENT = /<!--\s*agent-paths:\s*(\{[\s\S]*?\})\s*-->/i;
@@ -90,38 +91,8 @@ function expandGlobs(globs, trackedFiles) {
   return [...matched];
 }
 
-/**
- * Fail-closed path gate: expand globs, forbidden + protected prefixes.
- */
 function evaluateDeliveryPaths(globs, trackedFiles) {
-  if (!globs?.length) {
-    return { ok: false, reason: 'missing-agent-paths' };
-  }
-  const expanded = expandGlobs(globs, trackedFiles);
-  const forbiddenHits = [];
-  const protectedHits = [];
-
-  for (const file of expanded) {
-    if (isForbiddenPath(file)) {
-      forbiddenHits.push(file);
-    }
-    for (const prot of PROTECTED_GLOBS) {
-      if (globToRegExp(prot).test(file)) {
-        protectedHits.push(file);
-      }
-    }
-  }
-
-  if (forbiddenHits.length > 0 || protectedHits.length > 0) {
-    return {
-      ok: false,
-      reason: 'sensitive-paths',
-      forbiddenHits,
-      protectedHits,
-      expanded,
-    };
-  }
-  return { ok: true, expanded };
+  return evaluatePlannedPathGlobs(globs, trackedFiles);
 }
 
 function inferDeliveryMethod(issue, envMethod) {
@@ -166,14 +137,8 @@ function decideDeliveryPlan({
   return { kind: 'queued', method, label: method };
 }
 
-function buildStateMarker(state) {
-  return `<!-- agent-state: ${JSON.stringify(state)} -->`;
-}
-
 async function clearAssignees(owner, repo, issueNumber, token) {
-  await rest('POST', `/repos/${owner}/${repo}/issues/${issueNumber}/assignees`, token, {
-    assignees: [],
-  });
+  await setIssueAssignees(owner, repo, issueNumber, [], token);
 }
 
 async function applyDeliveryNeedsOwner({
@@ -208,10 +173,18 @@ async function applyDeliveryNeedsOwner({
 
 Reason: **${owner_reason}**.
 
-${pathCheck?.forbiddenHits?.length ? `Forbidden: ${pathCheck.forbiddenHits.join(', ')}\n` : ''}${pathCheck?.protectedHits?.length ? `Protected: ${pathCheck.protectedHits.join(', ')}\n` : ''}
-
-${buildStateMarker(nextState)}`,
+${pathCheck?.forbiddenHits?.length ? `Forbidden: ${pathCheck.forbiddenHits.join(', ')}\n` : ''}${pathCheck?.protectedHits?.length ? `Protected: ${pathCheck.protectedHits.join(', ')}\n` : ''}`,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    assignToken,
+    state: nextState,
+    summaryLine: `Delivery blocked: ${owner_reason}`,
   });
 
   return { kind: 'needs-owner', assignee: OWNER_LOGIN, state: nextState, owner_reason };
@@ -316,10 +289,18 @@ async function applyDeliveryStub({
 
 Path gate: **pass** (${pathCheck.expanded?.length ?? 0} tracked file(s) matched).
 
-Queued for implement — unassigned, label **${plan.label}**.
-
-${buildStateMarker(nextState)}`,
+Queued for implement — unassigned, label **${plan.label}**.`,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    assignToken,
+    state: nextState,
+    summaryLine: `Delivery queued (${plan.method})`,
   });
 
   return { kind: 'queued', method: plan.method, state: nextState, status: 'Ready' };

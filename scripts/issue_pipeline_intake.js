@@ -6,11 +6,12 @@ const {
   updateProjectStatus,
   upsertMarkerComment,
 } = require('../.github/scripts/github-project-lib');
-const { bodySha, STATE_MARKER, defaultState } = require('./issue_pipeline_state');
+const { bodySha, defaultState, PIPELINE_STATE_MARKER } = require('./issue_pipeline_state');
+const { upsertPipelineState } = require('./issue_pipeline_state_load');
 
 const INTAKE_MARKER = '<!-- pipeline-intake -->';
 
-function buildIntakeComment(issueNumber, hints, state) {
+function buildIntakeComment(issueNumber, hints) {
   const hintBlock =
     hints?.length > 0
       ? `**Delivery hints from triage:** ${hints.join(', ')}\n\n`
@@ -19,8 +20,6 @@ function buildIntakeComment(issueNumber, hints, state) {
 ## Intake (issue pipeline)
 
 ${hintBlock}Round **0** — analysis handoff for peer review on issue #${issueNumber}.
-
-<!-- agent-state: ${JSON.stringify(state)} -->
 
 Assigning **In Analysis** to \`pawpet-bot\` for peer review.`;
 }
@@ -50,7 +49,7 @@ async function applyIntakeHandoff({
     return { dryRun: true, issueNumber, state };
   }
 
-  const commentBody = buildIntakeComment(issueNumber, hints, state);
+  const commentBody = buildIntakeComment(issueNumber, hints);
 
   await upsertMarkerComment({
     owner,
@@ -59,6 +58,16 @@ async function applyIntakeHandoff({
     marker: INTAKE_MARKER,
     body: commentBody,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    assignToken,
+    state,
+    summaryLine: 'Intake handoff (round 0)',
   });
 
   const botTok = assignToken || token;
@@ -120,7 +129,7 @@ async function runTodoLanePipeline({
 
 module.exports = {
   INTAKE_MARKER,
-  STATE_MARKER,
+  PIPELINE_STATE_MARKER,
   buildIntakeComment,
   applyIntakeHandoff,
   runTodoLanePipeline,

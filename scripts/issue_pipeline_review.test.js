@@ -36,6 +36,18 @@ test('green with body edit continues to other agent', () => {
   assert.equal(plan.assignee, 'pawpet-claude');
 });
 
+test('converging green is checked before round cap', () => {
+  const plan = decideReviewHandoff({
+    state: { round: 4, body_sha: 'x', verdicts: { 'pawpet-claude': 'green' } },
+    liveBodySha: 'x',
+    reviewer: 'pawpet-bot',
+    verdict: 'green',
+    bodyEditedThisRound: false,
+    roundCap: 6,
+  });
+  assert.equal(plan.kind, 'converged');
+});
+
 test('round cap triggers needs-owner', () => {
   const plan = decideReviewHandoff({
     state: { round: 5, body_sha: 'x', verdicts: {} },

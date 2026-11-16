@@ -145,7 +145,7 @@ test('pawpet-bot without source_issue → ignored', async () => {
   assert.deepEqual(s.writes, []);
 });
 
-test('pawpet-bot pipeline approve (policy pass) → approved', async () => {
+test('pawpet-bot pipeline approve rejected until launch record and bot path restored', async () => {
   const pipelineSnap = buildSnapshotFromPlan({
     planId: PLAN_ID,
     planMarkdown: PLAN_MD,
@@ -157,10 +157,12 @@ test('pawpet-bot pipeline approve (policy pass) → approved', async () => {
   const { bodySha } = require('../issue_pipeline_state');
   const shaProduct = bodySha(productBody);
   const stateComment = {
-    body: `<!-- agent-state: ${JSON.stringify({
+    user: { login: 'pawpet-bot' },
+    body: `<!-- pipeline-state -->\n<!-- agent-state: ${JSON.stringify({
       body_sha: shaProduct,
       verdicts: { 'pawpet-claude': 'green', 'pawpet-bot': 'green' },
       converged_at: '2026-11-15T00:00:00.000Z',
+      execute_plan_launch: { plan_id: PLAN_ID },
     })} -->`,
     created_at: '2026-11-15T01:00:00Z',
   };
@@ -174,8 +176,8 @@ test('pawpet-bot pipeline approve (policy pass) → approved', async () => {
   const s = setup({ snapshotAtSha: pipelineSnap, issueComments: [stateComment] });
   Object.assign(s.clients.read, readExtras);
   const res = await run(s, event(mkComment(pipelineApprove, { user: { login: 'pawpet-bot' }, author_association: 'NONE' })));
-  assert.deepEqual(res, { handled: true, detail: 'driver pass dispatched' });
-  assert.deepEqual(s.writes.find((w) => w[0] === 'addLabels'), ['addLabels', 9, ['autonomous-approved', `plan:${PLAN_ID}`]]);
+  assert.equal(res.handled, true);
+  assert.match(res.detail, /rejected: pipeline bot-provenance-suspended/);
 });
 
 test('pawpet-bot pipeline approve policy fail → needs-owner on product + autonomous-revoked', async () => {

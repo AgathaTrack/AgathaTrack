@@ -4,7 +4,7 @@ owner: Documentation Team
 audience: agent
 status: proposed
 status_since: 2026-11-14
-last_updated: 2026-11-14
+last_updated: 2026-11-16
 tags: [agent-efficiency, github-issues, automation]
 parent: issue-pipeline-automation.md
 ---
@@ -19,7 +19,11 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 |----------|---------|
 | `.github/workflows/issue-pipeline-dispatcher.yml` | Triggers, concurrency, environment secrets |
 | `scripts/issue_pipeline_dispatcher.js` | Tick: enumerate work, choose actions, invoke workers |
-| `scripts/issue_pipeline_state.js` | Parse/update `<!-- agent-state: … -->` |
+| `scripts/issue_pipeline_health.js` | Schedule heartbeat summary (`pipeline_health` JSON + optional step summary) |
+| `scripts/issue_pipeline_state.js` | Parse `<!-- agent-state: … -->`; lane comments no longer embed state |
+| `scripts/lib/pipeline_state_trust.js` | Trust allowlist (`pawpet-bot`, `pawpet-claude`) + `pipeline-state` marker |
+| `scripts/issue_pipeline_state_load.js` | Upsert dedicated `<!-- pipeline-state -->` comment (bot token; newest `updated_at` wins) |
+| `scripts/lib/pipeline_path_gate.js` | Shared planned-path gate (delivery, implement, P8 policy) |
 | `scripts/issue_pipeline_project.js` | Pawpet Status read/write (wraps `github_issue_workflow.js` patterns) |
 | `scripts/issue_pipeline_workers/` | Launch Claude action or Cursor API per lane |
 | Repo variable `ISSUE_PIPELINE` | `off` \| `dry-run` \| `on` |
@@ -32,11 +36,11 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 |-------|-----|
 | `issues: assigned` | Primary — start lane for new assignee |
 | `issues: labeled`, `issues: edited` | Secondary — delivery labels, `question` cleared |
-| `issue_comment` (allowlisted authors) | Re-queue intake after author answers |
+| `issue_comment` (issue only — skip when `issue.pull_request` is set) | Re-queue intake after author answers |
 | `pull_request_target: closed` (merged) | Release tracking, WIP slot free |
 | `workflow_run` (deploy-uat, deploy-prod, CI) | UAT/Prod notify alignment |
-| `schedule` (30 min) | Heartbeat — match execute-plan driver |
-| `workflow_dispatch` | `dry_run`, optional `issue_number`, force tick |
+| `schedule` (7,37 past each hour) | Heartbeat — off the half-hour to reduce missed cron ticks |
+| `workflow_dispatch` | Optional scoped `issue_number` for debugging only |
 
 **Not used:** Project v2 item events (not available as workflow triggers).
 
@@ -44,13 +48,14 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 
 1. If `ISSUE_PIPELINE` is `off`, exit 0.
 2. Load org/project field IDs from secrets (`GH_PROJECT_ID`, `GH_STATUS_FIELD_ID`, org `AgathaTrack`).
-3. For each open issue with label ∉ {`manual-only`, support-only exclusions} (a `manual-only` issue is skipped before any lane condition is evaluated, whatever its status or assignee):
+3. **Global tick:** event-driven runs never set `ISSUE_NUMBER`; recompute from the whole Pawpet board so cancelled concurrent runs do not drop issues (repair #2363 §2.2). `workflow_dispatch` may pass `issue_number` for debugging only.
+4. For each open issue with label ∉ {`manual-only`, `owner-programme`, execute-plan control titles, non-automation columns} (a `manual-only` issue is skipped before any lane condition is evaluated, whatever its status or assignee). Automation columns: To do, In Analysis, Ready, In progress:
    - Read Pawpet **Status**, **assignee**, delivery labels, `busy`, `needs-owner`, state block.
    - Compute **eligible action** at most one per issue (priority table below).
-4. Sort actions by priority label then issue age.
-5. Apply **lane caps**; skip if cap reached.
-6. If `dry-run`, log planned actions only.
-7. Else execute: set lock (`busy` / marker), call worker or deterministic script, update assignee/status with **bot PAT** (not `GITHUB_TOKEN` for handoffs).
+5. Sort actions by priority label then issue age.
+6. Apply **lane caps**; skip if cap reached.
+7. If `dry-run`, log planned actions only.
+8. Else execute: set lock (`busy` / marker), call worker or deterministic script, update assignee/status with **bot PAT** (not `GITHUB_TOKEN` for handoffs).
 
 ### 3.1 Action priority (per issue)
 
@@ -68,14 +73,10 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 
 ## 4. Lanes and concurrency
 
-| Lane group | `concurrency` key | Cap per tick |
-|------------|-------------------|--------------|
-| `issue-pipeline-triage` | 1 | unlimited issues, cheap |
-| `issue-pipeline-intake` | 2 | 2 Claude runs |
-| `issue-pipeline-review` | 2 per bot | 2 `pawpet-claude`, 2 `pawpet-bot` |
-| `issue-pipeline-delivery` | 1 | 1 |
-| `issue-pipeline-implement` | WIP | §5 |
-| `issue-pipeline-monitor` | 2 | 2 poll/relaunch |
+| Lane | Cap per tick | Notes |
+|------|----------------|-------|
+| triage / intake / review / delivery / implement / monitor | inline in `issue_pipeline_dispatcher.js` | Legacy `issue-pipeline-{intake,review,delivery,implement,monitor}.yml` removed — one code path only |
+| implement launch | WIP | §5; requires `PIPELINE_IMPLEMENT_LAUNCH=true` and `CURSOR_API_KEY` on dispatcher job |
 
 Global dispatcher concurrency: `issue-pipeline-dispatcher` (single runner per repo, like today’s `agent-dispatch`).
 
@@ -187,9 +188,10 @@ Status option names must match live Pawpet field (case-insensitive match in scri
 
 ## 11. Observability
 
-- Each tick: summary comment optional (suppress in `on` mode; verbose in `dry-run`).
-- Structured log in Actions: `issue`, `action`, `lane`, `assignee`, `dry_run`.
-- Metrics debt: count ticks, worker failures, mean time in column (future).
+- Each tick: structured log lines `pipeline_action` / `pipeline_tick_complete` (`issue`, `action`, `lane`, `assignee`, `dry_run`).
+- **Schedule heartbeat** (`event=schedule`, full-board tick): after `pipeline_tick_complete`, emit `pipeline_health` with `by_column`, WIP usage, planned/executed counts, lane errors, and schedule staleness when the last **completed** schedule run is more than **2 hours** before the current tick (`scripts/issue_pipeline_health.js`). The job also appends a short table to `$GITHUB_STEP_SUMMARY` when present.
+- Per-issue verbose comments: optional; suppress in steady `on` mode.
+- Metrics debt: mean time in column dashboards (future).
 
 ## 12. Secrets and environments
 

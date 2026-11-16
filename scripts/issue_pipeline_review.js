@@ -8,6 +8,8 @@ const {
   upsertMarkerComment,
 } = require('../.github/scripts/github-project-lib');
 const { defaultState, DEFAULT_ROUND_CAP, DELIVERY_LABELS } = require('./issue_pipeline_state');
+const { upsertPipelineState } = require('./issue_pipeline_state_load');
+const { hasLabel } = require('./issue_pipeline_gate');
 const OWNER_LOGIN = 'KanopeeKa';
 
 const REVIEW_MARKER = '<!-- pipeline-review -->';
@@ -37,17 +39,16 @@ function decideReviewHandoff({
   const nextRound = round + 1;
   const verdicts = { ...(state.verdicts || {}), [reviewer]: verdict };
 
-  if (nextRound >= roundCap) {
-    return {
-      kind: 'needs-owner',
-      owner_reason: 'no-convergence',
-      round: nextRound,
-      verdicts,
-      body_sha: liveBodySha,
-    };
-  }
-
   if (verdict === 'red' || bodyEditedThisRound) {
+    if (nextRound >= roundCap) {
+      return {
+        kind: 'needs-owner',
+        owner_reason: 'no-convergence',
+        round: nextRound,
+        verdicts,
+        body_sha: liveBodySha,
+      };
+    }
     return {
       kind: 'continue-analysis',
       assignee: otherBot(reviewer),
@@ -71,6 +72,16 @@ function decideReviewHandoff({
       body_sha: liveBodySha,
       last_assignee: reviewer,
       converged_at: new Date().toISOString(),
+    };
+  }
+
+  if (nextRound >= roundCap) {
+    return {
+      kind: 'needs-owner',
+      owner_reason: 'no-convergence',
+      round: nextRound,
+      verdicts,
+      body_sha: liveBodySha,
     };
   }
 
@@ -138,10 +149,18 @@ async function applyReopenAnalysis({
     body: `${REVIEW_MARKER}
 ## Reopened for analysis
 
-Body or delivery mismatch — delivery labels removed, \`verdicts\` cleared.
-
-${buildStateMarker(nextState)}`,
+Body or delivery mismatch — delivery labels removed, \`verdicts\` cleared.`,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    assignToken,
+    state: nextState,
+    summaryLine: 'Reopened for analysis',
   });
 
   await assignIssue(owner, repo, issueNumber, assignee, assignToken || token);
@@ -194,10 +213,18 @@ async function applyNeedsOwnerConvergence({
     body: `${REVIEW_MARKER}
 ## Review round cap
 
-\`round >= ${DEFAULT_ROUND_CAP}\` — assigned @${OWNER_LOGIN} with \`needs-owner\`.
-
-${buildStateMarker(nextState)}`,
+\`round >= ${DEFAULT_ROUND_CAP}\` — assigned @${OWNER_LOGIN} with \`needs-owner\`.`,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    assignToken,
+    state: nextState,
+    summaryLine: 'Review round cap',
   });
 
   return { assignee: OWNER_LOGIN, labels: ['needs-owner'], state: nextState };
@@ -220,9 +247,23 @@ async function applyReviewStub({
   liveBodySha,
   reviewer,
   dryRun,
+  labels = [],
 }) {
-  const verdict = String(process.env.PIPELINE_REVIEW_VERDICT || 'green').toLowerCase();
+  const stubExplicit = process.env.PIPELINE_REVIEW_STUB === 'true';
+  const verdictEnv = process.env.PIPELINE_REVIEW_VERDICT;
+  if (!dryRun) {
+    if (!stubExplicit && !verdictEnv) {
+      return { action: 'review', skipped: true, reason: 'no-review-worker' };
+    }
+    if (stubExplicit && !hasLabel(labels, 'pipeline-beta')) {
+      return { action: 'review', skipped: true, reason: 'stub-not-pipeline-beta' };
+    }
+  }
+  const verdict = String(verdictEnv || 'green').toLowerCase();
   const bodyEdited = process.env.PIPELINE_REVIEW_BODY_EDIT === 'true';
+  if ((state.last_assignee || null) === reviewer) {
+    return { action: 'review', skipped: true, reason: 'self-review-blocked' };
+  }
   const plan = decideReviewHandoff({
     state,
     liveBodySha,
@@ -270,10 +311,18 @@ async function applyReviewStub({
     body: `${REVIEW_MARKER}
 ## Peer review (${reviewer})
 
-Verdict: **${verdict.toUpperCase()}**${bodyEdited ? ' (body edited)' : ''}.
-
-${buildStateMarker(nextState)}`,
+Verdict: **${verdict.toUpperCase()}**${bodyEdited ? ' (body edited)' : ''}.`,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    assignToken,
+    state: nextState,
+    summaryLine: `Peer review (${reviewer}): ${verdict.toUpperCase()}`,
   });
 
   await assignIssue(owner, repo, issueNumber, plan.assignee, assignToken || token);

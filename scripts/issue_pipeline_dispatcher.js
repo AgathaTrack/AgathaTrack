@@ -14,7 +14,8 @@ const {
   listPipelineIssues,
   fetchPipelineIssueForProject,
 } = require('./issue_pipeline_project');
-const { isPipelineIssue } = require('./issue_pipeline_gate');
+const { isDispatcherEligibleIssue } = require('./issue_pipeline_gate');
+const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { runTodoLanePipeline } = require('./issue_pipeline_intake');
 const { loadIssueState } = require('./issue_pipeline_state_load');
 const {
@@ -25,6 +26,12 @@ const {
 const { applyDeliveryStub } = require('./issue_pipeline_delivery');
 const { canQueueImplement, applyImplementLaunch } = require('./issue_pipeline_implement');
 const { applyMonitorTick } = require('./issue_pipeline_monitor');
+const {
+  countByColumn,
+  buildHealthPayload,
+  buildScheduleHealth,
+  emitHealthReport,
+} = require('./issue_pipeline_health');
 
 const BOTS = new Set(['pawpet-claude', 'pawpet-bot']);
 const OWNER_LOGIN = 'KanopeeKa';
@@ -35,14 +42,6 @@ const LANE_CAPS = {
   delivery: 1,
   monitor: 2,
 };
-
-function resolvePipelineMode(raw = process.env.ISSUE_PIPELINE) {
-  const mode = String(raw || 'off').trim().toLowerCase();
-  if (mode === 'on' || mode === 'dry-run') {
-    return mode;
-  }
-  return 'off';
-}
 
 function hasLabel(labels, name) {
   return (labels || []).includes(name);
@@ -59,16 +58,29 @@ function needsReopenAnalysis(ctx) {
   const state = ctx.state || defaultState();
   const liveSha = ctx.liveBodySha;
   const stateSha = state.body_sha || null;
-  if (stateSha && liveSha !== stateSha) {
+  const status = ctx.status;
+
+  if (status === 'In Analysis' && hasDeliveryLabel(ctx.labels)) {
     return true;
   }
-  if (ctx.status === 'In Analysis' && hasDeliveryLabel(ctx.labels)) {
+  if (status === 'Ready' && hasDeliveryLabel(ctx.labels) && !state.converged_at) {
     return true;
   }
-  if (ctx.status === 'Ready' && hasDeliveryLabel(ctx.labels) && !state.converged_at) {
+  if (
+    status === 'Ready' &&
+    state.converged_at &&
+    stateSha &&
+    liveSha !== stateSha
+  ) {
     return true;
   }
   return false;
+}
+
+const PIPELINE_ASSIGNEES = new Set(['pawpet-claude', 'pawpet-bot', OWNER_LOGIN]);
+
+function countPipelineAssignees(assignees) {
+  return (assignees || []).filter((login) => PIPELINE_ASSIGNEES.has(login)).length;
 }
 
 /**
@@ -219,17 +231,38 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
     const fetchOne =
       (io && io.fetchPipelineIssueForProject) ||
       ((o, r, t, c, n) => fetchPipelineIssueForProject(o, r, t, c, n));
-    const row = await fetchOne(owner, repo, token, config, issueNumber);
-    if (!row) {
-      console.log(
-        JSON.stringify({
-          event: 'pipeline_issue_not_on_project',
-          issue: Number(issueNumber),
-          reason: 'no open item for GH_PROJECT_ID',
-        }),
-      );
+    try {
+      const row = await fetchOne(owner, repo, token, config, issueNumber);
+      if (!row) {
+        console.log(
+          JSON.stringify({
+            event: 'pipeline_issue_not_on_project',
+            issue: Number(issueNumber),
+            reason: 'no open item for GH_PROJECT_ID',
+          }),
+        );
+      }
+      issues = row ? [row] : [];
+    } catch (error) {
+      const message = String(error.message || error);
+      if (/not found|Could not resolve to an Issue/i.test(message)) {
+        console.log(
+          JSON.stringify({
+            event: 'pipeline_tick_skipped',
+            issue: Number(issueNumber),
+            reason: 'not_an_issue',
+            detail: message.slice(0, 200),
+          }),
+        );
+        return {
+          mode: pipelineMode,
+          skipped: true,
+          reason: 'not_an_issue',
+          actions: [],
+        };
+      }
+      throw error;
     }
-    issues = row ? [row] : [];
   } else {
     issues = await listIssues(owner, repo, token, config);
   }
@@ -239,7 +272,18 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
 
   const planned = [];
   for (const issue of issues) {
-    if (!isPipelineIssue(issue.labels, pipelineMode)) {
+    if (!isDispatcherEligibleIssue(issue, pipelineMode)) {
+      continue;
+    }
+    if (countPipelineAssignees(issue.assignees) > 1) {
+      console.log(
+        JSON.stringify({
+          event: 'pipeline_skip',
+          issue: issue.number,
+          reason: 'multiple-pipeline-assignees',
+          assignees: issue.assignees,
+        }),
+      );
       continue;
     }
     const liveBodySha = bodySha(issue.body);
@@ -268,6 +312,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
   const runTodoLane =
     (io && io.runTodoLanePipeline) || ((args) => runTodoLanePipeline(args));
   const executed = [];
+  const errors = [];
   for (const row of actions) {
     const payload = {
       event: 'pipeline_action',
@@ -289,45 +334,52 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
         dryRun: false,
       };
       let run;
-      if (row.action === 'triage-intake') {
-        run = await runTodoLane(baseRun);
-      } else if (row.action === 'reopen-analysis') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyReopenAnalysis({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-        });
-      } else if (row.action === 'needs-owner-convergence') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyNeedsOwnerConvergence({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-        });
-      } else if (row.action === 'review') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyReviewStub({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-          reviewer: row.assignee,
-        });
-      } else if (row.action === 'delivery') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyDeliveryStub({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-        });
-      } else if (row.action === 'implement-launch') {
-        run = await applyImplementLaunch(baseRun);
-      } else if (row.action === 'monitor') {
-        run = await applyMonitorTick(baseRun);
+      try {
+        if (row.action === 'triage-intake') {
+          run = await runTodoLane(baseRun);
+        } else if (row.action === 'reopen-analysis') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyReopenAnalysis({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+          });
+        } else if (row.action === 'needs-owner-convergence') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyNeedsOwnerConvergence({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+          });
+        } else if (row.action === 'review') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyReviewStub({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+            reviewer: row.assignee,
+            labels: issueRow?.labels || [],
+          });
+        } else if (row.action === 'delivery') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyDeliveryStub({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+          });
+        } else if (row.action === 'implement-launch') {
+          run = await applyImplementLaunch(baseRun);
+        } else if (row.action === 'monitor') {
+          run = await applyMonitorTick(baseRun);
+        }
+      } catch (laneError) {
+        const message = String(laneError.message || laneError).slice(0, 300);
+        errors.push({ issue: row.issue, action: row.action, message });
+        payload.error = message;
       }
       if (run) {
         executed.push({ issue: row.issue, run });
@@ -342,9 +394,11 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
     dryRun,
     actions,
     executed,
+    errors,
     wipInUse,
     wipMax,
     issueCount: issues.length,
+    byColumn: countByColumn(issues),
   };
 }
 
@@ -362,12 +416,35 @@ async function main() {
     ? Number(process.env.ISSUE_NUMBER)
     : null;
 
+  const eventName = process.env.EVENT_NAME || null;
   const result = await tick({ owner, repo, token, issueNumber });
   if (result.skipped) {
     console.log(JSON.stringify({ event: 'pipeline_tick_skipped', ...result }));
     return;
   }
   console.log(JSON.stringify({ event: 'pipeline_tick_complete', ...result }));
+
+  const scheduleFullBoard =
+    eventName === 'schedule' && (issueNumber == null || Number.isNaN(issueNumber));
+  if (scheduleFullBoard) {
+    const nowMs = Date.now();
+    const schedule = await buildScheduleHealth(owner, repo, token, nowMs);
+    const health = buildHealthPayload({
+      mode: result.mode,
+      dryRun: result.dryRun,
+      eventName,
+      at: new Date(nowMs).toISOString(),
+      byColumn: result.byColumn,
+      issueCount: result.issueCount,
+      wipInUse: result.wipInUse,
+      wipMax: result.wipMax,
+      actions: result.actions,
+      executed: result.executed,
+      errors: result.errors,
+      schedule,
+    });
+    emitHealthReport(health);
+  }
 }
 
 if (require.main === module) {
@@ -378,7 +455,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  resolvePipelineMode,
+  resolvePipelineMode, // re-export from ./issue_pipeline_mode
   computeEligibleAction,
   countWipInUse,
   applyLaneCaps,

@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 
 const STATE_MARKER = '<!-- agent-state:';
+const PIPELINE_STATE_MARKER = '<!-- pipeline-state -->';
 const DELIVERY_LABELS = new Set(['PR', 'light-plan', 'execute-plan']);
 const DEFAULT_ROUND_CAP = 6;
 
@@ -41,9 +42,10 @@ function findLatestStateComment(comments) {
     if (!state) {
       continue;
     }
-    const createdAt = comment.created_at || comment.createdAt || '';
-    if (!latest || createdAt >= latest.createdAt) {
-      latest = { state, commentId: comment.id, createdAt };
+    const updatedAt =
+      comment.updated_at || comment.updatedAt || comment.created_at || comment.createdAt || '';
+    if (!latest || updatedAt >= latest.updatedAt) {
+      latest = { state, commentId: comment.id, updatedAt };
     }
   }
   return latest;
@@ -77,8 +79,15 @@ function defaultState() {
   };
 }
 
+function buildStateMarkerBody(state, summaryLine) {
+  const line = summaryLine ? `${summaryLine}\n\n` : '';
+  return `${PIPELINE_STATE_MARKER}\n${line}<!-- agent-state: ${JSON.stringify(state)} -->`;
+}
+
 module.exports = {
   STATE_MARKER,
+  PIPELINE_STATE_MARKER,
+  buildStateMarkerBody,
   DELIVERY_LABELS,
   DEFAULT_ROUND_CAP,
   normalizeBodyForHash,
