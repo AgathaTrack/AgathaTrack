@@ -17,7 +17,8 @@ const {
 const { isDispatcherEligibleIssue } = require('./issue_pipeline_gate');
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { runTodoLanePipeline } = require('./issue_pipeline_intake');
-const { loadIssueState } = require('./issue_pipeline_state_load');
+const { loadIssueState, fetchLatestBodyEdit } = require('./issue_pipeline_state_load');
+const { untrustedStateSkipReason, isOwnerBodyEdit } = require('./issue_pipeline_guards');
 const {
   applyReopenAnalysis,
   applyReviewStub,
@@ -227,6 +228,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
     ((o, r, n, t) => loadIssueState(o, r, n, t));
 
   let issues;
+  let boardIssues = null;
   if (issueNumber) {
     const fetchOne =
       (io && io.fetchPipelineIssueForProject) ||
@@ -263,12 +265,15 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       }
       throw error;
     }
+    // #2363 §2.4: a scoped (debug) tick still counts WIP over the whole board.
+    boardIssues = issues.length > 0 ? await listIssues(owner, repo, token, config) : issues;
   } else {
     issues = await listIssues(owner, repo, token, config);
+    boardIssues = issues;
   }
 
   const wipMax = Number(process.env.WIP_MAX || 2);
-  const wipInUse = countWipInUse(issues);
+  const wipInUse = countWipInUse(boardIssues);
 
   const planned = [];
   for (const issue of issues) {
@@ -287,7 +292,14 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       continue;
     }
     const liveBodySha = bodySha(issue.body);
-    const { state } = await resolveIssueState(owner, repo, issue.number, token);
+    const { state, source } = await resolveIssueState(owner, repo, issue.number, token);
+    const stateSkip = untrustedStateSkipReason(issue.status, source);
+    if (stateSkip) {
+      console.log(
+        JSON.stringify({ event: 'pipeline_skip', issue: issue.number, reason: stateSkip }),
+      );
+      continue;
+    }
     const action = computeEligibleAction({
       ...issue,
       liveBodySha,
@@ -307,12 +319,19 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
   planned.sort((a, b) => a.priority - b.priority || a.issue - b.issue);
   const actions = applyLaneCaps(planned, wipMax, wipInUse);
 
-  const dryRun = pipelineMode !== 'on';
-  const assignToken = process.env.EXECUTE_PLAN_BOT_TOKEN;
+  const assignToken = (io && 'assignToken' in io) ? io.assignToken : process.env.EXECUTE_PLAN_BOT_TOKEN;
+  const errors = [];
+  let liveMode = pipelineMode;
+  if (pipelineMode === 'on' && !assignToken) {
+    // State and handoffs need the bot identity; without it nothing written would be trusted.
+    errors.push({ issue: null, action: 'tick', message: 'EXECUTE_PLAN_BOT_TOKEN missing; no writes' });
+    console.log(JSON.stringify({ event: 'pipeline_tick_error', reason: 'missing-bot-token' }));
+    liveMode = 'dry-run';
+  }
+  const dryRun = liveMode !== 'on';
   const runTodoLane =
     (io && io.runTodoLanePipeline) || ((args) => runTodoLanePipeline(args));
   const executed = [];
-  const errors = [];
   for (const row of actions) {
     const payload = {
       event: 'pipeline_action',
@@ -321,7 +340,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
       workers_enabled: pipelineMode === 'on',
       ...row,
     };
-    if (pipelineMode === 'on') {
+    if (liveMode === 'on') {
       const baseRun = {
         owner,
         repo,
@@ -339,10 +358,15 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
           run = await runTodoLane(baseRun);
         } else if (row.action === 'reopen-analysis') {
           const issueRow = issues.find((i) => i.number === row.issue);
-          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          const { state, updatedAt } = await loadIssueState(owner, repo, row.issue, token);
+          const readBodyEdit =
+            (io && io.fetchLatestBodyEdit) ||
+            ((o, r, n) => fetchLatestBodyEdit(token, o, r, n));
+          const ownerEdited = isOwnerBodyEdit(await readBodyEdit(owner, repo, row.issue), updatedAt);
           run = await applyReopenAnalysis({
             ...baseRun,
             state,
+            ownerEdited,
             liveBodySha: bodySha(issueRow?.body || ''),
           });
         } else if (row.action === 'needs-owner-convergence') {
@@ -362,6 +386,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
             liveBodySha: bodySha(issueRow?.body || ''),
             reviewer: row.assignee,
             labels: issueRow?.labels || [],
+            body: issueRow?.body || '',
           });
         } else if (row.action === 'delivery') {
           const issueRow = issues.find((i) => i.number === row.issue);
@@ -458,6 +483,8 @@ module.exports = {
   resolvePipelineMode, // re-export from ./issue_pipeline_mode
   computeEligibleAction,
   countWipInUse,
+  untrustedStateSkipReason,
+  isOwnerBodyEdit,
   applyLaneCaps,
   tick,
   OWNER_LOGIN,

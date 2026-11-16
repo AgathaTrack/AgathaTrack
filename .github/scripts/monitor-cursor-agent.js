@@ -173,8 +173,13 @@ async function monitorIssue({
   projectsPat,
   projectId,
   statusFieldId,
+  found: providedFound,
 }) {
-  const found = await getRunMarkerComment(owner, repo, issueNumber, token);
+  // Callers that already selected a trusted marker pass it in (issue pipeline monitor).
+  const found =
+    providedFound !== undefined
+      ? providedFound
+      : await getRunMarkerComment(owner, repo, issueNumber, token);
   if (!found) return { issueNumber, action: 'skipped', reason: 'no marker' };
 
   const { marker } = found;

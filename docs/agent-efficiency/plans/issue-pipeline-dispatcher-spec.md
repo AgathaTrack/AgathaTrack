@@ -119,7 +119,7 @@ Queued: Ready + delivery label + **no assignee**, ordered by priority label then
 | Review | red / green+edits | other bot | In Analysis |
 | Review | green, `body_sha` unchanged this round | `pawpet-bot` | Ready |
 | Review | `round >= cap` (default 6) | `KanopeeKa` | + `needs-owner` |
-| Review reopen | `body_sha` changed after `converged_at`, or delivery rewrite changed body | other bot or `KanopeeKa` if at cap | In Analysis; strip delivery labels; clear `converged_at`; reset `verdicts`; `round + 1` unless cap → `needs-owner` |
+| Review reopen | `body_sha` changed after `converged_at`, or delivery rewrite changed body | other bot or `KanopeeKa` if at cap | In Analysis; strip delivery labels; clear `converged_at`; reset `verdicts`; `round + 1` unless cap → `needs-owner` (`no-convergence-reopen`); owner body edit → `round` 0; `last_assignee` stays the editing agent |
 | Delivery | ok (body unchanged this step) | *none* | Ready + delivery label |
 | Delivery | rewrite changed `body_sha` | other bot (reopen record; **no** label this pass) | In Analysis |
 | Delivery | sensitive | `KanopeeKa` | + `needs-owner` |
@@ -228,3 +228,11 @@ Environment: `automation` (same as current agent dispatch).
 | 4 | Remove `Agent1:*` / `Agent2:*` labels from open issues |
 | 5 | Update `github-issue-workflow.md` to target model; archive `human-reviewed` gate description |
 | 6 | Consolidate Pawpet Status updates: merge/UAT/prod notify use shared project helper; drop duplicate `GH_PROJECTS_PAT` bindings where redundant |
+
+## Fail-closed rules (#2363 review)
+
+- Scoped (`workflow_dispatch`) ticks still count WIP over the whole board.
+- No `EXECUTE_PLAN_BOT_TOKEN` in `on` mode → tick runs as dry-run and reports an error (state written by the Actions token would be untrusted).
+- Untrusted dedicated state (edited by someone else) stops every lane except intake; a **Ready** issue with no state is not reopened from default state.
+- Implement launch: run marker is written before assignee/`busy`/column; a failed launch leaves the issue queued; a later tick with an active marker finishes the handoff and never relaunches. Monitor releases the slot to `needs-owner` for a stub run or no run marker; run markers are read only from `pawpet-bot`, `pawpet-claude` or `github-actions[bot]`.
+- Prod notify: a delivery counts when the deploy commit is `ahead` of (or identical to) the merge commit; `agent-uat-branch` is bot-authored (the In Main handler writes it with `EXECUTE_PLAN_BOT_TOKEN`); `Refs #n` never closes an issue.

@@ -385,9 +385,12 @@ async function upsertMarkerComment({
   marker,
   body,
   token,
+  match,
 }) {
   const comments = await fetchAllIssueComments(owner, repo, issueNumber, token);
-  const existing = comments.find((comment) => comment.body?.includes(marker));
+  const existing = comments.find(
+    (comment) => comment.body?.includes(marker) && (!match || match(comment)),
+  );
 
   if (existing) {
     await rest(
@@ -428,7 +431,9 @@ async function setLabels(owner, repo, issueNumber, add, remove, token) {
  * Replace the issue assignee list (empty array clears all assignees).
  */
 async function setIssueAssignees(owner, repo, issueNumber, assignees, token) {
-  await rest('PUT', `/repos/${owner}/${repo}/issues/${issueNumber}/assignees`, token, {
+  // The assignees sub-resource only supports POST (add) and DELETE (remove);
+  // PATCH on the issue replaces the whole list (#2363 review).
+  await rest('PATCH', `/repos/${owner}/${repo}/issues/${issueNumber}`, token, {
     assignees: assignees || [],
   });
 }

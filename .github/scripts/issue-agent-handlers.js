@@ -42,7 +42,7 @@ function parseTrustedMergeCommitFromComments(comments) {
     if (!body.includes(UAT_BRANCH_MARKER)) {
       continue;
     }
-    if (author && !TRUSTED_UAT_BRANCH_AUTHORS.has(author)) {
+    if (!author || !TRUSTED_UAT_BRANCH_AUTHORS.has(author)) {
       continue;
     }
     const match = MERGE_COMMIT_RE.exec(body);
@@ -70,15 +70,18 @@ async function deployContainsMergeCommit(owner, repo, mergeSha, deploySha, token
       deploySha,
       token,
     );
-    return cmp.status === 'behind' || cmp.status === 'identical';
+    // compare base...head: `ahead` means head (deploy) contains base (merge) plus more.
+    return cmp.status === 'ahead' || cmp.status === 'identical';
   } catch {
     return false;
   }
 }
 
-function parseLinkedIssues(prBody) {
-  const matches =
-    prBody.match(/\b(?:fixes|closes|resolves|refs)\s+#(\d+)/gi) || [];
+function parseLinkedIssues(prBody, { includeRefs = true } = {}) {
+  const pattern = includeRefs
+    ? /\b(?:fixes|closes|resolves|refs)\s+#(\d+)/gi
+    : /\b(?:fixes|closes|resolves)\s+#(\d+)/gi;
+  const matches = prBody.match(pattern) || [];
   return [...new Set(matches.map((m) => Number(m.replace(/\D/g, ''))))];
 }
 
@@ -162,6 +165,7 @@ async function handleMergedPr({
   prBody,
   mergeSha,
   token,
+  botToken,
   projectsPat,
   projectId,
   statusFieldId,
@@ -217,10 +221,19 @@ async function handleMergedPr({
       });
     }
 
+    // Prod notify reads the merge SHA only from a bot-authored comment (#2363 §5.1), so the
+    // In Main record is written, and later edited, with the bot token.
+    if (!botToken) {
+      console.log(
+        `Issue #${issueNumber}: EXECUTE_PLAN_BOT_TOKEN missing — In Main comment written with the Actions token; prod notify will not close this issue.`,
+      );
+    }
     await api.upsertMarkerComment({
       owner,
       repo,
       issueNumber,
+      token: botToken || token,
+      match: (comment) => TRUSTED_UAT_BRANCH_AUTHORS.has(comment?.user?.login),
       marker: '<!-- agent-uat-branch -->',
       body: `<!-- agent-uat-branch -->
 ## Merged to main
@@ -233,7 +246,6 @@ PR #${prNumber} merged for this issue.
 - Issue reopened for UAT tracking (use **Done** after validation; do not rely on auto-close).
 
 UAT deploy runs automatically when the tag is pushed.`,
-      token,
     });
 
     results.push({
@@ -643,7 +655,8 @@ Deploy commit \`${commitSha}\` contains merge \`${mergeSha}\`, but the programme
 
   const seen = new Set();
   for (const pr of prList) {
-    const issueNumbers = parseLinkedIssues(pr.body || '');
+    // #2363 §5.1: `Refs #n` is a reference, not a delivery; never close on it.
+    const issueNumbers = parseLinkedIssues(pr.body || '', { includeRefs: false });
     for (const issueNumber of issueNumbers) {
       if (seen.has(issueNumber)) {
         continue;
@@ -705,6 +718,7 @@ async function main() {
       prBody: process.env.PR_BODY || '',
       mergeSha: process.env.MERGE_SHA,
       token,
+      botToken: process.env.EXECUTE_PLAN_BOT_TOKEN || null,
       projectsPat,
       projectId,
       statusFieldId,

@@ -116,7 +116,7 @@ test('tick exits early when ISSUE_PIPELINE off', async () => {
   assert.deepEqual(result.actions, []);
 });
 
-test('tick with issue_number uses direct Pawpet lookup', async () => {
+test('tick with issue_number plans only that issue', async () => {
   let listedFullProject = false;
   const result = await tick({
     owner: 'AgathaTrack',
@@ -146,7 +146,8 @@ test('tick with issue_number uses direct Pawpet lookup', async () => {
       },
     },
   });
-  assert.equal(listedFullProject, false);
+  // Board is still listed so WIP counts the whole board (#2363 §2.4); only 2337 is planned.
+  assert.equal(listedFullProject, true);
   assert.equal(result.issueCount, 1);
   assert.equal(result.actions.length, 1);
   assert.equal(result.actions[0].issue, 2337);
