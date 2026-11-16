@@ -100,7 +100,12 @@ function buildStateMarker(state) {
   return `<!-- agent-state: ${JSON.stringify(state)} -->`;
 }
 
-function buildReopenState(state, liveBodySha, assignee, round) {
+/**
+ * State after a reopen. `last_assignee` is kept: the newly assigned agent is the other bot, and
+ * the review lane refuses a reviewer equal to `last_assignee` (#2363 review: writing the new
+ * assignee here blocked every reopened issue as self-review).
+ */
+function buildReopenState(state, liveBodySha, round) {
   return {
     ...defaultState(),
     ...state,
@@ -108,8 +113,24 @@ function buildReopenState(state, liveBodySha, assignee, round) {
     body_sha: liveBodySha,
     verdicts: {},
     converged_at: null,
-    last_assignee: assignee,
+    delivery: null,
   };
+}
+
+/**
+ * Pure reopen decision (github-issue-workflow §Reopening In Analysis, step 5).
+ * Owner product edit → round 0. Agent reopen reaching the cap → needs-owner.
+ */
+function decideReopen({ state, ownerEdited, roundCap = DEFAULT_ROUND_CAP }) {
+  const assignee = otherBot(state.last_assignee || 'pawpet-claude');
+  if (ownerEdited) {
+    return { kind: 'reopen', assignee, round: 0 };
+  }
+  const round = (state.round || 0) + 1;
+  if (round >= roundCap) {
+    return { kind: 'needs-owner', owner_reason: 'no-convergence-reopen', round };
+  }
+  return { kind: 'reopen', assignee, round };
 }
 
 async function applyReopenAnalysis({
@@ -123,15 +144,41 @@ async function applyReopenAnalysis({
   assignToken,
   state,
   liveBodySha,
+  ownerEdited = false,
   dryRun,
 }) {
   const issue = await fetchIssue(owner, repo, issueNumber, token);
-  const assignee = otherBot(state.last_assignee || 'pawpet-claude');
-  const nextState = buildReopenState(state, liveBodySha, assignee, (state.round || 0) + 1);
-
+  const decision = decideReopen({ state, ownerEdited });
   const deliveryRemoves = (issue.labels?.nodes || [])
     .map((n) => n.name)
     .filter((n) => DELIVERY_LABELS.has(n));
+
+  if (decision.kind === 'needs-owner') {
+    const capState = buildReopenState(state, liveBodySha, decision.round);
+    if (dryRun) {
+      return { dryRun: true, action: 'reopen-analysis', decision, deliveryRemoves };
+    }
+    if (deliveryRemoves.length > 0) {
+      await setLabels(owner, repo, issueNumber, [], deliveryRemoves, token);
+    }
+    return applyNeedsOwnerConvergence({
+      owner,
+      repo,
+      issueNumber,
+      token,
+      projectsPat,
+      projectId,
+      statusFieldId,
+      assignToken,
+      state: capState,
+      liveBodySha,
+      ownerReason: decision.owner_reason,
+      dryRun: false,
+    });
+  }
+
+  const { assignee } = decision;
+  const nextState = buildReopenState(state, liveBodySha, decision.round);
 
   if (dryRun) {
     return { dryRun: true, action: 'reopen-analysis', assignee, nextState, deliveryRemoves };
@@ -149,7 +196,7 @@ async function applyReopenAnalysis({
     body: `${REVIEW_MARKER}
 ## Reopened for analysis
 
-Body or delivery mismatch — delivery labels removed, \`verdicts\` cleared.`,
+Body or delivery mismatch — delivery labels removed, \`verdicts\` cleared${ownerEdited ? ', round reset (owner edit)' : ''}.`,
     token,
   });
 
@@ -189,13 +236,14 @@ async function applyNeedsOwnerConvergence({
   assignToken,
   state,
   liveBodySha,
+  ownerReason = 'no-convergence',
   dryRun,
 }) {
   const nextState = {
     ...state,
     round: state.round || DEFAULT_ROUND_CAP,
     body_sha: liveBodySha,
-    owner_reason: 'no-convergence',
+    owner_reason: ownerReason,
     converged_at: null,
   };
 
@@ -213,7 +261,7 @@ async function applyNeedsOwnerConvergence({
     body: `${REVIEW_MARKER}
 ## Review round cap
 
-\`round >= ${DEFAULT_ROUND_CAP}\` — assigned @${OWNER_LOGIN} with \`needs-owner\`.`,
+\`round >= ${DEFAULT_ROUND_CAP}\` (\`${ownerReason}\`) — assigned @${OWNER_LOGIN} with \`needs-owner\`.`,
     token,
   });
 
@@ -248,6 +296,7 @@ async function applyReviewStub({
   reviewer,
   dryRun,
   labels = [],
+  body = '',
 }) {
   const stubExplicit = process.env.PIPELINE_REVIEW_STUB === 'true';
   const verdictEnv = process.env.PIPELINE_REVIEW_VERDICT;
@@ -259,7 +308,15 @@ async function applyReviewStub({
       return { action: 'review', skipped: true, reason: 'stub-not-pipeline-beta' };
     }
   }
-  const verdict = String(verdictEnv || 'green').toLowerCase();
+  let verdict = String(verdictEnv || 'green').toLowerCase() === 'red' ? 'red' : 'green';
+  // #2363 §4.2: review rounds own the agent-paths block; a Green without one is a Red.
+  // Lazy require: issue_pipeline_delivery imports this module.
+  const { parseAgentPathsBlock } = require('./issue_pipeline_delivery');
+  const pathsBlock = parseAgentPathsBlock(body);
+  const missingPaths = verdict === 'green' && !pathsBlock.ok;
+  if (missingPaths) {
+    verdict = 'red';
+  }
   const bodyEdited = process.env.PIPELINE_REVIEW_BODY_EDIT === 'true';
   if ((state.last_assignee || null) === reviewer) {
     return { action: 'review', skipped: true, reason: 'self-review-blocked' };
@@ -268,12 +325,12 @@ async function applyReviewStub({
     state,
     liveBodySha,
     reviewer,
-    verdict: verdict === 'red' ? 'red' : 'green',
+    verdict,
     bodyEditedThisRound: bodyEdited,
   });
 
   if (dryRun) {
-    return { dryRun: true, action: 'review', plan };
+    return { dryRun: true, action: 'review', plan, missingPaths };
   }
 
   if (plan.kind === 'needs-owner') {
@@ -311,7 +368,9 @@ async function applyReviewStub({
     body: `${REVIEW_MARKER}
 ## Peer review (${reviewer})
 
-Verdict: **${verdict.toUpperCase()}**${bodyEdited ? ' (body edited)' : ''}.`,
+Verdict: **${verdict.toUpperCase()}**${bodyEdited ? ' (body edited)' : ''}${
+  missingPaths ? ` — no parseable \`agent-paths\` block (${pathsBlock.reason})` : ''
+}.`,
     token,
   });
 
@@ -345,6 +404,8 @@ module.exports = {
   REVIEW_MARKER,
   otherBot,
   decideReviewHandoff,
+  decideReopen,
+  buildReopenState,
   applyReopenAnalysis,
   applyNeedsOwnerConvergence,
   applyReviewStub,

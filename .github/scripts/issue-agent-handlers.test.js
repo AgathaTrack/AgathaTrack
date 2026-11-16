@@ -285,7 +285,7 @@ test('handleProdDeployResult closes In UAT issues when merge is in deploy', asyn
       body: 'Done',
       labels: { nodes: [{ name: 'busy' }] },
     }),
-    compareCommits: async () => ({ status: 'behind' }),
+    compareCommits: async () => ({ status: 'ahead' }),
     updateProjectStatus: async () => calls.push('status'),
     setLabels: async () => calls.push('labels'),
     closeIssue: async () => calls.push('close'),

@@ -2,6 +2,7 @@
 
 const {
   parseStateMarker,
+  STATE_MARKER,
   PIPELINE_STATE_MARKER,
 } = require('../issue_pipeline_state');
 
@@ -66,8 +67,51 @@ function findLatestTrustedStateComment(comments) {
   return latest;
 }
 
+function isTrustedStateAuthor(comment) {
+  const author = commentAuthorLogin(comment);
+  return Boolean(author && TRUSTED_PIPELINE_STATE_AUTHORS.has(author));
+}
+
+/**
+ * Comments worth an editor lookup: trusted author, carries the dedicated marker, was edited.
+ */
+function isEditorLookupCandidate(comment) {
+  const body = String(comment?.body || '');
+  return isTrustedStateAuthor(comment) && body.includes(PIPELINE_STATE_MARKER);
+}
+
+/**
+ * Pre-dedicated-comment state (#2363 §3.4 migration): a lane comment from a trusted author that
+ * carries `agent-state` without the `pipeline-state` marker. Newest by update time wins.
+ */
+function findLatestLegacyStateComment(comments) {
+  let latest = null;
+  for (const comment of comments || []) {
+    const body = String(comment?.body || '');
+    if (!isTrustedStateAuthor(comment)) {
+      continue;
+    }
+    if (body.includes(PIPELINE_STATE_MARKER) || !body.includes(STATE_MARKER)) {
+      continue;
+    }
+    const state = parseStateMarker(body);
+    if (!state) {
+      continue;
+    }
+    const updatedAt =
+      comment.updated_at || comment.updatedAt || comment.created_at || comment.createdAt || '';
+    if (!latest || updatedAt >= latest.updatedAt) {
+      latest = { state, commentId: comment.id, updatedAt, author: commentAuthorLogin(comment) };
+    }
+  }
+  return latest;
+}
+
 module.exports = {
   TRUSTED_PIPELINE_STATE_AUTHORS,
+  isTrustedStateAuthor,
+  isEditorLookupCandidate,
+  findLatestLegacyStateComment,
   assessPipelineStateCommentTrust,
   isTrustedPipelineStateComment,
   findLatestTrustedStateComment,

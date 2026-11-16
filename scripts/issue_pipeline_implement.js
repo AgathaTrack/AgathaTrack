@@ -3,6 +3,7 @@
 const path = require('path');
 const {
   fetchIssue,
+  fetchAllIssueComments,
   assignIssue,
   setLabels,
   updateProjectStatus,
@@ -15,6 +16,11 @@ const {
 } = require('../.github/scripts/agent-payload-lib');
 const { launchAgent, botLaunchEnvVars } = require('../.github/scripts/launch-cursor-agent');
 const { deliveryLabel } = require('./issue_pipeline_state');
+const {
+  findTrustedRunMarker,
+  isActiveRunMarker,
+  isStubRunMarker,
+} = require('./lib/pipeline_run_marker');
 const {
   parseAgentPathsBlock,
   evaluateDeliveryPaths,
@@ -142,8 +148,9 @@ async function applyImplementLaunch({
   assignToken,
   dryRun,
   repoRoot = path.join(__dirname, '..'),
+  io = {},
 }) {
-  const issue = await fetchIssue(owner, repo, issueNumber, token);
+  const issue = await (io.fetchIssue || fetchIssue)(owner, repo, issueNumber, token);
   const labels = (issue.labels?.nodes || issue.labels || []).map((l) =>
     typeof l === 'string' ? l : l.name,
   );
@@ -154,7 +161,7 @@ async function applyImplementLaunch({
 
   const parsed = parseAgentPathsBlock(issue.body || '');
   const pathCheck = parsed.ok
-    ? evaluateDeliveryPaths(parsed.globs, listTrackedFiles(repoRoot))
+    ? evaluateDeliveryPaths(parsed.globs, (io.listTrackedFiles || listTrackedFiles)(repoRoot))
     : { ok: false, reason: parsed.reason };
 
   if (!pathCheck.ok) {
@@ -167,7 +174,7 @@ async function applyImplementLaunch({
       issueNumber,
       token,
       assignToken,
-      owner_reason: 'sensitive-paths',
+      owner_reason: pathCheck.reason || 'sensitive-paths',
       detail: `Path gate failed before launch (${pathCheck.reason}).`,
     });
   }
@@ -199,68 +206,116 @@ async function applyImplementLaunch({
   }
 
   const botTok = assignToken || token;
+  const fetchComments = io.fetchAllIssueComments || fetchAllIssueComments;
+  const launch = io.launchAgent || launchAgent;
 
+  // A previous tick may have launched but failed before the handoff writes finished.
+  // Finish that handoff instead of starting a second agent.
+  const existing = findTrustedRunMarker(await fetchComments(owner, repo, issueNumber, token));
+  if (existing && isActiveRunMarker(existing.marker) && !isStubRunMarker(existing.marker)) {
+    await completeImplementHandoff({
+      owner,
+      repo,
+      issueNumber,
+      token,
+      botTok,
+      projectsPat,
+      projectId,
+      statusFieldId,
+      io,
+    });
+    return {
+      action: 'implement-launch',
+      method,
+      resumed: existing.marker.runId,
+      status: 'In progress',
+    };
+  }
+
+  let launched;
   try {
     const model = process.env.CURSOR_AGENT_MODEL || 'composer-2.5';
-    const launched = await launchAgent({
+    launched = await launch({
       apiKey: process.env.cursor_api_key || process.env.CURSOR_API_KEY,
       repoUrl,
       promptText,
       model,
       envVars: botLaunchEnvVars(process.env),
     });
-    const agentId = launched.agent?.id;
-    const runId = launched.run?.id;
-    if (!agentId || !runId) {
-      return applyImplementNeedsOwner({
-        owner,
-        repo,
-        issueNumber,
-        token,
-        assignToken,
-        owner_reason: 'launch-failed',
-        detail: 'Cursor API response missing agent/run id.',
-      });
-    }
-    const marker = {
-      agentId,
-      runId,
-      issueNumber,
-      status: 'running',
-      dispatchedAt: new Date().toISOString(),
-      agentUrl: launched.agent?.url,
-      delivery: method,
-    };
-    await assignIssue(owner, repo, issueNumber, 'pawpet-bot', botTok);
-    await setLabels(owner, repo, issueNumber, ['busy'], [], token);
-    if (projectsPat && projectId && statusFieldId) {
-      const refreshed = await fetchIssue(owner, repo, issueNumber, token);
-      await updateProjectStatus({
-        issue: refreshed,
-        projectId,
-        statusFieldId,
-        statusName: 'In progress',
-        projectsPat,
-      });
-    }
-    await upsertMarkerComment({
-      owner,
-      repo,
-      issueNumber,
-      marker: RUN_MARKER_PREFIX,
-      body: buildDispatchComment(marker),
-      token: botTok,
-    });
-    return { action: 'implement-launch', method, launched: marker, status: 'In progress' };
   } catch (error) {
-    return applyImplementNeedsOwner({
-      owner,
-      repo,
-      issueNumber,
-      token,
-      assignToken,
-      owner_reason: 'launch-failed',
-      detail: error.message,
+    // #2363 §4.3: a failed launch leaves the issue queued (Ready, unassigned, label kept).
+    console.log(
+      JSON.stringify({
+        event: 'pipeline_implement_launch_failed',
+        issue: issueNumber,
+        detail: String(error.message || error).slice(0, 300),
+      }),
+    );
+    return { action: 'implement-launch', method, skipped: true, reason: 'launch-failed', status: 'Ready' };
+  }
+
+  const agentId = launched?.agent?.id;
+  const runId = launched?.run?.id;
+  if (!agentId || !runId) {
+    console.log(
+      JSON.stringify({ event: 'pipeline_implement_launch_failed', issue: issueNumber, detail: 'missing agent/run id' }),
+    );
+    return { action: 'implement-launch', method, skipped: true, reason: 'launch-failed', status: 'Ready' };
+  }
+
+  const marker = {
+    agentId,
+    runId,
+    issueNumber,
+    status: 'running',
+    dispatchedAt: new Date().toISOString(),
+    agentUrl: launched.agent?.url,
+    delivery: method,
+  };
+  // Record the run first so a failure in the writes below is resumed, never relaunched.
+  await (io.upsertMarkerComment || upsertMarkerComment)({
+    owner,
+    repo,
+    issueNumber,
+    marker: RUN_MARKER_PREFIX,
+    body: buildDispatchComment(marker),
+    token: botTok,
+  });
+  await completeImplementHandoff({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    botTok,
+    projectsPat,
+    projectId,
+    statusFieldId,
+    io,
+  });
+  return { action: 'implement-launch', method, launched: marker, status: 'In progress' };
+}
+
+async function completeImplementHandoff({
+  owner,
+  repo,
+  issueNumber,
+  token,
+  botTok,
+  projectsPat,
+  projectId,
+  statusFieldId,
+  io = {},
+}) {
+  await (io.assignIssue || assignIssue)(owner, repo, issueNumber, 'pawpet-bot', botTok);
+  await (io.setLabels || setLabels)(owner, repo, issueNumber, ['busy'], [], token);
+  if (projectsPat && projectId && statusFieldId) {
+    const refreshed = await (io.fetchIssue || fetchIssue)(owner, repo, issueNumber, token);
+    await (io.updateProjectStatus || updateProjectStatus)({
+      issue: refreshed,
+      projectId,
+      statusFieldId,
+      statusName: 'In progress',
+      projectsPat,
     });
   }
 }
