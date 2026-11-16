@@ -20,18 +20,27 @@ const ATSUPPORT_COLUMNS = [
   'Done',
 ];
 
-/** Union of Pawpet + ATSupport columns (matches org `Stage` field options). */
+/**
+ * Exact org `Stage` single-select spellings (GitHub rejects PATCH with wrong casing).
+ * Board columns may differ case (`In Analysis` ↔ `In analysis`); matching is case-insensitive.
+ */
+const STAGE_ORG_FIELD_OPTIONS = [
+  'Backlog',
+  'To do',
+  'In analysis',
+  'Ready',
+  'In progress',
+  'In Main',
+  'In UAT',
+  'Done',
+  'New',
+  'Triaged',
+  'Waiting on user',
+  'Engineering done',
+];
+
 function stageOrgFieldOptions() {
-  const seen = new Set();
-  const out = [];
-  for (const name of [...PAWPET_COLUMNS, ...ATSUPPORT_COLUMNS]) {
-    const key = name.trim().toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(name);
-    }
-  }
-  return out;
+  return [...STAGE_ORG_FIELD_OPTIONS];
 }
 
 function parseRepoSlug(slug) {
