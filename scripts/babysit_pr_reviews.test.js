@@ -12,6 +12,7 @@ const {
   parsePrRef,
   readReviewThreadPage,
 } = require('./lib/babysit_pr_reviews_lib');
+const { CURSOR_REVIEW_MARKER } = require('./lib/pr_review_request_lib');
 
 const COPILOT_BOT = 'copilot-pull-request-reviewer[bot]';
 
@@ -139,7 +140,7 @@ test('buildCollectReport: completed review with unresolved threads is triage-rea
   });
   assert.equal(report.readyForTriage, true);
   assert.equal(report.mergeReady, false);
-  assert.deepEqual(report.summary, { unresolvedCount: 2, copilotCount: 1, humanCount: 1 });
+  assert.deepEqual(report.summary, { unresolvedCount: 2, copilotCount: 1, cursorCount: 0, humanCount: 1 });
   assert.equal(report.threads.length, 2);
 });
 
@@ -174,6 +175,50 @@ test('buildCollectReport: timeout with Copilot still pending flags Copilot unava
   assert.equal(report.readyForTriage, true);
   assert.equal(report.mergeReady, false);
   assert.match(report.warnings[0], /unavailable/);
+});
+
+test('classifyReviewer maps Cursor-marked comments to cursor', () => {
+  assert.equal(classifyReviewer('pawpet-bot', `**must-fix** x\n\n${CURSOR_REVIEW_MARKER}`), 'cursor');
+  assert.equal(classifyReviewer('pawpet-bot', 'plain reply'), 'human');
+  assert.equal(classifyReviewer(COPILOT_BOT, CURSOR_REVIEW_MARKER), 'copilot');
+});
+
+test('normalizeReviewThreads labels Cursor fallback threads by the first comment', () => {
+  const [normalized] = normalizeReviewThreads([
+    {
+      isResolved: false,
+      comments: { nodes: [{ author: { login: 'pawpet-bot' }, body: `bug\n\n${CURSOR_REVIEW_MARKER}`, path: 'a.js', line: 3 }] },
+    },
+  ]);
+  assert.equal(normalized.reviewer, 'cursor');
+});
+
+test('buildCollectReport: Cursor fallback pending blocks triage until the timeout', () => {
+  const absentCopilot = { state: 'absent', reason: 'no_review', inlineCommentCount: 0 };
+  const cursor = { state: 'pending', reason: 'review_running', inlineCommentCount: 0 };
+  const running = buildCollectReport({ prNumber: 1, copilot: absentCopilot, cursor, threads: [] });
+  assert.equal(running.readyForTriage, false);
+  assert.equal(running.mergeReady, false);
+  assert.match(running.warnings[0], /Cursor fallback review in progress/);
+
+  const timedOut = buildCollectReport({ prNumber: 1, copilot: absentCopilot, cursor, threads: [], timedOut: true });
+  assert.equal(timedOut.cursorUnavailable, true);
+  assert.equal(timedOut.copilotUnavailable, false);
+  assert.equal(timedOut.readyForTriage, true);
+  assert.equal(timedOut.mergeReady, false);
+});
+
+test('buildCollectReport: completed Cursor review counts its unresolved threads', () => {
+  const report = buildCollectReport({
+    prNumber: 1,
+    copilot: { state: 'absent', reason: 'no_review', inlineCommentCount: 0 },
+    cursor: { state: 'complete', reason: 'review_submitted', inlineCommentCount: 1 },
+    threads: [thread({ reviewer: 'cursor', author: 'pawpet-bot' })],
+  });
+  assert.equal(report.readyForTriage, true);
+  assert.equal(report.mergeReady, false);
+  assert.equal(report.summary.cursorCount, 1);
+  assert.equal(report.reviewers.cursor.state, 'complete');
 });
 
 test('readReviewThreadPage throws on GraphQL errors instead of returning zero threads', () => {

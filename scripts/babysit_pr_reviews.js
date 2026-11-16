@@ -21,6 +21,7 @@ const {
   parsePrRef,
   readReviewThreadPage,
 } = require('./lib/babysit_pr_reviews_lib');
+const { assessCursorReviewStatus } = require('./lib/pr_review_request_lib');
 const { resolveRepository } = require('./lib/execute_plan_project');
 
 const EXIT_ERROR = 1;
@@ -57,14 +58,14 @@ query($owner: String!, $repo: String!, $number: Int!, $after: String) {
 function usage() {
   console.error(`Usage:
   node scripts/babysit_pr_reviews.js collect --pr <url|owner/repo#n|n>
-  node scripts/babysit_pr_reviews.js wait --pr <url|owner/repo#n|n> [--timeout-min 15] [--interval-sec 30]
-  node scripts/babysit_pr_reviews.js gate --pr <url|owner/repo#n|n> [--timeout-min 15] [--interval-sec 30]
+  node scripts/babysit_pr_reviews.js wait --pr <url|owner/repo#n|n> [--timeout-min 15] [--fallback-timeout-min 25] [--interval-sec 30]
+  node scripts/babysit_pr_reviews.js gate --pr <url|owner/repo#n|n> [--timeout-min 15] [--fallback-timeout-min 25] [--interval-sec 30]
 
-Outputs JSON with Copilot status and unresolved review threads (Copilot, human).
+Outputs JSON with Copilot and Cursor-fallback status and unresolved review threads (Copilot, Cursor, human).
   collect  one snapshot; exit 0 on success.
-  wait     poll until no Copilot review is in progress; exit 0, or 3 when Copilot is still pending at the timeout.
+  wait     poll until no automated review is in progress; exit 0, or 3 when one is still pending at the timeout.
   gate     wait, then exit 0 when mergeReady; 2 when unresolved threads remain;
-           3 when Copilot is still pending at the timeout and nothing is unresolved.
+           3 when an automated review is still pending at the timeout and nothing is unresolved.
 Fetch or GraphQL failures exit 1 — never read them as "no threads".`);
   process.exit(EXIT_ERROR);
 }
@@ -108,6 +109,7 @@ function fetchReviewSnapshot(pr, { timedOut = false } = {}) {
   const pull = ghJson(['api', `repos/${repoSlug}/pulls/${number}`]);
   const reviews = ghPaginated(`repos/${repoSlug}/pulls/${number}/reviews`);
   const reviewComments = ghPaginated(`repos/${repoSlug}/pulls/${number}/comments`);
+  const issueComments = ghPaginated(`repos/${repoSlug}/issues/${number}/comments`);
 
   return buildCollectReport({
     prNumber: number,
@@ -117,6 +119,7 @@ function fetchReviewSnapshot(pr, { timedOut = false } = {}) {
       requestedReviewers: pull.requested_reviewers || [],
       createdAt: pull.created_at,
     }),
+    cursor: assessCursorReviewStatus({ issueComments, reviews, reviewComments }),
     threads: normalizeReviewThreads(fetchReviewThreads(pr)),
     timedOut,
   });
@@ -134,17 +137,22 @@ function print(report) {
   console.log(JSON.stringify(report, null, 2));
 }
 
-/** Polls until no Copilot review is in progress; returns the last report (timedOut when the deadline passed). */
+/**
+ * Polls until no automated review is in progress; returns the last report (timedOut when the deadline passed).
+ * While the Cursor fallback is pending the deadline stretches to --fallback-timeout-min (Copilot wait + agent run).
+ */
 async function waitForReviews(flags) {
   const timeoutMin = parsePositiveInt(flags['timeout-min'] || 15, '--timeout-min');
+  const fallbackTimeoutMin = parsePositiveInt(flags['fallback-timeout-min'] || 25, '--fallback-timeout-min');
   const intervalSec = parsePositiveInt(flags['interval-sec'] || 30, '--interval-sec');
-  const deadline = Date.now() + timeoutMin * 60 * 1000;
+  const startedAt = Date.now();
   const pr = resolvePr(flags);
 
   while (true) {
     const report = fetchReviewSnapshot(pr);
     if (report.readyForTriage) return report;
-    if (Date.now() >= deadline) return fetchReviewSnapshot(pr, { timedOut: true });
+    const limitMin = report.reviewers.cursor.state === 'pending' ? Math.max(timeoutMin, fallbackTimeoutMin) : timeoutMin;
+    if (Date.now() >= startedAt + limitMin * 60 * 1000) return fetchReviewSnapshot(pr, { timedOut: true });
     await sleepMs(intervalSec * 1000);
   }
 }
@@ -158,7 +166,7 @@ async function run(cmd, flags) {
     case 'wait': {
       const report = await waitForReviews(flags);
       print(report);
-      return report.copilotUnavailable ? EXIT_COPILOT_UNAVAILABLE : 0;
+      return report.copilotUnavailable || report.cursorUnavailable ? EXIT_COPILOT_UNAVAILABLE : 0;
     }
     case 'gate': {
       const report = await waitForReviews(flags);
