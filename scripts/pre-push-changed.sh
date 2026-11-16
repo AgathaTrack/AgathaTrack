@@ -209,6 +209,7 @@ run_governance() {
   run_prepush_gate eslint
   node --test scripts/validate_eslint.test.js
   node --test scripts/github_issue_workflow.test.js
+  node --test scripts/issue_pipeline_state.test.js
   node --test scripts/issue_pipeline_dispatcher.test.js
   node --test scripts/issue_pipeline_gate.test.js
   node --test scripts/issue_pipeline_mode.test.js

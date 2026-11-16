@@ -5,6 +5,7 @@ const { execFileSync } = require('child_process');
 const {
   fetchIssue,
   assignIssue,
+  setIssueAssignees,
   setLabels,
   rest,
   upsertMarkerComment,
@@ -13,6 +14,7 @@ const { isForbiddenPath } = require('../.github/scripts/agent-safety-lib');
 const { globToRegExp } = require('./lib/execute_plan_schema');
 const { defaultState, DELIVERY_LABELS } = require('./issue_pipeline_state');
 const { applyReopenAnalysis } = require('./issue_pipeline_review');
+const { upsertPipelineState } = require('./issue_pipeline_state_load');
 
 const OWNER_LOGIN = 'KanopeeKa';
 const DELIVERY_MARKER = '<!-- pipeline-delivery -->';
@@ -166,14 +168,8 @@ function decideDeliveryPlan({
   return { kind: 'queued', method, label: method };
 }
 
-function buildStateMarker(state) {
-  return `<!-- agent-state: ${JSON.stringify(state)} -->`;
-}
-
 async function clearAssignees(owner, repo, issueNumber, token) {
-  await rest('POST', `/repos/${owner}/${repo}/issues/${issueNumber}/assignees`, token, {
-    assignees: [],
-  });
+  await setIssueAssignees(owner, repo, issueNumber, [], token);
 }
 
 async function applyDeliveryNeedsOwner({
@@ -208,10 +204,17 @@ async function applyDeliveryNeedsOwner({
 
 Reason: **${owner_reason}**.
 
-${pathCheck?.forbiddenHits?.length ? `Forbidden: ${pathCheck.forbiddenHits.join(', ')}\n` : ''}${pathCheck?.protectedHits?.length ? `Protected: ${pathCheck.protectedHits.join(', ')}\n` : ''}
-
-${buildStateMarker(nextState)}`,
+${pathCheck?.forbiddenHits?.length ? `Forbidden: ${pathCheck.forbiddenHits.join(', ')}\n` : ''}${pathCheck?.protectedHits?.length ? `Protected: ${pathCheck.protectedHits.join(', ')}\n` : ''}`,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    state: nextState,
+    summaryLine: `Delivery blocked: ${owner_reason}`,
   });
 
   return { kind: 'needs-owner', assignee: OWNER_LOGIN, state: nextState, owner_reason };
@@ -316,10 +319,17 @@ async function applyDeliveryStub({
 
 Path gate: **pass** (${pathCheck.expanded?.length ?? 0} tracked file(s) matched).
 
-Queued for implement — unassigned, label **${plan.label}**.
-
-${buildStateMarker(nextState)}`,
+Queued for implement — unassigned, label **${plan.label}**.`,
     token,
+  });
+
+  await upsertPipelineState({
+    owner,
+    repo,
+    issueNumber,
+    token,
+    state: nextState,
+    summaryLine: `Delivery queued (${plan.method})`,
   });
 
   return { kind: 'queued', method: plan.method, state: nextState, status: 'Ready' };

@@ -94,7 +94,7 @@ Nothing in Backlog is picked up automatically.
 
 ### In Analysis — peer review (alternating `pawpet-bot` ⇄ `pawpet-claude`)
 
-**Live (P5, soak stub):** [`issue-pipeline-review.yml`](../.github/workflows/issue-pipeline-review.yml) and `scripts/issue_pipeline_review.js` implement `body_sha` convergence, reopen record, and round cap (`>= 6` → `needs-owner`). Dispatcher loads state from `<!-- agent-state: … -->` comments. Full LLM review workers replace the env-driven stub when wired.
+**Live (soak / `pipeline-beta`):** `scripts/issue_pipeline_review.js` implements `body_sha` convergence (both agents Green on the same hash before Ready), reopen record, and round cap (`nextRound >= 6` → `needs-owner`, including Red that would exceed the cap). Pipeline JSON lives in a dedicated `<!-- pipeline-state -->` comment (`updated_at` wins when multiple markers exist). Assignees are set exactly via `PUT …/assignees` (empty array unassigns). Lane comments (intake, review, delivery) do not embed `agent-state`. Default Green requires `PIPELINE_REVIEW_STUB=true` or `PIPELINE_REVIEW_VERDICT` on beta issues. Full LLM review workers replace the env stub when wired.
 
 **Trigger:** assigned to either agent while the issue is in **In Analysis**.
 

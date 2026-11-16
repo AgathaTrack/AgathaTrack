@@ -343,10 +343,17 @@ async function setLabels(owner, repo, issueNumber, add, remove, token) {
   }
 }
 
-async function assignIssue(owner, repo, issueNumber, assignee, token) {
-  await rest('POST', `/repos/${owner}/${repo}/issues/${issueNumber}/assignees`, token, {
-    assignees: [assignee],
+/**
+ * Replace the issue assignee list (empty array clears all assignees).
+ */
+async function setIssueAssignees(owner, repo, issueNumber, assignees, token) {
+  await rest('PUT', `/repos/${owner}/${repo}/issues/${issueNumber}/assignees`, token, {
+    assignees: assignees || [],
   });
+}
+
+async function assignIssue(owner, repo, issueNumber, assignee, token) {
+  await setIssueAssignees(owner, repo, issueNumber, [assignee], token);
 }
 
 function parseRepo(repository) {
@@ -411,6 +418,7 @@ module.exports = {
   upsertMarkerComment,
   setLabels,
   assignIssue,
+  setIssueAssignees,
   reopenIssue,
   closeIssue,
   triggerWorkflowDispatch,
