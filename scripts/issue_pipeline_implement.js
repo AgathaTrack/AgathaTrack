@@ -51,6 +51,16 @@ function deliveryHandoffLines(method, issueNumber) {
 /**
  * Pure guards for dispatcher row 5 (implement launch).
  */
+function implementLaunchReadiness(env = process.env) {
+  const launchLive = env.PIPELINE_IMPLEMENT_LAUNCH === 'true';
+  const apiKey = env.cursor_api_key || env.CURSOR_API_KEY;
+  return {
+    launchLive,
+    hasApiKey: Boolean(apiKey),
+    canLaunch: launchLive && Boolean(apiKey),
+  };
+}
+
 function canQueueImplement(ctx) {
   const labels = ctx.labels || [];
   const assignees = ctx.assignees || [];
@@ -164,8 +174,7 @@ async function applyImplementLaunch({
 
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const promptText = buildPipelineImplementPrompt(issue, repoUrl, method);
-  const launchLive = process.env.PIPELINE_IMPLEMENT_LAUNCH === 'true';
-  const apiKey = process.env.cursor_api_key || process.env.CURSOR_API_KEY;
+  const { canLaunch, launchLive, hasApiKey } = implementLaunchReadiness(process.env);
 
   if (dryRun) {
     return {
@@ -174,50 +183,27 @@ async function applyImplementLaunch({
       method,
       pathCheck,
       launchLive,
+      hasApiKey,
       promptChars: promptText.length,
     };
   }
 
-  const botTok = assignToken || token;
-  await assignIssue(owner, repo, issueNumber, 'pawpet-bot', botTok);
-  await setLabels(owner, repo, issueNumber, ['busy'], [], token);
-
-  if (projectsPat && projectId && statusFieldId) {
-    const refreshed = await fetchIssue(owner, repo, issueNumber, token);
-    await updateProjectStatus({
-      issue: refreshed,
-      projectId,
-      statusFieldId,
-      statusName: 'In progress',
-      projectsPat,
-    });
-  }
-
-  if (!launchLive || !apiKey) {
-    const stubMarker = {
-      agentId: 'pipeline-stub',
-      runId: 'pipeline-stub',
-      issueNumber,
-      status: 'running',
-      dispatchedAt: new Date().toISOString(),
-      stub: true,
-      delivery: method,
+  if (!canLaunch) {
+    return {
+      action: 'implement-launch',
+      method,
+      skipped: true,
+      reason: !launchLive ? 'launch-disabled' : 'missing-cursor-api-key',
+      status: 'Ready',
     };
-    await upsertMarkerComment({
-      owner,
-      repo,
-      issueNumber,
-      marker: RUN_MARKER_PREFIX,
-      body: buildDispatchComment(stubMarker),
-      token,
-    });
-    return { action: 'implement-launch', method, stub: true, status: 'In progress' };
   }
+
+  const botTok = assignToken || token;
 
   try {
     const model = process.env.CURSOR_AGENT_MODEL || 'composer-2.5';
     const launched = await launchAgent({
-      apiKey,
+      apiKey: process.env.cursor_api_key || process.env.CURSOR_API_KEY,
       repoUrl,
       promptText,
       model,
@@ -226,7 +212,6 @@ async function applyImplementLaunch({
     const agentId = launched.agent?.id;
     const runId = launched.run?.id;
     if (!agentId || !runId) {
-      await setLabels(owner, repo, issueNumber, [], ['busy'], token);
       return applyImplementNeedsOwner({
         owner,
         repo,
@@ -246,17 +231,28 @@ async function applyImplementLaunch({
       agentUrl: launched.agent?.url,
       delivery: method,
     };
+    await assignIssue(owner, repo, issueNumber, 'pawpet-bot', botTok);
+    await setLabels(owner, repo, issueNumber, ['busy'], [], token);
+    if (projectsPat && projectId && statusFieldId) {
+      const refreshed = await fetchIssue(owner, repo, issueNumber, token);
+      await updateProjectStatus({
+        issue: refreshed,
+        projectId,
+        statusFieldId,
+        statusName: 'In progress',
+        projectsPat,
+      });
+    }
     await upsertMarkerComment({
       owner,
       repo,
       issueNumber,
       marker: RUN_MARKER_PREFIX,
       body: buildDispatchComment(marker),
-      token,
+      token: botTok,
     });
     return { action: 'implement-launch', method, launched: marker, status: 'In progress' };
   } catch (error) {
-    await setLabels(owner, repo, issueNumber, [], ['busy'], token);
     return applyImplementNeedsOwner({
       owner,
       repo,
@@ -271,6 +267,7 @@ async function applyImplementLaunch({
 
 module.exports = {
   IMPLEMENT_MARKER,
+  implementLaunchReadiness,
   canQueueImplement,
   buildPipelineImplementPrompt,
   deliveryHandoffLines,

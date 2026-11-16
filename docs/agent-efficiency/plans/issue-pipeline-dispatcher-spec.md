@@ -72,14 +72,10 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 
 ## 4. Lanes and concurrency
 
-| Lane group | `concurrency` key | Cap per tick |
-|------------|-------------------|--------------|
-| `issue-pipeline-triage` | 1 | unlimited issues, cheap |
-| `issue-pipeline-intake` | 2 | 2 Claude runs |
-| `issue-pipeline-review` | 2 per bot | 2 `pawpet-claude`, 2 `pawpet-bot` |
-| `issue-pipeline-delivery` | 1 | 1 |
-| `issue-pipeline-implement` | WIP | §5 |
-| `issue-pipeline-monitor` | 2 | 2 poll/relaunch |
+| Lane | Cap per tick | Notes |
+|------|----------------|-------|
+| triage / intake / review / delivery / implement / monitor | inline in `issue_pipeline_dispatcher.js` | Legacy `issue-pipeline-{intake,review,delivery,implement,monitor}.yml` removed — one code path only |
+| implement launch | WIP | §5; requires `PIPELINE_IMPLEMENT_LAUNCH=true` and `CURSOR_API_KEY` on dispatcher job |
 
 Global dispatcher concurrency: `issue-pipeline-dispatcher` (single runner per repo, like today’s `agent-dispatch`).
 

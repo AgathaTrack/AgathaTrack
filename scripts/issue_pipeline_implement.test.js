@@ -2,7 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { canQueueImplement, deliveryHandoffLines } = require('./issue_pipeline_implement');
+const {
+  canQueueImplement,
+  deliveryHandoffLines,
+  implementLaunchReadiness,
+} = require('./issue_pipeline_implement');
 const { countWipInUse } = require('./issue_pipeline_dispatcher');
 
 test('canQueueImplement requires converged body_sha', () => {
@@ -43,6 +47,21 @@ test('deliveryHandoffLines references light-plan skill', () => {
   const lines = deliveryHandoffLines('light-plan', 99).join('\n');
   assert.match(lines, /light-plan/);
   assert.match(lines, /#99/);
+});
+
+test('implementLaunchReadiness requires flag and api key', () => {
+  assert.equal(
+    implementLaunchReadiness({ PIPELINE_IMPLEMENT_LAUNCH: 'false', CURSOR_API_KEY: 'k' }).canLaunch,
+    false,
+  );
+  assert.equal(
+    implementLaunchReadiness({ PIPELINE_IMPLEMENT_LAUNCH: 'true' }).canLaunch,
+    false,
+  );
+  assert.equal(
+    implementLaunchReadiness({ PIPELINE_IMPLEMENT_LAUNCH: 'true', CURSOR_API_KEY: 'k' }).canLaunch,
+    true,
+  );
 });
 
 test('countWipInUse counts in-progress pawpet-bot without requiring busy', () => {
