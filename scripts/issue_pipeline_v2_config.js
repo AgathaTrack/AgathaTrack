@@ -72,8 +72,13 @@ function validateConfig(config) {
   return config;
 }
 
+/** Logins of the listed agents, in config order. */
+function agentLogins(config) {
+  return config.agents.map((agent) => agent.login);
+}
+
 function loadConfig(file = DEFAULT_CONFIG_PATH) {
   return validateConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
 }
 
-module.exports = { DEFAULT_CONFIG_PATH, KNOWN_METHODS, validateConfig, loadConfig };
+module.exports = { DEFAULT_CONFIG_PATH, KNOWN_METHODS, validateConfig, loadConfig, agentLogins };

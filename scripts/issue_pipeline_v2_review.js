@@ -1,12 +1,9 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
+const { agentLogins } = require('./issue_pipeline_v2_config');
 
 const REVIEW_REQUEST = 'v2:review-request';
-
-function agentLogins(config) {
-  return config.agents.map((agent) => agent.login);
-}
 
 /**
  * The engine's "review requested for <hash>" comment (#2385 §In Analysis). One per body hash; a

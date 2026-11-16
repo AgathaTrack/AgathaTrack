@@ -30,6 +30,8 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
+const { agentLogins } = require('./issue_pipeline_v2_config');
+
 const STAGES = [
   'Backlog',
   'To do',
@@ -63,10 +65,6 @@ function setStage(to, row, extra = {}) {
 
 function setBlocked(reason, row) {
   return { type: 'set-blocked', reason, row };
-}
-
-function agentLogins(config) {
-  return config.agents.map((agent) => agent.login);
 }
 
 /** Least recently used first; ties keep the order in the config file. */
