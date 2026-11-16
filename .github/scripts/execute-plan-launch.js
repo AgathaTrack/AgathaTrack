@@ -105,6 +105,7 @@ async function cursorApi(fetchImpl, method, path, apiKey, body) {
  * @param {Record<string,string>} [params.envVars] values for the agent's environment, sent in the launch request
  *   (Cursor: take precedence over dashboard secrets). Never logged. Field name/shape unverified against the
  *   official docs (unreachable when written): kept as an object of string -> string.
+ * @param {boolean} [params.workOnCurrentBranch] false: changes land on a new agent branch, never on startingRef
  * @param {typeof fetch} [params.fetchImpl]
  * @returns {Promise<{ agentId: string, runId: string, agentUrl: string|null }>}
  */
@@ -115,6 +116,7 @@ async function launchPlanAgent({
   prompt,
   model,
   envVars,
+  workOnCurrentBranch = true,
   fetchImpl,
 }) {
   const fetchFn = resolveFetch(fetchImpl);
@@ -123,7 +125,7 @@ async function launchPlanAgent({
     prompt: { text: prompt },
     repos: [{ url: repoUrl, startingRef }],
     autoCreatePR: false,
-    workOnCurrentBranch: true,
+    workOnCurrentBranch,
   };
 
   if (model) {

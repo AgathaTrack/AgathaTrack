@@ -110,6 +110,7 @@ function fetchReviewSnapshot(pr, { timedOut = false } = {}) {
   const reviews = ghPaginated(`repos/${repoSlug}/pulls/${number}/reviews`);
   const reviewComments = ghPaginated(`repos/${repoSlug}/pulls/${number}/comments`);
   const issueComments = ghPaginated(`repos/${repoSlug}/issues/${number}/comments`);
+  const cursor = assessCursorReviewStatus({ issueComments, reviews, reviewComments });
 
   return buildCollectReport({
     prNumber: number,
@@ -119,8 +120,8 @@ function fetchReviewSnapshot(pr, { timedOut = false } = {}) {
       requestedReviewers: pull.requested_reviewers || [],
       createdAt: pull.created_at,
     }),
-    cursor: assessCursorReviewStatus({ issueComments, reviews, reviewComments }),
-    threads: normalizeReviewThreads(fetchReviewThreads(pr)),
+    cursor,
+    threads: normalizeReviewThreads(fetchReviewThreads(pr), { cursorLogin: cursor.reviewerLogin }),
     timedOut,
   });
 }

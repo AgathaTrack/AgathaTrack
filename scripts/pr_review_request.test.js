@@ -31,22 +31,28 @@ function pullFixture(overrides = {}) {
 }
 
 /** Routes fetch by "METHOD path" and records calls; `copilotStartsAfter` flips events after N polls. */
-function installFetch({ pull = pullFixture(), copilotStartsAfter = Infinity, issueComments = [] } = {}) {
+function installFetch({ pull = pullFixture(), copilotStartsAfter = Infinity, closeAfter = Infinity, issueComments = [] } = {}) {
   const calls = [];
   let eventPolls = 0;
+  let pullPolls = 0;
   const original = global.fetch;
   global.fetch = async (url, init = {}) => {
     const method = init.method || 'GET';
-    const path = String(url).replace('https://api.github.com', '').replace(/[?&]per_page=.*$/, '');
+    const { hostname, pathname } = new URL(url);
+    const path = pathname;
     const body = init.body ? JSON.parse(init.body) : undefined;
     const auth = init.headers?.Authorization;
-    calls.push({ method, path, body, auth });
+    calls.push({ method, hostname, path, body, auth });
     const json = (data, status = 200) => ({ ok: true, status, json: async () => data, text: async () => JSON.stringify(data) });
 
-    if (String(url).startsWith('https://api.cursor.com')) {
+    if (hostname === 'api.cursor.com') {
       return json({ agent: { id: 'a1', url: 'https://cursor.com/agents/a1' }, run: { id: 'r1' } });
     }
-    if (method === 'GET' && path === '/repos/o/r/pulls/7') return json(pull);
+    if (method === 'GET' && path === '/repos/o/r/pulls/7') {
+      pullPolls += 1;
+      return json(pullPolls > closeAfter ? { ...pull, state: 'closed' } : pull);
+    }
+    if (method === 'GET' && path === '/user') return json({ login: 'pawpet-bot' });
     if (method === 'GET' && path === '/repos/o/r/issues/7/events') {
       eventPolls += 1;
       return json(eventPolls > copilotStartsAfter ? [{ event: 'copilot_work_started' }] : []);
@@ -59,10 +65,18 @@ function installFetch({ pull = pullFixture(), copilotStartsAfter = Infinity, iss
   return { calls, restore: () => { global.fetch = original; } };
 }
 
-function stateWrites(calls) {
+function stateBodies(calls) {
   return calls
-    .filter((c) => c.path.endsWith('/issues/7/comments') && c.method === 'POST' || c.path.includes('/issues/comments/'))
-    .map((c) => JSON.parse(c.body.body.match(/<!-- pr-review-request: (.*) -->/)[1]).state);
+    .filter((c) => (c.path.endsWith('/issues/7/comments') && c.method === 'POST') || c.path.includes('/issues/comments/'))
+    .map((c) => JSON.parse(c.body.body.match(/<!-- pr-review-request: (.*) -->/)[1]));
+}
+
+function stateWrites(calls) {
+  return stateBodies(calls).map((state) => state.state);
+}
+
+function launches(calls) {
+  return calls.filter((c) => c.hostname === 'api.cursor.com');
 }
 
 test('buildContext requires repo, PR number and GITHUB_TOKEN', () => {
@@ -84,7 +98,7 @@ test('requests Copilot with the owner token and stops once Copilot starts', asyn
   assert.equal(request.auth, 'Bearer owner-token');
   assert.deepEqual(request.body, { reviewers: ['copilot-pull-request-reviewer[bot]'] });
   assert.deepEqual(stateWrites(calls), ['requested', 'copilot']);
-  assert.ok(!calls.some((c) => c.path.includes('api.cursor.com')));
+  assert.ok(!calls.some((c) => c.hostname === 'api.cursor.com'));
   assert.ok(calls.filter((c) => c.path.includes('/issues/')).every((c) => c.method === 'GET' || c.auth === 'Bearer actions-token'));
 });
 
@@ -96,12 +110,45 @@ test('launches the Cursor review agent on the PR head when Copilot never starts'
     restore();
   }
   assert.ok(calls.some((c) => c.method === 'DELETE' && c.path.endsWith('/requested_reviewers')));
-  const launch = calls.find((c) => c.path.startsWith('https://api.cursor.com'));
+  const launch = calls.find((c) => c.hostname === 'api.cursor.com');
   assert.equal(launch.body.model.id, 'composer-2.5');
   assert.equal(launch.body.repos[0].startingRef, 'cursor/x-44e7');
+  assert.equal(launch.body.workOnCurrentBranch, false);
   assert.equal(launch.body.envVars.GH_TOKEN, 'bot-token');
   assert.ok(launch.body.prompt.text.includes(CURSOR_REVIEW_MARKER));
   assert.deepEqual(stateWrites(calls), ['requested', 'cursor-launched']);
+  const launched = stateBodies(calls).at(-1);
+  assert.equal(launched.reviewer_login, 'pawpet-bot');
+  assert.ok(launched.launched_at);
+});
+
+test('replaces a ruleset Copilot request (made as the unlicensed author) with the owner request', async () => {
+  const { calls, restore } = installFetch({
+    pull: pullFixture({ requested_reviewers: [{ login: 'Copilot' }] }),
+    copilotStartsAfter: 1,
+  });
+  try {
+    await run(buildContext({ pr: '7' }, ENV));
+  } finally {
+    restore();
+  }
+  const reviewerCalls = calls.filter((c) => c.path.endsWith('/requested_reviewers')).map((c) => c.method);
+  assert.equal(reviewerCalls.at(-1), 'POST');
+  assert.ok(reviewerCalls.indexOf('DELETE') < reviewerCalls.indexOf('POST'));
+  assert.ok(calls.filter((c) => c.path.endsWith('/requested_reviewers')).every((c) => c.auth === 'Bearer owner-token'));
+  assert.deepEqual(stateWrites(calls), ['requested', 'copilot']);
+});
+
+test('a PR closed by the post-deadline snapshot gets no withdrawal and no agent', async () => {
+  const { calls, restore } = installFetch({ closeAfter: 1 });
+  try {
+    await run(buildContext({ pr: '7' }, ENV));
+  } finally {
+    restore();
+  }
+  assert.ok(!calls.some((c) => c.method === 'DELETE'));
+  assert.equal(launches(calls).length, 0);
+  assert.deepEqual(stateWrites(calls), ['requested']);
 });
 
 test('skips PRs that are not agent-authored and PRs already handled', async () => {

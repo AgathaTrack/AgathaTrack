@@ -177,10 +177,13 @@ test('buildCollectReport: timeout with Copilot still pending flags Copilot unava
   assert.match(report.warnings[0], /unavailable/);
 });
 
-test('classifyReviewer maps Cursor-marked comments to cursor', () => {
-  assert.equal(classifyReviewer('pawpet-bot', `**must-fix** x\n\n${CURSOR_REVIEW_MARKER}`), 'cursor');
-  assert.equal(classifyReviewer('pawpet-bot', 'plain reply'), 'human');
-  assert.equal(classifyReviewer(COPILOT_BOT, CURSOR_REVIEW_MARKER), 'copilot');
+test('classifyReviewer maps Cursor-marked comments from the agent identity to cursor', () => {
+  const marked = `**must-fix** x\n\n${CURSOR_REVIEW_MARKER}`;
+  assert.equal(classifyReviewer('pawpet-bot', marked, 'pawpet-bot'), 'cursor');
+  assert.equal(classifyReviewer('pawpet-claude', marked, 'pawpet-bot'), 'human');
+  assert.equal(classifyReviewer('pawpet-bot', marked), 'human');
+  assert.equal(classifyReviewer('pawpet-bot', 'plain reply', 'pawpet-bot'), 'human');
+  assert.equal(classifyReviewer(COPILOT_BOT, CURSOR_REVIEW_MARKER, 'pawpet-bot'), 'copilot');
 });
 
 test('normalizeReviewThreads labels Cursor fallback threads by the first comment', () => {
@@ -189,7 +192,7 @@ test('normalizeReviewThreads labels Cursor fallback threads by the first comment
       isResolved: false,
       comments: { nodes: [{ author: { login: 'pawpet-bot' }, body: `bug\n\n${CURSOR_REVIEW_MARKER}`, path: 'a.js', line: 3 }] },
     },
-  ]);
+  ], { cursorLogin: 'pawpet-bot' });
   assert.equal(normalized.reviewer, 'cursor');
 });
 
@@ -219,6 +222,31 @@ test('buildCollectReport: completed Cursor review counts its unresolved threads'
   assert.equal(report.mergeReady, false);
   assert.equal(report.summary.cursorCount, 1);
   assert.equal(report.reviewers.cursor.state, 'complete');
+});
+
+test('buildCollectReport: a leftover Copilot request is superseded once the fallback took over', () => {
+  const report = buildCollectReport({
+    prNumber: 1,
+    copilot: { state: 'pending', reason: 'review_requested', inlineCommentCount: 0 },
+    cursor: { state: 'complete', reason: 'review_submitted', inlineCommentCount: 0, reviewerLogin: 'pawpet-bot', supersedesCopilot: true },
+    threads: [],
+  });
+  assert.equal(report.reviewers.copilot.state, 'skipped');
+  assert.equal(report.reviewers.copilot.reason, 'superseded_by_cursor_fallback');
+  assert.equal(report.mergeReady, true);
+});
+
+test('buildCollectReport: an unavailable fallback is triage-ready but flags review unavailable (exit 3)', () => {
+  const report = buildCollectReport({
+    prNumber: 1,
+    copilot: { state: 'pending', reason: 'review_requested', inlineCommentCount: 0 },
+    cursor: { state: 'unavailable', reason: 'cursor_launch_failed', inlineCommentCount: 0, reviewerLogin: null, supersedesCopilot: true },
+    threads: [],
+  });
+  assert.equal(report.readyForTriage, true);
+  assert.equal(report.cursorUnavailable, true);
+  assert.equal(report.mergeReady, false);
+  assert.match(report.warnings[0], /cursor_launch_failed/);
 });
 
 test('readReviewThreadPage throws on GraphQL errors instead of returning zero threads', () => {

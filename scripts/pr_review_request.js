@@ -15,7 +15,9 @@ const { rest } = require('../.github/scripts/github-project-lib');
 const { launchPlanAgent, workerLaunchEnvVars } = require('../.github/scripts/execute-plan-launch');
 const { parseFlags } = require('./lib/github_issue_workflow_lib');
 const {
+  COPILOT_CANCEL_LOGINS,
   COPILOT_REVIEWER_LOGINS,
+  DEFAULT_CURSOR_REVIEWER_LOGIN,
   STATES,
   buildCursorReviewPrompt,
   buildStateCommentBody,
@@ -89,15 +91,23 @@ async function requestCopilot(ctx) {
 }
 
 async function cancelCopilotRequest(ctx) {
-  for (const login of COPILOT_REVIEWER_LOGINS) {
+  for (const login of COPILOT_CANCEL_LOGINS) {
     try {
       await rest('DELETE', `${ctx.base}/pulls/${ctx.prNumber}/requested_reviewers`, ctx.ownerToken, {
         reviewers: [login],
       });
-      return;
     } catch {
-      // Best effort: a stale request only keeps babysit waiting until its timeout.
+      // Best effort: babysit treats a leftover request as superseded once the fallback state is written.
     }
+  }
+}
+
+async function resolveReviewerLogin(ctx) {
+  if (!ctx.botToken) return DEFAULT_CURSOR_REVIEWER_LOGIN;
+  try {
+    return (await rest('GET', '/user', ctx.botToken))?.login || DEFAULT_CURSOR_REVIEWER_LOGIN;
+  } catch {
+    return DEFAULT_CURSOR_REVIEWER_LOGIN;
   }
 }
 
@@ -116,6 +126,7 @@ async function launchCursorReview(ctx, pull) {
     console.log(`[dry-run] would launch ${ctx.model} review agent on ${pull.head.ref}`);
     return;
   }
+  const launchedAt = new Date().toISOString();
   let launched;
   try {
     launched = await launchPlanAgent({
@@ -125,6 +136,7 @@ async function launchCursorReview(ctx, pull) {
       prompt,
       model: ctx.model,
       envVars: workerLaunchEnvVars(ctx.botToken),
+      workOnCurrentBranch: false,
     });
   } catch (error) {
     console.error(`Cursor launch failed: ${error.message}`);
@@ -135,7 +147,8 @@ async function launchCursorReview(ctx, pull) {
   await writeState(ctx, {
     state: STATES.CURSOR_LAUNCHED,
     agent_url: launched.agentUrl,
-    launched_at: new Date().toISOString(),
+    launched_at: launchedAt,
+    reviewer_login: await resolveReviewerLogin(ctx),
   });
 }
 
@@ -165,8 +178,15 @@ async function run(ctx) {
     return;
   }
 
-  if (!copilotRequested(first.pull)) {
-    const error = ctx.ownerToken ? (ctx.dryRun ? null : await requestCopilot(ctx)) : 'missing_owner_token';
+  if (!ctx.ownerToken) {
+    console.log('No OWNER_COPILOT_REQUEST_TOKEN; Copilot cannot review an agent PR');
+    await launchCursorReview(ctx, first.pull);
+    return;
+  }
+  if (!ctx.dryRun) {
+    // The ruleset's request was made as the unlicensed author and never starts; replace it with the owner's.
+    if (copilotRequested(first.pull)) await cancelCopilotRequest(ctx);
+    const error = await requestCopilot(ctx);
     if (error) {
       console.log(`Copilot request failed: ${error}`);
       await launchCursorReview(ctx, first.pull);
@@ -175,22 +195,24 @@ async function run(ctx) {
   }
   await writeState(ctx, { state: STATES.REQUESTED, requested_at: new Date().toISOString() });
 
+  // The last snapshot is taken after the deadline, so a PR closed or a Copilot start in the final
+  // interval never gets its request withdrawn or a paid agent run.
   const deadline = Date.now() + ctx.waitMs;
-  while (Date.now() < deadline) {
+  let latest;
+  do {
     await sleep(ctx.pollMs);
-    const snap = await snapshot(ctx);
-    if (snap.pull.state !== 'open') {
+    latest = await snapshot(ctx);
+    if (latest.pull.state !== 'open') {
       console.log('PR closed while waiting; stopping');
       return;
     }
-    if (copilotStarted(snap)) {
+    if (copilotStarted(latest)) {
       await writeState(ctx, { state: STATES.COPILOT });
       return;
     }
-  }
+  } while (Date.now() < deadline);
 
-  if (ctx.ownerToken && !ctx.dryRun) await cancelCopilotRequest(ctx);
-  const latest = await snapshot(ctx);
+  if (!ctx.dryRun) await cancelCopilotRequest(ctx);
   await launchCursorReview(ctx, latest.pull);
 }
 

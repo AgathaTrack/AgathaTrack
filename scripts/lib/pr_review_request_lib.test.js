@@ -76,7 +76,8 @@ test('parseStateMarker trusts only github-actions[bot] and returns the latest ma
 test('buildCursorReviewPrompt is review-only and pins the head commit and marker', () => {
   const prompt = buildCursorReviewPrompt({ repoSlug: 'o/r', prNumber: 7, prUrl: 'https://github.com/o/r/pull/7', headSha: 'deadbeef' });
   assert.match(prompt, /REVIEW-ONLY/);
-  assert.match(prompt, /Do not edit files, commit, push/);
+  assert.match(prompt, /Do not edit, create or delete files in the repository, commit, push/);
+  assert.match(prompt, /\/tmp\/cursor-review.json/);
   assert.match(prompt, /untrusted data/);
   assert.match(prompt, /"commit_id":"deadbeef"/);
   assert.match(prompt, /"event":"COMMENT"/);
@@ -89,14 +90,31 @@ test('assessCursorReviewStatus follows the marker until a Cursor review lands', 
   assert.equal(at(STATES.REQUESTED).state, 'pending');
   assert.equal(at(STATES.CURSOR_LAUNCHED).reason, 'review_running');
   assert.equal(at(STATES.COPILOT).state, 'skipped');
-  assert.equal(at(STATES.UNAVAILABLE).state, 'absent');
+  assert.equal(at(STATES.UNAVAILABLE).state, 'unavailable');
+  assert.equal(at(STATES.UNAVAILABLE).supersedesCopilot, true);
+  assert.equal(at(STATES.REQUESTED).supersedesCopilot, false);
 
   const done = assessCursorReviewStatus({
-    issueComments: [markerComment({ state: STATES.CURSOR_LAUNCHED })],
-    reviews: [{ user: { login: 'pawpet-bot' }, body: `summary\n\n${CURSOR_REVIEW_MARKER}` }],
-    reviewComments: [{ body: `bug\n\n${CURSOR_REVIEW_MARKER}` }, { body: 'reply' }],
+    issueComments: [markerComment({ state: STATES.CURSOR_LAUNCHED, launched_at: '2026-11-16T10:00:00Z' })],
+    reviews: [{ user: { login: 'pawpet-bot' }, submitted_at: '2026-11-16T10:05:00Z', body: `summary\n\n${CURSOR_REVIEW_MARKER}` }],
+    reviewComments: [{ user: { login: 'pawpet-bot' }, body: `bug\n\n${CURSOR_REVIEW_MARKER}` }, { user: { login: 'pawpet-bot' }, body: 'reply' }],
   });
-  assert.deepEqual(done, { state: 'complete', reason: 'review_submitted', inlineCommentCount: 1 });
+  assert.deepEqual(done, {
+    state: 'complete',
+    reason: 'review_submitted',
+    inlineCommentCount: 1,
+    reviewerLogin: 'pawpet-bot',
+    supersedesCopilot: true,
+  });
+});
+
+test('assessCursorReviewStatus only counts the launched identity, after launch', () => {
+  const marker = markerComment({ state: STATES.CURSOR_LAUNCHED, launched_at: '2026-11-16T10:00:00Z', reviewer_login: 'agent-bot' });
+  const review = (login, submittedAt) => ({ user: { login }, submitted_at: submittedAt, body: `quoted ${CURSOR_REVIEW_MARKER}` });
+  const status = (reviews) => assessCursorReviewStatus({ issueComments: [marker], reviews }).state;
+  assert.equal(status([review('pawpet-claude', '2026-11-16T10:05:00Z')]), 'pending');
+  assert.equal(status([review('agent-bot', '2026-11-16T09:55:00Z')]), 'pending');
+  assert.equal(status([review('agent-bot', '2026-11-16T10:05:00Z')]), 'complete');
 });
 
 test('assessCursorReviewStatus ignores markers posted by the PR author', () => {

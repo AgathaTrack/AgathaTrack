@@ -65,14 +65,18 @@ buy a second licence.
 | Step | Behaviour |
 |------|-----------|
 | Trigger | `pull_request_target` opened / ready_for_review / reopened → `main`, same-repo, non-draft, author `pawpet-bot` or `pawpet-claude`. A secret-less relay re-dispatches the job on `main` (the `automation` environment is main-only); PR code is never checked out. |
-| 1. Request Copilot | With `OWNER_COPILOT_REQUEST_TOKEN` (owner fine-grained PAT, Pull requests: read and write) — Copilot then reviews on the owner's licence. |
-| 2. Wait | Up to 8 min for `copilot_work_started` or a Copilot review. |
-| 3. Fallback | Copilot did not start (or no owner token): withdraw the request and launch a **review-only** Cursor agent (`composer-2.5`, bot identity) on the PR head. It posts one `COMMENT` review with inline findings marked `<!-- cursor-pr-review -->`, and never edits, pushes, approves or requests changes. |
-| State | One `github-actions[bot]` comment with a `<!-- pr-review-request: … -->` marker (`requested` → `copilot` / `cursor-launched` / `unavailable`). Markers from other authors are ignored. |
+| 1. Request Copilot | With `OWNER_COPILOT_REQUEST_TOKEN` (owner fine-grained PAT, Pull requests: read and write). A Copilot request the ruleset already made (as the unlicensed author) is withdrawn and replaced, so Copilot reviews on the owner's licence. No owner token → straight to step 3. |
+| 2. Wait | Up to 8 min for `copilot_work_started` (issue events) or a Copilot review. The last check runs after the deadline: a PR closed or a Copilot start in the final interval stops the run. |
+| 3. Fallback | Withdraw the Copilot request and launch a **review-only** Cursor agent (`composer-2.5`, bot identity) from the PR head with `workOnCurrentBranch: false`, so any stray change lands on a new agent branch, not the PR. It posts one `COMMENT` review with inline findings marked `<!-- cursor-pr-review -->`, and must not edit, push, approve or request changes (prompt rule; the bot token itself can push). |
+| State | One `github-actions[bot]` comment with a `<!-- pr-review-request: … -->` marker (`requested` → `copilot` / `cursor-launched` / `unavailable`). `cursor-launched` records `launched_at` and `reviewer_login`. Markers from other authors are ignored. |
 
 Babysit: `babysit_pr_reviews.js` reports the fallback as `reviewers.cursor`, waits for it (up to
-`--fallback-timeout-min`, default 25) and labels its threads `cursor`. Cursor threads are triaged like Copilot
-threads. Kill switch: repository variable `PR_REVIEW_FALLBACK=off`. Human-authored PRs keep the ruleset path.
+`--fallback-timeout-min`, default 25) and labels its threads `cursor`. Only marked reviews by `reviewer_login`
+submitted after `launched_at` count, so a quoted marker never completes the fallback. Once the marker is
+`cursor-launched` or `unavailable`, a leftover Copilot request counts as superseded, not pending. `unavailable`
+(no Cursor key, launch failed) sets `cursorUnavailable` → `wait` / `gate` exit `3` (§Copilot unavailable). Cursor
+threads are triaged like Copilot threads. Repository variable `PR_REVIEW_FALLBACK` defaults to `on`; set it to `off`
+to disable the workflow. Human-authored PRs keep the ruleset path.
 
 ---
 

@@ -173,7 +173,7 @@ Every review-thread page is read. A fetch or GraphQL error exits `1` and is neve
 3. **Close every thread** — reply on the thread (fixed in `<sha>` / false positive because … / deferred to #issue) and resolve it. Unresolved threads block merge (ruleset) and the merge gate.
 4. **After every push** — run `wait` again and triage any new threads before entering or continuing the CI wait loop (human or re-requested Copilot reviews arrive at any time).
 5. **Before merge** — `gate --pr <url>` must exit `0` as the last step before `gh pr merge`, after any sync push (§Merge gates → Execution). Exit `2` → back to triage.
-6. **Copilot unavailable** — `wait` / `gate` exit `3`: comment `Copilot review did not finish within 15 min; proceeding on triage + CI + pre-push.` once; triage the listed threads; `gate` exit `3` (nothing unresolved) then counts as passing. Copilot absent (never requested, no credits): proceed. A Cursor fallback still pending at the timeout (`cursorUnavailable`) is handled the same way. See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Copilot unavailable.
+6. **Copilot unavailable** — `wait` / `gate` exit `3`: comment `Copilot review did not finish within 15 min; proceeding on triage + CI + pre-push.` once; triage the listed threads; `gate` exit `3` (nothing unresolved) then counts as passing. Copilot absent (never requested, no credits): proceed. A Cursor fallback that is unavailable or still pending at the timeout (`cursorUnavailable`) is handled the same way. See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Copilot unavailable.
 7. **Cursor Bugbot:** Retired — the script ignores it; never wait on it.
 8. **Autofix:** Off by policy — babysit+ owns fixes (no duplicate Cloud Agent spend).
 
