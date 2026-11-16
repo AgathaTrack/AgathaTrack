@@ -61,7 +61,7 @@ jobs:
           OWNER_COPILOT_REQUEST_TOKEN: ${{ secrets.OWNER_COPILOT_REQUEST_TOKEN }}
           EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          PR_REVIEW_FALLBACK: ${{ vars.PR_REVIEW_FALLBACK }}
+          PR_REVIEW_FALLBACK: ${{ vars.PR_REVIEW_FALLBACK || 'on' }}
           PR_NUMBER: ${{ inputs.pr_number }}
         run: |
           # Bootstrap: the dispatch checks out main, which has no script until this workflow merges.
