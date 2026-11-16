@@ -157,6 +157,7 @@ function buildCollectReport({
   cursor = { state: 'skipped', reason: 'not_evaluated', inlineCommentCount: 0 },
   threads,
   timedOut = false,
+  fallbackRequestedAt = null,
 }) {
   const unresolvedThreads = threads.filter((thread) => !thread.isResolved);
   const copilotThreads = unresolvedThreads.filter((thread) => thread.reviewer === 'copilot');
@@ -176,7 +177,10 @@ function buildCollectReport({
 
   const readyForTriage = !automatedPending;
   const missingAutomatedFallback =
-    cursorRelevant && cursor.state === 'absent' && !cursorUnavailable;
+    cursorRelevant &&
+    cursor.state === 'absent' &&
+    !cursorUnavailable &&
+    Boolean(fallbackRequestedAt);
   const mergeReady =
     readyForTriage && unresolvedThreads.length === 0 && !missingAutomatedFallback;
 

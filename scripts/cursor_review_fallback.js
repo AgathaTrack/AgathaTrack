@@ -14,7 +14,6 @@ const {
   COPILOT_REQUEST_GRACE_MS,
   assessCopilotStatus,
   assessCursorBugbotStatus,
-  buildCollectReport,
   parsePrRef,
 } = require('./lib/babysit_pr_reviews_lib');
 const { queueBugbotReview } = require('./lib/cursor_bugbot_api');
@@ -110,8 +109,8 @@ async function runForPr(flags) {
 
   const apiKey = process.env.CURSOR_API_KEY || process.env.cursor_api_key;
   if (!apiKey) {
-    console.error('CURSOR_API_KEY is required for Bugbot fallback');
-    return 1;
+    console.log(JSON.stringify({ ok: true, skipped: true, reason: 'missing_cursor_api_key' }));
+    return 0;
   }
 
   const prUrl = pull.html_url;

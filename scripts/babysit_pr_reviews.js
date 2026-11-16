@@ -150,6 +150,7 @@ function fetchReviewSnapshot(pr, { timedOut = false } = {}) {
     cursor,
     threads: normalizeReviewThreads(fetchReviewThreads(pr)),
     timedOut,
+    fallbackRequestedAt: findFallbackRequestTime(issueComments),
   });
 }
 
