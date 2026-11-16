@@ -26,6 +26,12 @@ const {
 const { applyDeliveryStub } = require('./issue_pipeline_delivery');
 const { canQueueImplement, applyImplementLaunch } = require('./issue_pipeline_implement');
 const { applyMonitorTick } = require('./issue_pipeline_monitor');
+const {
+  countByColumn,
+  buildHealthPayload,
+  buildScheduleHealth,
+  emitHealthReport,
+} = require('./issue_pipeline_health');
 
 const BOTS = new Set(['pawpet-claude', 'pawpet-bot']);
 const OWNER_LOGIN = 'KanopeeKa';
@@ -306,6 +312,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
   const runTodoLane =
     (io && io.runTodoLanePipeline) || ((args) => runTodoLanePipeline(args));
   const executed = [];
+  const errors = [];
   for (const row of actions) {
     const payload = {
       event: 'pipeline_action',
@@ -327,46 +334,52 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
         dryRun: false,
       };
       let run;
-      if (row.action === 'triage-intake') {
-        run = await runTodoLane(baseRun);
-      } else if (row.action === 'reopen-analysis') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyReopenAnalysis({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-        });
-      } else if (row.action === 'needs-owner-convergence') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyNeedsOwnerConvergence({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-        });
-      } else if (row.action === 'review') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyReviewStub({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-          reviewer: row.assignee,
-          labels: issueRow?.labels || [],
-        });
-      } else if (row.action === 'delivery') {
-        const issueRow = issues.find((i) => i.number === row.issue);
-        const { state } = await loadIssueState(owner, repo, row.issue, token);
-        run = await applyDeliveryStub({
-          ...baseRun,
-          state,
-          liveBodySha: bodySha(issueRow?.body || ''),
-        });
-      } else if (row.action === 'implement-launch') {
-        run = await applyImplementLaunch(baseRun);
-      } else if (row.action === 'monitor') {
-        run = await applyMonitorTick(baseRun);
+      try {
+        if (row.action === 'triage-intake') {
+          run = await runTodoLane(baseRun);
+        } else if (row.action === 'reopen-analysis') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyReopenAnalysis({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+          });
+        } else if (row.action === 'needs-owner-convergence') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyNeedsOwnerConvergence({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+          });
+        } else if (row.action === 'review') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyReviewStub({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+            reviewer: row.assignee,
+            labels: issueRow?.labels || [],
+          });
+        } else if (row.action === 'delivery') {
+          const issueRow = issues.find((i) => i.number === row.issue);
+          const { state } = await loadIssueState(owner, repo, row.issue, token);
+          run = await applyDeliveryStub({
+            ...baseRun,
+            state,
+            liveBodySha: bodySha(issueRow?.body || ''),
+          });
+        } else if (row.action === 'implement-launch') {
+          run = await applyImplementLaunch(baseRun);
+        } else if (row.action === 'monitor') {
+          run = await applyMonitorTick(baseRun);
+        }
+      } catch (laneError) {
+        const message = String(laneError.message || laneError).slice(0, 300);
+        errors.push({ issue: row.issue, action: row.action, message });
+        payload.error = message;
       }
       if (run) {
         executed.push({ issue: row.issue, run });
@@ -381,9 +394,11 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
     dryRun,
     actions,
     executed,
+    errors,
     wipInUse,
     wipMax,
     issueCount: issues.length,
+    byColumn: countByColumn(issues),
   };
 }
 
@@ -401,12 +416,35 @@ async function main() {
     ? Number(process.env.ISSUE_NUMBER)
     : null;
 
+  const eventName = process.env.EVENT_NAME || null;
   const result = await tick({ owner, repo, token, issueNumber });
   if (result.skipped) {
     console.log(JSON.stringify({ event: 'pipeline_tick_skipped', ...result }));
     return;
   }
   console.log(JSON.stringify({ event: 'pipeline_tick_complete', ...result }));
+
+  const scheduleFullBoard =
+    eventName === 'schedule' && (issueNumber == null || Number.isNaN(issueNumber));
+  if (scheduleFullBoard) {
+    const nowMs = Date.now();
+    const schedule = await buildScheduleHealth(owner, repo, token, nowMs);
+    const health = buildHealthPayload({
+      mode: result.mode,
+      dryRun: result.dryRun,
+      eventName,
+      at: new Date(nowMs).toISOString(),
+      byColumn: result.byColumn,
+      issueCount: result.issueCount,
+      wipInUse: result.wipInUse,
+      wipMax: result.wipMax,
+      actions: result.actions,
+      executed: result.executed,
+      errors: result.errors,
+      schedule,
+    });
+    emitHealthReport(health);
+  }
 }
 
 if (require.main === module) {

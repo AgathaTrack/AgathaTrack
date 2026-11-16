@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-15
+last_updated: 2026-11-16
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -56,14 +56,14 @@ Engineering work is tracked on the org Project **Pawpet** (`AgathaTrack` org). T
 
 | Status | Planned meaning | Whose turn (planned) | Live today |
 |--------|-----------------|----------------------|------------|
-| **Backlog** | Filed, not in the pipeline | — | Default entry point; triage returns incomplete issues here |
-| **To do** | Human "go": in the pipeline when assigned to an agent | `pawpet-claude` | Optional human prioritisation; not set by Actions |
-| **In Analysis** | Agent peer review | `pawpet-bot` ⇄ `pawpet-claude` | `human-reviewed` added; waiting on (or failed) auto-triage |
-| **Ready** | Review converged → delivery step → queued | `pawpet-bot` for delivery, then nobody while queued | Passed triage; eligible for Cursor dispatch |
-| **In progress** | Being implemented | `pawpet-bot` | Set by dispatch at agent launch |
-| **In Main** | Merged to `main` | nobody | Merge handler |
-| **In UAT** | All UAT gates green | nobody | `deploy-uat.yml` notify job |
-| **Done** | Live in production; issue closed | nobody | Closed by a human or the programme |
+| **Backlog** | Filed, not in the pipeline | — | Default on create; legacy triage and pipeline intake failures land here with `question` |
+| **To do** | Human "go": in the pipeline when assigned to an agent | `pawpet-claude` | Manual prioritisation; [`issue-pipeline-todo.yml`](../.github/workflows/issue-pipeline-todo.yml) on `todo`; pipeline intake when assigned `pawpet-claude` (`pipeline-beta` or `ISSUE_PIPELINE=on`) |
+| **In Analysis** | Agent peer review | `pawpet-bot` ⇄ `pawpet-claude` | Legacy: `human-reviewed` → triage. Pipeline: review lane via dispatcher (env stub until LLM workers) |
+| **Ready** | Review converged → delivery step → queued | `pawpet-bot` for delivery, then nobody while queued | Legacy: `agent-approved` + dispatch. Pipeline: delivery path gate + queued implement (`pipeline-beta` / `on`) |
+| **In progress** | Being implemented | `pawpet-bot` | Legacy `agent-dispatch.yml` / monitor, or pipeline implement+monitor when enabled |
+| **In Main** | Merged to `main` | nobody | [`issue-agent-pr-merge.yml`](../.github/workflows/issue-agent-pr-merge.yml) |
+| **In UAT** | All UAT gates green | nobody | [`deploy-uat.yml`](../.github/workflows/deploy-uat.yml) notify job |
+| **Done** | Live in production; issue closed | nobody | Human close or prod notify (`In UAT` board scan, repair #2363 P5) |
 
 There is no **In Prod** column. The planned prod notify job sets **Done** and closes the issue once production has really been deployed.
 
@@ -154,7 +154,7 @@ Peer review can end with **Ready** only when the latest Green left `body_sha` un
 4. **Path check (dispatcher, fail-closed):** expand the globs against tracked files and check them with `isForbiddenPath`, plus `.github/**` and `.cursor/agent-kernel/**`. A hit, or a missing or invalid block, → `needs-owner` (`sensitive-paths`) and assign `KanopeeKa`.
 5. **Pass** → add the delivery label and unassign. The issue is now queued.
 
-**Automation (issue pipeline P6):** `scripts/issue_pipeline_delivery.js` parses the fenced `agent-paths` JSON, expands globs with `git ls-files`, and fail-closes with `isForbiddenPath` plus `.github/**` and `.cursor/agent-kernel/**`. The dispatcher row **delivery** calls it when `ISSUE_PIPELINE=on`; `issue-pipeline-delivery.yml` is the manual/soak entry. Template rewrites stay agent-driven until a later phase — the stub labels via `PIPELINE_DELIVERY_METHOD` when the body and path gate are already valid.
+**Automation (live on integration):** `scripts/issue_pipeline_delivery.js` + `scripts/lib/pipeline_path_gate.js` parse the fenced `agent-paths` JSON, expand globs with `git ls-files`, and fail-close with `isForbiddenPath` plus `.github/**` and `.cursor/agent-kernel/**`. The dispatcher **delivery** action runs this when `ISSUE_PIPELINE=on` (no per-lane workflow files). Template rewrites stay agent-driven until LLM delivery workers ship — the stub labels via `PIPELINE_DELIVERY_METHOD` when the body already passes the path gate.
 
 If step 2 **changes `body_sha`**, **do not** add the label in this pass. Run the **reopen record** first (In Analysis, strip any delivery labels, reset `verdicts`, assign the other agent). Re-add the label only after reconvergence and a later successful delivery pass with an unchanged `body_sha`.
 
@@ -176,7 +176,7 @@ A failed launch → `needs-owner` (`launch-failed`) and assign `KanopeeKa`.
 
 ### In progress — monitor (`pawpet-bot`)
 
-**Automation (issue pipeline P7):** `scripts/issue_pipeline_implement.js` re-runs the delivery path gate, moves **Ready** → **In progress**, assigns `pawpet-bot`, sets `busy`, and writes the Cursor run marker (`PIPELINE_IMPLEMENT_LAUNCH=true` for live API). `scripts/issue_pipeline_monitor.js` wraps `monitor-cursor-agent.js`; both run from the dispatcher when `ISSUE_PIPELINE=on`. Until **P7b cutover**, `agent-dispatch.yml` / `agent-monitor.yml` stay live for issues **without** `pipeline-beta`; sandbox issues use the new lanes only.
+**Automation (live on integration):** `scripts/issue_pipeline_implement.js` re-runs the delivery path gate, moves **Ready** → **In progress**, assigns `pawpet-bot`, sets `busy`, and optionally calls the Cursor API (`PIPELINE_IMPLEMENT_LAUNCH=true` + `CURSOR_API_KEY`). `scripts/issue_pipeline_monitor.js` wraps `monitor-cursor-agent.js`. Both run only from `issue-pipeline-dispatcher.yml`. Legacy [`agent-dispatch.yml`](../.github/workflows/agent-dispatch.yml) / [`agent-monitor.yml`](../.github/workflows/agent-monitor.yml) still serve issues **without** `pipeline-beta` until `ISSUE_PIPELINE=on` cutover (spec §14.3).
 
 **Trigger:** the heartbeat and run events. If `stuck >= 3`, add `needs-owner` (`stuck`).
 

@@ -19,6 +19,7 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 |----------|---------|
 | `.github/workflows/issue-pipeline-dispatcher.yml` | Triggers, concurrency, environment secrets |
 | `scripts/issue_pipeline_dispatcher.js` | Tick: enumerate work, choose actions, invoke workers |
+| `scripts/issue_pipeline_health.js` | Schedule heartbeat summary (`pipeline_health` JSON + optional step summary) |
 | `scripts/issue_pipeline_state.js` | Parse `<!-- agent-state: … -->`; lane comments no longer embed state |
 | `scripts/lib/pipeline_state_trust.js` | Trust allowlist (`pawpet-bot`, `pawpet-claude`) + `pipeline-state` marker |
 | `scripts/issue_pipeline_state_load.js` | Upsert dedicated `<!-- pipeline-state -->` comment (bot token; newest `updated_at` wins) |
@@ -187,9 +188,10 @@ Status option names must match live Pawpet field (case-insensitive match in scri
 
 ## 11. Observability
 
-- Each tick: summary comment optional (suppress in `on` mode; verbose in `dry-run`).
-- Structured log in Actions: `issue`, `action`, `lane`, `assignee`, `dry_run`.
-- Metrics debt: count ticks, worker failures, mean time in column (future).
+- Each tick: structured log lines `pipeline_action` / `pipeline_tick_complete` (`issue`, `action`, `lane`, `assignee`, `dry_run`).
+- **Schedule heartbeat** (`event=schedule`, full-board tick): after `pipeline_tick_complete`, emit `pipeline_health` with `by_column`, WIP usage, planned/executed counts, lane errors, and schedule staleness when the last **completed** schedule run is more than **2 hours** before the current tick (`scripts/issue_pipeline_health.js`). The job also appends a short table to `$GITHUB_STEP_SUMMARY` when present.
+- Per-issue verbose comments: optional; suppress in steady `on` mode.
+- Metrics debt: mean time in column dashboards (future).
 
 ## 12. Secrets and environments
 
