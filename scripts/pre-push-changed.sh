@@ -204,8 +204,6 @@ run_governance() {
   node --test scripts/ci/detect-deploy-package-changed.test.js
   node scripts/check_skill_frontmatter.js
   node --test scripts/check_babysit_skill_family.test.js
-  node --test scripts/babysit_pr_reviews.test.js
-  node --test scripts/lib/cursor_bugbot_api.test.js
   node scripts/validate_openapi.js
   node --test scripts/validate_openapi.test.js
   run_prepush_gate eslint

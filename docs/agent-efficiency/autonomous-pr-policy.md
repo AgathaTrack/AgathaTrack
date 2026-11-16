@@ -149,11 +149,7 @@ Only after self-review passes: commit, push, create/update PR. Then continue wit
 
 Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. Execute-plan v2 plan PRs: §Execute-plan (v2) review threads.
 
-**Primary reviewer:** GitHub **Copilot** PR review (`copilot-pull-request-reviewer`) when enabled — **must be triaged when it posts review threads**. The `main` ruleset requests Copilot once when the PR opens (drafts included, not on later pushes); it posts 2–7 minutes later.
-
-**Fallback reviewer (main only):** **Cursor Bugbot** when Copilot was **absent** on a PR that **merged to `main`** — `cursor-review-fallback.yml` (`pull_request` **closed**, merged) queues via Bugbot API. Pre-merge `babysit_pr_reviews.js` still waits on Copilot and triages any existing Cursor threads. See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Automatic review fallback.
-
-Both the `main` and integration rulesets require every review thread to be **resolved** before merge.
+**Primary reviewer:** GitHub **Copilot** PR review (`copilot-pull-request-reviewer`) when enabled — **must be triaged when it posts review threads**. The `main` ruleset requests Copilot once when the PR opens (drafts included, not on later pushes); it posts 2–7 minutes later. Both the `main` and integration rulesets require every review thread to be **resolved** before merge.
 
 **Model (Cursor):** [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Cloud Agent model policy.
 
@@ -161,19 +157,19 @@ Both the `main` and integration rulesets require every review thread to be **res
 
 | Command | Use | Exit |
 |---------|-----|------|
-| `wait --pr <url>` | Before triage — polls until no Copilot **or Cursor fallback** review is in progress | `0` ready · `3` automated review still pending at timeout — threads listed are triageable · `1` error |
-| `gate --pr <url>` | Merge gate — `wait`, then require no unresolved threads (`mergeReady`) | `0` merge-ready · `2` unresolved threads → triage · `3` automated review pending at timeout, nothing unresolved · `1` error |
+| `wait --pr <url>` | Before triage — polls until no Copilot review is in progress (a PR younger than 3 min counts as awaiting the Copilot request) | `0` ready · `3` Copilot still pending at the timeout (default 15 min) — threads listed are triageable · `1` error |
+| `gate --pr <url>` | Merge gate — `wait`, then require no unresolved threads (`mergeReady`) | `0` merge-ready · `2` unresolved threads → triage · `3` Copilot still pending at the timeout, nothing unresolved · `1` error |
 | `collect --pr <url>` | One snapshot (no waiting) | `0` · `1` error |
 
 Every review-thread page is read. A fetch or GraphQL error exits `1` and is never “no threads”: fix the error (identity, network) before continuing.
 
 1. Mark PR **ready for review** before merge gates (`gh pr ready <url>` when draft).
-2. **Wait, then triage** — `wait --pr <url>`; triage **every** unresolved thread in the JSON `threads` array (Copilot, Cursor, human) per §Review triage. Never declare “no automated review” while `reviewers.copilot.state == "pending"`, `reviewers.cursor.state == "pending"`, or threads exist.
+2. **Wait, then triage** — `wait --pr <url>`; triage **every** unresolved thread in the JSON `threads` array (Copilot, human) per §Review triage. Never declare “no automated review” while Copilot is pending (`reviewers.copilot.state == "pending"`) or threads exist.
 3. **Close every thread** — reply on the thread (fixed in `<sha>` / false positive because … / deferred to #issue) and resolve it. Unresolved threads block merge (ruleset) and the merge gate.
 4. **After every push** — run `wait` again and triage any new threads before entering or continuing the CI wait loop (human or re-requested Copilot reviews arrive at any time).
 5. **Before merge** — `gate --pr <url>` must exit `0` as the last step before `gh pr merge`, after any sync push (§Merge gates → Execution). Exit `2` → back to triage.
-6. **Copilot absent / unavailable** — fallback workflow queues Cursor Bugbot; babysit waits on `reviewers.cursor` when Copilot is absent. `wait` / `gate` exit `3` when **either** reviewer is still pending at timeout: comment once per [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Automatic review fallback; triage threads; `gate` exit `3` with nothing unresolved counts as passing.
-7. **Kill switch** — `CURSOR_REVIEW_FALLBACK=off` disables Bugbot detection and merge blocking for the fallback path.
+6. **Copilot unavailable** — `wait` / `gate` exit `3`: comment `Copilot review did not finish within 15 min; proceeding on triage + CI + pre-push.` once; triage the listed threads; `gate` exit `3` (nothing unresolved) then counts as passing. Copilot absent (never requested, no credits): proceed. See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Copilot unavailable.
+7. **Cursor Bugbot:** Retired — the script ignores it; never wait on it.
 8. **Autofix:** Off by policy — babysit+ owns fixes (no duplicate Cloud Agent spend).
 
 ---

@@ -136,7 +136,7 @@ Full lifecycle: `docs/agent-efficiency/github-issue-workflow.md`.
 | Topic | Home |
 |-------|------|
 | Execute-plan v2 (`tick`, driver, babysit+ / babysit-uat) | `.cursor/skills/execute-plan/SKILL.md` · `docs/agent-efficiency/plans/execute-plan-v2.md` |
-| Pre-PR self-review, review triage (Copilot; Cursor Bugbot fallback when absent) | `.cursor/rules/pr-hygiene.mdc` · `docs/agent-efficiency/pr-review-cost-efficiency.md` |
+| Pre-PR self-review, review triage (Copilot; Bugbot retired) | `.cursor/rules/pr-hygiene.mdc` · `docs/agent-efficiency/pr-review-cost-efficiency.md` |
 | One outcome per PR, snag ladder, zero untracked debt | `docs/agent-efficiency/atomic-pr-policy.md` |
 | Canonical docs (product spec) | `docs/domains/documentation/standards.md` · canonical-docs skill |
 | Branch targets (single-agent → `main`; sprints and execute-plan → integration `base_branch`) | `.cursor/rules/merge-policy.mdc` |

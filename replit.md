@@ -46,7 +46,7 @@ sources conflict, follow `AGENTS.md` §Precedence and fix the losing text; do no
    content, current blob SHA, branch name).
 4. **Open the PR** via the GitHub REST API with `GITHUB_TOKEN`, ready (not draft), with `## Docs` in the body.
 5. **Review:** Copilot (`POST /repos/AgathaTrack/AgathaTrack/pulls/{n}/requested_reviewers` with
-   `{"reviewers":["copilot-pull-request-reviewer"]}` when credits allow). Cursor Bugbot fallback when Copilot absent (`cursor-review-fallback.yml`). Triage threads per
+   `{"reviewers":["copilot-pull-request-reviewer"]}` when credits allow). Bugbot is retired. Triage threads per
    `docs/agent-efficiency/autonomous-pr-policy.md`.
 6. **CI:** poll `GET /repos/AgathaTrack/AgathaTrack/commits/{sha}/check-runs` every 60–90 s and fix failures (Flutter
    shards ~3–5 min, full suite ~8–10 min). New blocking jobs go in ci-gate `needs` and `scripts/ci/assert-ci-gate.sh`.
