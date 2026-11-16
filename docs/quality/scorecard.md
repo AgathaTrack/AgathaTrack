@@ -17,11 +17,11 @@ Living metrics for Agatha Track quality. Update when CI or test counts change ma
 ## Live metrics
 
 <!-- scorecard-metrics:begin -->
-**Auto-generated block** — refresh with `node scripts/quality/generate-scorecard-metrics.mjs --write-scorecard` (2026-11-15).
+**Auto-generated block** — refresh with `node scripts/quality/generate-scorecard-metrics.mjs --write-scorecard` (2026-11-16).
 
 | Metric | Value | Enforced by |
 |--------|------:|-------------|
-| Flutter unit/widget (active CI) | 388 | 6 shards (`ci_shards.json`) |
+| Flutter unit/widget (active CI) | 389 | 6 shards (`ci_shards.json`) |
 | Flutter frozen / excluded tests | 0 / 2 | frozen-domains manifest |
 | Flutter unowned tests | 0 | `flutter-shards.mjs check` |
 | Flutter integration flows | 1 | `flutter-integration` job |

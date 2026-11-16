@@ -7,7 +7,6 @@ import '../models/health_event_photo.dart';
 import '../models/health_entry_model.dart';
 import '../models/health_history_model.dart';
 import '../models/health_occurrence_model.dart';
-import '../../domain/occurrence_scheduling.dart';
 import 'health_occurrence_remote_datasource.dart'
     show
         RescheduleOccurrenceRemoteResult,
@@ -15,7 +14,6 @@ import 'health_occurrence_remote_datasource.dart'
         fetchPastOccurrences,
         postCompleteOccurrence,
         postRescheduleOccurrence,
-        postResolveStack,
         postSkipOccurrence,
         postUndoOccurrence,
         patchOccurrenceNotes;
@@ -63,7 +61,6 @@ abstract class HealthRemoteDataSource {
     String occurrenceId, {
     String notes = '',
   });
-  Future<int> skipMissedOccurrences(String entryId);
   Future<HealthOccurrenceModel> undoOccurrence(
     String entryId,
     String occurrenceId,

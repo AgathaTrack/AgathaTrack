@@ -2805,20 +2805,6 @@
     }
   },
   "occurrenceCareFinishedNoReopen": "Ce soin est terminé.",
-  "occurrenceOpenCount": "{count} en attente",
-  "@occurrenceOpenCount": {
-    "placeholders": {
-      "count": { "type": "int" }
-    }
-  },
-  "occurrenceMissedCount": "{count} en retard",
-  "@occurrenceMissedCount": {
-    "placeholders": {
-      "count": { "type": "int" }
-    }
-  },
-  "occurrenceZoneMissed": "En retard",
-  "occurrenceZoneDueToday": "Aujourd'hui",
   "occurrenceZoneComingUp": "À venir",
   "completedEventSemanticLabel": "{name}, terminé, pour {petName}",
   "@completedEventSemanticLabel": {
