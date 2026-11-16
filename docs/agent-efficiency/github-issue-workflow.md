@@ -403,6 +403,26 @@ GH_PROJECTS_PAT=ghp_... node .github/scripts/discover-project-ids.js --org Agath
 
 Pick the **Pawpet** project from the script output (not **ATSupport**). Legacy user-owned boards used `--user <login>`.
 
+### Stage mirror (org `Stage` field)
+
+Board columns stay on built-in Project **Status** (humans drag cards; the pipeline and release jobs keep writing Status). Agents without Projects scope read and write the org issue field **`Stage`** instead, kept in sync by [`stage-mirror.yml`](../.github/workflows/stage-mirror.yml) and `scripts/stage_mirror.js`.
+
+| Switch | Meaning |
+|--------|---------|
+| `STAGE_MIRROR` repo variable `off` | Default — workflow exits immediately |
+| `dry-run` | Logs intended writes only |
+| `on` | Applies writes |
+
+Reconcile uses project **Synced stage** (hidden text field) as the last-applied value. Triggers: **10-minute** schedule, `issues: edited` on this repo (field changes), and `workflow_dispatch` (`dry_run` input). **ATSupport** (`AgathaTrackPrivate`) is poll-only.
+
+**Agents:** use the REST/GraphQL issue payload `issue_field_values` / set the org **`Stage`** field when you must move stage without Projects access. Invalid values for that board are reverted on the next mirror pass (board wins). Spec and DoD: issue #2345.
+
+| Secret / variable | Purpose |
+|-------------------|---------|
+| `GH_PAWPET_SYNCED_STAGE_FIELD_ID` | Pawpet **Synced stage** text field |
+| `GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID` | ATSupport **Synced stage** text field |
+| `STAGE_ATSUPPORT_REPO` | Default `AgathaTrack/AgathaTrackPrivate` |
+
 ### Monitoring and debugging
 
 - **Weekly dependabot batch:** Actions → **Dependabot batch dispatch** (Tuesday cron; `workflow_dispatch` with `dry_run` for payload-only). Agent URL is written to the workflow job summary. Dispatched agents receive **`/run-as-me`** in the launch prompt (owner `gh` for merge and cleanup).

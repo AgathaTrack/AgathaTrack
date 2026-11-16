@@ -1,0 +1,60 @@
+name: Stage mirror
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Log intended writes only (overrides STAGE_MIRROR=on for one run)
+        type: boolean
+        default: true
+      issue_number:
+        description: Optional issue number (Pawpet repo only when triggered by issues event)
+        required: false
+  issues:
+    types: [edited]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: stage-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: stage-mirror
+    if: github.event_name != 'issues' || github.repository == 'AgathaTrack/AgathaTrack'
+    runs-on: ubuntu-latest
+    environment: automation
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Run stage mirror
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PROJECTS_PAT: ${{ secrets.GH_PROJECTS_PAT }}
+          GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
+          GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
+          GH_PAWPET_SYNCED_STAGE_FIELD_ID: ${{ secrets.GH_PAWPET_SYNCED_STAGE_FIELD_ID }}
+          GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID: ${{ secrets.GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID }}
+          STAGE_MIRROR: ${{ vars.STAGE_MIRROR }}
+          STAGE_MIRROR_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ ! -f scripts/stage_mirror.js ]; then
+            echo "scripts/stage_mirror.js not on main; nothing to do"
+            exit 0
+          fi
+          node scripts/stage_mirror.js
