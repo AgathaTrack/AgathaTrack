@@ -114,11 +114,6 @@ class HealthRepositoryImpl implements HealthRepository {
   }
 
   @override
-  Future<int> skipMissedOccurrences(String entryId) {
-    return dataSource.skipMissedOccurrences(entryId);
-  }
-
-  @override
   Future<HealthOccurrence> undoOccurrence(String entryId, String occurrenceId) {
     return dataSource.undoOccurrence(entryId, occurrenceId);
   }

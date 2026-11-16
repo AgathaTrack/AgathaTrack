@@ -2956,20 +2956,6 @@
     }
   },
   "occurrenceCareFinishedNoReopen": "This care is finished.",
-  "occurrenceOpenCount": "{count} open",
-  "@occurrenceOpenCount": {
-    "placeholders": {
-      "count": { "type": "int" }
-    }
-  },
-  "occurrenceMissedCount": "{count} overdue",
-  "@occurrenceMissedCount": {
-    "placeholders": {
-      "count": { "type": "int" }
-    }
-  },
-  "occurrenceZoneMissed": "Overdue",
-  "occurrenceZoneDueToday": "Due today",
   "occurrenceZoneComingUp": "Coming up",
   "completedEventSemanticLabel": "{name}, completed, for {petName}",
   "@completedEventSemanticLabel": {
