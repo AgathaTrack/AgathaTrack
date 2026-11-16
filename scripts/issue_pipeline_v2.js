@@ -18,6 +18,8 @@ const {
   listIssueComments,
   listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
+const { deriveReviewFacts, findReviewRequests, totalNWrite } = require('./issue_pipeline_v2_review');
+const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
 
 /** Flipped on in run B, together with the launch and release stages. */
 const WRITES_ENABLED = false;
@@ -40,14 +42,30 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
   };
 }
 
+/** Last editors of edited engine-authored comments (GraphQL), keyed by comment node id. */
+async function resolveEditors({ comments, config, token, io }) {
+  const editors = {};
+  for (const comment of comments) {
+    const edited = comment.updated_at && comment.updated_at !== comment.created_at;
+    const byEngine = config.engine.logins.includes(comment.user?.login);
+    if (edited && byEngine && /<!--\s*v2:(spec|review)-request/.test(comment.body || '')) {
+      editors[comment.node_id] = await (io.fetchCommentEditor || fetchCommentEditor)({
+        nodeId: comment.node_id,
+        token,
+      });
+    }
+  }
+  return editors;
+}
+
 /**
- * Facts that need comments or reactions. Only read for the stages that use them, so a board of
- * mostly Backlog and Done issues costs no extra calls.
+ * Facts that need comments, reactions or edit history. Only read for the stages that use them,
+ * so a board of mostly Backlog and Done issues costs no extra calls.
  */
 async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
   const canonical = canonicalStage(entry.parsed.stage);
-  const needsComments = canonical === 'To do' || Boolean(entry.parsed.blocked);
-  if (!needsComments) {
+  const blocked = Boolean(entry.parsed.blocked);
+  if (!(canonical === 'To do' || canonical === 'In analysis' || blocked)) {
     return {};
   }
   const comments = await (io.listIssueComments || listIssueComments)({
@@ -57,22 +75,43 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
     token,
   });
   const facts = {};
-  if (entry.parsed.blocked) {
+  if (blocked) {
     facts.humanCommentSinceBlock = humanCommentSinceBlock(comments, config);
+    return facts;
   }
-  if (canonical === 'To do' && !entry.parsed.blocked) {
-    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins: config.engine.logins });
-    const reactions = probe.commentId
-      ? await (io.listCommentReactions || listCommentReactions)({
-          owner,
-          repo,
-          commentId: probe.commentId,
-          token,
-        })
-      : [];
-    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins: config.engine.logins });
+  const editors = await resolveEditors({ comments, config, token, io });
+  const engineLogins = config.engine.logins;
+  const reactionsOf = (commentId) =>
+    (io.listCommentReactions || listCommentReactions)({ owner, repo, commentId, token });
+
+  if (canonical === 'To do') {
+    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors });
+    const reactions = probe.commentId ? await reactionsOf(probe.commentId) : [];
+    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins, editors });
+    return facts;
   }
-  return facts;
+
+  const requests = findReviewRequests(comments, engineLogins, editors);
+  const reactionsByComment = {};
+  for (const request of requests) {
+    reactionsByComment[request.comment.id] = await reactionsOf(request.comment.id);
+  }
+  const history = await (io.fetchBodyEdits || fetchBodyEdits)({
+    owner,
+    repo,
+    issueNumber: entry.number,
+    token: io.graphqlToken || token,
+  });
+  const derived = deriveReviewFacts({
+    comments,
+    reactionsByComment,
+    edits: history.edits,
+    bodyAuthor: history.author,
+    config,
+    engineLogins,
+    editors,
+  });
+  return { ...facts, ...derived };
 }
 
 function countWip(entries) {
@@ -131,9 +170,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
     };
     const action = decide(facts, config);
-    actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
+    const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
+    actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });
     console.log(
-      JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: WRITES_ENABLED, issue: entry.number, action }),
+      JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: WRITES_ENABLED, issue: entry.number, action, counters }),
     );
     if (action.type === 'set-stage' || action.type === 'set-blocked') {
       const writes =

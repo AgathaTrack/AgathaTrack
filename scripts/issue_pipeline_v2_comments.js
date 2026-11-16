@@ -34,13 +34,27 @@ function parseSpecRequest(body) {
   return { assigned: match[1] || null, history: match[2] ? match[2].split(',') : [] };
 }
 
+/**
+ * A request comment is trusted when an engine identity wrote it and nobody else edited it. An
+ * edited comment needs its last editor (`editors[node_id]`, from GraphQL) to be its author; a
+ * comment whose editor is unknown is not trusted.
+ */
+function isTrustedRequest(comment, engineLogins, editors = {}) {
+  const author = comment?.user?.login;
+  if (!author || !(engineLogins || []).includes(author)) {
+    return false;
+  }
+  if (!comment.updated_at || comment.updated_at === comment.created_at) {
+    return true;
+  }
+  return editors[comment.node_id] === author;
+}
+
 /** Newest spec request written by a trusted engine identity (never by an agent or a stranger). */
-function findSpecRequest(comments, engineLogins) {
-  const trusted = new Set(engineLogins || []);
+function findSpecRequest(comments, engineLogins, editors = {}) {
   let found = null;
   for (const comment of comments || []) {
-    const author = comment?.user?.login;
-    const parsed = trusted.has(author) ? parseSpecRequest(comment.body) : null;
+    const parsed = isTrustedRequest(comment, engineLogins, editors) ? parseSpecRequest(comment.body) : null;
     if (parsed && (!found || comment.created_at >= found.comment.created_at)) {
       found = { comment, ...parsed };
     }
@@ -52,8 +66,8 @@ function findSpecRequest(comments, engineLogins) {
  * Spec facts for `decide()`. `reactions` are the reactions on the request comment; only a 👍
  * from a listed agent created after the request counts as the DoR pass.
  */
-function deriveSpecFacts({ comments, reactions, config, engineLogins }) {
-  const request = findSpecRequest(comments, engineLogins);
+function deriveSpecFacts({ comments, reactions, config, engineLogins, editors }) {
+  const request = findSpecRequest(comments, engineLogins, editors);
   if (!request) {
     return {};
   }
@@ -111,6 +125,7 @@ module.exports = {
   SPEC_REQUEST,
   buildSpecRequest,
   parseSpecRequest,
+  isTrustedRequest,
   findSpecRequest,
   deriveSpecFacts,
   humanCommentSinceBlock,
