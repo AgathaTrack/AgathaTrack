@@ -1,6 +1,7 @@
 'use strict';
 
 const { rest } = require('../.github/scripts/github-project-lib');
+const { stageOrgFieldOptions } = require('./stage_mirror_config');
 
 const STAGE_FIELD_NAME = 'Stage';
 
@@ -29,7 +30,21 @@ function findFieldValueById(issueFieldValues, fieldId) {
   return null;
 }
 
+function loadOrgStageFieldFromEnv() {
+  const rawId = process.env.STAGE_ISSUE_FIELD_ID;
+  const id = Number(rawId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return null;
+  }
+  const options = stageOrgFieldOptions();
+  return { id, options, name: STAGE_FIELD_NAME };
+}
+
 async function loadOrgStageField({ org, token }) {
+  const fromEnv = loadOrgStageFieldFromEnv();
+  if (fromEnv) {
+    return fromEnv;
+  }
   const fields = await rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token);
   const stage = (fields || []).find(
     (field) => field?.name?.toLowerCase() === STAGE_FIELD_NAME.toLowerCase(),
@@ -83,6 +98,7 @@ function assertBoardColumnsMatchStageOptions(boardColumns, stageOptions, boardLa
 
 module.exports = {
   STAGE_FIELD_NAME,
+  loadOrgStageFieldFromEnv,
   loadOrgStageField,
   fetchIssueStage,
   setIssueStageField,

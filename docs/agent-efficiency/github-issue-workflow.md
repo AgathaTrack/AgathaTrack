@@ -421,6 +421,7 @@ Reconcile uses project **Synced stage** (hidden text field) as the last-applied 
 |-------------------|---------|
 | `GH_PAWPET_SYNCED_STAGE_FIELD_ID` | Pawpet **Synced stage** text field |
 | `GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID` | ATSupport **Synced stage** text field |
+| `STAGE_ISSUE_FIELD_ID` | Numeric org **Stage** field id (avoids `/orgs/.../issue-fields` on PAT) |
 | `STAGE_ATSUPPORT_REPO` | Default `AgathaTrack/AgathaTrackPrivate` |
 
 ### Monitoring and debugging

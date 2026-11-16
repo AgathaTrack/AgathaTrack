@@ -20,6 +20,20 @@ const ATSUPPORT_COLUMNS = [
   'Done',
 ];
 
+/** Union of Pawpet + ATSupport columns (matches org `Stage` field options). */
+function stageOrgFieldOptions() {
+  const seen = new Set();
+  const out = [];
+  for (const name of [...PAWPET_COLUMNS, ...ATSUPPORT_COLUMNS]) {
+    const key = name.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(name);
+    }
+  }
+  return out;
+}
+
 function parseRepoSlug(slug) {
   const text = String(slug || '').trim();
   const parts = text.split('/');
@@ -88,6 +102,7 @@ function loadStageMirrorBoards({ defaultOwner, defaultRepo }) {
 module.exports = {
   PAWPET_COLUMNS,
   ATSUPPORT_COLUMNS,
+  stageOrgFieldOptions,
   loadStageMirrorBoards,
   parseRepoSlug,
 };
