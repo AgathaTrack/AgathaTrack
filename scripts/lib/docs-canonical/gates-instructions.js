@@ -180,8 +180,8 @@ function checkPhrases(root, files) {
       if (lower.includes('composer-2.5') && !COMPOSER_ALLOWED.some((p) => f === p || f.startsWith(p))) {
         out.push(warn('R-I6', f, '`composer-2.5` is Cursor-only — keep it in pr-review-cost-efficiency.md.', i + 1));
       }
-      if (/bugbot/.test(lower) && !/retired|disabled/.test(lower)) {
-        out.push(warn('R-I6', f, 'Bugbot is retired — remove or mark as retired.', i + 1));
+      if (/bugbot/.test(lower) && !/retired|disabled|fallback|unavailable/.test(lower)) {
+        out.push(warn('R-I6', f, 'Bugbot is retired unless documented as Copilot fallback — clarify.', i + 1));
       }
     });
   }

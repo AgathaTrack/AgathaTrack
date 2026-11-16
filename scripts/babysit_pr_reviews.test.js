@@ -7,6 +7,7 @@ const {
   COPILOT_REQUEST_GRACE_MS,
   classifyReviewer,
   assessCopilotStatus,
+  assessCursorBugbotStatus,
   normalizeReviewThreads,
   buildCollectReport,
   parsePrRef,
@@ -33,7 +34,7 @@ test('classifyReviewer maps copilot logins and everyone else to human', () => {
   assert.equal(classifyReviewer('copilot-pull-request-reviewer'), 'copilot');
   assert.equal(classifyReviewer(COPILOT_BOT), 'copilot');
   assert.equal(classifyReviewer('Copilot'), 'copilot');
-  assert.equal(classifyReviewer('cursor[bot]'), 'human');
+  assert.equal(classifyReviewer('cursor[bot]'), 'cursor');
   assert.equal(classifyReviewer('human-dev'), 'human');
 });
 
@@ -124,6 +125,7 @@ test('buildCollectReport: Copilot in progress with no threads yet is neither tri
   const report = buildCollectReport({
     prNumber: 2017,
     copilot: { state: 'pending', reason: 'review_requested', inlineCommentCount: 0 },
+    cursor: { state: 'skipped', reason: 'awaiting_copilot', inlineCommentCount: 0 },
     threads: [],
   });
   assert.equal(report.readyForTriage, false);
@@ -135,11 +137,12 @@ test('buildCollectReport: completed review with unresolved threads is triage-rea
   const report = buildCollectReport({
     prNumber: 1,
     copilot: { state: 'complete', reason: 'review_submitted', inlineCommentCount: 2 },
+    cursor: { state: 'skipped', reason: 'copilot_primary', inlineCommentCount: 0 },
     threads: [thread(), thread({ reviewer: 'human', author: 'owner' }), thread({ isResolved: true })],
   });
   assert.equal(report.readyForTriage, true);
   assert.equal(report.mergeReady, false);
-  assert.deepEqual(report.summary, { unresolvedCount: 2, copilotCount: 1, humanCount: 1 });
+  assert.deepEqual(report.summary, { unresolvedCount: 2, copilotCount: 1, cursorCount: 0, humanCount: 1 });
   assert.equal(report.threads.length, 2);
 });
 
@@ -147,25 +150,59 @@ test('buildCollectReport: merge-ready when review done and every thread resolved
   const report = buildCollectReport({
     prNumber: 1,
     copilot: { state: 'complete', reason: 'review_submitted', inlineCommentCount: 1 },
+    cursor: { state: 'skipped', reason: 'copilot_primary', inlineCommentCount: 0 },
     threads: [thread({ isResolved: true })],
   });
   assert.equal(report.mergeReady, true);
 });
 
-test('buildCollectReport: merge-ready when Copilot absent and no threads', () => {
+test('buildCollectReport: not merge-ready when Copilot absent and Cursor fallback not queued', () => {
   const report = buildCollectReport({
     prNumber: 1,
     copilot: { state: 'absent', reason: 'no_review', inlineCommentCount: 0 },
+    cursor: { state: 'absent', reason: 'no_review', inlineCommentCount: 0 },
     threads: [],
   });
   assert.equal(report.readyForTriage, true);
+  assert.equal(report.mergeReady, false);
+  assert.equal(report.cursorFallbackApplies, true);
+});
+
+test('buildCollectReport: merge-ready when Copilot absent and Cursor fallback complete', () => {
+  const report = buildCollectReport({
+    prNumber: 1,
+    copilot: { state: 'absent', reason: 'no_review', inlineCommentCount: 0 },
+    cursor: { state: 'complete', reason: 'review_submitted', inlineCommentCount: 0 },
+    threads: [],
+  });
   assert.equal(report.mergeReady, true);
+});
+
+test('assessCursorBugbotStatus skipped while Copilot pending', () => {
+  const status = assessCursorBugbotStatus({
+    reviews: [],
+    reviewComments: [],
+    checkRuns: [],
+    copilot: { state: 'pending' },
+  });
+  assert.equal(status.state, 'skipped');
+});
+
+test('assessCursorBugbotStatus pending when check in progress', () => {
+  const status = assessCursorBugbotStatus({
+    reviews: [],
+    reviewComments: [],
+    checkRuns: [{ name: 'Cursor Bugbot', status: 'in_progress', started_at: '2026-11-16T10:00:00Z' }],
+    copilot: { state: 'absent' },
+  });
+  assert.equal(status.state, 'pending');
 });
 
 test('buildCollectReport: timeout with Copilot still pending flags Copilot unavailable, not merge-ready', () => {
   const report = buildCollectReport({
     prNumber: 1,
     copilot: { state: 'pending', reason: 'review_requested', inlineCommentCount: 0 },
+    cursor: { state: 'skipped', reason: 'awaiting_copilot', inlineCommentCount: 0 },
     threads: [thread({ reviewer: 'human', author: 'owner' })],
     timedOut: true,
   });
@@ -173,7 +210,7 @@ test('buildCollectReport: timeout with Copilot still pending flags Copilot unava
   assert.equal(report.copilotUnavailable, true);
   assert.equal(report.readyForTriage, true);
   assert.equal(report.mergeReady, false);
-  assert.match(report.warnings[0], /unavailable/);
+  assert.match(report.warnings[0], /fallback/);
 });
 
 test('readReviewThreadPage throws on GraphQL errors instead of returning zero threads', () => {

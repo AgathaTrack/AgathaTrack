@@ -2,13 +2,26 @@
 
 // Review author is `copilot-pull-request-reviewer[bot]`; a pending request lists the reviewer as `Copilot`.
 const COPILOT_LOGIN_RE = /^copilot/i;
+const CURSOR_LOGIN_RE = /^cursor/i;
+
+/** GitHub check name for queued Bugbot runs (fallback when Copilot is absent). */
+const CURSOR_BUGBOT_CHECK_NAME = 'Cursor Bugbot';
+
+/** After a fallback trigger, allow time for the check/review to land (similar to Copilot). */
+const CURSOR_REVIEW_GRACE_MS = 7 * 60 * 1000;
 
 function isCopilotLogin(login) {
   return COPILOT_LOGIN_RE.test(String(login || ''));
 }
 
+function isCursorLogin(login) {
+  return CURSOR_LOGIN_RE.test(String(login || ''));
+}
+
 function classifyReviewer(login) {
-  return isCopilotLogin(login) ? 'copilot' : 'human';
+  if (isCopilotLogin(login)) return 'copilot';
+  if (isCursorLogin(login)) return 'cursor';
+  return 'human';
 }
 
 function loginOf(entry) {
@@ -37,6 +50,60 @@ function assessCopilotStatus({ reviews, reviewComments, requestedReviewers, crea
   if (age < COPILOT_REQUEST_GRACE_MS) {
     return { state: 'pending', reason: 'awaiting_request', inlineCommentCount: 0 };
   }
+  return { state: 'absent', reason: 'no_review', inlineCommentCount: 0 };
+}
+
+function latestCheckRun(checkRuns, name) {
+  const matches = (checkRuns || []).filter((run) => run?.name === name);
+  if (matches.length === 0) return null;
+  return matches.sort(
+    (a, b) => Date.parse(b.started_at || b.created_at || 0) - Date.parse(a.started_at || a.created_at || 0),
+  )[0];
+}
+
+/**
+ * Cursor Bugbot fallback applies only after Copilot is settled absent (or timed out unavailable).
+ */
+function assessCursorBugbotStatus({
+  reviews,
+  reviewComments,
+  checkRuns,
+  copilot,
+  copilotTimedOut = false,
+  fallbackRequestedAt = null,
+  now = Date.now(),
+}) {
+  const copilotPending = copilot?.state === 'pending';
+  const copilotAbsent = copilot?.state === 'absent';
+  const copilotUnavailable = copilotPending && copilotTimedOut;
+  const fallbackApplies = copilotAbsent || copilotUnavailable;
+
+  if (!fallbackApplies) {
+    if (copilot?.state === 'complete') {
+      return { state: 'skipped', reason: 'copilot_primary', inlineCommentCount: 0 };
+    }
+    return { state: 'skipped', reason: 'awaiting_copilot', inlineCommentCount: 0 };
+  }
+
+  const cursorComments = (reviewComments || []).filter((c) => isCursorLogin(loginOf(c)));
+  const hasCursorReview = (reviews || []).some((r) => isCursorLogin(loginOf(r)));
+  const check = latestCheckRun(checkRuns, CURSOR_BUGBOT_CHECK_NAME);
+
+  if (check && (check.status === 'queued' || check.status === 'in_progress')) {
+    return { state: 'pending', reason: 'check_in_progress', inlineCommentCount: cursorComments.length };
+  }
+  if (hasCursorReview || cursorComments.length > 0) {
+    return { state: 'complete', reason: 'review_submitted', inlineCommentCount: cursorComments.length };
+  }
+  if (check?.status === 'completed') {
+    return { state: 'complete', reason: 'check_completed', inlineCommentCount: cursorComments.length };
+  }
+
+  const requestAge = fallbackRequestedAt ? now - Date.parse(fallbackRequestedAt) : null;
+  if (requestAge != null && requestAge < CURSOR_REVIEW_GRACE_MS) {
+    return { state: 'pending', reason: 'awaiting_review', inlineCommentCount: 0 };
+  }
+
   return { state: 'absent', reason: 'no_review', inlineCommentCount: 0 };
 }
 
@@ -84,37 +151,66 @@ function readReviewThreadPage(graphql, prNumber) {
  *   timed out and Copilot counts as unavailable (`copilotUnavailable`).
  * `mergeReady` — no Copilot review in progress and nothing unresolved.
  */
-function buildCollectReport({ prNumber, copilot, threads, timedOut = false }) {
+function buildCollectReport({
+  prNumber,
+  copilot,
+  cursor = { state: 'skipped', reason: 'not_evaluated', inlineCommentCount: 0 },
+  threads,
+  timedOut = false,
+}) {
   const unresolvedThreads = threads.filter((thread) => !thread.isResolved);
   const copilotThreads = unresolvedThreads.filter((thread) => thread.reviewer === 'copilot');
+  const cursorThreads = unresolvedThreads.filter((thread) => thread.reviewer === 'cursor');
   const humanThreads = unresolvedThreads.filter((thread) => thread.reviewer === 'human');
 
   const copilotPending = copilot.state === 'pending';
   const copilotUnavailable = copilotPending && timedOut;
-  const readyForTriage = !copilotPending || copilotUnavailable;
-  const mergeReady = !copilotPending && unresolvedThreads.length === 0;
+  const fallbackApplies =
+    copilot.state === 'absent' || copilotUnavailable;
+  const cursorRelevant = fallbackApplies && cursor.state !== 'skipped';
+  const cursorPending = cursorRelevant && cursor.state === 'pending';
+  const cursorUnavailable = cursorPending && timedOut;
+
+  const automatedPending =
+    (copilotPending && !timedOut) || (cursorRelevant && cursorPending && !timedOut);
+
+  const readyForTriage = !automatedPending;
+  const missingAutomatedFallback =
+    cursorRelevant && cursor.state === 'absent' && !cursorUnavailable;
+  const mergeReady =
+    readyForTriage && unresolvedThreads.length === 0 && !missingAutomatedFallback;
 
   const warnings = [];
   if (copilotUnavailable) {
     warnings.push(
-      'Copilot review still pending after the wait timeout — treat Copilot as unavailable (pr-review-cost-efficiency.md §Copilot unavailable) and triage the threads present.'
+      'Copilot review still pending after the wait timeout — Cursor Bugbot fallback applies when configured (pr-review-cost-efficiency.md §Automatic review fallback).'
     );
-  } else if (copilotPending) {
+  } else if (copilotPending && !timedOut) {
     warnings.push('Copilot review in progress — more threads may arrive. Run `wait` before triage or merge.');
+  }
+  if (cursorUnavailable) {
+    warnings.push(
+      'Cursor Bugbot review still pending after the wait timeout — triage existing threads; consider re-running cursor-review-fallback workflow.'
+    );
+  } else if (cursorPending && !timedOut) {
+    warnings.push('Cursor Bugbot review in progress — more threads may arrive.');
   }
 
   return {
     prNumber,
-    reviewers: { copilot },
+    reviewers: { copilot, cursor },
     threads: unresolvedThreads,
     summary: {
       unresolvedCount: unresolvedThreads.length,
       copilotCount: copilotThreads.length,
+      cursorCount: cursorThreads.length,
       humanCount: humanThreads.length,
     },
     readyForTriage,
     mergeReady,
     copilotUnavailable,
+    cursorUnavailable,
+    cursorFallbackApplies: cursorRelevant,
     timedOut,
     warnings,
   };
@@ -148,9 +244,14 @@ function parsePrRef(prRef, defaultOwner, defaultRepo) {
 
 module.exports = {
   COPILOT_REQUEST_GRACE_MS,
+  CURSOR_BUGBOT_CHECK_NAME,
+  CURSOR_REVIEW_GRACE_MS,
   classifyReviewer,
   isCopilotLogin,
+  isCursorLogin,
   assessCopilotStatus,
+  assessCursorBugbotStatus,
+  latestCheckRun,
   normalizeReviewThreads,
   buildCollectReport,
   parsePrRef,

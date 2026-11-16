@@ -1,0 +1,18 @@
+# Repo Bugbot defaults when Cursor reviews are triggered (API fallback or manual `cursor review`).
+# Bugbot reads from the PR base branch only — merge to main before these apply to open PRs.
+version: 1
+
+triggers:
+  drafts: true
+  # Primary open-path is workflow/API when Copilot is absent; avoid duplicate auto-on-every-push.
+  frequency: oncePerPr
+
+review:
+  effort: low
+  incremental: true
+
+prSummary:
+  mode: disabled
+
+autofix:
+  mode: disabled

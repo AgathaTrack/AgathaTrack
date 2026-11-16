@@ -3,12 +3,12 @@ title: Pr Review Cost Efficiency
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-02
+last_updated: 2026-11-16
 tags: [agent-efficiency, policy, actions-cost]
 ---
 # PR review & cost efficiency
 
-**Homes:** pre-PR self-review · Copilot triage · **Cloud Agent model policy** · Actions cost levers.
+**Homes:** pre-PR self-review · Copilot + Cursor Bugbot fallback · **Cloud Agent model policy** · Actions cost levers.
 
 | Topic | Also see |
 |-------|----------|
@@ -16,7 +16,9 @@ tags: [agent-efficiency, policy, actions-cost]
 | Triage / merge gates | [autonomous-pr-policy.md](./autonomous-pr-policy.md) |
 | Always-on rule | `.cursor/rules/pr-hygiene.mdc` |
 
-**Cursor Bugbot:** Retired for this repo (user decision). Do not configure, wait on, or document active Bugbot flows.
+**Cursor Bugbot (fallback):** Official secondary reviewer when GitHub Copilot PR review is **absent** on PRs to `main`. Workflow `cursor-review-fallback.yml` queues Bugbot via `POST /bugbot/review` after the Copilot grace window. Effort **low** (`.cursor/config/bugbot.yaml`). Triage Cursor threads like Copilot. Disable with repo variable / env `CURSOR_REVIEW_FALLBACK=off`.
+
+**Operator:** Enable Bugbot for this repository in **Cursor → Automations → Bugbot** and set repository **`manualTriggerOnly: true`** so only the workflow (or a human `cursor review` comment) queues reviews — not duplicate auto-on-every-push. Actions secret `cursor_api_key` must allow Bugbot review API.
 
 ---
 
@@ -44,13 +46,15 @@ Implementation
 
 Copilot PR review (when enabled) → triage when threads exist
 
+Cursor Bugbot (Copilot absent on main) → triage when threads exist
+
 Babysit+ (composer-2.5 for babysit steps — see below)
-  → babysit_pr_reviews.js wait --pr <url>   (Copilot done → triage every thread)
+  → babysit_pr_reviews.js wait --pr <url>   (Copilot or Cursor fallback done → triage every thread)
   → fix + pre-push-changed.sh → reply + resolve threads → push → wait again → CI
   → babysit_pr_reviews.js gate --pr <url>   (exit 0) → pre-push.sh → merge
 ```
 
-When Copilot is unavailable or posts no threads: proceed after self-review + CI green + review gate (§Copilot unavailable). Full procedure: autonomous-pr-policy §Automatic reviews.
+When Copilot is absent, the fallback workflow queues Cursor Bugbot. When both are unavailable after the wait timeout: proceed after self-review + CI green + review gate (§Automatic review fallback). Full procedure: autonomous-pr-policy §Automatic reviews.
 
 ---
 
@@ -74,7 +78,7 @@ Controls: this section (SSOT), `.cursor/rules/pr-hygiene.mdc` pointer, dashboard
 |-------|--------|
 | Pre-PR self-review | Fewer fix iterations after open |
 | `composer-2.5` for babysit | Avoid thinking-model burn on triage/CI |
-| Copilot once per PR (dashboard) | Automatic review off agent pool |
+| Copilot once per PR (ruleset) + Bugbot only when absent | Automatic review off agent pool except guarded fallback |
 | Push batching | Fewer `ci.yml` runs (`AGENTS.md` §Autonomy and merging) |
 | Pre-UAT cancel superseded runs | Stale E2E grids stop when `main` advances |
 
@@ -91,15 +95,26 @@ Copilot credits and Actions minutes are separate meters. Levers: batch pushes, i
 | AEC-D-001 | Oct 2026 Actions spike mainly `ci.yml` volume, not Copilot runners | Live |
 | AEC-D-002 | Trim triggers, push batching, Pre-UAT cancel-in-progress, PR E2E max 2 legs | Live |
 | AEC-D-003 | Babysit skills wait for Copilot before triage, re-check reviews after every push and gate merge on `babysit_pr_reviews.js gate` (PR #2017 merged 1 s before Copilot's 3 threads; `collect` also failed under the `repo`-only bot token) | Live |
+| AEC-D-004 | Cursor Bugbot is the official fallback when Copilot PR review is absent on `main` (`cursor-review-fallback.yml`, `effort: low`); `babysit_pr_reviews.js` waits on Cursor when Copilot is absent | Live |
 
 ---
 
-## Copilot unavailable
+## Automatic review fallback (Copilot absent)
 
-1. Do not request Copilot reviewer without credits.
-2. Self-review + CI + `./scripts/pre-push.sh` before merge to `main`.
-3. `wait --pr` exits `3` (Copilot still pending at the timeout) or Copilot absent — triage any existing threads; `gate --pr` must exit `0`, or `3` with nothing unresolved, before merge.
-4. Optional PR comment: Copilot unavailable; CI + pre-push only.
+Applies to PRs targeting **`main`** only (matches Copilot ruleset scope).
+
+1. **Wait for Copilot** — three-minute grace after open (`reviewers.copilot.state == pending`, reason `awaiting_request`).
+2. **Copilot absent** — workflow `cursor-review-fallback.yml` sleeps through grace + buffer, then `scripts/cursor_review_fallback.js` calls `POST https://api.cursor.com/bugbot/review` when Copilot is still absent and Bugbot is not already running.
+3. **Babysit wait** — `babysit_pr_reviews.js wait` then treats **Cursor Bugbot** like Copilot (`reviewers.cursor`, threads from `cursor[bot]`). Merge gate blocks while fallback is **absent** (not yet queued) or **pending**.
+4. **Triage** — same buckets as Copilot; resolve every thread before merge.
+5. **Timeout** — `wait` / `gate` exit `3` when Copilot or Cursor is still pending at timeout but nothing unresolved — optional PR comment once; see §Copilot unavailable legacy note below.
+6. **Kill switch** — `CURSOR_REVIEW_FALLBACK=off` (Actions env or local) restores Copilot-only behaviour.
+
+Do not manually `POST` Copilot reviewers without org credits.
+
+### Copilot unavailable (legacy escape hatch)
+
+When **both** reviewers fail to finish within the wait timeout and there are no threads: self-review + CI + `./scripts/pre-push.sh` before merge; `gate --pr` exit `3` with nothing unresolved counts as passing.
 
 ---
 

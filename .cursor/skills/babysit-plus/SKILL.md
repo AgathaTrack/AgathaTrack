@@ -84,7 +84,7 @@ Use **`composer-2.5` only** for steps §0–7 (sync, poll, triage, fixes, CI, me
 
 ### 0b. Ready for review + wait for automatic reviews (mandatory)
 
-Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. **Copilot** is the primary automatic reviewer when enabled; it posts 2–7 min after the PR opens and **must be triaged**. Policy: autonomous-pr-policy §Automatic reviews.
+Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. **Copilot** is the primary automatic reviewer when enabled; **Cursor Bugbot** is the official fallback on `main` when Copilot is absent (`cursor-review-fallback.yml`). **Must triage** both. Policy: autonomous-pr-policy §Automatic reviews.
 
 1. Confirm session model is **`composer-2.5`** before this step (see §Model). During an active execute-plan (any schema), never switch model or spawn a fresh agent for this step; v2 workers never merge — the driver arms auto-merge.
 2. If `isDraft`: `gh pr ready <url>` (or equivalent).
@@ -92,8 +92,8 @@ Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. **Copilot** is the pr
    ```bash
    node scripts/babysit_pr_reviews.js wait --pr <url>
    ```
-   Returns once no Copilot review is in progress (a PR younger than 3 min counts as awaiting Copilot). The JSON `threads` array lists **every unresolved thread** from Copilot and humans. Never declare “no automated review” while `reviewers.copilot.state` is `pending` or `threads` is non-empty. A script error is never “no threads” — fix it and re-run.
-4. **Copilot unavailable:** `wait` exits `3` (Copilot still pending after 15 min) → comment `Copilot review did not finish within 15 min; proceeding on triage + CI + pre-push.` once and continue — do **not** halt. Copilot absent (never requested) → proceed.
+   Returns once no Copilot **or Cursor fallback** review is in progress. The JSON `threads` array lists **every unresolved thread** (Copilot, Cursor, human). Never declare “no automated review” while `reviewers.copilot.state` or `reviewers.cursor.state` is `pending`, or while `threads` is non-empty. A script error is never “no threads” — fix it and re-run.
+4. **Automated review timeout:** `wait` exits `3` when Copilot or Cursor is still pending after 15 min → comment once per pr-review-cost-efficiency §Automatic review fallback; triage listed threads; continue — do **not** halt if `gate` later passes.
 5. **Autofix:** Off — babysit+ owns fixes; do not re-run adversarial review in agent turns (slim babysit).
 
 ### 1. Sync and conflicts
@@ -102,7 +102,7 @@ Same as `/babysit`: resolve merge conflicts preserving intent; escalate if inten
 
 ### 2. Triage (mandatory before fixes)
 
-Triage **every** entry in `threads` from the latest `wait` output (Copilot, human; resolved threads are already filtered out).
+Triage **every** entry in `threads` from the latest `wait` output (Copilot, Cursor, human; resolved threads are already filtered out).
 
 Post a **triage comment** on the PR summarizing every active unresolved thread:
 

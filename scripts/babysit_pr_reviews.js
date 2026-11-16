@@ -16,6 +16,7 @@ const { setTimeout: sleepMs } = require('timers/promises');
 const { parseFlags } = require('./lib/github_issue_workflow_lib');
 const {
   assessCopilotStatus,
+  assessCursorBugbotStatus,
   buildCollectReport,
   normalizeReviewThreads,
   parsePrRef,
@@ -60,7 +61,7 @@ function usage() {
   node scripts/babysit_pr_reviews.js wait --pr <url|owner/repo#n|n> [--timeout-min 15] [--interval-sec 30]
   node scripts/babysit_pr_reviews.js gate --pr <url|owner/repo#n|n> [--timeout-min 15] [--interval-sec 30]
 
-Outputs JSON with Copilot status and unresolved review threads (Copilot, human).
+Outputs JSON with Copilot and Cursor Bugbot (fallback) status and unresolved review threads.
   collect  one snapshot; exit 0 on success.
   wait     poll until no Copilot review is in progress; exit 0, or 3 when Copilot is still pending at the timeout.
   gate     wait, then exit 0 when mergeReady; 2 when unresolved threads remain;
@@ -101,6 +102,20 @@ function fetchReviewThreads({ owner, repo, number }) {
   throw new Error(`PR #${number} has more than ${THREAD_PAGE_CAP * 100} review threads; inspect the GitHub UI`);
 }
 
+function findFallbackRequestTime(issueComments) {
+  const marker = '<!-- cursor-bugbot-fallback-requested -->';
+  for (const comment of issueComments || []) {
+    if (String(comment.body || '').includes(marker)) {
+      return comment.created_at;
+    }
+  }
+  return null;
+}
+
+function cursorFallbackEnabled() {
+  return process.env.CURSOR_REVIEW_FALLBACK !== 'off';
+}
+
 /** REST + reviewThreads GraphQL only: both work with the `repo`-scoped bot token (no `read:org`). */
 function fetchReviewSnapshot(pr, { timedOut = false } = {}) {
   const { owner, repo, number } = pr;
@@ -108,15 +123,31 @@ function fetchReviewSnapshot(pr, { timedOut = false } = {}) {
   const pull = ghJson(['api', `repos/${repoSlug}/pulls/${number}`]);
   const reviews = ghPaginated(`repos/${repoSlug}/pulls/${number}/reviews`);
   const reviewComments = ghPaginated(`repos/${repoSlug}/pulls/${number}/comments`);
+  const issueComments = ghPaginated(`repos/${repoSlug}/issues/${number}/comments`);
+  const checkRuns = ghPaginated(`repos/${repoSlug}/commits/${pull.head.sha}/check-runs?per_page=100`);
+
+  const copilot = assessCopilotStatus({
+    reviews,
+    reviewComments,
+    requestedReviewers: pull.requested_reviewers || [],
+    createdAt: pull.created_at,
+  });
+
+  const cursor = cursorFallbackEnabled()
+    ? assessCursorBugbotStatus({
+        reviews,
+        reviewComments,
+        checkRuns,
+        copilot,
+        copilotTimedOut: timedOut,
+        fallbackRequestedAt: findFallbackRequestTime(issueComments),
+      })
+    : { state: 'skipped', reason: 'disabled', inlineCommentCount: 0 };
 
   return buildCollectReport({
     prNumber: number,
-    copilot: assessCopilotStatus({
-      reviews,
-      reviewComments,
-      requestedReviewers: pull.requested_reviewers || [],
-      createdAt: pull.created_at,
-    }),
+    copilot,
+    cursor,
     threads: normalizeReviewThreads(fetchReviewThreads(pr)),
     timedOut,
   });
@@ -158,7 +189,9 @@ async function run(cmd, flags) {
     case 'wait': {
       const report = await waitForReviews(flags);
       print(report);
-      return report.copilotUnavailable ? EXIT_COPILOT_UNAVAILABLE : 0;
+      return report.copilotUnavailable || report.cursorUnavailable
+        ? EXIT_COPILOT_UNAVAILABLE
+        : 0;
     }
     case 'gate': {
       const report = await waitForReviews(flags);
