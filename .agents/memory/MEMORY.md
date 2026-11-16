@@ -84,5 +84,5 @@ Institutional knowledge for cloud agents. Domain workflows live in **Skills** (`
 - Domain map: `docs/architecture/index.md`
 - Efficiency plan: `docs/agent-efficiency/plans/agent-efficiency-plan.md`
 - Pre-push: `./scripts/pre-push-changed.sh` (iteration) · `./scripts/pre-push.sh` (merge)
-- PR hygiene: pre-PR self-review + Copilot review (Bugbot retired) — `docs/agent-efficiency/pr-review-cost-efficiency.md`
+- PR hygiene: pre-PR self-review + Copilot; Cursor Bugbot when Copilot absent — `docs/agent-efficiency/pr-review-cost-efficiency.md`
 - PR reviews: fix valid Copilot/human feedback **in the same PR** before merge — no follow-up debt for locator/assertion hardening.
