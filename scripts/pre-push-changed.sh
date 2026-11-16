@@ -224,6 +224,7 @@ run_governance() {
   node --test scripts/issue_pipeline_monitor.test.js
   node --test scripts/issue_pipeline_legacy.test.js
   node --test scripts/issue_pipeline_repair.test.js
+  node --test scripts/issue_pipeline_v2.test.js
   node --test scripts/stage_mirror_decide.test.js
   node --test scripts/db/normalize-schema-dump.test.js
   node scripts/db/check-migration-manifest.js
