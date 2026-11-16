@@ -19,7 +19,8 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 |----------|---------|
 | `.github/workflows/issue-pipeline-dispatcher.yml` | Triggers, concurrency, environment secrets |
 | `scripts/issue_pipeline_dispatcher.js` | Tick: enumerate work, choose actions, invoke workers |
-| `scripts/issue_pipeline_state.js` | Parse/update `<!-- agent-state: … -->` |
+| `scripts/issue_pipeline_state.js` | Parse `<!-- agent-state: … -->`; lane comments no longer embed state |
+| `scripts/issue_pipeline_state_load.js` | Upsert dedicated `<!-- pipeline-state -->` comment (newest `updated_at` wins) |
 | `scripts/issue_pipeline_project.js` | Pawpet Status read/write (wraps `github_issue_workflow.js` patterns) |
 | `scripts/issue_pipeline_workers/` | Launch Claude action or Cursor API per lane |
 | Repo variable `ISSUE_PIPELINE` | `off` \| `dry-run` \| `on` |

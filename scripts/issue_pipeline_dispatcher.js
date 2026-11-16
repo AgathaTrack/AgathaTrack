@@ -52,16 +52,29 @@ function needsReopenAnalysis(ctx) {
   const state = ctx.state || defaultState();
   const liveSha = ctx.liveBodySha;
   const stateSha = state.body_sha || null;
-  if (stateSha && liveSha !== stateSha) {
+  const status = ctx.status;
+
+  if (status === 'In Analysis' && hasDeliveryLabel(ctx.labels)) {
     return true;
   }
-  if (ctx.status === 'In Analysis' && hasDeliveryLabel(ctx.labels)) {
+  if (status === 'Ready' && hasDeliveryLabel(ctx.labels) && !state.converged_at) {
     return true;
   }
-  if (ctx.status === 'Ready' && hasDeliveryLabel(ctx.labels) && !state.converged_at) {
+  if (
+    status === 'Ready' &&
+    state.converged_at &&
+    stateSha &&
+    liveSha !== stateSha
+  ) {
     return true;
   }
   return false;
+}
+
+const PIPELINE_ASSIGNEES = new Set(['pawpet-claude', 'pawpet-bot', OWNER_LOGIN]);
+
+function countPipelineAssignees(assignees) {
+  return (assignees || []).filter((login) => PIPELINE_ASSIGNEES.has(login)).length;
 }
 
 /**
@@ -256,6 +269,17 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
     if (!isDispatcherEligibleIssue(issue, pipelineMode)) {
       continue;
     }
+    if (countPipelineAssignees(issue.assignees) > 1) {
+      console.log(
+        JSON.stringify({
+          event: 'pipeline_skip',
+          issue: issue.number,
+          reason: 'multiple-pipeline-assignees',
+          assignees: issue.assignees,
+        }),
+      );
+      continue;
+    }
     const liveBodySha = bodySha(issue.body);
     const { state } = await resolveIssueState(owner, repo, issue.number, token);
     const action = computeEligibleAction({
@@ -329,6 +353,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
           state,
           liveBodySha: bodySha(issueRow?.body || ''),
           reviewer: row.assignee,
+          labels: issueRow?.labels || [],
         });
       } else if (row.action === 'delivery') {
         const issueRow = issues.find((i) => i.number === row.issue);
