@@ -8,7 +8,7 @@ const {
   setLabels,
   assignIssue,
 } = require('../.github/scripts/github-project-lib');
-const { resolvePipelineMode } = require('./issue_pipeline_dispatcher');
+const { resolvePipelineMode, pipelineModeWritesLive } = require('./issue_pipeline_mode');
 const { isPipelineIssue } = require('./issue_pipeline_gate');
 
 async function applyTodoShortcut({
@@ -25,6 +25,14 @@ async function applyTodoShortcut({
   const issue = await fetchIssue(owner, repo, issueNumber, token);
   const labels = issue.labels.nodes.map((node) => node.name);
   const mode = resolvePipelineMode(process.env.ISSUE_PIPELINE);
+
+  if (mode === 'off') {
+    return {
+      skipped: true,
+      reason: 'ISSUE_PIPELINE off',
+      issueNumber,
+    };
+  }
 
   if (!isPipelineIssue(labels, mode)) {
     return {
@@ -67,7 +75,12 @@ async function main() {
     throw new Error('GITHUB_REPOSITORY, ISSUE_NUMBER, and GITHUB_TOKEN are required');
   }
   const { owner, repo } = parseRepo(repository);
-  const dryRun = resolvePipelineMode(process.env.ISSUE_PIPELINE) === 'dry-run';
+  const mode = resolvePipelineMode(process.env.ISSUE_PIPELINE);
+  if (mode === 'off') {
+    console.log(JSON.stringify({ skipped: true, reason: 'ISSUE_PIPELINE off' }));
+    process.exit(0);
+  }
+  const dryRun = !pipelineModeWritesLive(mode);
   const result = await applyTodoShortcut({
     owner,
     repo,

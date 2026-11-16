@@ -41,7 +41,13 @@ jobs:
           const { parseRepo } = require('./.github/scripts/github-project-lib');
           const { runTodoLanePipeline } = require('./scripts/issue_pipeline_intake');
           const { owner, repo } = parseRepo(process.env.GITHUB_REPOSITORY);
-          const dryRun = String(process.env.ISSUE_PIPELINE || 'off').toLowerCase() === 'dry-run';
+          const { resolvePipelineMode, pipelineModeWritesLive, pipelineModeAllowsRun } = require('./scripts/issue_pipeline_mode');
+          const mode = resolvePipelineMode(process.env.ISSUE_PIPELINE);
+          if (!pipelineModeAllowsRun(mode)) {
+            console.log(JSON.stringify({ skipped: true, reason: 'ISSUE_PIPELINE off' }));
+            process.exit(0);
+          }
+          const dryRun = !pipelineModeWritesLive(mode);
           runTodoLanePipeline({
             owner,
             repo,
