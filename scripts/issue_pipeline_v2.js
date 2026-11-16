@@ -12,6 +12,12 @@ const { bodySha } = require('./issue_pipeline_state');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields, writeIssueFields } = require('./issue_pipeline_v2_fields');
+const {
+  deriveSpecFacts,
+  humanCommentSinceBlock,
+  listIssueComments,
+  listCommentReactions,
+} = require('./issue_pipeline_v2_comments');
 
 /** Flipped on in run B, together with the launch and release stages. */
 const WRITES_ENABLED = false;
@@ -32,6 +38,41 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
     bodyHash: bodySha(issue.body),
     wip,
   };
+}
+
+/**
+ * Facts that need comments or reactions. Only read for the stages that use them, so a board of
+ * mostly Backlog and Done issues costs no extra calls.
+ */
+async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
+  const canonical = canonicalStage(entry.parsed.stage);
+  const needsComments = canonical === 'To do' || Boolean(entry.parsed.blocked);
+  if (!needsComments) {
+    return {};
+  }
+  const comments = await (io.listIssueComments || listIssueComments)({
+    owner,
+    repo,
+    issueNumber: entry.number,
+    token,
+  });
+  const facts = {};
+  if (entry.parsed.blocked) {
+    facts.humanCommentSinceBlock = humanCommentSinceBlock(comments, config);
+  }
+  if (canonical === 'To do' && !entry.parsed.blocked) {
+    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins: config.engine.logins });
+    const reactions = probe.commentId
+      ? await (io.listCommentReactions || listCommentReactions)({
+          owner,
+          repo,
+          commentId: probe.commentId,
+          token,
+        })
+      : [];
+    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins: config.engine.logins });
+  }
+  return facts;
 }
 
 function countWip(entries) {
@@ -78,14 +119,17 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     if (only && entry.number !== only) {
       continue;
     }
-    const facts = buildBaseFacts({
-      issue: entry.issue,
-      parsed: entry.parsed,
-      onBoard: true,
-      wip,
-      now,
-      runMode,
-    });
+    const facts = {
+      ...buildBaseFacts({
+        issue: entry.issue,
+        parsed: entry.parsed,
+        onBoard: true,
+        wip,
+        now,
+        runMode,
+      }),
+      ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
+    };
     const action = decide(facts, config);
     actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
     console.log(
@@ -138,4 +182,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { tick, buildBaseFacts, countWip, WRITES_ENABLED };
+module.exports = { tick, buildBaseFacts, buildCommentFacts, countWip, WRITES_ENABLED };

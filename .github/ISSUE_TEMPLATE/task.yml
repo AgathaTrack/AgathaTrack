@@ -59,6 +59,20 @@ body:
     validations:
       required: true
 
+  - type: textarea
+    id: delivery_plan
+    attributes:
+      label: Delivery plan
+      description: Filled in during analysis, so reviewers approve it with the rest of the spec. Method (PR, light-plan or execute-plan), the planned work, and an `agent-paths` block listing the paths it will touch.
+      placeholder: |
+        Method: PR
+        Plan: ...
+        ```agent-paths
+        {"globs":["server/**"]}
+        ```
+    validations:
+      required: false
+
   - type: input
     id: affected_area
     attributes:

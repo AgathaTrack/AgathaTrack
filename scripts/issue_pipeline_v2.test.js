@@ -368,6 +368,8 @@ function boardIo(extra = {}) {
       { issue: { number: 8, state: 'OPEN', repository: { name: 'Other' } } },
     ],
     getIssue: async (n) => issues[n],
+    listIssueComments: async () => [],
+    listCommentReactions: async () => [],
     ...extra,
   };
 }
