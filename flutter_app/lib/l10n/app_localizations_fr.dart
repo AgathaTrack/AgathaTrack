@@ -7821,22 +7821,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get occurrenceCareFinishedNoReopen => 'Ce soin est terminé.';
 
   @override
-  String occurrenceOpenCount(int count) {
-    return '$count en attente';
-  }
-
-  @override
-  String occurrenceMissedCount(int count) {
-    return '$count en retard';
-  }
-
-  @override
-  String get occurrenceZoneMissed => 'En retard';
-
-  @override
-  String get occurrenceZoneDueToday => 'Aujourd\'hui';
-
-  @override
   String get occurrenceZoneComingUp => 'À venir';
 
   @override

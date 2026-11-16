@@ -88,65 +88,6 @@ String _formatOccurrenceTimeLabel(BuildContext context, String time) {
   ).formatTimeOfDay(TimeOfDay(hour: hour, minute: minute));
 }
 
-/// Occurrence-aware third line for [CareEventRow] when open doses exist.
-CareEventStatusLine formatOccurrenceCareEventStatusLine(
-  HealthEntry entry,
-  OccurrenceSummary summary,
-  AppLocalizations l,
-  ColorScheme colorScheme, {
-  BuildContext? context,
-}) {
-  if (summary.openCount == 0) {
-    return formatCareEventStatusLine(entry, l, colorScheme);
-  }
-
-  final now = DateTime.now();
-  final headline = summary.leadingOccurrence;
-  if (headline == null) {
-    return formatCareEventStatusLine(entry, l, colorScheme);
-  }
-
-  final zone = occurrenceZone(headline, now);
-  final openSuffix = summary.openCount > 1
-      ? ' · ${l.occurrenceOpenCount(summary.openCount)}'
-      : '';
-
-  switch (zone) {
-    case OccurrenceZone.missed:
-      final suffix = l.urgencyOverdue;
-      final missedSuffix = summary.missedCount > 1
-          ? ' · ${l.occurrenceMissedCount(summary.missedCount)}'
-          : '';
-      final instant = formatOccurrenceInstant(headline, l, context: context);
-      return CareEventStatusLine(
-        text: '$instant$openSuffix$missedSuffix · $suffix',
-        statusSuffix: suffix,
-        suffixTreatment: overdueStatusTreatment(colorScheme),
-      );
-    case OccurrenceZone.dueToday:
-      if (headline.scheduledTime != null &&
-          headline.scheduledTime!.isNotEmpty) {
-        final instant = formatOccurrenceInstant(headline, l, context: context);
-        final suffix = l.urgencyDueToday;
-        return CareEventStatusLine(
-          text: '$instant$openSuffix · $suffix',
-          statusSuffix: suffix,
-          suffixTreatment: dueTodayStatusTreatment(),
-        );
-      }
-      return CareEventStatusLine(
-        text: '${l.urgencyDueToday}$openSuffix',
-        statusSuffix: summary.openCount == 1 ? l.urgencyDueToday : null,
-        suffixTreatment: summary.openCount == 1
-            ? dueTodayStatusTreatment()
-            : null,
-      );
-    case OccurrenceZone.comingUp:
-      final instant = formatOccurrenceInstant(headline, l, context: context);
-      return CareEventStatusLine(text: '$instant$openSuffix');
-  }
-}
-
 /// Renders [CareEventStatusLine] with neutral date text and accessible suffix chip.
 class CareEventStatusLineView extends StatelessWidget {
   const CareEventStatusLineView({

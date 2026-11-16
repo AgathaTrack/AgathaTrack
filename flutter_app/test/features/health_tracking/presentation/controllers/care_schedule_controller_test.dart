@@ -18,7 +18,6 @@ class _CareScheduleFakeRepository implements HealthRepository {
 
   List<HealthEntry> entries;
   var completeCalls = 0;
-  var skipMissedCalls = 0;
   var rescheduleCalls = 0;
   var undoCalls = 0;
   bool failNextGetEntries = false;
@@ -51,12 +50,6 @@ class _CareScheduleFakeRepository implements HealthRepository {
     }
     if (throwOnComplete) throw Exception('complete failed');
     return testOccurrence(entryId, id: occurrenceId);
-  }
-
-  @override
-  Future<int> skipMissedOccurrences(String entryId) async {
-    skipMissedCalls++;
-    return 1;
   }
 
   @override
@@ -153,12 +146,8 @@ void main() {
     expect(repository.completeCalls, 1);
   });
 
-  test('skip missed and reschedule reconcile store', () async {
+  test('reschedule reconciles store', () async {
     await pumpStore();
-    final skipped = await controller().skipAllMissedOccurrences('e1');
-    expect(skipped?.committed, isTrue);
-    expect(repository.skipMissedCalls, 1);
-
     final rescheduled = await controller().rescheduleOccurrence(
       'e1',
       'occ-1',
