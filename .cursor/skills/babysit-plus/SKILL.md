@@ -92,7 +92,7 @@ Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. **Copilot** is the pr
    ```bash
    node scripts/babysit_pr_reviews.js wait --pr <url>
    ```
-   Returns once no Copilot review is in progress (a PR younger than 3 min counts as awaiting Copilot). The JSON `threads` array lists **every unresolved thread** from Copilot and humans. Never declare “no automated review” while `reviewers.copilot.state` is `pending` or `threads` is non-empty. A script error is never “no threads” — fix it and re-run.
+   Returns once no Copilot or Cursor-fallback review is in progress (a PR younger than 3 min counts as awaiting Copilot; agent-authored PRs: pr-review-cost-efficiency §Agent-authored PRs). The JSON `threads` array lists **every unresolved thread** from Copilot, the Cursor fallback and humans. Never declare “no automated review” while `reviewers.copilot.state` or `reviewers.cursor.state` is `pending` or `threads` is non-empty. A script error is never “no threads” — fix it and re-run.
 4. **Copilot unavailable:** `wait` exits `3` (Copilot still pending after 15 min) → comment `Copilot review did not finish within 15 min; proceeding on triage + CI + pre-push.` once and continue — do **not** halt. Copilot absent (never requested) → proceed.
 5. **Autofix:** Off — babysit+ owns fixes; do not re-run adversarial review in agent turns (slim babysit).
 
@@ -102,7 +102,7 @@ Same as `/babysit`: resolve merge conflicts preserving intent; escalate if inten
 
 ### 2. Triage (mandatory before fixes)
 
-Triage **every** entry in `threads` from the latest `wait` output (Copilot, human; resolved threads are already filtered out).
+Triage **every** entry in `threads` from the latest `wait` output (Copilot, Cursor, human; resolved threads are already filtered out).
 
 Post a **triage comment** on the PR summarizing every active unresolved thread:
 
