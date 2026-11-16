@@ -44,6 +44,18 @@ function validateConfig(config) {
       }
     }
   }
+  // The engine writes under its own identity, never a listed agent's (#2385). An empty list is
+  // allowed while the owner has not picked one: the engine then trusts no request comment.
+  const engineLogins = config?.engine?.logins;
+  if (!Array.isArray(engineLogins) || engineLogins.some((login) => typeof login !== 'string')) {
+    problems.push('engine.logins must be a list of logins (may be empty)');
+  } else {
+    for (const login of engineLogins) {
+      if (seen.has(login)) {
+        problems.push(`engine identity ${login} must not be a listed agent`);
+      }
+    }
+  }
   const limits = config?.limits || {};
   for (const key of LIMIT_KEYS) {
     if (!Number.isFinite(limits[key]) || limits[key] <= 0) {
