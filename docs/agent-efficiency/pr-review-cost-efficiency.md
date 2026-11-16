@@ -3,7 +3,7 @@ title: Pr Review Cost Efficiency
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-02
+last_updated: 2026-11-16
 tags: [agent-efficiency, policy, actions-cost]
 ---
 # PR review & cost efficiency
@@ -54,6 +54,32 @@ When Copilot is unavailable or posts no threads: proceed after self-review + CI 
 
 ---
 
+## Agent-authored PRs (Copilot request + Cursor fallback)
+
+The `copilot_code_review` ruleset requests Copilot **as the PR author**. Only the owner's personal account has a
+Copilot licence, so PRs opened by `pawpet-bot` / `pawpet-claude` never get the automatic review. The org does not
+buy a second licence.
+
+`.github/workflows/pr-review-request.yml` (runner `scripts/pr_review_request.js`) handles these PRs:
+
+| Step | Behaviour |
+|------|-----------|
+| Trigger | `pull_request_target` opened / ready_for_review / reopened → `main`, same-repo, non-draft, author `pawpet-bot` or `pawpet-claude`. A secret-less relay re-dispatches the job on `main` (the `automation` environment is main-only); PR code is never checked out. |
+| 1. Request Copilot | With `OWNER_COPILOT_REQUEST_TOKEN` (owner fine-grained PAT, Pull requests: read and write). A Copilot request the ruleset already made (as the unlicensed author) is withdrawn and replaced, so Copilot reviews on the owner's licence. No owner token → straight to step 3. |
+| 2. Wait | Up to 8 min for `copilot_work_started` (issue events) or a Copilot review. The last check runs after the deadline: a PR closed or a Copilot start in the final interval stops the run. |
+| 3. Fallback | Withdraw the Copilot request and launch a **review-only** Cursor agent (`composer-2.5`, bot identity) from the PR head with `workOnCurrentBranch: false`, so any stray change lands on a new agent branch, not the PR. It posts one `COMMENT` review with inline findings marked `<!-- cursor-pr-review -->`, and must not edit, push, approve or request changes (prompt rule; the bot token itself can push). |
+| State | One `github-actions[bot]` comment with a `<!-- pr-review-request: … -->` marker (`requested` → `copilot` / `cursor-launched` / `unavailable`). `cursor-launched` records `launched_at` and `reviewer_login`. Markers from other authors are ignored. |
+
+Babysit: `babysit_pr_reviews.js` reports the fallback as `reviewers.cursor`, waits for it (up to
+`--fallback-timeout-min`, default 25) and labels its threads `cursor`. Only marked reviews by `reviewer_login`
+submitted after `launched_at` count, so a quoted marker never completes the fallback. Once the marker is
+`cursor-launched` or `unavailable`, a leftover Copilot request counts as superseded, not pending. `unavailable`
+(no Cursor key, launch failed) sets `cursorUnavailable` → `wait` / `gate` exit `3` (§Copilot unavailable). Cursor
+threads are triaged like Copilot threads. Repository variable `PR_REVIEW_FALLBACK` defaults to `on`; set it to `off`
+to disable the workflow. Human-authored PRs keep the ruleset path.
+
+---
+
 ## Cloud Agent model policy
 
 Usage data showed thinking models on babysit-scale work burn disproportionate tokens. **Babysitting stays on Composer 2.5.**
@@ -91,6 +117,7 @@ Copilot credits and Actions minutes are separate meters. Levers: batch pushes, i
 | AEC-D-001 | Oct 2026 Actions spike mainly `ci.yml` volume, not Copilot runners | Live |
 | AEC-D-002 | Trim triggers, push batching, Pre-UAT cancel-in-progress, PR E2E max 2 legs | Live |
 | AEC-D-003 | Babysit skills wait for Copilot before triage, re-check reviews after every push and gate merge on `babysit_pr_reviews.js gate` (PR #2017 merged 1 s before Copilot's 3 threads; `collect` also failed under the `repo`-only bot token) | Live |
+| AEC-D-004 | Agent-authored PRs: request Copilot with the owner's token, fall back to a review-only `composer-2.5` Cursor agent when Copilot does not start within 8 min (§Agent-authored PRs). Cursor Bugbot rejected (separate subscription, no review-only fallback trigger) | Live |
 
 ---
 
