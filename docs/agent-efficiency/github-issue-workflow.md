@@ -191,7 +191,7 @@ A lock is reclaimed only when the recorded run has ended or its heartbeat lease 
 ### In Main → In UAT → Done (Actions; unassigned)
 
 - **In Main / In UAT:** the existing merge and UAT handlers ([§Merge → UAT automation](#merge--uat-automation)).
-- **Done (planned):** a prod notify job in `deploy-prod.yml`. It runs only after a real production deploy plus post-deploy smoke, never on the stub path (`PROD_DEPLOY_ENABLED` not `true`). It sets **Done**, removes `busy`, and closes the issue.
+- **Done:** `deploy-prod.yml` `agent-prod-notify` scans Pawpet **In UAT** issues (not the deploy PR’s `Refs` line alone). It closes an issue only when a trusted `<!-- agent-uat-branch -->` comment’s merge commit is an ancestor of the deployed SHA, and when a `light-plan:` programme has no open checklist items.
 - **Light-plan issues (D-002, live):** the release PR uses `Refs #n`, and the session stops at Pre-UAT green without closing the issue (`busy` removed). Light-plan tracking issues then follow In Main → In UAT → Done like product issues (merge/UAT/prod handlers in `issue-agent-handlers.js`). Execute-plan **control** issues remain the exception (no UAT ticket).
 
 ### Needs you (any status)
