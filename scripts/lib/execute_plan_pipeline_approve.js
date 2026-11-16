@@ -5,10 +5,9 @@
  * Spec: docs/agent-efficiency/plans/issue-pipeline-automation.md §8
  */
 
-const { isForbiddenPath } = require('../../.github/scripts/agent-safety-lib');
-const { globToRegExp } = require('./execute_plan_schema');
-const { expandGlobs } = require('../issue_pipeline_delivery');
-const { bodySha, findLatestStateComment, defaultState } = require('../issue_pipeline_state');
+const { bodySha, defaultState } = require('../issue_pipeline_state');
+const { findLatestTrustedStateComment } = require('./pipeline_state_trust');
+const { evaluatePlannedPathGlobs } = require('./pipeline_path_gate');
 const { listActivePlans } = require('./execute_plan_plans');
 
 const PIPELINE_BOTS = new Set(['pawpet-claude', 'pawpet-bot']);
@@ -34,20 +33,18 @@ function isSensitiveAllowed(file, sensitiveGlobs) {
  * Expand phase allowed_paths at main; forbidden hits fail unless approved_sensitive_paths covers them.
  * @returns {{ ok: boolean, reason?: string, forbiddenHits?: string[] }}
  */
-function evaluatePipelinePlanPaths(snapshot, trackedFiles) {
+function evaluatePipelinePlanPaths(snapshot, trackedFiles, { botApprovePath = false } = {}) {
   const { globs, sensitiveGlobs } = collectPhasePathPolicy(snapshot);
   if (!globs.length) return { ok: false, reason: 'no-allowed-paths' };
-  const expanded = expandGlobs(globs, trackedFiles);
-  const forbiddenHits = [];
-  for (const file of expanded) {
-    if (isForbiddenPath(file) && !isSensitiveAllowed(file, sensitiveGlobs)) {
-      forbiddenHits.push(file);
-    }
+  if (botApprovePath && sensitiveGlobs.length > 0) {
+    return { ok: false, reason: 'bot-sensitive-paths-waived' };
   }
-  if (forbiddenHits.length > 0) {
-    return { ok: false, reason: 'forbidden-paths', forbiddenHits };
+  const gate = evaluatePlannedPathGlobs(globs, trackedFiles);
+  if (!gate.ok) {
+    const reason = gate.reason === 'sensitive-paths' ? 'forbidden-paths' : gate.reason;
+    return { ...gate, reason };
   }
-  return { ok: true, expanded };
+  return gate;
 }
 
 /**
@@ -60,12 +57,19 @@ function checkInitProvenance(commit, botLogin) {
   if (author !== botLogin && committer !== botLogin) {
     return { ok: false, reason: 'init-not-bot-authored' };
   }
+  return { ok: false, reason: 'bot-provenance-suspended' };
+}
+
+function checkPipelineLaunchRecord(state) {
+  if (!state?.execute_plan_launch?.plan_id) {
+    return { ok: false, reason: 'no-pipeline-launch-record' };
+  }
   return { ok: true };
 }
 
 function checkProductConvergence({ productBody, comments }) {
   const liveSha = bodySha(productBody);
-  const latest = findLatestStateComment(comments);
+  const latest = findLatestTrustedStateComment(comments);
   if (!latest) return { ok: false, reason: 'no-pipeline-state' };
   const state = { ...defaultState(), ...latest.state };
   if (!state.converged_at) return { ok: false, reason: 'not-converged' };
@@ -88,6 +92,7 @@ async function evaluatePipelineApprovePolicy(readClient, {
   killSwitch,
   planId,
   controlIssueNumber,
+  botApprovePath = true,
 }) {
   if (killSwitch !== 'on') return { ok: false, reason: `driver-${killSwitch}` };
   if (!Number.isInteger(snapshot.source_issue) || snapshot.source_issue < 1) {
@@ -98,8 +103,20 @@ async function evaluatePipelineApprovePolicy(readClient, {
   const treeMap = await readClient.blobShaMapForRef('main');
   if (!treeMap) return { ok: false, reason: 'main-tree-unavailable' };
   const trackedFiles = [...treeMap.keys()];
-  const paths = evaluatePipelinePlanPaths(snapshot, trackedFiles);
+  const paths = evaluatePipelinePlanPaths(snapshot, trackedFiles, { botApprovePath });
   if (!paths.ok) return paths;
+
+  const product = await readClient.getIssue(sourceN);
+  const productComments = await readClient.listIssueComments(sourceN, { pages: 5 });
+  const convergence = checkProductConvergence({
+    productBody: product.body || '',
+    comments: productComments,
+  });
+  if (!convergence.ok) return convergence;
+
+  const latest = findLatestTrustedStateComment(productComments);
+  const launch = checkPipelineLaunchRecord(latest?.state);
+  if (!launch.ok) return launch;
 
   let commit;
   try {
@@ -109,14 +126,6 @@ async function evaluatePipelineApprovePolicy(readClient, {
   }
   const provenance = checkInitProvenance(commit, config.bot_login);
   if (!provenance.ok) return provenance;
-
-  const product = await readClient.getIssue(sourceN);
-  const productComments = await readClient.listIssueComments(sourceN, { pages: 5 });
-  const convergence = checkProductConvergence({
-    productBody: product.body || '',
-    comments: productComments,
-  });
-  if (!convergence.ok) return convergence;
 
   const active = await listActivePlans(readClient);
   const other = active.filter(
@@ -133,5 +142,6 @@ module.exports = {
   evaluatePipelinePlanPaths,
   checkInitProvenance,
   checkProductConvergence,
+  checkPipelineLaunchRecord,
   collectPhasePathPolicy,
 };

@@ -10,7 +10,6 @@ const {
   rest,
   upsertMarkerComment,
 } = require('../.github/scripts/github-project-lib');
-const { isForbiddenPath } = require('../.github/scripts/agent-safety-lib');
 const { globToRegExp } = require('./lib/execute_plan_schema');
 const { defaultState, DELIVERY_LABELS } = require('./issue_pipeline_state');
 const { applyReopenAnalysis } = require('./issue_pipeline_review');
@@ -19,7 +18,7 @@ const { upsertPipelineState } = require('./issue_pipeline_state_load');
 const OWNER_LOGIN = 'KanopeeKa';
 const DELIVERY_MARKER = '<!-- pipeline-delivery -->';
 const VALID_METHODS = new Set(['PR', 'light-plan', 'execute-plan']);
-const PROTECTED_GLOBS = ['.github/**', '.cursor/agent-kernel/**'];
+const { evaluatePlannedPathGlobs, PROTECTED_GLOBS } = require('./lib/pipeline_path_gate');
 
 const AGENT_PATHS_FENCE = /```agent-paths\s*\n([\s\S]*?)```/i;
 const AGENT_PATHS_COMMENT = /<!--\s*agent-paths:\s*(\{[\s\S]*?\})\s*-->/i;
@@ -92,38 +91,8 @@ function expandGlobs(globs, trackedFiles) {
   return [...matched];
 }
 
-/**
- * Fail-closed path gate: expand globs, forbidden + protected prefixes.
- */
 function evaluateDeliveryPaths(globs, trackedFiles) {
-  if (!globs?.length) {
-    return { ok: false, reason: 'missing-agent-paths' };
-  }
-  const expanded = expandGlobs(globs, trackedFiles);
-  const forbiddenHits = [];
-  const protectedHits = [];
-
-  for (const file of expanded) {
-    if (isForbiddenPath(file)) {
-      forbiddenHits.push(file);
-    }
-    for (const prot of PROTECTED_GLOBS) {
-      if (globToRegExp(prot).test(file)) {
-        protectedHits.push(file);
-      }
-    }
-  }
-
-  if (forbiddenHits.length > 0 || protectedHits.length > 0) {
-    return {
-      ok: false,
-      reason: 'sensitive-paths',
-      forbiddenHits,
-      protectedHits,
-      expanded,
-    };
-  }
-  return { ok: true, expanded };
+  return evaluatePlannedPathGlobs(globs, trackedFiles);
 }
 
 function inferDeliveryMethod(issue, envMethod) {
@@ -213,6 +182,7 @@ ${pathCheck?.forbiddenHits?.length ? `Forbidden: ${pathCheck.forbiddenHits.join(
     repo,
     issueNumber,
     token,
+    assignToken,
     state: nextState,
     summaryLine: `Delivery blocked: ${owner_reason}`,
   });
@@ -328,6 +298,7 @@ Queued for implement — unassigned, label **${plan.label}**.`,
     repo,
     issueNumber,
     token,
+    assignToken,
     state: nextState,
     summaryLine: `Delivery queued (${plan.method})`,
   });

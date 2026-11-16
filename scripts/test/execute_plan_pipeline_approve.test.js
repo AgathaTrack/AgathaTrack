@@ -60,15 +60,39 @@ test('evaluatePipelinePlanPaths passes clean globs', () => {
   assert.equal(res.ok, true);
 });
 
-test('checkInitProvenance requires bot on init tip', () => {
-  assert.equal(checkInitProvenance({ author: { login: 'pawpet-bot' } }, 'pawpet-bot').ok, true);
+test('evaluatePipelinePlanPaths rejects .github workflow additions on bot path', () => {
+  const badSnapMd = `# P
+
+## Goal
+g
+
+## Phases
+
+### Phase 1 — One
+\`\`\`json
+{ "allowed_paths": [".github/workflows/x.yml"], "exit_checklist": ["ok"] }
+\`\`\`
+`;
+  const bad = buildSnapshotFromPlan({
+    planId: 'wf-y-z-ab',
+    planMarkdown: badSnapMd,
+    controlIssue: 1,
+    now: '2026-10-16T09:00:30Z',
+  });
+  const res = evaluatePipelinePlanPaths(bad, ['docs/a.md'], { botApprovePath: true });
+  assert.equal(res.ok, false);
+});
+
+test('checkInitProvenance is suspended until pipeline launch record ships', () => {
+  assert.equal(checkInitProvenance({ author: { login: 'pawpet-bot' } }, 'pawpet-bot').ok, false);
   assert.equal(checkInitProvenance({ author: { login: 'KanopeeKa' } }, 'pawpet-bot').ok, false);
 });
 
 test('checkProductConvergence requires green verdicts and body_sha', () => {
   const body = 'Issue body';
   const comments = [{
-    body: '<!-- agent-state: {"body_sha":"abc","verdicts":{"pawpet-claude":"green","pawpet-bot":"green"},"converged_at":"2026-11-15T00:00:00.000Z"} -->',
+    user: { login: 'pawpet-bot' },
+    body: '<!-- pipeline-state -->\n<!-- agent-state: {"body_sha":"abc","verdicts":{"pawpet-claude":"green","pawpet-bot":"green"},"converged_at":"2026-11-15T00:00:00.000Z"} -->',
     created_at: '2026-11-15T01:00:00Z',
   }];
   const fail = checkProductConvergence({ productBody: body, comments });
@@ -76,7 +100,8 @@ test('checkProductConvergence requires green verdicts and body_sha', () => {
   const { bodySha } = require('../issue_pipeline_state');
   const sha = bodySha(body);
   const good = [{
-    body: `<!-- agent-state: ${JSON.stringify({
+    user: { login: 'pawpet-claude' },
+    body: `<!-- pipeline-state -->\n<!-- agent-state: ${JSON.stringify({
       body_sha: sha,
       verdicts: { 'pawpet-claude': 'green', 'pawpet-bot': 'green' },
       converged_at: '2026-11-15T00:00:00.000Z',

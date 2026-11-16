@@ -25,10 +25,6 @@ jobs:
             startsWith(github.event.comment.body, 'resume-autonomous ') ||
             startsWith(github.event.comment.body, 'revoke-autonomous ')
           )
-        ) ||
-        (
-          github.event.comment.user.login == 'pawpet-bot' &&
-          startsWith(github.event.comment.body, 'approve-autonomous ')
         )
       )
     runs-on: ubuntu-latest

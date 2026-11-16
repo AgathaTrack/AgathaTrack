@@ -149,7 +149,7 @@ Plus **hidden state block** (§4): `round`, `body_sha`, `owner_reason`, `deliver
 
 Do not use title counters — they break `isPlanControlIssue` and human edits.
 
-**Normative storage:** a **bot-authored issue comment** containing the marker (not a fragment in the mutable body — issue bodies have no per-field authorship, and a later bot edit can preserve a forged inline marker). Workers replace their own prior state comment or add a new comment and delete the superseded one.
+**Normative storage:** one dedicated comment per issue with `<!-- pipeline-state -->` plus the JSON marker (lane comments do not embed state). Writes use the Pawpet bot token so the author is `pawpet-bot` or `pawpet-claude`. Loaders ignore markers on comments from other authors or edited by someone other than the author (`scripts/lib/pipeline_state_trust.js`).
 
 ```html
 <!-- agent-state: {"round":3,"stuck":0,"last_assignee":"pawpet-claude","body_sha":"…","delivery":"PR","owner_reason":null,"run_id":null,"verdicts":{"pawpet-claude":"green","pawpet-bot":"green"},"converged_at":"2026-11-14T12:00:00Z"} -->
@@ -341,7 +341,7 @@ merge (Actions) ──▶ In Main ──▶ In UAT ──▶ In Prod notify ─�
 
 | ID | Decision | Rationale | Status | Date |
 |----|----------|-----------|--------|------|
-| ISSUE-PIPELINE-D-001 | Coded auto-approve for pipeline-started execute-plan | Trusted code, bot identity; no owner token in agents | Live | 2026-11-15 |
+| ISSUE-PIPELINE-D-001 | Coded auto-approve for pipeline-started execute-plan | Trusted state + path gate (Step 1); bot `approve-autonomous` stays suspended until dispatcher writes `execute_plan_launch` (issue repair 4.5) | In delivery | 2026-11-16 |
 | ISSUE-PIPELINE-D-002 | Light-plan issues follow In Main → UAT → Prod via Actions | One lifecycle; agent stops at Pre-UAT green | Live | 2026-11-15 |
 | ISSUE-PIPELINE-D-003 | ~~User-owned; status labels source of truth~~ | — | **Superseded** | 2026-11-13 |
 | ISSUE-PIPELINE-D-003b | Org-owned repo; Pawpet **column** = stage; org-scoped token may sync board | Org migration #2324+; Claude/Cursor can read/write Status | Proposed | 2026-11-14 |

@@ -158,6 +158,7 @@ Body or delivery mismatch — delivery labels removed, \`verdicts\` cleared.`,
     repo,
     issueNumber,
     token,
+    assignToken,
     state: nextState,
     summaryLine: 'Reopened for analysis',
   });
@@ -221,6 +222,7 @@ async function applyNeedsOwnerConvergence({
     repo,
     issueNumber,
     token,
+    assignToken,
     state: nextState,
     summaryLine: 'Review round cap',
   });
@@ -318,6 +320,7 @@ Verdict: **${verdict.toUpperCase()}**${bodyEdited ? ' (body edited)' : ''}.`,
     repo,
     issueNumber,
     token,
+    assignToken,
     state: nextState,
     summaryLine: `Peer review (${reviewer}): ${verdict.toUpperCase()}`,
   });

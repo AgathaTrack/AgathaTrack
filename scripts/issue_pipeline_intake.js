@@ -65,6 +65,7 @@ async function applyIntakeHandoff({
     repo,
     issueNumber,
     token,
+    assignToken,
     state,
     summaryLine: 'Intake handoff (round 0)',
   });

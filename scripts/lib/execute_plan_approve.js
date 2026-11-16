@@ -125,6 +125,15 @@ async function handleApprove(clients, { issue, comment, parsed, config }, { now,
   }
 
   const pipelineBot = isPipelineBotApprove({ comment, snapshot, config });
+  const res = validateControlComment({ comment, snapshot, config, pipelineBotApprove: pipelineBot });
+  if (!res.valid) {
+    if (IGNORED_REASONS.has(res.reason)) return done(false, `ignored: ${res.reason}`);
+    const detail = formatAuthorizationRejection({
+      reason: res.reason, verb: 'approve', snapshot, initSha: sha, labels: labelNames(issue),
+    });
+    return rejectWith(detail);
+  }
+
   if (pipelineBot) {
     const policy = await evaluatePipelineApprovePolicy(read, {
       snapshot,
@@ -133,19 +142,11 @@ async function handleApprove(clients, { issue, comment, parsed, config }, { now,
       killSwitch,
       planId: parsed.plan,
       controlIssueNumber: issue.number,
+      botApprovePath: true,
     });
     if (!policy.ok) {
       return rejectPipelineApprove(clients, { issue, snapshot, reason: policy.reason }, { dry, log });
     }
-  }
-
-  const res = validateControlComment({ comment, snapshot, config, pipelineBotApprove: pipelineBot });
-  if (!res.valid) {
-    if (IGNORED_REASONS.has(res.reason)) return done(false, `ignored: ${res.reason}`);
-    const detail = formatAuthorizationRejection({
-      reason: res.reason, verb: 'approve', snapshot, initSha: sha, labels: labelNames(issue),
-    });
-    return rejectWith(detail);
   }
 
   const own = new Set(ownPlanFilePaths(snapshot.plan_id));
