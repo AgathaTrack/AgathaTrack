@@ -151,7 +151,7 @@ Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. Execute-plan v2 plan 
 
 **Primary reviewer:** GitHub **Copilot** PR review (`copilot-pull-request-reviewer`) when enabled — **must be triaged when it posts review threads**. The `main` ruleset requests Copilot once when the PR opens (drafts included, not on later pushes); it posts 2–7 minutes later.
 
-**Fallback reviewer (main only):** **Cursor Bugbot** when Copilot is **absent** — `cursor-review-fallback.yml` queues via Bugbot API; `babysit_pr_reviews.js` reports `reviewers.cursor` and includes Cursor threads in triage. Effort **low** (`.cursor/config/bugbot.yaml`). See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Automatic review fallback.
+**Fallback reviewer (main only):** **Cursor Bugbot** when Copilot was **absent** on a PR that **merged to `main`** — `cursor-review-fallback.yml` (`pull_request` **closed**, merged) queues via Bugbot API. Pre-merge `babysit_pr_reviews.js` still waits on Copilot and triages any existing Cursor threads. See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Automatic review fallback.
 
 Both the `main` and integration rulesets require every review thread to be **resolved** before merge.
 

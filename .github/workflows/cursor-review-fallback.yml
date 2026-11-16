@@ -1,8 +1,9 @@
 name: Cursor Bugbot fallback (Copilot absent)
 
+# Queue Bugbot only when a PR actually merges to main — not on every open/sync.
 on:
   pull_request:
-    types: [opened, ready_for_review, synchronize, reopened]
+    types: [closed]
     branches: [main]
 
 permissions:
@@ -17,7 +18,9 @@ concurrency:
 jobs:
   queue-bugbot:
     name: cursor-review-fallback
-    if: github.event.pull_request.draft == false
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -32,4 +35,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
           CURSOR_REVIEW_FALLBACK: on
+          CURSOR_FALLBACK_SKIP_SLEEP: 'true'
         run: node scripts/cursor_review_fallback.js run --pr "${{ github.event.pull_request.number }}"

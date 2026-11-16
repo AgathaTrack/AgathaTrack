@@ -84,7 +84,7 @@ Use **`composer-2.5` only** for steps §0–7 (sync, poll, triage, fixes, CI, me
 
 ### 0b. Ready for review + wait for automatic reviews (mandatory)
 
-Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. **Copilot** is the primary automatic reviewer when enabled; **Cursor Bugbot** is the official fallback on `main` when Copilot is absent (`cursor-review-fallback.yml`). **Must triage** both. Policy: autonomous-pr-policy §Automatic reviews.
+Applies to `/babysit`, `/babysit-plus` and `/babysit-uat`. **Copilot** is the primary automatic reviewer when enabled. **Cursor Bugbot** queues on **merge to `main`** when Copilot was absent (`cursor-review-fallback.yml`). **Triage** Copilot, Cursor, and human threads on the open PR before merge. Policy: autonomous-pr-policy §Automatic reviews.
 
 1. Confirm session model is **`composer-2.5`** before this step (see §Model). During an active execute-plan (any schema), never switch model or spawn a fresh agent for this step; v2 workers never merge — the driver arms auto-merge.
 2. If `isDraft`: `gh pr ready <url>` (or equivalent).

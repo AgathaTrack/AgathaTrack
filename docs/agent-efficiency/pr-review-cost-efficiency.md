@@ -16,7 +16,7 @@ tags: [agent-efficiency, policy, actions-cost]
 | Triage / merge gates | [autonomous-pr-policy.md](./autonomous-pr-policy.md) |
 | Always-on rule | `.cursor/rules/pr-hygiene.mdc` |
 
-**Cursor Bugbot (fallback):** Official secondary reviewer when GitHub Copilot PR review is **absent** on PRs to `main`. Workflow `cursor-review-fallback.yml` queues Bugbot via `POST /bugbot/review` after the Copilot grace window. Effort **low** (`.cursor/config/bugbot.yaml`). Triage Cursor threads like Copilot. Disable with repo variable / env `CURSOR_REVIEW_FALLBACK=off`.
+**Cursor Bugbot (fallback):** Secondary reviewer when Copilot PR review was **absent** on a PR that **merged to `main`**. Workflow `cursor-review-fallback.yml` runs on `pull_request` **closed** (merged) and queues Bugbot via `POST /bugbot/review`. Effort **low** (`.cursor/config/bugbot.yaml`). Pre-merge babysit still waits on Copilot (and any existing Cursor threads); merge-time Bugbot is for audit and follow-up on closed PRs. Disable with env `CURSOR_REVIEW_FALLBACK=off`.
 
 **Operator:** Enable Bugbot for this repository in **Cursor → Automations → Bugbot** and set repository **`manualTriggerOnly: true`** so only the workflow (or a human `cursor review` comment) queues reviews — not duplicate auto-on-every-push. Actions secret `cursor_api_key` must allow Bugbot review API.
 
@@ -54,7 +54,7 @@ Babysit+ (composer-2.5 for babysit steps — see below)
   → babysit_pr_reviews.js gate --pr <url>   (exit 0) → pre-push.sh → merge
 ```
 
-When Copilot is absent, the fallback workflow queues Cursor Bugbot. When both are unavailable after the wait timeout: proceed after self-review + CI green + review gate (§Automatic review fallback). Full procedure: autonomous-pr-policy §Automatic reviews.
+When Copilot is absent before merge: self-review + CI + review gate; after merge to `main`, the fallback workflow may queue Cursor Bugbot on the closed PR (§Automatic review fallback). Full procedure: autonomous-pr-policy §Automatic reviews.
 
 ---
 
@@ -95,7 +95,7 @@ Copilot credits and Actions minutes are separate meters. Levers: batch pushes, i
 | AEC-D-001 | Oct 2026 Actions spike mainly `ci.yml` volume, not Copilot runners | Live |
 | AEC-D-002 | Trim triggers, push batching, Pre-UAT cancel-in-progress, PR E2E max 2 legs | Live |
 | AEC-D-003 | Babysit skills wait for Copilot before triage, re-check reviews after every push and gate merge on `babysit_pr_reviews.js gate` (PR #2017 merged 1 s before Copilot's 3 threads; `collect` also failed under the `repo`-only bot token) | Live |
-| AEC-D-004 | Cursor Bugbot is the official fallback when Copilot PR review is absent on `main` (`cursor-review-fallback.yml`, `effort: low`); `babysit_pr_reviews.js` waits on Cursor when Copilot is absent | Live |
+| AEC-D-004 | Cursor Bugbot fallback on **merge to `main`** when Copilot was absent (`cursor-review-fallback.yml`, `effort: low`); `babysit_pr_reviews.js` triages Cursor threads when present | Live |
 
 ---
 
@@ -103,10 +103,10 @@ Copilot credits and Actions minutes are separate meters. Levers: batch pushes, i
 
 Applies to PRs targeting **`main`** only (matches Copilot ruleset scope).
 
-1. **Wait for Copilot** — three-minute grace after open (`reviewers.copilot.state == pending`, reason `awaiting_request`).
-2. **Copilot absent** — workflow `cursor-review-fallback.yml` sleeps through grace + buffer, then `scripts/cursor_review_fallback.js` calls `POST https://api.cursor.com/bugbot/review` when Copilot is still absent and Bugbot is not already running.
-3. **Babysit wait** — `babysit_pr_reviews.js wait` then treats **Cursor Bugbot** like Copilot (`reviewers.cursor`, threads from `cursor[bot]`). Merge gate blocks while fallback is **absent** (not yet queued) or **pending**.
-4. **Triage** — same buckets as Copilot; resolve every thread before merge.
+1. **Pre-merge** — babysit waits on Copilot (three-minute grace after open). Triage any Copilot or human threads before merge.
+2. **On merge to `main`** — when the PR **closes merged** and Copilot is still absent, `cursor-review-fallback.yml` runs `scripts/cursor_review_fallback.js` (no grace sleep) and queues **Cursor Bugbot** on the closed PR URL.
+3. **Post-merge threads** — if Bugbot posts on the closed PR, triage and resolve or open follow-up issues; they do not block the merge that already landed.
+4. **Manual** — comment `cursor review` on an open PR pre-merge when you want Bugbot before merge.
 5. **Timeout** — `wait` / `gate` exit `3` when Copilot or Cursor is still pending at timeout but nothing unresolved — optional PR comment once; see §Copilot unavailable legacy note below.
 6. **Kill switch** — `CURSOR_REVIEW_FALLBACK=off` (Actions env or local) restores Copilot-only behaviour.
 

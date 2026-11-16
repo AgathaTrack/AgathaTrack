@@ -22,6 +22,12 @@ const { resolveRepository } = require('./lib/execute_plan_project');
 const MARKER = '<!-- cursor-bugbot-fallback-requested -->';
 const SLEEP_MS = COPILOT_REQUEST_GRACE_MS + 45_000;
 
+function shouldSkipGraceSleep(flags) {
+  return (
+    process.env.CURSOR_FALLBACK_SKIP_SLEEP === 'true' || flags['skip-sleep'] === true
+  );
+}
+
 function ghJson(args) {
   const result = spawnSync('gh', args, { encoding: 'utf8' });
   if (result.status !== 0) {
@@ -70,7 +76,9 @@ async function runForPr(flags) {
     return 0;
   }
 
-  await sleep(SLEEP_MS);
+  if (!shouldSkipGraceSleep(flags)) {
+    await sleep(SLEEP_MS);
+  }
 
   const reviews = ghPaginated(`repos/${repoSlug}/pulls/${pr.number}/reviews`);
   const reviewComments = ghPaginated(`repos/${repoSlug}/pulls/${pr.number}/comments`);

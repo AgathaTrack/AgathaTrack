@@ -156,7 +156,7 @@ test('buildCollectReport: merge-ready when review done and every thread resolved
   assert.equal(report.mergeReady, true);
 });
 
-test('buildCollectReport: merge-ready when Copilot absent before fallback marker', () => {
+test('buildCollectReport: merge-ready when Copilot absent and no threads (fallback runs at merge)', () => {
   const report = buildCollectReport({
     prNumber: 1,
     copilot: { state: 'absent', reason: 'no_review', inlineCommentCount: 0 },
@@ -166,17 +166,6 @@ test('buildCollectReport: merge-ready when Copilot absent before fallback marker
   assert.equal(report.readyForTriage, true);
   assert.equal(report.mergeReady, true);
   assert.equal(report.cursorFallbackApplies, true);
-});
-
-test('buildCollectReport: not merge-ready after fallback marker but no Cursor review', () => {
-  const report = buildCollectReport({
-    prNumber: 1,
-    copilot: { state: 'absent', reason: 'no_review', inlineCommentCount: 0 },
-    cursor: { state: 'absent', reason: 'no_review', inlineCommentCount: 0 },
-    threads: [],
-    fallbackRequestedAt: '2026-11-16T10:00:00Z',
-  });
-  assert.equal(report.mergeReady, false);
 });
 
 test('buildCollectReport: merge-ready when Copilot absent and Cursor fallback complete', () => {
