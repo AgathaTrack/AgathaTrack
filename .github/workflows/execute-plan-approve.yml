@@ -14,22 +14,15 @@ jobs:
   approve:
     name: execute-plan-approve
     # Login must stay in sync with config.owners in execute-plan.config.json.
+    # pawpet-bot approve-autonomous trigger suspended until issue-pipeline security step 1.2 (AgathaTrackPrivate#4).
     if: >-
       github.event.issue.pull_request == null &&
+      github.event.comment.user.login == 'KanopeeKa' &&
+      contains(fromJSON('["OWNER","MEMBER"]'), github.event.comment.author_association) &&
       (
-        (
-          github.event.comment.user.login == 'KanopeeKa' &&
-          contains(fromJSON('["OWNER","MEMBER"]'), github.event.comment.author_association) &&
-          (
-            startsWith(github.event.comment.body, 'approve-autonomous ') ||
-            startsWith(github.event.comment.body, 'resume-autonomous ') ||
-            startsWith(github.event.comment.body, 'revoke-autonomous ')
-          )
-        ) ||
-        (
-          github.event.comment.user.login == 'pawpet-bot' &&
-          startsWith(github.event.comment.body, 'approve-autonomous ')
-        )
+        startsWith(github.event.comment.body, 'approve-autonomous ') ||
+        startsWith(github.event.comment.body, 'resume-autonomous ') ||
+        startsWith(github.event.comment.body, 'revoke-autonomous ')
       )
     runs-on: ubuntu-latest
     environment: automation
