@@ -1,7 +1,6 @@
 import 'services/care_temporal_grouping_service.dart';
 import 'care_temporal_group.dart';
 import 'entities/health_occurrence.dart';
-import 'occurrence_missed.dart';
 
 export 'occurrence_missed.dart' show isOccurrenceMissed;
 
@@ -50,66 +49,3 @@ List<HealthOccurrence> sortOccurrencesClosestToPresent(
   List<HealthOccurrence> items,
   OccurrenceZone zone,
 ) => sortOccurrencesByZone(items, zone);
-
-/// Summary for list-row headlines (one series).
-class OccurrenceSummary {
-  const OccurrenceSummary({
-    required this.openCount,
-    required this.missedCount,
-    this.missedHead,
-    this.nextHead,
-  });
-
-  final int openCount;
-  final int missedCount;
-  final HealthOccurrence? missedHead;
-  final HealthOccurrence? nextHead;
-
-  /// Worst open slot for list rows: overdue head, else next due/upcoming.
-  HealthOccurrence? get leadingOccurrence => missedHead ?? nextHead;
-}
-
-OccurrenceSummary summarizeOpenOccurrences(
-  List<HealthOccurrence> open,
-  DateTime now,
-) {
-  final withMissed = open
-      .map((o) => o.missed ? o : o.copyWithMissed(isOccurrenceMissed(o, now)))
-      .toList();
-  final missed = withMissed.where((o) => o.missed).toList();
-  final missedSorted = sortOccurrencesByZone(missed, OccurrenceZone.missed);
-  final nonMissed = withMissed.where((o) => !o.missed).toList();
-  HealthOccurrence? nextHead;
-  for (final zone in [OccurrenceZone.dueToday, OccurrenceZone.comingUp]) {
-    final bucket = nonMissed
-        .where((o) => occurrenceZone(o, now) == zone)
-        .toList();
-    if (bucket.isEmpty) continue;
-    nextHead = sortOccurrencesByZone(bucket, zone).first;
-    break;
-  }
-  return OccurrenceSummary(
-    openCount: open.length,
-    missedCount: missed.length,
-    missedHead: missedSorted.isEmpty ? null : missedSorted.first,
-    nextHead: nextHead,
-  );
-}
-
-extension _HealthOccurrenceMissed on HealthOccurrence {
-  HealthOccurrence copyWithMissed(bool missed) {
-    return HealthOccurrence(
-      id: id,
-      entryId: entryId,
-      scheduledDate: scheduledDate,
-      scheduledTime: scheduledTime,
-      status: status,
-      completedOn: completedOn,
-      markedAt: markedAt,
-      markedByUserId: markedByUserId,
-      markedByName: markedByName,
-      notes: notes,
-      missed: missed,
-    );
-  }
-}

@@ -13423,30 +13423,6 @@ abstract class AppLocalizations {
   /// **'This care is finished.'**
   String get occurrenceCareFinishedNoReopen;
 
-  /// No description provided for @occurrenceOpenCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} open'**
-  String occurrenceOpenCount(int count);
-
-  /// No description provided for @occurrenceMissedCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} overdue'**
-  String occurrenceMissedCount(int count);
-
-  /// No description provided for @occurrenceZoneMissed.
-  ///
-  /// In en, this message translates to:
-  /// **'Overdue'**
-  String get occurrenceZoneMissed;
-
-  /// No description provided for @occurrenceZoneDueToday.
-  ///
-  /// In en, this message translates to:
-  /// **'Due today'**
-  String get occurrenceZoneDueToday;
-
   /// No description provided for @occurrenceZoneComingUp.
   ///
   /// In en, this message translates to:

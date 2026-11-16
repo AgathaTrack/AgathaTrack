@@ -7689,22 +7689,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get occurrenceCareFinishedNoReopen => 'This care is finished.';
 
   @override
-  String occurrenceOpenCount(int count) {
-    return '$count open';
-  }
-
-  @override
-  String occurrenceMissedCount(int count) {
-    return '$count overdue';
-  }
-
-  @override
-  String get occurrenceZoneMissed => 'Overdue';
-
-  @override
-  String get occurrenceZoneDueToday => 'Due today';
-
-  @override
   String get occurrenceZoneComingUp => 'Coming up';
 
   @override

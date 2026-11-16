@@ -95,13 +95,6 @@ class CareScheduleController {
     });
   }
 
-  Future<CommandOutcome?> skipAllMissedOccurrences(String entryId) {
-    return _runGuarded('skip-missed:$entryId', () async {
-      await _ref.read(healthRepositoryProvider).skipMissedOccurrences(entryId);
-      return _reconcileAfterCommit(entryId);
-    });
-  }
-
   Future<CommandOutcome?> undoOccurrence(
     String entryId,
     String occurrenceId, {
