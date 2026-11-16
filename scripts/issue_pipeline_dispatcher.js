@@ -14,7 +14,8 @@ const {
   listPipelineIssues,
   fetchPipelineIssueForProject,
 } = require('./issue_pipeline_project');
-const { isPipelineIssue } = require('./issue_pipeline_gate');
+const { isDispatcherEligibleIssue } = require('./issue_pipeline_gate');
+const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { runTodoLanePipeline } = require('./issue_pipeline_intake');
 const { loadIssueState } = require('./issue_pipeline_state_load');
 const {
@@ -35,14 +36,6 @@ const LANE_CAPS = {
   delivery: 1,
   monitor: 2,
 };
-
-function resolvePipelineMode(raw = process.env.ISSUE_PIPELINE) {
-  const mode = String(raw || 'off').trim().toLowerCase();
-  if (mode === 'on' || mode === 'dry-run') {
-    return mode;
-  }
-  return 'off';
-}
 
 function hasLabel(labels, name) {
   return (labels || []).includes(name);
@@ -219,17 +212,38 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
     const fetchOne =
       (io && io.fetchPipelineIssueForProject) ||
       ((o, r, t, c, n) => fetchPipelineIssueForProject(o, r, t, c, n));
-    const row = await fetchOne(owner, repo, token, config, issueNumber);
-    if (!row) {
-      console.log(
-        JSON.stringify({
-          event: 'pipeline_issue_not_on_project',
-          issue: Number(issueNumber),
-          reason: 'no open item for GH_PROJECT_ID',
-        }),
-      );
+    try {
+      const row = await fetchOne(owner, repo, token, config, issueNumber);
+      if (!row) {
+        console.log(
+          JSON.stringify({
+            event: 'pipeline_issue_not_on_project',
+            issue: Number(issueNumber),
+            reason: 'no open item for GH_PROJECT_ID',
+          }),
+        );
+      }
+      issues = row ? [row] : [];
+    } catch (error) {
+      const message = String(error.message || error);
+      if (/not found|Could not resolve to an Issue/i.test(message)) {
+        console.log(
+          JSON.stringify({
+            event: 'pipeline_tick_skipped',
+            issue: Number(issueNumber),
+            reason: 'not_an_issue',
+            detail: message.slice(0, 200),
+          }),
+        );
+        return {
+          mode: pipelineMode,
+          skipped: true,
+          reason: 'not_an_issue',
+          actions: [],
+        };
+      }
+      throw error;
     }
-    issues = row ? [row] : [];
   } else {
     issues = await listIssues(owner, repo, token, config);
   }
@@ -239,7 +253,7 @@ async function tick({ owner, repo, token, issueNumber, mode, io } = {}) {
 
   const planned = [];
   for (const issue of issues) {
-    if (!isPipelineIssue(issue.labels, pipelineMode)) {
+    if (!isDispatcherEligibleIssue(issue, pipelineMode)) {
       continue;
     }
     const liveBodySha = bodySha(issue.body);
@@ -378,7 +392,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  resolvePipelineMode,
+  resolvePipelineMode, // re-export from ./issue_pipeline_mode
   computeEligibleAction,
   countWipInUse,
   applyLaneCaps,

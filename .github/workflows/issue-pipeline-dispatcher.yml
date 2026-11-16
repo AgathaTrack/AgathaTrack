@@ -2,7 +2,8 @@ name: Issue pipeline dispatcher
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # Off the half-hour to reduce GitHub schedule drops (#2363 §2.3).
+    - cron: '7,37 * * * *'
   workflow_dispatch:
     inputs:
       issue_number:
@@ -51,7 +52,12 @@ jobs:
 
   dispatch:
     name: issue-pipeline-dispatcher
-    if: github.event_name != 'pull_request_target'
+    if: >-
+      github.event_name != 'pull_request_target' &&
+      (
+        github.event_name != 'issue_comment' ||
+        !github.event.issue.pull_request
+      )
     runs-on: ubuntu-latest
     environment: automation
     timeout-minutes: 15
@@ -72,7 +78,7 @@ jobs:
           GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
           ISSUE_PIPELINE: ${{ vars.ISSUE_PIPELINE }}
-          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
+          ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.issue_number || '' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail

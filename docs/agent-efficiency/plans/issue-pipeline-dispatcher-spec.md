@@ -4,7 +4,7 @@ owner: Documentation Team
 audience: agent
 status: proposed
 status_since: 2026-11-14
-last_updated: 2026-11-14
+last_updated: 2026-11-16
 tags: [agent-efficiency, github-issues, automation]
 parent: issue-pipeline-automation.md
 ---
@@ -32,11 +32,11 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 |-------|-----|
 | `issues: assigned` | Primary — start lane for new assignee |
 | `issues: labeled`, `issues: edited` | Secondary — delivery labels, `question` cleared |
-| `issue_comment` (allowlisted authors) | Re-queue intake after author answers |
+| `issue_comment` (issue only — skip when `issue.pull_request` is set) | Re-queue intake after author answers |
 | `pull_request_target: closed` (merged) | Release tracking, WIP slot free |
 | `workflow_run` (deploy-uat, deploy-prod, CI) | UAT/Prod notify alignment |
-| `schedule` (30 min) | Heartbeat — match execute-plan driver |
-| `workflow_dispatch` | `dry_run`, optional `issue_number`, force tick |
+| `schedule` (7,37 past each hour) | Heartbeat — off the half-hour to reduce missed cron ticks |
+| `workflow_dispatch` | Optional scoped `issue_number` for debugging only |
 
 **Not used:** Project v2 item events (not available as workflow triggers).
 
@@ -44,13 +44,14 @@ Normative implementation contract for the unified issue pipeline dispatcher. Pro
 
 1. If `ISSUE_PIPELINE` is `off`, exit 0.
 2. Load org/project field IDs from secrets (`GH_PROJECT_ID`, `GH_STATUS_FIELD_ID`, org `AgathaTrack`).
-3. For each open issue with label ∉ {`manual-only`, support-only exclusions} (a `manual-only` issue is skipped before any lane condition is evaluated, whatever its status or assignee):
+3. **Global tick:** event-driven runs never set `ISSUE_NUMBER`; recompute from the whole Pawpet board so cancelled concurrent runs do not drop issues (repair #2363 §2.2). `workflow_dispatch` may pass `issue_number` for debugging only.
+4. For each open issue with label ∉ {`manual-only`, `owner-programme`, execute-plan control titles, non-automation columns} (a `manual-only` issue is skipped before any lane condition is evaluated, whatever its status or assignee). Automation columns: To do, In Analysis, Ready, In progress:
    - Read Pawpet **Status**, **assignee**, delivery labels, `busy`, `needs-owner`, state block.
    - Compute **eligible action** at most one per issue (priority table below).
-4. Sort actions by priority label then issue age.
-5. Apply **lane caps**; skip if cap reached.
-6. If `dry-run`, log planned actions only.
-7. Else execute: set lock (`busy` / marker), call worker or deterministic script, update assignee/status with **bot PAT** (not `GITHUB_TOKEN` for handoffs).
+5. Sort actions by priority label then issue age.
+6. Apply **lane caps**; skip if cap reached.
+7. If `dry-run`, log planned actions only.
+8. Else execute: set lock (`busy` / marker), call worker or deterministic script, update assignee/status with **bot PAT** (not `GITHUB_TOKEN` for handoffs).
 
 ### 3.1 Action priority (per issue)
 
