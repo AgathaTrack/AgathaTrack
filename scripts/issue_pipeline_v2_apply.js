@@ -86,7 +86,7 @@ async function applyAction({ action: decided, ctx }) {
   // A failed ring never fails the tick; the pickup timeout reassigns if nobody answers.
   const ring = async (agent, stage) => {
     const entry = (ctx.config.agents || []).find((candidate) => candidate.login === agent);
-    if (!entry || !(ctx.config.launchRunners || []).includes(entry.runner) || !['To do', 'In analysis'].includes(stage)) {
+    if (!entry || !(ctx.config.launchRunners || []).includes(entry.runner) || !['To do', 'In analysis', 'In Main'].includes(stage)) {
       return;
     }
     try {
@@ -95,8 +95,8 @@ async function applyAction({ action: decided, ctx }) {
       }
       calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent, stage } });
       applied.push(`doorbell:${agent}`);
-    } catch {
-      applied.push(`doorbell-failed:${agent}`);
+    } catch (error) {
+      applied.push(`doorbell-failed:${agent}:${String(error.message).slice(0, 120)}`);
     }
   };
 
@@ -167,6 +167,7 @@ async function applyAction({ action: decided, ctx }) {
         'comment:intent-review',
       );
       await assign(action.agent);
+      await ring(action.agent, 'In Main');
       break;
     case 'reopen':
       await request('PATCH', base, { state: 'open' });

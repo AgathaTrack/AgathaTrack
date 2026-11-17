@@ -351,6 +351,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         },
       });
       actions[actions.length - 1].applied = result.applied;
+      // The action line above is logged before it is applied, so say what actually happened.
+      if (result.applied.length > 0) {
+        console.log(JSON.stringify({ event: 'pipeline_v2_applied', issue: entry.number, applied: result.applied }));
+      }
       if (inScope && result.applied.some((entry) => entry.startsWith('launch:'))) {
         wip += 1; // a started run takes a slot; a failed launch or an out-of-scope simulation does not
       }

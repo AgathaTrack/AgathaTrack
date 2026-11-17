@@ -66,6 +66,18 @@ test('request-spec also starts a Cursor run for an agent whose runner the engine
   assert.ok(dry.calls.some((call) => call.path === 'cursor:/v1/agents' && call.body.stage === 'In analysis'));
 });
 
+test('request-intent-review also rings a launchable agent, for the In Main stage', async () => {
+  const { restFn } = recorder();
+  const launches = [];
+  const withRunners = { ...config, launchRunners: ['cursor'], agents: [{ login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }] };
+  const result = await applyAction({
+    action: { type: 'request-intent-review', agent: 'pawpet-bot' },
+    ctx: ctx({ restFn, config: withRunners, launchFn: async (args) => { launches.push(args); return {}; }, facts: { stage: 'In Main', delivery: {} } }),
+  });
+  assert.deepEqual(launches, [{ agent: 'pawpet-bot', stage: 'In Main' }]);
+  assert.ok(result.applied.includes('doorbell:pawpet-bot'));
+});
+
 test('a failed doorbell launch never fails the tick', async () => {
   const { restFn } = recorder();
   const withRunners = { ...config, launchRunners: ['cursor'], agents: [{ login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }] };
@@ -73,7 +85,7 @@ test('a failed doorbell launch never fails the tick', async () => {
     action: { type: 'request-spec', agent: 'pawpet-bot' },
     ctx: ctx({ restFn, config: withRunners, launchFn: async () => { throw new Error('cursor down'); } }),
   });
-  assert.ok(result.applied.includes('doorbell-failed:pawpet-bot'));
+  assert.ok(result.applied.includes('doorbell-failed:pawpet-bot:cursor down'), 'the reason is kept');
 });
 
 test('request-review carries the hash', async () => {
