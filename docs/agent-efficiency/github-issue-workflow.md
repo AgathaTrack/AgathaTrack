@@ -186,7 +186,7 @@ A failed launch → `needs-owner` (`launch-failed`) and assign `KanopeeKa`.
 | `light-plan` | Session ended before Pre-UAT went green → relaunch with `continue light-plan #n` and add 1 to `stuck` |
 | `execute-plan` | Report only. A stopped plan → `needs-owner` (`plan-stopped`); resuming is owner-only |
 
-A lock is reclaimed only when the recorded run has ended or its heartbeat lease has expired; elapsed time alone is not enough. **Today**, a `continue light-plan #n` comment on the issue triggers nothing. Resuming needs a Cursor agent session until this lane ships.
+A lock is reclaimed only when the recorded run has ended or its heartbeat lease has expired; elapsed time alone is not enough. **Light-plan resume (live):** when the pipeline monitor sees a terminal run, `light-plan` + `busy` still set, and no PR URL on the run, `scripts/issue_pipeline_monitor.js` relaunches via `continue light-plan #n` (increments `stuck`; at `stuck >= 3` → `needs-owner`). A human `continue light-plan #n` comment is optional; the heartbeat does not read issue comments for resume.
 
 ### In Main → In UAT → Done (Actions; unassigned)
 

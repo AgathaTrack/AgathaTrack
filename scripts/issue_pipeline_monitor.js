@@ -9,6 +9,7 @@ const {
 } = require('../.github/scripts/github-project-lib');
 const { findTrustedRunMarker, isStubRunMarker } = require('./lib/pipeline_run_marker');
 const { monitorIssue } = require('../.github/scripts/monitor-cursor-agent');
+const { applyLightPlanRelaunch } = require('./issue_pipeline_light_plan_relaunch');
 const OWNER_LOGIN = 'KanopeeKa';
 
 const MONITOR_MARKER = '<!-- pipeline-monitor -->';
@@ -87,7 +88,31 @@ async function applyMonitorTick({
     projectId,
     statusFieldId,
     found,
+    allowLightPlanResume: true,
   });
+
+  if (result.action === 'light-plan-resume') {
+    const assignToken = process.env.EXECUTE_PLAN_BOT_TOKEN;
+    if (!assignToken) {
+      return {
+        action: 'monitor',
+        lightPlanResume: true,
+        skipped: true,
+        reason: 'missing-bot-token',
+        monitor: result,
+      };
+    }
+    const relaunch = await applyLightPlanRelaunch({
+      owner,
+      repo,
+      issueNumber,
+      token,
+      assignToken,
+      dryRun: false,
+      priorMarker: found?.marker,
+    });
+    return { action: 'monitor', lightPlanResume: true, monitor: result, ...relaunch };
+  }
 
   return { action: 'monitor', ...result };
 }
