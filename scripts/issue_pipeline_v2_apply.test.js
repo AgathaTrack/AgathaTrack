@@ -48,6 +48,35 @@ test('request-spec posts the marker comment then rings the agent', async () => {
   assert.deepEqual(result.applied, ['comment:spec-request', 'assign:pawpet-claude']);
 });
 
+test('request-spec also starts a Cursor run for an agent whose runner the engine can launch', async () => {
+  const { restFn } = recorder();
+  const launches = [];
+  const withRunners = { ...config, launchRunners: ['cursor'], agents: [
+    { login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] },
+    { login: 'pawpet-claude', runner: 'claude', methods: ['PR'] },
+  ] };
+  const launchFn = async (args) => { launches.push(args); return { runId: 'r' }; };
+  const bot = await applyAction({ action: { type: 'request-spec', agent: 'pawpet-bot' }, ctx: ctx({ restFn, launchFn, config: withRunners }) });
+  assert.deepEqual(launches, [{ agent: 'pawpet-bot', stage: 'To do' }]);
+  assert.ok(bot.applied.includes('doorbell:pawpet-bot'));
+  const claude = await applyAction({ action: { type: 'request-spec', agent: 'pawpet-claude' }, ctx: ctx({ restFn, launchFn, config: withRunners }) });
+  assert.equal(launches.length, 1, 'a runner the engine cannot start is only assigned');
+  assert.ok(!claude.applied.some((entry) => entry.startsWith('doorbell')));
+  const dry = await applyAction({ action: { type: 'request-review', agent: 'pawpet-bot', hash: 'h' }, ctx: ctx({ restFn, launchFn, config: withRunners, dryRun: true }) });
+  assert.equal(launches.length, 1, 'a dry run sends nothing');
+  assert.ok(dry.calls.some((call) => call.path === 'cursor:/v1/agents' && call.body.stage === 'In analysis'));
+});
+
+test('a failed doorbell launch never fails the tick', async () => {
+  const { restFn } = recorder();
+  const withRunners = { ...config, launchRunners: ['cursor'], agents: [{ login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }] };
+  const result = await applyAction({
+    action: { type: 'request-spec', agent: 'pawpet-bot' },
+    ctx: ctx({ restFn, config: withRunners, launchFn: async () => { throw new Error('cursor down'); } }),
+  });
+  assert.ok(result.applied.includes('doorbell-failed:pawpet-bot'));
+});
+
 test('request-review carries the hash', async () => {
   const { sent, restFn } = recorder();
   await applyAction({ action: { type: 'request-review', agent: 'pawpet-bot', hash: 'abc' }, ctx: ctx({ restFn }) });

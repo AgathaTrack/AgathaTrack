@@ -96,7 +96,27 @@ const METHOD_PROMPTS = {
     'Delivery method: execute-plan. Deliver this issue with the procedure in `.cursor/skills/execute-plan/SKILL.md` (a frozen v2 plan driven by `tick`).',
 };
 
-async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', deps = {} }) {
+/**
+ * Doorbell prompts: a run started because the engine asked an agent to work on the issue's spec or
+ * review. They are not deliveries, so the issue is not marked `busy` and no PR is expected.
+ */
+const STAGE_PROMPTS = {
+  'To do':
+    'Stage task: SPEC PASS (the engine assigned you this issue; do not implement it). Read the issue and its comments. ' +
+    'If there is not enough information to write a proper spec, write a best-effort spec into the issue body, ask your ' +
+    'question in a comment, and set `Blocked` to `question` (agent-owned write; the engine wakes you when a human replies). ' +
+    'If there is enough, write the full spec into the issue body: intent, acceptance criteria, a `## Delivery plan` section ' +
+    'with a `Method:` line (`PR`, `light-plan` or `execute-plan`), the planned work, an `agent-paths` block and the ' +
+    'Definition of Done checkboxes. Then react 👍 on the engine\'s latest `v2:spec-request` comment to mark the spec ready; ' +
+    'the engine moves the issue to In analysis for the first adversarial review. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
+  'In analysis':
+    'Stage task: ADVERSARIAL REVIEW (the engine assigned you this issue; do not implement it). Review the issue body as a spec: ' +
+    'challenge intent, scope, delivery method, acceptance criteria and risks. If it needs changes, edit the body (your edit counts as ' +
+    'your approval; the other agent must then vote) and say what changed in a comment. If it is sound, react 👍 on the engine\'s latest ' +
+    '`v2:review-request` comment; if not, react 👎 with a comment explaining why. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
+};
+
+async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', stage, deps = {} }) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
   const payloadLib = deps.payload || require('../.github/scripts/agent-payload-lib');
   const launcher = deps.launcher || require('../.github/scripts/launch-cursor-agent');
@@ -112,9 +132,11 @@ async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', d
     { number: issue.number, url: issue.html_url, title: issue.title, body: issue.body || '', labels },
     repoUrl,
   );
-  const promptText = [payloadLib.buildAgentPrompt(payload), METHOD_PROMPTS[method] || ''].filter(Boolean).join('\n\n');
+  const extra = stage ? STAGE_PROMPTS[stage] : METHOD_PROMPTS[method];
+  const promptText = [payloadLib.buildAgentPrompt(payload), extra || ''].filter(Boolean).join('\n\n');
+  const mark = stage ? async () => {} : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
 
-  await lib.setLabels(owner, repo, issue.number, ['busy'], [], token);
+  await mark(['busy'], []);
   let launched;
   try {
     launched = await launcher.launchAgent({
@@ -124,12 +146,12 @@ async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', d
       model: process.env.CURSOR_AGENT_MODEL || undefined,
     });
   } catch (error) {
-    await lib.setLabels(owner, repo, issue.number, [], ['busy'], token);
+    await mark([], ['busy']);
     throw error;
   }
   const runId = launched.run?.id;
   if (!runId || !launched.agent?.id) {
-    await lib.setLabels(owner, repo, issue.number, [], ['busy'], token);
+    await mark([], ['busy']);
     throw new Error('Cursor API response missing agent/run id');
   }
   return { runId, agentId: launched.agent.id, agentUrl: launched.agent.url };
@@ -138,6 +160,7 @@ async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', d
 module.exports = {
   METHODS,
   METHOD_PROMPTS,
+  STAGE_PROMPTS,
   buildLaunchRecord,
   buildLaunchFailed,
   buildLaunchAcked,

@@ -221,3 +221,9 @@ test('Ready with a busy issue and no launch record moves on; the dry-run plan sh
   const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 }, ctx: c });
   assert.deepEqual(result.calls[0], { method: 'POST', path: '/repos/o/r/issues/7/labels', body: { labels: ['busy'] } });
 });
+
+test('stage prompts exist for the spec and review doorbells', () => {
+  const { STAGE_PROMPTS } = require('./issue_pipeline_v2_launch');
+  assert.match(STAGE_PROMPTS['To do'], /SPEC PASS[\s\S]*Blocked[\s\S]*question/);
+  assert.match(STAGE_PROMPTS['In analysis'], /ADVERSARIAL REVIEW/);
+});
