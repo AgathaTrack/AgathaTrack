@@ -101,6 +101,16 @@ test('non-plan PR → success ok when no forbidden paths', async () => {
   assert.deepEqual([noIssue.conclusion, noIssue.title], ['success', 'ok']);
 });
 
+test('non-plan PR into integration is not scanned (base not main)', async () => {
+  const { client } = setup({ files: ['db/migrations/099_x.sql'] });
+  const res = await runScopeCheck(client, {
+    ...phasePr,
+    headRef: 'cursor/misc-feature-x',
+    baseRef: INTEGRATION,
+  });
+  assert.deepEqual([res.conclusion, res.title, res.summary], ['success', 'ok', 'not an execute-plan PR']);
+});
+
 test('non-plan PR forbidden path → failure in enforce mode', async () => {
   const prev = process.env.FORBIDDEN_GATE_MODE;
   process.env.FORBIDDEN_GATE_MODE = 'enforce';
