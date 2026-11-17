@@ -556,6 +556,8 @@ Strengths: single-flight refresh and replay are explicit (`auth_providers.dart:3
 ### 2. Complete a care occurrence
 
 > **Update (#1672):** `occurrence_care_actions.dart` and the occurrence stack sheet cited below were removed as unreachable; the live completion path is `careCompletionFlowProvider`. References below are the review-time snapshot.
+>
+> **Update (#2335 / PR #2417):** Legacy health_tracking occurrence-completion widgets (`occurrence_completion_*`, `overdue_completion_sheet`, `occurrence_add_details_sheet`) and the planned-vet completion health-issue hook were removed; completion UX is Care Item `CareCompletionFlow` only. Planned vet completion prompt delivery: D-CIE-046, tracked in [#2419](https://github.com/AgathaTrack/AgathaTrack/issues/2419).
 1. UI loads open occurrences through `entryOccurrencesProvider` (`occurrence_providers.dart:7-11`) and selects stack/single completion (`occurrence_care_actions.dart:20-74`).
 2. `persistCompletion` calls `HealthRepository.completeOccurrence`, then manually invalidates occurrence state and refreshes the global health list (`occurrence_care_actions.dart:76-101`).
 3. Repository maps the domain call to the remote adapter (`health_repository_impl.dart:94-109`), which POSTs the calendar-day payload (`health_occurrence_remote_datasource.dart:48-77`).

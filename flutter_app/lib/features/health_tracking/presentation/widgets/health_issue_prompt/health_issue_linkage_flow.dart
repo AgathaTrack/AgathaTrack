@@ -12,7 +12,7 @@ import '../care_schedule_command_feedback.dart';
 import 'health_issue_linkage_prompt.dart';
 import 'health_issue_prompt_eligibility.dart';
 
-/// Orchestrates vet health-issue prompts and linkage after save/completion.
+/// Orchestrates vet health-issue prompts and linkage after unplanned vet save.
 class HealthIssueLinkageFlow {
   const HealthIssueLinkageFlow._();
 
