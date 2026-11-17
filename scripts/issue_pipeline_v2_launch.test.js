@@ -69,15 +69,28 @@ test('only agents whose runner the engine can start are launched', () => {
   );
 });
 
+const launchFields = {
+  stage: { id: 1, name: 'Stage', options: ['In progress'] },
+  blocked: { id: 2, name: 'Blocked', options: [] },
+  attempts: { id: 3, name: 'Attempts', options: [] },
+};
+
 function ctx(extra = {}) {
   const sent = [];
+  const issuePath = '/repos/o/r/issues/7';
   return {
     sent,
     ctx: {
       owner: 'o', repo: 'r', issueNumber: 7, token: 'pat', config,
-      fields: { attempts: { id: 3, name: 'Attempts', options: [] } },
+      fields: launchFields,
       parsed: { attempts: 0 }, assignees: [], counters: {}, facts: {}, dryRun: false,
-      restFn: async (method, path, token, body) => { sent.push({ method, path, body }); return { id: 1 }; },
+      restFn: async (method, path, token, body) => {
+        sent.push({ method, path, body });
+        if (method === 'GET' && path === issuePath) {
+          return { number: 7, issue_field_values: [{ field_id: 3, value: 0 }] };
+        }
+        return { id: 1 };
+      },
       ...extra,
     },
   };
@@ -87,7 +100,8 @@ test('apply launch: starts the run, records it, writes the failed-run count', as
   const { sent, ctx: c } = ctx({ launchFn: async () => ({ runId: 'r9', agentUrl: 'https://cursor/x' }) });
   const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 1 }, ctx: c });
   assert.match(sent[0].body.body, /v2:launch run=r9 agent=pawpet-bot/);
-  assert.equal(sent[1].body.issue_field_values[0].value, 1);
+  const patch = sent.find((c) => c.body?.issue_field_values);
+  assert.equal(patch.body.issue_field_values.find((v) => v.field_id === 3).value, 1);
   assert.deepEqual(result.applied.slice(0, 2), ['launch:pawpet-bot', 'comment:launch']);
 });
 
@@ -95,7 +109,8 @@ test('apply launch: a failed API call is recorded and counted, not thrown', asyn
   const { sent, ctx: c } = ctx({ launchFn: async () => { throw new Error('503'); } });
   const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 }, ctx: c });
   assert.match(sent[0].body.body, /v2:launch-failed agent=pawpet-bot/);
-  assert.equal(sent[1].body.issue_field_values[0].value, 1);
+  const patch = sent.find((c) => c.body?.issue_field_values);
+  assert.equal(patch.body.issue_field_values.find((v) => v.field_id === 3).value, 1);
   assert.equal(result.applied[0], 'launch-failed:pawpet-bot');
 });
 
@@ -107,7 +122,7 @@ test('apply launch: a dry run never starts a run', async () => {
 });
 
 test('apply set-stage In progress leaves the acked record', async () => {
-  const { sent, ctx: c } = ctx({ facts: { launch: { runId: 'r9' } }, fields: { stage: { id: 1, name: 'Stage', options: ['In progress'] }, attempts: { id: 3, name: 'Attempts', options: [] } } });
+  const { sent, ctx: c } = ctx({ facts: { launch: { runId: 'r9' } } });
   await applyAction({ action: { type: 'set-stage', to: 'In progress' }, ctx: c });
   assert.match(sent[0].body.body, /v2:launch-acked run=r9/);
 });
