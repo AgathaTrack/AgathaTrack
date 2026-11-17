@@ -12,6 +12,8 @@ const { agentLogins } = require('./issue_pipeline_v2_config');
 const { buildFieldWrites } = require('./issue_pipeline_v2_fields');
 const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
 const { buildReviewRequest } = require('./issue_pipeline_v2_review');
+const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
+const { buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 
 /**
@@ -126,7 +128,38 @@ async function applyAction({ action: decided, ctx }) {
       action = { ...action, attempts };
       break;
     }
+    case 'request-intent-review':
+      await comment(
+        buildIntentReviewRequest({
+          agent: action.agent,
+          issueNumber: ctx.issueNumber,
+          prNumbers: ctx.facts.delivery?.mergedPrNumbers,
+        }),
+        'comment:intent-review',
+      );
+      await assign(action.agent);
+      break;
+    case 'resume': {
+      let ok = true;
+      try {
+        if (!ctx.dryRun) {
+          await ctx.launchFn({ agent: action.agent, method: action.method });
+        }
+        calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
+      } catch {
+        ok = false;
+      }
+      // The resume is recorded even when it failed: the next tick then marks the issue stalled.
+      await comment(buildResume({ agent: action.agent, ok }), 'comment:resume');
+      applied.unshift(`${ok ? 'resume' : 'resume-failed'}:${action.agent}`);
+      break;
+    }
     case 'set-stage':
+      if (action.to === 'Done') {
+        await request('POST', `${base}/labels`, { labels: ['in-prod'] });
+        await request('DELETE', `${base}/labels/busy`).catch(() => {}); // already gone is fine
+        applied.push('labels:in-prod');
+      }
       if (action.to === 'In progress' && ctx.facts.launch?.runId) {
         await comment(buildLaunchAcked({ runId: ctx.facts.launch.runId }), 'comment:launch-acked');
       }

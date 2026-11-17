@@ -13,6 +13,13 @@ const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue } = require('./issue_pipeline_v2_launch');
+const {
+  deployContains,
+  deriveDeliveryFacts,
+  latestDeploySha,
+  listLinkedPrs,
+} = require('./issue_pipeline_v2_release');
+const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 const {
@@ -24,6 +31,8 @@ const {
 } = require('./issue_pipeline_v2_comments');
 const { deriveReviewFacts, findReviewRequests, totalNWrite } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
+
+const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
 
 function mode() {
   return resolvePipelineMode(process.env.ISSUE_PIPELINE_V2);
@@ -60,13 +69,55 @@ async function resolveEditors({ comments, config, token, io }) {
 }
 
 /**
+ * Facts for In progress, In Main and In UAT: linked PRs, checklist, markers, and (only when the
+ * stage needs it) what UAT or production has deployed. Deploy lookups are memoised per tick.
+ */
+async function buildReleaseFacts({ owner, repo, entry, canonical, comments, config, token, io }) {
+  const prs = await (io.listLinkedPrs || listLinkedPrs)({ owner, repo, issueNumber: entry.number, token });
+  const facts = {
+    deliveryMethod: deliveryMethod(entry.issue.body),
+    ...deriveDeliveryFacts({ issue: entry.issue, prs, comments, engineLogins: config.engine.logins }),
+  };
+  const environment = { 'In Main': 'UAT', 'In UAT': 'PROD' }[canonical];
+  if (environment) {
+    const deploySha = await (io.deploySha || ((env) => deploys.get(env, () => latestDeploySha({ owner, repo, environment: env, token }))))(environment);
+    const contains = await (io.deployContains || deployContains)({
+      owner,
+      repo,
+      mergeSha: facts.delivery.lastMergeSha,
+      deploySha,
+      token,
+    });
+    facts[environment === 'UAT' ? 'uatContainsLatestMerge' : 'prodContainsLatestMerge'] = contains;
+  }
+  return facts;
+}
+
+/** One lookup per environment per tick. */
+const deploys = {
+  cache: new Map(),
+  reset() {
+    this.cache.clear();
+  },
+  get(key, load) {
+    if (!this.cache.has(key)) {
+      this.cache.set(key, load());
+    }
+    return this.cache.get(key);
+  },
+};
+
+/**
  * Facts that need comments, reactions or edit history. Only read for the stages that use them,
  * so a board of mostly Backlog and Done issues costs no extra calls.
  */
 async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
+  if (entry.labels.includes('manual-only')) {
+    return {}; // decide() ignores it, so spend no calls on it
+  }
   const canonical = canonicalStage(entry.parsed.stage);
   const blocked = Boolean(entry.parsed.blocked);
-  if (!(canonical === 'To do' || canonical === 'In analysis' || canonical === 'Ready' || blocked)) {
+  if (!(canonical === 'To do' || canonical === 'In analysis' || canonical === 'Ready' || RELEASE_STAGES.has(canonical) || blocked)) {
     return {};
   }
   const comments = await (io.listIssueComments || listIssueComments)({
@@ -82,6 +133,9 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
     facts.humanCommentId = human ? human.id : null;
     facts.wokenFor = wokenCommentIds(comments, config.engine.logins);
     return facts;
+  }
+  if (RELEASE_STAGES.has(canonical)) {
+    return buildReleaseFacts({ owner, repo, entry, canonical, comments, config, token, io });
   }
   if (canonical === 'Ready') {
     return {
@@ -141,6 +195,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   if (runMode === 'off') {
     return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [] };
   }
+  deploys.reset();
   const config = io.config || loadConfig();
   const list = io.listProjectIssues || listProjectIssues;
   const getIssue =
@@ -194,6 +249,9 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       }),
       ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
     };
+    if (!String(entry.parsed.stage || '').trim() && parseFollowUp(entry.issue.body)) {
+      facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
+    }
     const action = decide(facts, config);
     const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
     actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });
