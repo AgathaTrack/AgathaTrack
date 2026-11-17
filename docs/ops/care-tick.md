@@ -147,11 +147,11 @@ Tracked on [DEBT-OPS-R11 (#1546)](https://github.com/AgathaTrack/AgathaTrack/iss
 
 | WP | What | Evidence to attach on #1546 |
 |----|------|------------------------------|
-| **WP1** | After a `main` deploy: UAT SSH migrate + post-deploy smoke green | Actions run URL; migration log (no ownership errors); smoke job link |
-| **WP2** | Cron every 15 minutes on UAT backend | One-shot `care_tick.js` output; cPanel cron line; `tail` of `~/logs/care_tick_uat.log` |
+| **WP1** | After a `main` deploy: **Deploy UAT** SSH migrate + **UAT post-deploy smoke** job green (required Tier 2 gate; not optional **UAT live E2E**, which is advisory) | `deploy-uat.yml` Actions run URL; migration log (no ownership errors); **UAT post-deploy smoke** job link |
+| **WP2** | Cron every 15 minutes on UAT backend | One-shot `care_tick.js` output; cPanel cron line; after **30–45 minutes**, `tail` of `~/logs/care_tick_uat.log` showing at least one scheduled cron line (not only the install-time manual run) |
 | **WP3** | Post-reset data health | `repair_occurrences.js --dry-run` → **0 violations** (paste full summary line) |
 
-Order: deploy with migration **083** → (UAT) live smoke after deploy if applicable → **reset** per [UAT reset](#uat-reset) → install cron → WP2/WP3 checks. Do not enable production cron until the [production reset](#production-reset-one-off-2026-10) / empty-DB policy in this doc applies to that host.
+Order: deploy with migration **083** → **UAT post-deploy smoke** green → **reset** per [UAT reset](#uat-reset) → install cron → WP2/WP3 checks. Optional: advisory **UAT live E2E** on the same promote path ([uat-deploy-tiers.md](../e2e/uat-deploy-tiers.md)). Do not enable production cron until the [production reset](#production-reset-one-off-2026-10) / empty-DB policy in this doc applies to that host.
 
 ## Related
 
