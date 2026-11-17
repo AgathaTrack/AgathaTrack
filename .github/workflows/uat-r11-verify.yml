@@ -3,8 +3,9 @@ name: UAT R11 ops verify
 on:
   workflow_dispatch:
 
+# Serialize with deploy-uat / uat-live-e2e SSH whitelist usage (see uat-live-e2e.yml).
 concurrency:
-  group: uat-r11-verify
+  group: deploy-uat
   cancel-in-progress: false
 
 permissions:
@@ -48,26 +49,40 @@ jobs:
           ip="$(curl -sf --retry 3 https://api.ipify.org)"
           echo "ipv4=${ip}" >> "$GITHUB_OUTPUT"
 
-      - name: o2switch SSH whitelist — allow GitHub runner
-        id: whitelist_add
+      - name: o2switch SSH whitelist — clear CI slots
         continue-on-error: true
         env:
           CPANEL_SERVER: ${{ secrets.UAT_SSH_HOST }}
           CPANEL_USER: ${{ secrets.UAT_SSH_USER }}
           CPANEL_TOKEN: ${{ secrets.UAT_CPANEL_API_TOKEN }}
+        run: bash scripts/o2switch-ssh-whitelist.sh remove_all
+
+      - name: o2switch SSH whitelist — allow GitHub runner
+        id: whitelist_add
+        env:
+          CPANEL_SERVER: ${{ secrets.UAT_SSH_HOST }}
+          CPANEL_USER: ${{ secrets.UAT_SSH_USER }}
+          CPANEL_TOKEN: ${{ secrets.UAT_CPANEL_API_TOKEN }}
+          SSH_PORT: ${{ secrets.UAT_SSH_PORT || 22 }}
           RUNNER_IP: ${{ steps.runner_ip.outputs.ipv4 }}
         run: bash scripts/o2switch-ssh-whitelist.sh add
 
+      - name: o2switch SSH whitelist — verify runner IP
+        id: whitelist_verify
+        env:
+          CPANEL_SERVER: ${{ secrets.UAT_SSH_HOST }}
+          CPANEL_USER: ${{ secrets.UAT_SSH_USER }}
+          CPANEL_TOKEN: ${{ secrets.UAT_CPANEL_API_TOKEN }}
+        run: |
+          bash scripts/o2switch-ssh-whitelist.sh list | grep -q "${{ steps.runner_ip.outputs.ipv4 }}"
+
       - name: Wait for firewall
-        if: steps.whitelist_add.outcome == 'success'
         run: sleep 30
 
       - name: Prepare R11 verify script
-        if: steps.whitelist_add.outcome == 'success'
         run: bash scripts/ci/prepare-uat-r11-verify.sh
 
       - name: Run R11 verify via SSH
-        if: steps.whitelist_add.outcome == 'success'
         uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
         with:
           host: ${{ secrets.UAT_SSH_HOST }}
@@ -86,5 +101,6 @@ jobs:
           CPANEL_SERVER: ${{ secrets.UAT_SSH_HOST }}
           CPANEL_USER: ${{ secrets.UAT_SSH_USER }}
           CPANEL_TOKEN: ${{ secrets.UAT_CPANEL_API_TOKEN }}
+          SSH_PORT: ${{ secrets.UAT_SSH_PORT || 22 }}
           RUNNER_IP: ${{ steps.runner_ip.outputs.ipv4 }}
         run: bash scripts/o2switch-ssh-whitelist.sh remove

@@ -30,8 +30,8 @@ echo "=== WP2: one-shot care_tick.js ==="
 "${UAT_NODE_BIN}" scripts/care/care_tick.js
 
 echo "=== WP2: cPanel cron (crontab) ==="
-if crontab -l 2>/dev/null | grep -F 'care_tick.js' || true; then
-  :
+if crontab -l 2>/dev/null | grep -F 'care_tick.js'; then
+  echo "cron_line=found"
 else
   echo "::warning::No care_tick.js line in crontab — cron may not be installed"
 fi
