@@ -1,13 +1,10 @@
 'use strict';
 
 const { rest } = require('../.github/scripts/github-project-lib');
+const { agentLogins } = require('./issue_pipeline_v2_config');
 
 const SPEC_REQUEST = 'v2:spec-request';
 const WRITE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
-
-function agentLogins(config) {
-  return config.agents.map((agent) => agent.login);
-}
 
 /**
  * The engine's "spec requested" comment. The marker carries the current assignee and the agents
