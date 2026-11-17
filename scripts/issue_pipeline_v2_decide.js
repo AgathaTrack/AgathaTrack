@@ -273,6 +273,12 @@ function decideInProgress(facts, config) {
 }
 
 function decideInMain(facts, config) {
+  // An issue moved to In Main by hand may have no linked PR merged into `main`. There is then no
+  // merge to review or to find in a deploy, and a request could never be satisfied: it would repeat
+  // on every tick. Wait until a merge exists.
+  if (!facts.delivery?.lastMergeSha) {
+    return none('main.no-merge');
+  }
   if (!facts.intentReview?.requested) {
     const authors = new Set(facts.prAuthors || []);
     const independent = agentLogins(config).filter((login) => !authors.has(login));

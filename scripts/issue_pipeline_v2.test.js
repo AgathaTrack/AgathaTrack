@@ -266,12 +266,19 @@ test('In progress: working, resume once, stalled, finished', () => {
   }
 });
 
+test('In Main without a merge into main waits instead of repeating an unsatisfiable review request', () => {
+  assert.equal(rowOf({ stage: 'In Main' }).reason, 'main.no-merge');
+  assert.equal(rowOf({ stage: 'In Main', delivery: {} }).reason, 'main.no-merge');
+  assert.equal(rowOf({ stage: 'In Main', delivery: { lastMergeSha: null }, uatContainsLatestMerge: true }).reason, 'main.no-merge');
+});
+
 test('In Main: intent review first, from an agent that did not author the PRs, then UAT', () => {
-  const request = rowOf({ stage: 'In Main', prAuthors: ['pawpet-bot'] });
+  const merged = { delivery: { lastMergeSha: 'm1' } };
+  const request = rowOf({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot'] });
   assert.deepEqual([request.type, request.agent], ['request-intent-review', 'pawpet-claude']);
-  const everyone = rowOf({ stage: 'In Main', prAuthors: ['pawpet-bot', 'pawpet-claude'] });
+  const everyone = rowOf({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot', 'pawpet-claude'] });
   assert.equal(everyone.type, 'request-intent-review');
-  const requested = { stage: 'In Main', intentReview: { requested: true } };
+  const requested = { stage: 'In Main', ...merged, intentReview: { requested: true } };
   assert.equal(rowOf(requested).reason, 'main.waiting-uat');
   assert.equal(rowOf({ ...requested, uatContainsLatestMerge: true }).to, 'In UAT');
 });
