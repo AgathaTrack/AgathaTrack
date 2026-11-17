@@ -4,7 +4,7 @@ import '../../../../../l10n/app_localizations.dart';
 import '../../../domain/entities/health_issue.dart';
 
 /// User choice from a vet health-issue linkage prompt.
-enum VetHealthIssuePromptChoice { dismiss, linkExisting, addNew, planNextVisit }
+enum VetHealthIssuePromptChoice { dismiss, linkExisting, addNew }
 
 /// Suggested quick-pick titles for new health issues (§10.4).
 enum HealthIssueQuickPick { injury, dental, neutering, other }
@@ -36,37 +36,6 @@ Future<VetHealthIssuePromptChoice?> showUnplannedVetHealthIssuePrompt(
   );
 }
 
-/// Sheet after planned vet visit completion (§10.2).
-Future<VetHealthIssuePromptChoice?> showPlannedVetCompletionHealthIssuePrompt(
-  BuildContext context,
-) {
-  final l = AppLocalizations.of(context)!;
-  return showModalBottomSheet<VetHealthIssuePromptChoice>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (ctx) => _VetHealthIssuePromptSheet(
-      title: l.vetPlannedCompletionHealthIssuePromptTitle,
-      primaryAction: _PromptAction(
-        label: l.vetHealthIssuePromptAddNew,
-        choice: VetHealthIssuePromptChoice.addNew,
-      ),
-      secondaryAction: _PromptAction(
-        label: l.vetHealthIssuePromptLinkExisting,
-        choice: VetHealthIssuePromptChoice.linkExisting,
-      ),
-      dismissAction: _PromptAction(
-        label: l.vetHealthIssuePromptNo,
-        choice: VetHealthIssuePromptChoice.dismiss,
-      ),
-      extraAction: _PromptAction(
-        label: l.vetHealthIssuePlanNextVisit,
-        choice: VetHealthIssuePromptChoice.planNextVisit,
-      ),
-    ),
-  );
-}
-
 class _PromptAction {
   const _PromptAction({required this.label, required this.choice});
 
@@ -80,14 +49,12 @@ class _VetHealthIssuePromptSheet extends StatelessWidget {
     required this.primaryAction,
     required this.secondaryAction,
     required this.dismissAction,
-    this.extraAction,
   });
 
   final String title;
   final _PromptAction primaryAction;
   final _PromptAction secondaryAction;
   final _PromptAction dismissAction;
-  final _PromptAction? extraAction;
 
   @override
   Widget build(BuildContext context) {
@@ -113,14 +80,6 @@ class _VetHealthIssuePromptSheet extends StatelessWidget {
               onPressed: () => Navigator.pop(context, secondaryAction.choice),
               child: Text(secondaryAction.label),
             ),
-            if (extraAction != null) ...[
-              const SizedBox(height: 8),
-              OutlinedButton(
-                key: Key('vet_health_issue_prompt_${extraAction!.choice.name}'),
-                onPressed: () => Navigator.pop(context, extraAction!.choice),
-                child: Text(extraAction!.label),
-              ),
-            ],
             const SizedBox(height: 8),
             TextButton(
               key: Key('vet_health_issue_prompt_${dismissAction.choice.name}'),

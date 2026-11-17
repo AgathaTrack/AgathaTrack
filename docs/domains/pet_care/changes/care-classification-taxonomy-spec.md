@@ -428,6 +428,8 @@ Existing: `health_entries.health_issue_id` optional link; dropdown on form when 
 
 ### 10.2 Prompt — planned vet visit completion
 
+**Delivery:** **Planned** — not implemented on `CareCompletionFlow` ([#2335](https://github.com/AgathaTrack/AgathaTrack/issues/2335)); canonical truth: D-CIE-046.
+
 **When:** user marks completed a **planned** entry where `care_setting=vet` (or family ∈ {wellness_review, dental, vaccination}).
 
 **UI:** after completion confirm:
@@ -533,7 +535,7 @@ Each phase = one verifiable outcome ([atomic-pr-policy](../../../agent-efficienc
 - [ ] Taxonomy defaults match §4.3 matrix; single JSON/registry source.
 - [ ] `deriveLegacyType` has contract tests (Dart ↔ Node).
 - [ ] Vet unplanned save shows health-issue prompt (dismissible).
-- [ ] Planned vet completion shows health-issue + optional re-plan prompt.
+- [ ] Planned vet completion shows health-issue + optional re-plan prompt. **Planned** (D-CIE-046; not on Care Item completion path).
 - [ ] No urgent picker anywhere in care entry flows.
 - [ ] Filters use family + `filter_group` (type chips removed or deprecated).
 - [ ] Phase B rejects client-sent `type`; E2E updated in same PR.
