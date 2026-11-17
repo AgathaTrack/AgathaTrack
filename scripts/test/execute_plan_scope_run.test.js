@@ -62,7 +62,7 @@ function planComments(extra = []) {
   return [APPROVE, ackComment(APPROVE.id), statusComment(), ...extra];
 }
 
-function setup({ issue = CONTROL_ISSUE, comments = planComments(), files = [], extra = {} } = {}) {
+function setup({ issue = CONTROL_ISSUE, comments = planComments(), files = [], extra = {}, prAuthor = 'pawpet-bot' } = {}) {
   const routes = {
     ...workflowRunRoute(REPO),
     [ISSUES_KEY]: { body: [issue] },
@@ -70,6 +70,7 @@ function setup({ issue = CONTROL_ISSUE, comments = planComments(), files = [], e
     [`GET ${R}/issues/77/comments?per_page=100`]: { body: comments },
     [`GET ${R}/contents/.agents/plans/${PLAN}.snapshot.json?ref=${INIT_SHA}`]: file(SNAP_JSON),
     [`GET ${R}/contents/.agents/plans/${PLAN}.md?ref=${INIT_SHA}`]: file(PLAN_MD),
+    [`GET ${R}/pulls/5`]: { body: { user: { login: prAuthor }, head: { sha: phasePr.headSha, ref: phasePr.headRef } } },
     [`GET ${R}/pulls/5/files?per_page=100`]: { body: files.map((filename) => ({ filename })) },
     [`GET ${R}/pulls/5/reviews?per_page=100`]: { body: [] },
     ...extra,
@@ -90,13 +91,60 @@ test('fork PR → success ok, no GitHub calls', async () => {
   assert.equal(fake.calls.length, 0);
 });
 
-test('non-plan PR → success ok (no plan id, or no open control issue)', async () => {
-  const { client } = setup();
+test('non-plan PR → success ok when no forbidden paths', async () => {
+  const { client, fake } = setup();
   const none = await runScopeCheck(client, { ...phasePr, headRef: 'feature/x', baseRef: 'main' });
   assert.deepEqual([none.conclusion, none.title, none.planId], ['success', 'ok', null]);
+  assert.equal(fake.calls.some((c) => c.url.includes('/issues/77/comments')), false);
   const { client: c2 } = setup({ extra: { [ISSUES_KEY]: { body: [] } } });
   const noIssue = await runScopeCheck(c2, phasePr);
   assert.deepEqual([noIssue.conclusion, noIssue.title], ['success', 'ok']);
+});
+
+test('non-plan PR into integration is not scanned (base not main)', async () => {
+  const { client } = setup({ files: ['db/migrations/099_x.sql'] });
+  const res = await runScopeCheck(client, {
+    ...phasePr,
+    headRef: 'cursor/misc-feature-x',
+    baseRef: 'cursor/misc-dev-294b',
+  });
+  assert.deepEqual([res.conclusion, res.title, res.summary], ['success', 'ok', 'not an execute-plan PR']);
+});
+
+test('non-plan PR forbidden path → failure in enforce mode', async () => {
+  const prev = process.env.FORBIDDEN_GATE_MODE;
+  process.env.FORBIDDEN_GATE_MODE = 'enforce';
+  try {
+    const { client } = setup({
+      files: ['db/migrations/099_x.sql'],
+    });
+    const res = await runScopeCheck(client, { ...phasePr, headRef: 'feature/x', baseRef: 'main' });
+    assert.deepEqual([res.conclusion, res.title], ['failure', 'forbidden']);
+    assert.match(res.summary, /db\/migrations\/099_x\.sql/);
+  } finally {
+    if (prev === undefined) delete process.env.FORBIDDEN_GATE_MODE;
+    else process.env.FORBIDDEN_GATE_MODE = prev;
+  }
+});
+
+test('non-plan PR forbidden path → success forbidden-advisory in report-only mode', async () => {
+  const prev = process.env.FORBIDDEN_GATE_MODE;
+  process.env.FORBIDDEN_GATE_MODE = 'report-only';
+  try {
+    const { client } = setup({ files: ['db/migrations/099_x.sql'] });
+    const res = await runScopeCheck(client, { ...phasePr, headRef: 'copilot/fix-1', baseRef: 'main' });
+    assert.deepEqual([res.conclusion, res.title], ['success', 'forbidden-advisory']);
+    assert.match(res.summary, /would block/);
+  } finally {
+    if (prev === undefined) delete process.env.FORBIDDEN_GATE_MODE;
+    else process.env.FORBIDDEN_GATE_MODE = prev;
+  }
+});
+
+test('non-plan owner-authored PR skips forbidden scan', async () => {
+  const { client } = setup({ files: ['db/migrations/099_x.sql'], prAuthor: 'KanopeeKa' });
+  const res = await runScopeCheck(client, { ...phasePr, headRef: 'cursor/some-dev', baseRef: 'main' });
+  assert.deepEqual([res.conclusion, res.title, res.summary], ['success', 'ok', 'owner-authored PR (forbidden-path gate skipped)']);
 });
 
 test('phase PR in scope → success', async () => {

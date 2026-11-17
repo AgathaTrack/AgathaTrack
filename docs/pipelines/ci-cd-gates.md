@@ -47,7 +47,7 @@ shards unchanged for prod-ready. Prod security scans noted in Phase 6 (future).
 | PR granular CI jobs | Visible, not individually required | `ci.yml` (startup-smoke, test-suite, flutter-*, …) |
 | PR startup smoke | **Yes** (via `ci-gate`) | `ci.yml` → `_reusable-pr-startup-smoke.yml` |
 | PR hints | No (advisory) | `pr-governance-hints.yml` |
-| Agent `cursor/*` PRs | **Yes** (forbidden paths — migrations, security config, infra, auth/billing/secrets routes) | `agent-pr-safety-gate.yml` |
+| All PRs → `main` (forbidden paths) | **Yes** (via required `execute-plan-scope`; owner review on head clears hits) | `execute-plan-scope.yml` |
 | `uat-*` tag deploy | **Yes** (UAT + `prod-ready`) | `deploy-uat.yml` (tag push or `workflow_run` after promote) |
 | Weekly E2E on `main` | **No** (signal only) | `e2e.yml` |
 | PROD deploy / stub tag | **Yes** (environment when live) | `deploy-prod.yml` (auto after UAT `prod-ready`) |
@@ -68,7 +68,7 @@ Triggered by `.github/workflows/ci.yml` → `_reusable-pr-startup-smoke.yml`,
 | `ci-gate / CI passed` | `ci.yml` → `_reusable-ci-gate.yml` (aggregator — see maintenance note below) |
 | `Analyze JavaScript` | `codeql.yml` (separate workflow; weekly schedule preserved) |
 
-**Conditional:** `Forbidden path check` — agent `cursor/*` PRs only (`agent-pr-safety-gate.yml`).
+**Forbidden paths:** every in-repo PR → `main` is scanned by required `execute-plan-scope` (trusted code on `main`). Owner approving review on the PR head clears forbidden hits; owner-authored PRs skip the scan ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)).
 
 #### `ci-gate` maintenance (dependency list drift)
 
@@ -360,8 +360,7 @@ wait for one green **CI** run — GitHub only lists checks that have reported at
 | Check / action | Workflow | Behavior |
 |----------------|----------|----------|
 | `Governance hints (advisory)` | `pr-governance-hints.yml` | PR comment only; does not block merge |
-| `Forbidden path check` | `agent-pr-safety-gate.yml` | **Blocks** PRs from `cursor/*` branches that touch forbidden paths (migrations, `server/config/security.js`, `infra/`, auth/billing/secrets routes). Workflow edits under `.github/workflows/` are allowed when paired with gate doc updates. Human branches unaffected |
-| `execute-plan-scope` | `execute-plan-scope.yml` (`pull_request_target` + `pull_request_review` submitted; **commit status** posted with `GITHUB_TOKEN`) | Execute-plan v2 PRs only: scope matcher in `scripts/lib/execute_plan_scope_run.js` (forbidden fails the PR but does not STOP the plan — owner **APPROVING** review on the head clears forbidden; release checks protected + own-plan files only; infra errors use reason `error`). Other PRs get green `ok`. Trusted `main` code only. Spec: [execute-plan-schema §v2 scope](../agent-efficiency/execute-plan-schema.md) |
+| `execute-plan-scope` | `execute-plan-scope.yml` (`pull_request_target` + `pull_request_review` submitted; **commit status** posted with `GITHUB_TOKEN`) | **All** in-repo PRs to `main`: `agent-safety-lib` forbidden-path scan (`scripts/lib/execute_plan_scope_nonplan.js`); owner **APPROVING** review on the head clears forbidden hits; owner-authored PRs skip the scan. Execute-plan branches still run the snapshot scope matcher (phase/release/sync rules). Infra errors use reason `error` / `error-advisory` (report-only mode if configured). Trusted `main` code only. Spec: [execute-plan-schema §v2 scope](../agent-efficiency/execute-plan-schema.md) · shipped [#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980) |
 
 ---
 

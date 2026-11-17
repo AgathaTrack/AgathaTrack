@@ -26,6 +26,7 @@ jobs:
       - name: Evaluate and publish execute-plan-scope
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORBIDDEN_GATE_MODE: enforce
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}

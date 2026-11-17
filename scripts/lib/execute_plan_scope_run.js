@@ -22,6 +22,12 @@ const { findOwnerScopeAckReview } = require('./execute_plan_scope_ack');
 const { deriveControl } = require('./execute_plan_control');
 const { planIdFromRefs, findControlIssue, labelNames } = require('./execute_plan_plans');
 const { SCOPE_CONTEXT, describeScope } = require('./execute_plan_scope_status');
+const {
+  evaluateNonPlanForbidden,
+  forbiddenGateMode,
+  nonPlanEvaluationToResult,
+  nonPlanInfrastructureOutcome,
+} = require('./execute_plan_scope_nonplan');
 
 const CHECK_NAME = SCOPE_CONTEXT;
 const CONFIG_PATH = '.github/execute-plan.config.json';
@@ -171,41 +177,63 @@ async function loadPlanControl(client, issue, planId, now) {
 
 /** @returns {Promise<{ conclusion: string, title: string, summary: string, planId: string|null }>} */
 async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, headRepo, repo, now }) {
+  const mode = forbiddenGateMode();
   if (headRepo !== repo) return result('success', 'ok', 'not an execute-plan PR (fork)');
-  const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
-  if (!planId) return result('success', 'ok', 'not an execute-plan PR');
-  const issue = await findControlIssue(client, planId);
-  if (!issue) return result('success', 'ok', 'not an execute-plan PR');
 
-  let snapshot;
-  let stopped;
-  let control;
+  const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
+
+  let config;
   try {
-    ({ snapshot, stopped, control } = await loadPlanControl(client, issue, planId, now));
+    config = await loadConfig(client);
   } catch (e) {
+    if (!planId) return nonPlanInfrastructureOutcome('config', e, mode);
     return result('failure', 'error', e.message, planId);
   }
 
   let files;
-  try {
-    const pullFiles = await client.listPullFiles(prNumber);
-    files = [...new Set(pullFiles.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))];
-  } catch (e) {
-    if (e instanceof PullFilesOverflow) return result('failure', 'too-many-files', e.message, planId);
-    throw e;
-  }
-
-  const config = await loadConfig(client);
+  let prAuthor = null;
   let scopeAckReview = null;
   try {
+    const pull = await client.getPull(prNumber);
+    prAuthor = pull.user && pull.user.login;
+    const pullFiles = await client.listPullFiles(prNumber);
+    files = [...new Set(pullFiles.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))];
     const reviews = await client.listPullReviews(prNumber);
     scopeAckReview = findOwnerScopeAckReview(reviews, {
       headSha,
       owners: config.owners || [],
       botLogin: config.bot_login,
     });
-  } catch {
-    scopeAckReview = null;
+  } catch (e) {
+    if (!planId) {
+      if (e instanceof PullFilesOverflow) return nonPlanInfrastructureOutcome('file list', e, mode);
+      return nonPlanInfrastructureOutcome('PR load', e, mode);
+    }
+    if (e instanceof PullFilesOverflow) return result('failure', 'too-many-files', e.message, planId);
+    throw e;
+  }
+
+  const issue = planId ? await findControlIssue(client, planId) : null;
+  if (!planId || !issue) {
+    if (baseRef !== 'main') {
+      return result('success', 'ok', 'not an execute-plan PR');
+    }
+    const evaluation = evaluateNonPlanForbidden({
+      files,
+      scopeAckReview,
+      mode,
+      prAuthor,
+      owners: config.owners || [],
+    });
+    return nonPlanEvaluationToResult(evaluation, null);
+  }
+
+  let snapshot;
+  let stopped;
+  try {
+    ({ snapshot, stopped } = await loadPlanControl(client, issue, planId, now));
+  } catch (e) {
+    return result('failure', 'error', e.message, planId);
   }
 
   const { category, phaseId } = categorizePull({ head_ref: headRef, base_ref: baseRef }, snapshot);

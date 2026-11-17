@@ -279,7 +279,7 @@ GitHub remains the source of truth. Cursor Cloud Agents are workers that impleme
 | [`.github/workflows/issue-agent-pr-merge.yml`](../.github/workflows/issue-agent-pr-merge.yml) | On merged `cursor/**` PR → **In Main**, record expected UAT tag |
 | [`.github/workflows/promote-uat.yml`](../.github/workflows/promote-uat.yml) | On push to `main` → create `uat-YYMMDD-PR#` tag |
 | [`.github/workflows/deploy-uat.yml`](../.github/workflows/deploy-uat.yml) | UAT deploy + **Notify linked agent issue** job → **In UAT** or escalate |
-| [`.github/workflows/agent-pr-safety-gate.yml`](../.github/workflows/agent-pr-safety-gate.yml) | Fail PRs that touch forbidden paths |
+| `execute-plan-scope.yml` (forbidden paths on all PRs to `main`) | Required commit status; owner review clears forbidden hits ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)) |
 | [`.github/scripts/agent-payload-lib.js`](../.github/scripts/agent-payload-lib.js) | Sanitized task payload + prompt |
 | [`.github/scripts/agent-safety-lib.js`](../.github/scripts/agent-safety-lib.js) | Preflight + forbidden path rules |
 | [`.github/scripts/launch-cursor-agent.js`](../.github/scripts/launch-cursor-agent.js) | Calls Cursor Cloud Agents API v1 |

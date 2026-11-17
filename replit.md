@@ -31,8 +31,8 @@ sources conflict, follow `AGENTS.md` §Precedence and fix the losing text; do no
 - Inspect first, change second: smallest safe change; be conservative around UAT deploy, Playwright E2E, auth/session
   handling and environment-specific behaviour.
 - PRs to `main` are enforced by branch protection (`ci-gate / CI passed` + CodeQL `Analyze JavaScript` required).
-  Sensitive paths (`.github/scripts/agent-safety-lib.js`) are blocked on `replit/*` branches by
-  `agent-pr-safety-gate.yml`.
+  Sensitive paths (`.github/scripts/agent-safety-lib.js`) are enforced on every PR to `main` via required
+  `execute-plan-scope` (owner review on the head clears hits).
 
 ## Replit mechanics
 1. **Pre-PR critical self-review** — `.cursor/rules/pr-hygiene.mdc`; canonical-docs sync when behaviour changes.
