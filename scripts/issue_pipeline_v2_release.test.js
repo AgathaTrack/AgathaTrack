@@ -74,17 +74,21 @@ test('delivery facts: merges into main, open PRs, activity ignores the engine, m
   assert.deepEqual(facts.prAuthors, ['pawpet-bot', 'pawpet-claude']);
 });
 
-test('deployments: newest successful deployment sha; containment by compare', async () => {
+test('deploy lookup: the newest successful run of the deploy workflow, never environment records', async () => {
+  const seen = [];
   const restFn = async (method, path) => {
-    if (path.includes('/statuses')) {
-      return path.includes('/deployments/2/') ? [{ state: 'success' }] : [{ state: 'failure' }];
-    }
+    seen.push(path);
     if (path.includes('/compare/')) {
       return { status: path.includes('old...new') ? 'ahead' : 'diverged' };
     }
-    return [{ id: 3, sha: 'bad' }, { id: 2, sha: 'new' }, { id: 1, sha: 'older' }];
+    return { workflow_runs: [{ head_sha: 'new' }] };
   };
   assert.equal(await latestDeploySha({ owner: 'o', repo: 'r', environment: 'UAT', token: 't', restFn }), 'new');
+  assert.match(seen[0], /actions\/workflows\/deploy-uat\.yml\/runs\?status=success&branch=main&per_page=1/);
+  await latestDeploySha({ owner: 'o', repo: 'r', environment: 'PROD', token: 't', restFn });
+  assert.match(seen[1], /deploy-prod\.yml/);
+  assert.equal(await latestDeploySha({ owner: 'o', repo: 'r', environment: 'UAT', token: 't', restFn: async () => ({ workflow_runs: [] }) }), null);
+  await assert.rejects(latestDeploySha({ owner: 'o', repo: 'r', environment: 'STAGING', token: 't', restFn }), /No deploy workflow/);
   assert.equal(await deployContains({ owner: 'o', repo: 'r', mergeSha: 'old', deploySha: 'new', token: 't', restFn }), true);
   assert.equal(await deployContains({ owner: 'o', repo: 'r', mergeSha: 'zzz', deploySha: 'new', token: 't', restFn }), false);
   assert.equal(await deployContains({ owner: 'o', repo: 'r', mergeSha: 'same', deploySha: 'same', token: 't', restFn }), true);
@@ -121,7 +125,7 @@ test('runner: release stages read PRs and deploys; In Main waits for UAT, In UAT
         fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
         listProjectIssues: async () => [{ issue: { number: 1, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }],
         getIssue: async () => stageOf(stage),
-        listIssueComments: async () => [{ user: { login: 'pawpet-engine' }, body: `<!-- ${INTENT_REVIEW} -->`, created_at: '2026-11-10T00:00:00Z' }],
+        listIssueComments: async () => [{ user: { login: 'pawpet-engine' }, body: `<!-- ${INTENT_REVIEW} agent=a merge=m1 -->`, created_at: '2026-11-10T00:00:00Z' }],
         listLinkedPrs: async () => [{ number: 1, state: 'closed', merged: true, mergedAt: '2026-11-10T00:00:00Z', mergeSha: 'm1', base: 'main', author: 'pawpet-bot', updatedAt: '2026-11-10T00:00:00Z' }],
         ...io,
       },
@@ -138,16 +142,23 @@ test('runner: release stages read PRs and deploys; In Main waits for UAT, In UAT
 
 const { buildIntentReviewRequest, parseFollowUp, followUpDepth } = require('./issue_pipeline_v2_intent');
 
+const merged = (mergeSha, mergedAt) => ({ number: 1, state: 'closed', merged: true, mergedAt, mergeSha, base: 'main', author: 'a', updatedAt: mergedAt });
+
 test('intent review: the request carries the marker the delivery facts read back', () => {
-  const body = buildIntentReviewRequest({ agent: 'pawpet-claude', issueNumber: 5, prNumbers: [11, 12] });
-  assert.match(body, /v2:intent-review agent=pawpet-claude/);
+  const body = buildIntentReviewRequest({ agent: 'pawpet-claude', issueNumber: 5, prNumbers: [11, 12], mergeSha: 'abc' });
+  assert.match(body, /v2:intent-review agent=pawpet-claude merge=abc/);
   assert.match(body, /#11, #12/);
   assert.match(body, /v2:follow-up of=#5/);
   const facts = deriveDeliveryFacts({
-    issue: { body: '', labels: [] }, prs: [], engineLogins: engine,
+    issue: { body: '', labels: [] }, prs: [merged('abc', '2026-11-10T00:00:00Z')], engineLogins: engine,
     comments: [{ user: { login: 'pawpet-engine' }, body, created_at: '2026-11-10T00:00:00Z' }],
   });
   assert.equal(facts.intentReview.requested, true);
+  const later = deriveDeliveryFacts({
+    issue: { body: '', labels: [] }, prs: [merged('abc', '2026-11-10T00:00:00Z'), merged('def', '2026-11-12T00:00:00Z')], engineLogins: engine,
+    comments: [{ user: { login: 'pawpet-engine' }, body, created_at: '2026-11-10T00:00:00Z' }],
+  });
+  assert.equal(later.intentReview.requested, false, 'a later merge needs its own review');
 });
 
 test('intent review: apply posts the request and rings the agent', async () => {

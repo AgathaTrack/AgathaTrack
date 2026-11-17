@@ -77,6 +77,18 @@ function dodComplete(body) {
   return true;
 }
 
+/** An intent review counts only for the merge it was requested for (a later merge needs a new one). */
+function intentReviewRequested(comments, engine, mergeSha) {
+  return (
+    Boolean(mergeSha) &&
+    (comments || []).some(
+      (comment) =>
+        engine.has(comment.user?.login) &&
+        new RegExp(`<!--\\s*${INTENT_REVIEW}\\b[^>]*\\bmerge=${mergeSha}\\b`).test(comment.body || ''),
+    )
+  );
+}
+
 function markerNote(comment, engine, marker) {
   return (
     engine.has(comment.user?.login) &&
@@ -110,7 +122,7 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
       lastActivityAt: times.length > 0 ? Math.max(...times) : null,
       resumed: (comments || []).some((c) => markerNote(c, engine, RESUME)),
     },
-    intentReview: { requested: (comments || []).some((c) => markerNote(c, engine, INTENT_REVIEW)) },
+    intentReview: { requested: intentReviewRequested(comments, engine, merges.at(-1)?.mergeSha) },
     prAuthors: [...new Set(prs.filter((pr) => pr.merged).map((pr) => pr.author).filter(Boolean))],
   };
 }
@@ -124,20 +136,23 @@ function buildResume({ agent, ok }) {
   ].join('\n');
 }
 
+const DEPLOY_WORKFLOWS = { UAT: 'deploy-uat.yml', PROD: 'deploy-prod.yml' };
+
 /**
- * The commit of the newest successful deployment to a GitHub environment (`UAT`, `PROD`), or null.
- * Deployments are the record the deploy workflows already leave by running in those environments.
+ * The commit the newest successful run of a deploy workflow ran for, or null. The `UAT` / `PROD`
+ * environments are also used by smoke, reset and gate jobs, so a deployment record there does not
+ * mean "deployed"; a green run of the deploy workflow itself does. Its `head_sha` is the `main`
+ * commit being promoted (checked against the real runs). `status=success&per_page=1` also means
+ * there is nothing to page through.
  */
 async function latestDeploySha({ owner, repo, environment, token, restFn = rest }) {
-  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
-  const deployments = await restFn('GET', `${base}/deployments?environment=${encodeURIComponent(environment)}&per_page=20`, token);
-  for (const deployment of deployments || []) {
-    const statuses = await restFn('GET', `${base}/deployments/${deployment.id}/statuses?per_page=1`, token);
-    if (statuses?.[0]?.state === 'success') {
-      return deployment.sha;
-    }
+  const file = DEPLOY_WORKFLOWS[environment];
+  if (!file) {
+    throw new Error(`No deploy workflow for environment ${environment}`);
   }
-  return null;
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+  const runs = await restFn('GET', `${base}/actions/workflows/${file}/runs?status=success&branch=main&per_page=1`, token);
+  return runs?.workflow_runs?.[0]?.head_sha || null;
 }
 
 /** Does `deploySha` contain `mergeSha`? Compare reports `ahead` or `identical` when it does. */
