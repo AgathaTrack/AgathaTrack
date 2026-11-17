@@ -30,7 +30,7 @@ const {
   listIssueComments,
   listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
-const { deriveReviewFacts, findReviewRequests, totalNWrite } = require('./issue_pipeline_v2_review');
+const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
@@ -316,10 +316,9 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         lastUsed[action.agent] = clock;
       }
       const inScope = !scopeLabel || entry.labels.includes(scopeLabel);
-      const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
-      actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });
+      actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
       console.log(
-        JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action, counters }),
+        JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action }),
       );
       const result = await (io.applyAction || applyAction)({
         action,
@@ -332,7 +331,6 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           fields,
           parsed: entry.parsed,
           assignees: (entry.issue.assignees || []).map((a) => a.login),
-          counters,
           facts,
           // With a scope label, only labelled issues are written to; the rest are still decided and logged.
           dryRun: !live || !inScope,

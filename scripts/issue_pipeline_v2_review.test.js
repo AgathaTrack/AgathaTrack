@@ -12,7 +12,6 @@ const {
   findReviewRequests,
   votesOnRequest,
   deriveReviewFacts,
-  totalNWrite,
 } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
 const { tick } = require('./issue_pipeline_v2');
@@ -142,11 +141,6 @@ test('scenario: no vote, every eligible agent timed out → Blocked stalled; one
   assert.deepEqual([stalled.type, stalled.reason], ['set-blocked', 'stalled']);
 });
 
-test('Total N: written only when it differs from the counted votes', () => {
-  assert.deepEqual(totalNWrite(3, 3), {});
-  assert.deepEqual(totalNWrite(0, 3), { totalN: 3 });
-});
-
 test('graphql readers: request shape, ordering, author fallback and unedited comments', async () => {
   const seen = [];
   const graphqlFn = async (token, query, vars) => {
@@ -184,7 +178,7 @@ test('runner: an In analysis issue reads requests, reactions, edit history and e
         config,
         fields: {
           stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] },
-          attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] },
+          attempts: { id: 3, name: 'Attempts', options: [] },
         },
         listProjectIssues: async () => [{ issue: { number: 7, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }],
         getIssue: async () => ({
@@ -200,7 +194,7 @@ test('runner: an In analysis issue reads requests, reactions, edit history and e
     assert.deepEqual(calls, [['editor', req.node_id], ['reactions', req.id]]);
     const entry = result.actions[0];
     assert.deepEqual([entry.action.type, entry.action.to], ['set-stage', 'Ready']);
-    assert.deepEqual(entry.counters, { totalN: 2 }, 'one vote plus one agent edit');
+    assert.equal(entry.counters, undefined, 'there is no Total N counter any more');
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;

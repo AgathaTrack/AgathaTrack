@@ -75,7 +75,7 @@ function ctx(extra = {}) {
     ctx: {
       owner: 'o', repo: 'r', issueNumber: 7, token: 'pat', config,
       fields: { attempts: { id: 3, name: 'Attempts', options: [] } },
-      parsed: { attempts: 0, totalN: 0 }, assignees: [], counters: {}, facts: {}, dryRun: false,
+      parsed: { attempts: 0 }, assignees: [], counters: {}, facts: {}, dryRun: false,
       restFn: async (method, path, token, body) => { sent.push({ method, path, body }); return { id: 1 }; },
       ...extra,
     },
@@ -162,7 +162,7 @@ test('runner: one failing issue does not stop the board, and two Ready issues re
       owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
       io: {
         config,
-        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
+        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] } },
         listProjectIssues: async () => board,
         getIssue: async (n) => ready(n),
         listIssueComments: async () => [],
@@ -182,7 +182,7 @@ test('runner: one failing issue does not stop the board, and two Ready issues re
       owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
       io: {
         config,
-        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
+        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] } },
         listProjectIssues: async () => board.slice(2),
         getIssue: async (n) => ready(n),
         listIssueComments: async () => [],

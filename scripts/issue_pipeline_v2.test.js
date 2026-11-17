@@ -303,7 +303,6 @@ function orgFieldDefs() {
     { id: 1, name: 'Stage', options: ['Backlog', 'To do', 'In analysis', 'Ready', 'In progress', 'In Main', 'In UAT', 'Done'].map((name) => ({ name })) },
     { id: 2, name: 'Blocked', options: ['question', 'no-convergence', 'launch-failed', 'decision', 'stalled', 'paused'].map((name) => ({ name })) },
     { id: 3, name: 'Attempts' },
-    { id: 4, name: 'Total N' },
   ];
 }
 
@@ -320,12 +319,12 @@ test('fields: org definitions are loaded with the real request path; a missing f
   assert.deepEqual(seen, [['GET', '/orgs/AgathaTrack/issue-fields', 't']]);
   assert.equal(fields.stage.options.length, 8);
   await assert.rejects(
-    loadOrgFields({ org: 'o', token: 't', restFn: async () => orgFieldDefs().slice(0, 3) }),
-    /"Total N" not found/,
+    loadOrgFields({ org: 'o', token: 't', restFn: async () => orgFieldDefs().slice(0, 2) }),
+    /"Attempts" not found/,
   );
 });
 
-test('fields: an issue\'s values parse into stage, blocked, attempts and totalN', async () => {
+test('fields: an issue\'s values parse into stage, blocked and attempts', async () => {
   const fields = await loadOrgFields({ org: 'o', token: 't', restFn: async () => orgFieldDefs() });
   const parsed = parseIssueFields(
     {
@@ -333,13 +332,12 @@ test('fields: an issue\'s values parse into stage, blocked, attempts and totalN'
         { field_id: 1, single_select_option: { name: 'In analysis' } },
         { field_id: 2, single_select_option: { name: 'stalled' } },
         { field_id: 3, value: 2 },
-        { field_id: 4, value: '5' },
       ],
     },
     fields,
   );
-  assert.deepEqual(parsed, { stage: 'In analysis', blocked: 'stalled', attempts: 2, totalN: 5 });
-  assert.deepEqual(parseIssueFields({}, fields), { stage: '', blocked: '', attempts: 0, totalN: 0 });
+  assert.deepEqual(parsed, { stage: 'In analysis', blocked: 'stalled', attempts: 2 });
+  assert.deepEqual(parseIssueFields({}, fields), { stage: '', blocked: '', attempts: 0 });
 });
 
 test('fields: writes use PATCH on the issue with canonical option names; typos fail before the call', async () => {
@@ -378,7 +376,6 @@ function boardIo(extra = {}) {
       stage: { id: 1, name: 'Stage', options: [] },
       blocked: { id: 2, name: 'Blocked', options: [] },
       attempts: { id: 3, name: 'Attempts', options: [] },
-      totalN: { id: 4, name: 'Total N', options: [] },
     },
     listProjectIssues: async () => [
       { issue: { number: 1, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
@@ -423,13 +420,11 @@ test('runner: off does nothing; dry-run decides over the board and never writes'
 });
 
 test('writes: stage and blocked changes, attempts on reassign, and the counter even when nothing else changes', () => {
-  const parsed = { attempts: 0, totalN: 0 };
+  const parsed = { attempts: 0 };
   assert.deepEqual(buildWrites({ action: { type: 'set-stage', to: 'Ready' }, parsed, counters: {} }), { stage: 'Ready', attempts: 0 });
   assert.deepEqual(buildWrites({ action: { type: 'set-blocked', reason: 'stalled' }, parsed, counters: {} }), { blocked: 'stalled' });
   assert.deepEqual(buildWrites({ action: { type: 'reassign', attempts: 1 }, parsed, counters: {} }), { attempts: 1 });
   assert.deepEqual(buildWrites({ action: { type: 'reassign', attempts: 0 }, parsed, counters: {} }), {}, 'unchanged attempts are not rewritten');
-  assert.deepEqual(buildWrites({ action: { type: 'none' }, parsed, counters: { totalN: 3 } }), { totalN: 3 });
-  assert.deepEqual(buildWrites({ action: { type: 'set-stage', to: 'Ready' }, parsed, counters: { totalN: 2 } }), { stage: 'Ready', attempts: 0, totalN: 2 });
   assert.deepEqual(buildWrites({ action: { type: 'none' }, parsed, counters: {} }), {});
 });
 
@@ -445,7 +440,6 @@ test('runner: a counter-only change reaches the applier (as a dry run without an
       applyAction: async (args) => { written.push(args); return { applied: [], calls: [] }; },
     });
     io.config = { ...io.config, engine: { logins: ['engine'] } };
-    // an agent edit after the first request counts as one vote, so Total N should read 1
     io.listIssueComments = async () => [{
       id: 5, node_id: 'N5', user: { login: 'engine' }, created_at: '2026-11-16T09:00:00Z', updated_at: '2026-11-16T09:00:00Z',
       body: '<!-- v2:review-request hash=other assigned=pawpet-bot history= -->',
@@ -454,7 +448,6 @@ test('runner: a counter-only change reaches the applier (as a dry run without an
     await tick({ owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S', io });
     assert.equal(written.length, 1);
     assert.equal(written[0].ctx.dryRun, true, 'the token is not a configured engine identity');
-    assert.equal(written[0].ctx.counters.totalN, 1);
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;

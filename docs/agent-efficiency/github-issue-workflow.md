@@ -55,7 +55,6 @@ Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the 
 | `Stage` | org issue field, **is the board column** | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
 | `Blocked` | org issue field | empty, or `question` · `no-convergence` · `launch-failed` · `decision` · `stalled` · `paused` |
 | `Attempts` | number | engine retry counter (reassignments, failed launches); reset on every `Stage` change |
-| `Total N` | number | votes cast in To do / In analysis; display only, rewritten each tick, never read back |
 | `busy` | label | a delivery agent is actively working |
 | `manual-only` | label | hand-driven: the engine never touches the issue (it takes no WIP slot) |
 | body | issue body | the spec, then the agreed Delivery plan and Definition of Done |
@@ -65,8 +64,8 @@ join by configuration.
 
 ### Who writes what
 
-| Writer | `Stage` | `Blocked` | `Attempts` / `Total N` | `busy` | body | new issues |
-|--------|---------|-----------|------------------------|--------|------|------------|
+| Writer | `Stage` | `Blocked` | `Attempts` | `busy` | body | new issues |
+|--------|---------|-----------|------------|--------|------|------------|
 | Engine | yes | yes | yes | no | no | no |
 | Agents | no, except during bootstrap | yes, when giving up or escalating | no | yes | yes | follow-up issues only, without `Stage` |
 | Humans | yes | yes | no | yes | yes | yes |

@@ -107,11 +107,6 @@ function deriveReviewFacts({ comments, reactionsByComment, edits, bodyAuthor, co
   };
 }
 
-/** The value the display-only `Total N` field should show. Never read back by the engine. */
-function totalNWrite(parsedTotalN, totalVotes) {
-  return parsedTotalN === totalVotes ? {} : { totalN: totalVotes };
-}
-
 module.exports = {
   REVIEW_REQUEST,
   buildReviewRequest,
@@ -119,5 +114,4 @@ module.exports = {
   findReviewRequests,
   votesOnRequest,
   deriveReviewFacts,
-  totalNWrite,
 };

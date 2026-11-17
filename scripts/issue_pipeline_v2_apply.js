@@ -18,10 +18,9 @@ const { buildLaunchAcked, buildLaunchFailed, buildLaunchRecord } = require('./is
 
 /**
  * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
- * and the display-only `Total N` counter. The counter is written even when the decision is
- * `none`, so a stable issue's counter does not go stale.
+ * and nothing else.
  */
-function buildWrites({ action, parsed, counters }) {
+function buildWrites({ action, parsed }) {
   const writes = {};
   if (action.type === 'set-stage') {
     writes.stage = action.to;
@@ -35,7 +34,7 @@ function buildWrites({ action, parsed, counters }) {
   ) {
     writes.attempts = action.attempts;
   }
-  return { ...writes, ...counters };
+  return writes;
 }
 
 /**
@@ -56,7 +55,7 @@ function issuePath({ owner, repo, issueNumber }) {
  * @param {object} args
  * @param {object} args.action        a `decide()` result
  * @param {object} args.ctx           { owner, repo, issueNumber, token, config, fields, parsed,
- *                                      assignees, counters, facts, dryRun, restFn }
+ *                                      assignees, facts, dryRun, restFn }
  * @returns {Promise<{ applied: string[], calls: Array<{method: string, path: string, body?: object}> }>}
  */
 async function applyAction({ action: decided, ctx }) {
@@ -206,7 +205,7 @@ async function applyAction({ action: decided, ctx }) {
       return { applied: [`unsupported:${action.type}`], calls };
   }
 
-  const writes = buildWrites({ action, parsed: ctx.parsed, counters: ctx.counters || {} });
+  const writes = buildWrites({ action, parsed: ctx.parsed });
   const patch = {};
   if (Object.keys(writes).length > 0) {
     patch.issue_field_values = buildFieldWrites(ctx.fields, writes);

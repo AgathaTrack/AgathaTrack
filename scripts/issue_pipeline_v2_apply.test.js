@@ -16,13 +16,12 @@ const fields = {
   stage: { id: 1, name: 'Stage', options: ['Ready', 'Done'] },
   blocked: { id: 2, name: 'Blocked', options: ['stalled'] },
   attempts: { id: 3, name: 'Attempts', options: [] },
-  totalN: { id: 4, name: 'Total N', options: [] },
 };
 
 function ctx(extra = {}) {
   return {
     owner: 'o', repo: 'r', issueNumber: 7, token: 'pat', config, fields,
-    parsed: { attempts: 0, totalN: 0 }, assignees: ['human', 'pawpet-bot'], counters: {}, facts: {},
+    parsed: { attempts: 0 }, assignees: ['human', 'pawpet-bot'], counters: {}, facts: {},
     dryRun: false, ...extra,
   };
 }
