@@ -24,6 +24,7 @@ alwaysApply: true
 | `/babysit-uat` | Final merge to `main` + pre-UAT — [`babysit-uat` skill](../skills/babysit-uat/SKILL.md) |
 | `/e2e-debug` | Pre-UAT remedial → chain babysit-uat |
 | `/ui-design-deep` | Multi-screen design + implementation |
+| `/AgentAcceptance` | Holistic issue/PR acceptance — [`agent-acceptance` skill](../skills/agent-acceptance/SKILL.md) |
 
 Each Tier 1 skill runs the **Router** first, then applicable protocols under `.cursor/agent-kernel/protocols/`.
 

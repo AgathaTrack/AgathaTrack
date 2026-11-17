@@ -25,6 +25,7 @@ Normal day-to-day workflows:
 | `/babysit-uat` | Final merge to `main` + pre-UAT E2E watch + remedial loop |
 | `/e2e-debug` | Pre-UAT forensic fix on one remedial branch (hands off to babysit-uat) |
 | `/ui-design-deep` | Design + production UI for flows, theme, multi-screen work |
+| `/AgentAcceptance` | Final holistic acceptance on a parent issue or linked PR — [skill](../../.cursor/skills/agent-acceptance/SKILL.md) |
 
 You do **not** invoke internal protocols (`security`, `authorization`, etc.) — Tier 1 skills run the Router and load them automatically.
 

@@ -7,6 +7,9 @@
  *   node scripts/github_issue_workflow.js set-status --issue <n> --status "In Progress"
  *   node scripts/github_issue_workflow.js comment --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js start-work --issue <n> --body "..."
+ *   node scripts/github_issue_workflow.js aat-start --issue <n>
+ *   node scripts/github_issue_workflow.js aat-pass --issue <n> [--body text | --body-file path]
+ *   node scripts/github_issue_workflow.js aat-fail --issue <n> [--body text | --body-file path]
  */
 
 const { spawnSync } = require('child_process');
@@ -16,6 +19,7 @@ const {
   updateIssueProjectStatus,
 } = require('./lib/execute_plan_project');
 const { parseFlags, readBody } = require('./lib/github_issue_workflow_lib');
+const { aatLabelPlan } = require('./lib/github_issue_workflow_aat');
 
 function usage() {
   console.error(`Usage:
@@ -24,6 +28,8 @@ function usage() {
   node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
 Agents do not write the Project Status field — use comments + the \`busy\` label. The org field Stage follows the who-writes-what rule in docs/agent-efficiency/github-issue-workflow.md.
+aat-start | aat-pass | aat-fail — Agent Acceptance labels (see .cursor/skills/agent-acceptance/SKILL.md)
+
 See docs/agent-efficiency/github-labels.md`);
   process.exit(1);
 }
@@ -47,6 +53,11 @@ function editIssueLabels(issueNumber, { add = [], remove = [] } = {}) {
     );
   }
   return { ok: true, issueNumber, added: add, removed: remove };
+}
+
+function aatLabelTransition(issueNumber, outcome) {
+  const { add, remove } = aatLabelPlan(outcome);
+  return editIssueLabels(issueNumber, { add, remove });
 }
 
 async function main() {
@@ -75,6 +86,27 @@ async function main() {
       const commentResult = await postIssueComment(issueNumber, body);
       const labelResult = editIssueLabels(issueNumber, { add: ['busy'] });
       printJson({ comment: commentResult, labels: labelResult });
+      break;
+    }
+
+    case 'aat-start': {
+      printJson({ labels: aatLabelTransition(issueNumber, 'start') });
+      break;
+    }
+
+    case 'aat-pass': {
+      const body = readBody(flags);
+      const labelResult = aatLabelTransition(issueNumber, 'pass');
+      const commentResult = body ? await postIssueComment(issueNumber, body) : { skipped: true };
+      printJson({ labels: labelResult, comment: commentResult });
+      break;
+    }
+
+    case 'aat-fail': {
+      const body = readBody(flags);
+      const labelResult = aatLabelTransition(issueNumber, 'fail');
+      const commentResult = body ? await postIssueComment(issueNumber, body) : { skipped: true };
+      printJson({ labels: labelResult, comment: commentResult });
       break;
     }
 
