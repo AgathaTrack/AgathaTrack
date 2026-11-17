@@ -10,6 +10,7 @@ const {
   findSpecRequest,
   deriveSpecFacts,
   humanCommentSinceBlock,
+  fetchAllPages,
   listIssueComments,
   listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
@@ -18,7 +19,6 @@ const { tick } = require('./issue_pipeline_v2');
 
 const config = { ...loadConfig(), engine: { logins: ['KanopeeKa'] } };
 const NOW = Date.parse('2026-11-16T12:00:00Z');
-const MIN = 60 * 1000;
 
 const TASK = `### Summary
 
@@ -132,15 +132,21 @@ test('spec facts feed decide(): request, wait, reassign, stall and pass', () => 
   assert.equal(decide({ ...base, spec: passed }, config).to, 'In analysis');
 });
 
-test('blocked: a human comment with write access after the last agent comment wakes the agent', () => {
-  const agent = { user: { login: 'pawpet-claude', type: 'User' }, author_association: 'MEMBER', created_at: '2026-11-16T10:00:00Z' };
-  const owner = { user: { login: 'KanopeeKa', type: 'User' }, author_association: 'OWNER', created_at: '2026-11-16T11:00:00Z' };
-  const stranger = { user: { login: 'someone', type: 'User' }, author_association: 'NONE', created_at: '2026-11-16T12:00:00Z' };
-  const bot = { user: { login: 'github-actions[bot]', type: 'Bot' }, author_association: 'CONTRIBUTOR', created_at: '2026-11-16T13:00:00Z' };
+test('blocked: any write-access human comment after the last agent or engine comment wakes the agent', () => {
+  const at = (hour) => `2026-11-16T${hour}:00:00Z`;
+  const agent = { user: { login: 'pawpet-claude', type: 'User' }, author_association: 'MEMBER', created_at: at('10') };
+  const human = { user: { login: 'maintainer', type: 'User' }, author_association: 'OWNER', created_at: at('11') };
+  const stranger = { user: { login: 'someone', type: 'User' }, author_association: 'NONE', created_at: at('12') };
+  const bot = { user: { login: 'github-actions[bot]', type: 'Bot' }, author_association: 'CONTRIBUTOR', created_at: at('13') };
+  const engine = { user: { login: 'KanopeeKa', type: 'User' }, author_association: 'OWNER', created_at: at('14') };
+  const agentAgain = { ...agent, created_at: at('15') };
   assert.equal(humanCommentSinceBlock([agent], config), false);
-  assert.equal(humanCommentSinceBlock([agent, owner], config), true);
-  assert.equal(humanCommentSinceBlock([agent, owner, stranger], config), false, 'a stranger does not wake it');
-  assert.equal(humanCommentSinceBlock([owner, bot], config), false);
+  assert.equal(humanCommentSinceBlock([agent, human], config), true);
+  assert.equal(humanCommentSinceBlock([agent, human, stranger, bot], config), true, 'not only the newest comment counts');
+  assert.equal(humanCommentSinceBlock([agent, stranger, bot], config), false, 'strangers and bots do not wake it');
+  assert.equal(humanCommentSinceBlock([agent, human, agentAgain], config), false, 'the agent already answered');
+  assert.equal(humanCommentSinceBlock([agent, human, engine], config), false, 'the engine identity is not a human, and anchors');
+  assert.equal(humanCommentSinceBlock([human], config), true, 'no agent comment yet');
   assert.equal(humanCommentSinceBlock([], config), false);
 });
 
@@ -150,9 +156,28 @@ test('readers use the real REST paths', async () => {
   await listIssueComments({ owner: 'o', repo: 'r', issueNumber: 5, token: 't', restFn });
   await listCommentReactions({ owner: 'o', repo: 'r', commentId: 77, token: 't', restFn });
   assert.deepEqual(calls.map((c) => [c[0], c[1]]), [
-    ['GET', '/repos/o/r/issues/5/comments?per_page=100'],
-    ['GET', '/repos/o/r/issues/comments/77/reactions?per_page=100'],
+    ['GET', '/repos/o/r/issues/5/comments?per_page=100&page=1'],
+    ['GET', '/repos/o/r/issues/comments/77/reactions?per_page=100&page=1'],
   ]);
+});
+
+test('readers page past 100 items so the newest request and the latest vote are not missed', async () => {
+  const item = (n) => ({ id: n });
+  const pages = { 1: Array.from({ length: 100 }, (_, i) => item(i)), 2: Array.from({ length: 100 }, (_, i) => item(100 + i)), 3: [item(200)] };
+  const paths = [];
+  const restFn = async (_method, path) => { paths.push(path); return pages[Number(/&page=(\d+)/.exec(path)[1])]; };
+  const all = await listIssueComments({ owner: 'o', repo: 'r', issueNumber: 5, token: 't', restFn });
+  assert.equal(all.length, 201);
+  assert.equal(all[200].id, 200, 'the item on the last page is returned');
+  assert.equal(paths.length, 3);
+  // an exactly full last page triggers one more (empty) request, then stops
+  const exact = [];
+  await fetchAllPages({ path: '/x', token: 't', perPage: 2, restFn: async (_m, path) => { exact.push(path); return path.endsWith('page=1') ? [1, 2] : []; } });
+  assert.equal(exact.length, 2);
+  // a runaway is bounded
+  let calls = 0;
+  await fetchAllPages({ path: '/x', token: 't', perPage: 1, maxPages: 4, restFn: async () => { calls += 1; return [1]; } });
+  assert.equal(calls, 4);
 });
 
 test('config: the engine identity may be empty but never a listed agent', () => {
@@ -178,7 +203,7 @@ test('runner: a To do issue reads its comments and reactions; Backlog and Done c
           stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] },
           attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] },
         },
-        listProjectIssues: async () => [1, 2, 3].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack' } } })),
+        listProjectIssues: async () => [1, 2, 3].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } })),
         getIssue: async (n) => issues[n],
         listIssueComments: async ({ issueNumber }) => { calls.push(['comments', issueNumber]); return [requestComment()]; },
         listCommentReactions: async ({ commentId }) => {

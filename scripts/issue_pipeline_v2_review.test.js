@@ -155,7 +155,7 @@ test('graphql readers: request shape, ordering, author fallback and unedited com
       return { node: vars.id === 'edited' ? { lastEditedAt: 'x', editor: { login: 'engine' } } : { lastEditedAt: null, editor: null } };
     }
     return {
-      repository: { issue: { author: { login: 'KanopeeKa' }, userContentEdits: { nodes: [
+      repository: { issue: { author: { login: 'KanopeeKa' }, userContentEdits: { pageInfo: { hasPreviousPage: false, startCursor: null }, nodes: [
         { editedAt: '2026-11-16T10:00:00Z', editor: { login: 'b' } },
         { editedAt: '2026-11-16T09:00:00Z', editor: { login: 'a' } },
       ] } } },
@@ -164,7 +164,7 @@ test('graphql readers: request shape, ordering, author fallback and unedited com
   const result = await fetchBodyEdits({ owner: 'o', repo: 'r', issueNumber: 5, token: 't', graphqlFn });
   assert.deepEqual(result.edits.map((e) => e.editor), ['a', 'b']);
   assert.equal(result.author, 'KanopeeKa');
-  assert.deepEqual(seen[0], ['t', { owner: 'o', repo: 'r', number: 5 }]);
+  assert.deepEqual(seen[0], ['t', { owner: 'o', repo: 'r', number: 5, before: null }]);
   assert.equal(await fetchCommentEditor({ nodeId: 'edited', token: 't', graphqlFn }), 'engine');
   assert.equal(await fetchCommentEditor({ nodeId: 'plain', token: 't', graphqlFn }), null);
   assert.equal(await fetchCommentEditor({ nodeId: '', token: 't', graphqlFn }), null);
@@ -186,7 +186,7 @@ test('runner: an In analysis issue reads requests, reactions, edit history and e
           stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] },
           attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] },
         },
-        listProjectIssues: async () => [{ issue: { number: 7, state: 'OPEN', repository: { name: 'AgathaTrack' } } }],
+        listProjectIssues: async () => [{ issue: { number: 7, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }],
         getIssue: async () => ({
           number: 7, body, labels: [],
           issue_field_values: [{ field_id: 1, single_select_option: { name: 'In analysis' } }, { field_id: 4, value: 0 }],
@@ -205,4 +205,28 @@ test('runner: an In analysis issue reads requests, reactions, edit history and e
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;
   }
+});
+
+test('graphql: the edit history is paged backwards so edits past one page still count', async () => {
+  const seen = [];
+  const page = (nodes, hasPreviousPage, startCursor) => ({
+    repository: { issue: { author: { login: 'KanopeeKa' }, userContentEdits: { pageInfo: { hasPreviousPage, startCursor }, nodes } } },
+  });
+  const graphqlFn = async (_token, _query, vars) => {
+    seen.push(vars.before);
+    if (vars.before === null) {
+      return page([{ editedAt: '2026-11-16T12:00:00Z', editor: { login: 'newest' } }], true, 'cursor-1');
+    }
+    if (vars.before === 'cursor-1') {
+      return page([{ editedAt: '2026-11-16T11:00:00Z', editor: { login: 'middle' } }], true, 'cursor-2');
+    }
+    return page([{ editedAt: '2026-11-16T10:00:00Z', editor: { login: 'oldest' } }], false, null);
+  };
+  const result = await fetchBodyEdits({ owner: 'o', repo: 'r', issueNumber: 5, token: 't', graphqlFn });
+  assert.deepEqual(seen, [null, 'cursor-1', 'cursor-2']);
+  assert.deepEqual(result.edits.map((edit) => edit.editor), ['oldest', 'middle', 'newest']);
+  // a runaway is bounded
+  let calls = 0;
+  await fetchBodyEdits({ owner: 'o', repo: 'r', issueNumber: 5, token: 't', maxPages: 3, graphqlFn: async () => { calls += 1; return page([{ editedAt: `2026-11-16T0${calls}:00:00Z`, editor: { login: 'x' } }], true, 'c'); } });
+  assert.equal(calls, 3);
 });

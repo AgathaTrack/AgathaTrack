@@ -114,6 +114,28 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
   return { ...facts, ...derived };
 }
 
+/**
+ * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
+ * and the display-only `Total N` counter. The counter is written even when the decision is
+ * `none`, so a stable issue's counter does not go stale.
+ */
+function buildWrites({ action, parsed, counters }) {
+  const writes = {};
+  if (action.type === 'set-stage') {
+    writes.stage = action.to;
+    writes.attempts = 0;
+  } else if (action.type === 'set-blocked') {
+    writes.blocked = action.reason;
+  } else if (
+    action.type === 'reassign' &&
+    Number.isFinite(action.attempts) &&
+    action.attempts !== parsed.attempts
+  ) {
+    writes.attempts = action.attempts;
+  }
+  return { ...writes, ...counters };
+}
+
 function countWip(entries) {
   return entries.filter(
     (entry) =>
@@ -136,7 +158,13 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const rows = await list({ projectId, statusFieldId, projectsPat });
   const numbers = rows
     .map((row) => row.issue)
-    .filter((issue) => issue && issue.state === 'OPEN' && issue.repository?.name === repo)
+    .filter(
+      (issue) =>
+        issue &&
+        issue.state === 'OPEN' &&
+        issue.repository?.name === repo &&
+        issue.repository?.owner?.login === owner,
+    )
     .map((issue) => issue.number);
 
   const entries = [];
@@ -175,12 +203,9 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     console.log(
       JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: WRITES_ENABLED, issue: entry.number, action, counters }),
     );
-    if (action.type === 'set-stage' || action.type === 'set-blocked') {
-      const writes =
-        action.type === 'set-stage'
-          ? { stage: action.to, attempts: 0 }
-          : { blocked: action.reason };
-      await writeIssueFields({
+    const writes = buildWrites({ action, parsed: entry.parsed, counters });
+    if (Object.keys(writes).length > 0) {
+      await (io.writeIssueFields || writeIssueFields)({
         owner,
         repo,
         issueNumber: entry.number,
@@ -222,4 +247,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { tick, buildBaseFacts, buildCommentFacts, countWip, WRITES_ENABLED };
+module.exports = { tick, buildBaseFacts, buildCommentFacts, buildWrites, countWip, WRITES_ENABLED };

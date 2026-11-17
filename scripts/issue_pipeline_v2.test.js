@@ -10,7 +10,7 @@ const {
   buildFieldWrites,
   writeIssueFields,
 } = require('./issue_pipeline_v2_fields');
-const { tick, WRITES_ENABLED } = require('./issue_pipeline_v2');
+const { tick, buildWrites, WRITES_ENABLED } = require('./issue_pipeline_v2');
 
 const config = loadConfig();
 const MIN = 60 * 1000;
@@ -361,11 +361,12 @@ function boardIo(extra = {}) {
       totalN: { id: 4, name: 'Total N', options: [] },
     },
     listProjectIssues: async () => [
-      { issue: { number: 1, state: 'OPEN', repository: { name: 'AgathaTrack' } } },
-      { issue: { number: 2, state: 'OPEN', repository: { name: 'AgathaTrack' } } },
-      { issue: { number: 3, state: 'OPEN', repository: { name: 'AgathaTrack' } } },
-      { issue: { number: 9, state: 'CLOSED', repository: { name: 'AgathaTrack' } } },
-      { issue: { number: 8, state: 'OPEN', repository: { name: 'Other' } } },
+      { issue: { number: 1, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+      { issue: { number: 2, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+      { issue: { number: 3, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+      { issue: { number: 9, state: 'CLOSED', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+      { issue: { number: 8, state: 'OPEN', repository: { name: 'Other', owner: { login: 'AgathaTrack' } } } },
+      { issue: { number: 7, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'SomeoneElse' } } } },
     ],
     getIssue: async (n) => issues[n],
     listIssueComments: async () => [],
@@ -385,7 +386,7 @@ test('runner: off does nothing; dry-run decides over the board and never writes'
     process.env.ISSUE_PIPELINE_V2 = 'on';
     assert.equal(WRITES_ENABLED, false);
     const result = await tick({ ...args, io: boardIo() });
-    assert.equal(result.issueCount, 3);
+    assert.equal(result.issueCount, 3, 'closed, other-repo and same-name-other-owner issues are not read');
     assert.equal(result.wip, 0, 'manual-only issues do not take WIP');
     const byIssue = Object.fromEntries(result.actions.map((entry) => [entry.issue, entry.action]));
     assert.equal(byIssue[1].type, 'request-spec');
@@ -394,6 +395,45 @@ test('runner: off does nothing; dry-run decides over the board and never writes'
 
     const only = await tick({ ...args, only: 1, io: boardIo() });
     assert.equal(only.actions.length, 1);
+  } finally {
+    if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
+    else process.env.ISSUE_PIPELINE_V2 = prior;
+  }
+});
+
+test('writes: stage and blocked changes, attempts on reassign, and the counter even when nothing else changes', () => {
+  const parsed = { attempts: 0, totalN: 0 };
+  assert.deepEqual(buildWrites({ action: { type: 'set-stage', to: 'Ready' }, parsed, counters: {} }), { stage: 'Ready', attempts: 0 });
+  assert.deepEqual(buildWrites({ action: { type: 'set-blocked', reason: 'stalled' }, parsed, counters: {} }), { blocked: 'stalled' });
+  assert.deepEqual(buildWrites({ action: { type: 'reassign', attempts: 1 }, parsed, counters: {} }), { attempts: 1 });
+  assert.deepEqual(buildWrites({ action: { type: 'reassign', attempts: 0 }, parsed, counters: {} }), {}, 'unchanged attempts are not rewritten');
+  assert.deepEqual(buildWrites({ action: { type: 'none' }, parsed, counters: { totalN: 3 } }), { totalN: 3 });
+  assert.deepEqual(buildWrites({ action: { type: 'set-stage', to: 'Ready' }, parsed, counters: { totalN: 2 } }), { stage: 'Ready', attempts: 0, totalN: 2 });
+  assert.deepEqual(buildWrites({ action: { type: 'none' }, parsed, counters: {} }), {});
+});
+
+test('runner: a counter-only change reaches the writer (as a dry run while writes are disabled)', async () => {
+  const prior = process.env.ISSUE_PIPELINE_V2;
+  process.env.ISSUE_PIPELINE_V2 = 'on';
+  const written = [];
+  try {
+    const stale = { number: 4, body: 'x', labels: [], issue_field_values: [{ field_id: 1, single_select_option: { name: 'In analysis' } }, { field_id: 4, value: 0 }] };
+    const io = boardIo({
+      listProjectIssues: async () => [{ issue: { number: 4, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }],
+      getIssue: async () => stale,
+      writeIssueFields: async (args) => { written.push(args); },
+    });
+    io.config = { ...io.config, engine: { logins: ['engine'] } };
+    // an agent edit after the first request counts as one vote, so Total N should read 1
+    io.listIssueComments = async () => [{
+      id: 5, node_id: 'N5', user: { login: 'engine' }, created_at: '2026-11-16T09:00:00Z', updated_at: '2026-11-16T09:00:00Z',
+      body: '<!-- v2:review-request hash=other assigned=pawpet-bot history= -->',
+    }];
+    io.fetchBodyEdits = async () => ({ author: 'KanopeeKa', edits: [{ editor: 'pawpet-claude', editedAt: '2026-11-16T09:30:00Z' }] });
+    await tick({ owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S', io });
+    assert.equal(written.length, 1);
+    assert.equal(written[0].dryRun, true, 'writes stay disabled in run A');
+    assert.equal(written[0].writes.totalN, 1);
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;
