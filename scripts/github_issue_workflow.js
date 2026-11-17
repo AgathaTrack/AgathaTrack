@@ -23,7 +23,7 @@ function usage() {
   node scripts/github_issue_workflow.js start-work --issue <n> [--body text | --body-file path]
   node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
-Agents cannot update GitHub Project board status — use comments + the \`busy\` label.
+Agents do not write the Project Status field — use comments + the \`busy\` label. The org field Stage follows the who-writes-what rule in docs/agent-efficiency/github-issue-workflow.md.
 See docs/agent-efficiency/github-labels.md`);
   process.exit(1);
 }
