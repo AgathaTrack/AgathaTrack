@@ -2,12 +2,15 @@
 title: Issue pipeline automation — proposal
 owner: Documentation Team
 audience: both
-status: proposed
-last_updated: 2026-11-16
+status: superseded
+last_updated: 2026-11-17
 tags: [agent-efficiency, github-issues, automation, security]
 ---
 
 # Issue pipeline automation — proposal
+
+> **Superseded (2026-11-17).** The pipeline is now the `Stage` state machine in [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385), described in [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine). This document is kept for the decision history only.
+
 
 Automate engineering issues from intake through production: **Pawpet** board columns show **stage**, **assignee** shows **whose turn**, and a hidden **state block** holds round count and machine fields. Claude (`pawpet-claude`) and Cursor (`pawpet-bot`) alternate on review; Cursor chooses delivery and implements under a work-in-progress limit; GitHub Actions track release.
 
@@ -56,7 +59,7 @@ Implementation detail (events, tokens, lanes, locks): [issue-pipeline-dispatcher
 
 ## Owner's original design (2026-11-13) and how it maps
 
-The owner's brief, kept here so the intent is not lost. It set four questions and specified one workflow per status. The target lanes are in [github-issue-workflow.md §Planned workflows by status](../github-issue-workflow.md#planned-workflows-by-status).
+The owner's brief, kept here so the intent is not lost. It set four questions and specified one workflow per status. The target lanes are in [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine).
 
 ### The four questions
 
@@ -188,7 +191,7 @@ Ignore markers not on a comment whose author is `pawpet-bot` or `pawpet-claude`.
 
 ### 5.1–5.6 Lane behaviour (summary)
 
-Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, needs-owner) and the handoff table live in [github-issue-workflow.md §Planned workflows by status](../github-issue-workflow.md#planned-workflows-by-status). Compared with the 2026-11-13 draft:
+Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, needs-owner) and the handoff table live in [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine). Compared with the 2026-11-13 draft:
 
 - **Status moves** use Pawpet **Status** field (bot PAT), not `status:*` labels. Org issue field **`Stage`** mirrors Status for agents without Projects scope ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345); `stage-mirror.yml`, default `STAGE_MIRROR=off`).
 - **Handoffs** use **assignment** with the agent’s PAT, not verdict labels.
@@ -196,7 +199,7 @@ Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, 
 
 Convergence (In Analysis → Ready): Green **and** `body_sha` unchanged in that round (the body is the one the previous agent handed over). Green with a substantive edit — even after an earlier Green — reassigns to the other agent. Round cap **6** — escalate when `round >= 6` (configurable).
 
-**Reopening:** if `body_sha` changes after `converged_at`, strip delivery labels, reset `verdicts`, clear `converged_at`, return to **In Analysis**, and assign the other agent (or `needs-owner` if already at round cap). Two fresh Greens required on the new hash. Dispatcher row **3a** and implement row **5** guards. Full table: [github-issue-workflow.md §Reopening In Analysis](../github-issue-workflow.md#reopening-in-analysis-after-convergence-or-during-ready).
+**Reopening:** if `body_sha` changes after `converged_at`, strip delivery labels, reset `verdicts`, clear `converged_at`, return to **In Analysis**, and assign the other agent (or `needs-owner` if already at round cap). Two fresh Greens required on the new hash. Dispatcher row **3a** and implement row **5** guards. Full table: [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine).
 
 Work-in-progress (implement): **2** slots — e.g. one programme + one single PR, or two single PRs. Each product issue **In progress** assigned `pawpet-bot` (with `busy` or an active programme) holds one slot, whatever its delivery method. See dispatcher spec §5.
 

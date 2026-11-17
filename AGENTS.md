@@ -121,8 +121,10 @@ On **Cursor Cloud**, default `gh`/API identity is **`pawpet-bot`** (dashboard **
 
 ## GitHub issues
 
-Agents can comment, close and add/remove labels; they cannot move GitHub Project board columns (no Projects write on
-agent tokens — humans or Actions do that). The `busy` label signals active work:
+Agents comment, edit issue bodies, set `busy` and write `Blocked` (when giving up or escalating). The org field `Stage`
+is the board column: once `ISSUE_PIPELINE_V2=on` only the engine and humans write it; until then (bootstrap) an agent may
+move it for a transition it satisfied, citing the table row and evidence in a comment. Agents cannot write the Project
+`Status` field (no Projects write on agent tokens). In every PR for an issue, write `Refs #n`, never `Closes`.
 
 ```bash
 node scripts/github_issue_workflow.js start-work --issue <n> --body "Work started …"

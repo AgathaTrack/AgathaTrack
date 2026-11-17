@@ -10,7 +10,7 @@ Minimal sequential programme — tracking issue only; no execute-plan runtime. P
 
 ## Run to completion
 
-- `/light-plan` delivers a release squash-merged to `main` and Pre-UAT green on that SHA. The release PR uses `Refs #<issue>` (not `Closes`). Remove `busy` after Pre-UAT green; **do not** close the tracking issue — merge/UAT/prod handlers move it **In Main** → **In UAT** → **Done** ([`github-issue-workflow.md`](../../../docs/agent-efficiency/github-issue-workflow.md) §D-002).
+- `/light-plan` delivers a release squash-merged to `main` and Pre-UAT green on that SHA. The release PR uses `Refs #<issue>` (not `Closes`). Remove `busy` after Pre-UAT green; **do not** close the tracking issue — the pipeline moves it **In Main** → **In UAT** → **Done** (delivery contract: [`github-issue-workflow.md`](../../../docs/agent-efficiency/github-issue-workflow.md) §Delivery contract).
 - Do not end the turn or ask the owner at a step boundary (setup done, phase merged, checklist tick, sync PR, waiting on CI — `gh pr checks --watch`; waiting on review — `node scripts/babysit_pr_reviews.js wait --pr <url>`).
 - End the turn only for stops in §Stop and ask, blocked `./scripts/pre-push.sh` in §Final self-review, or Done (§Release). Leaving merge, Pre-UAT, or issue close for a later session is not an ending.
 - Put status on the tracking issue (checklist ticks with PR links). Never ask for acknowledgement.
@@ -76,7 +76,7 @@ Re-read this section before opening that PR, and again before any user-facing me
 | `mergeable` is `CONFLICTING`, or preflight exit `4` | One PR that merges `main` into integration and resolves the conflict. Light-merge it, then watch the release again. |
 | Release head moved because that conflict PR merged | Watch CI on the new head. |
 | Merged, Pre-UAT not yet green | `./scripts/babysit_uat_watch_preuat.sh <merge_sha> --json --timeout-min 90`. Failure → Phase 3–4, then watch again. |
-| Pre-UAT green | Tick the checklist, comment the merge SHA and pre-UAT run URL, remove `busy` (`node scripts/github_issue_workflow.js` or `gh issue edit` labels). **Do not** `gh issue close` — Actions reopen on merge and advance **In Main** / **In UAT** / **Done**. |
+| Pre-UAT green | Tick the checklist, comment the merge SHA and pre-UAT run URL, remove `busy` (`node scripts/github_issue_workflow.js` or `gh issue edit` labels). **Do not** `gh issue close` — the pipeline advances **In Main** / **In UAT** / **Done** (and reopens an issue a merge auto-closed). |
 
 Done when that last row has happened. A later message that only says `/babysit-plus` or "merge it" still owes the Pre-UAT watch and the `busy` removal. If this conversation is woken by a CI subscription, the first action is the matching row — the wake is not an owner question.
 
@@ -86,7 +86,7 @@ Do not end the turn while the release PR is open or Pre-UAT is unfinished, excep
 
 ## Recovery
 
-If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When the issue has `pipeline-beta` and `ISSUE_PIPELINE=on`, the issue-pipeline monitor relaunches the same prompt automatically while `busy` remains (`github-issue-workflow.md` §In progress — monitor).
+If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When the engine launched the run (a `v2:launch` comment on the issue), it restarts a quiet run once and then sets `Blocked: stalled` (`github-issue-workflow.md` §Pipeline v2, In progress row).
 
 ## Stop and ask
 
