@@ -179,6 +179,19 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 | `needs-owner` | only on execute-plan control issues, where the runtime reads it; not an issue-pipeline state |
 | `in-prod` | added by the engine when an issue reaches Done |
 | `bug` / `feature` / `task` | issue form type; the Definition of Ready is checked per form |
+| `AAT-progress` / `AAT-passed` / `AAT-failed` | Agent Acceptance (`/AgentAcceptance`); see [github-labels.md](./github-labels.md) |
+
+### Agent acceptance (`/AgentAcceptance`)
+
+Optional **human- or agent-invoked** holistic acceptance on a **parent** issue (or the issue linked from a delivery PR). It does not replace pipeline v2 **intent review** (In Main, non-gating) or the engine path to **Done** after UAT/prod.
+
+1. **Eligibility:** Parent issues only — not bodies with `<!-- v2:follow-up of=#n -->`.
+2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment. **Verdict record:** `<!-- v2:aat verdict=… merge=… -->` on the issue (engine #2424).
+3. **INCONCLUSIVE:** `aat-inconclusive` posts the marker and clears progress/pass/fail labels when live verification cannot run (not a product fail).
+4. **Checks:** Original intent and NFRs, code at the merge SHA under test, built Flutter web + single-origin stack, final code review.
+5. **Fail:** Remediation after the verdict — small PR (`Refs #parent`) or P0 follow-up (`v2:follow-up`, Priority field `P0`); engine re-launches AAT when ready. Agents do not close pipeline issues on PASS.
+
+Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md).
 
 ## Live workflow (legacy, until `ISSUE_PIPELINE=on`)
 
