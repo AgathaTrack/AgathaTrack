@@ -17,6 +17,8 @@ const {
   BUNDLE_BUDGET_FILE,
   validateBundleBudgetRatchet,
   ownPlanFiles,
+  parseSupportHeadRef,
+  validateSupportLinkage,
 } = require('./execute_plan_scope');
 const { findOwnerScopeAckReview } = require('./execute_plan_scope_ack');
 const { deriveControl } = require('./execute_plan_control');
@@ -34,14 +36,14 @@ const CONFIG_PATH = '.github/execute-plan.config.json';
 const SUMMARY_MAX_LINES = 50;
 
 const UNSUPPORTED_INTEGRATION_SUMMARY =
-  'PR targets the integration branch but is not a recognized phase, sync, or sync-resolve head. '
-  + 'Plan-linked side fixes merge to main (runbooks §7.5); open the PR against main or use the documented branch shape.';
+  'PR targets the integration branch but is not a recognized phase, sync, sync-resolve, or support head. '
+  + 'Plan-linked side fixes may use cursor/<plan>-support-<phase>-<n> (integration) or main (runbooks §7.5).';
 
 const result = (conclusion, title, summary, planId = null, extra = {}) => ({ conclusion, title, summary, planId, ...extra });
 
 /** Sync-resolve and remedial PRs keep a normal scope evaluation while the plan is stopped (PR4). */
 function exemptFromStopPublish(category) {
-  return category === 'sync-resolve' || category === 'remedial';
+  return category === 'sync-resolve' || category === 'remedial' || category === 'support';
 }
 const sha256Hex = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
@@ -178,6 +180,10 @@ async function loadPlanControl(client, issue, planId, now) {
 /** @returns {Promise<{ conclusion: string, title: string, summary: string, planId: string|null }>} */
 async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, headRepo, repo, now }) {
   const mode = forbiddenGateMode();
+  const supportHead = parseSupportHeadRef(headRef);
+  if (supportHead && headRepo !== repo) {
+    return result('failure', 'unblocks', 'support PR must not come from a fork', supportHead.planId);
+  }
   if (headRepo !== repo) return result('success', 'ok', 'not an execute-plan PR (fork)');
 
   const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
@@ -192,10 +198,12 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
 
   let files;
   let prAuthor = null;
+  let pullBody = '';
   let scopeAckReview = null;
   try {
     const pull = await client.getPull(prNumber);
     prAuthor = pull.user && pull.user.login;
+    pullBody = pull.body || '';
     const pullFiles = await client.listPullFiles(prNumber);
     files = [...new Set(pullFiles.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))];
     const reviews = await client.listPullReviews(prNumber);
@@ -214,7 +222,16 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
   }
 
   const issue = planId ? await findControlIssue(client, planId) : null;
-  if (!planId || !issue) {
+  if (supportHead) {
+    if (!planId || !issue) {
+      return result(
+        'failure',
+        'unblocks',
+        'support PR requires an active execute-plan control issue',
+        planId || supportHead.planId,
+      );
+    }
+  } else if (!planId || !issue) {
     if (baseRef !== 'main') {
       return result('success', 'ok', 'not an execute-plan PR');
     }
@@ -236,7 +253,18 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
     return result('failure', 'error', e.message, planId);
   }
 
+  if (supportHead && baseRef !== snapshot.integration_branch) {
+    return result('failure', 'unblocks', 'support PRs must target the plan integration branch', planId);
+  }
+
   const { category, phaseId } = categorizePull({ head_ref: headRef, base_ref: baseRef }, snapshot);
+  if (category === 'support') {
+    const linkErr = validateSupportLinkage({ body: pullBody, snapshot, headRef, phaseId });
+    if (linkErr) return result('failure', 'unblocks', linkErr, planId);
+    if (stopped.stopped && (stopped.reason === 'approval-invalid' || stopped.reason === 'expired' || stopped.reason === 'revoked')) {
+      return result('failure', 'unblocks', `support PR requires valid plan approval (${stopped.reason})`, planId);
+    }
+  }
   const stopExempt = stopped.stopped && exemptFromStopPublish(category);
   const ownPlanFilesVerified = category === 'release' && files.length > 0
     ? await verifyOwnPlanFiles(client, snapshot, headSha, files)

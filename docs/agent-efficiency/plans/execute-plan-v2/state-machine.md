@@ -39,6 +39,7 @@ Times are ISO-8601 UTC strings. `null` means "does not exist". Example = the sce
   "sync": { "open_pr": null, "resolve_pr": null, "resolve_prs_since_epoch": 0 },
   "release": { "pr": null },
   "remedial": { "open_pr": null, "merged_since_epoch": 0 },
+  "support": { "open_by_phase": { "1": 0, "2": 0 }, "merged_by_phase": { "1": 0, "2": 0 } },
   "uat": null
 }
 ```
@@ -56,6 +57,7 @@ Times are ISO-8601 UTC strings. `null` means "does not exist". Example = the sce
 | `sync.open_pr` | Open PR head `main`, base integration. `resolve_pr` = newest open PR from `cursor/<id>-sync-*` into integration, else `null`. `resolve_prs_since_epoch` = PRs from `cursor/<id>-sync-*` created after the epoch. |
 | `release.pr` | Most recent PR head = integration, base `main` (open or merged). Same head/base lookup when the integration branch was deleted after merge. |
 | `remedial` | PRs from `cursor/<id>-remedial-*` into `main`: the open one, and the count merged after the epoch. |
+| `support` | Per-phase counts of open and merged (since epoch) support PRs (`cursor/<id>-support-<phase>-*` into integration). Driver stops at `ci-budget` when open &gt; 1 or merged ≥ `settings.budgets.support_merges_per_phase`. |
 | `uat` | `null` until a release or remedial PR of this plan is merged; then `UatObservations` (WP5). |
 
 ### `PrObs`
@@ -83,7 +85,7 @@ Times are ISO-8601 UTC strings. `null` means "does not exist". Example = the sce
 |-------|------|
 | `ready_at` | Latest `ready_for_review` timeline event, else `created_at` when the PR was never a draft, else `null`. |
 | `mergeable_state` | From `GET /pulls/{n}`; when GitHub returns `unknown`, observe re-reads once after 3 s, then keeps `unknown`. |
-| `checks` | One entry per name in `config.required_checks.integration` (base = integration) or `.main` (base = `main`): the latest check run with that name on `head_sha`. `execute-plan-scope` is a **commit status**: the newest status with that context whose creator is `github-actions[bot]` (statuses from any other account are ignored, matching the rulesets' GitHub Actions pin); `success` → `conclusion: success`, `failure`/`error` → `failure`, `pending` → `status: in_progress`; `completed_at` = the status time. A check run named `execute-plan-scope` is ignored (the check-run fallback for heads published before 2026-11-02 was removed, issue #2002). No trusted status → `{ "status": "missing", "conclusion": null }`. Includes `completed_at` when GitHub provides it. For `execute-plan-scope`, `reason` = the status description up to the first `:` (`ok`, `unclassified`, `companion-cap`, `drift`, `protected`, `forbidden`, `plan-stopped`, `too-many-files`, `recheck-error`, `unsupported`). |
+| `checks` | One entry per name in `config.required_checks.integration` (base = integration) or `.main` (base = `main`): the latest check run with that name on `head_sha`. `execute-plan-scope` is a **commit status**: the newest status with that context whose creator is `github-actions[bot]` (statuses from any other account are ignored, matching the rulesets' GitHub Actions pin); `success` → `conclusion: success`, `failure`/`error` → `failure`, `pending` → `status: in_progress`; `completed_at` = the status time. A check run named `execute-plan-scope` is ignored (the check-run fallback for heads published before 2026-11-02 was removed, issue #2002). No trusted status → `{ "status": "missing", "conclusion": null }`. Includes `completed_at` when GitHub provides it. For `execute-plan-scope`, `reason` = the status description up to the first `:` (`ok`, `unclassified`, `companion-cap`, `drift`, `protected`, `forbidden`, `plan-stopped`, `too-many-files`, `recheck-error`, `unsupported`, `unblocks`). |
 | `checks_settled_at` | Newest `completed_at` over **every** check run on `head_sha` once all of them are `completed`; `null` while any is queued or running, or when the head has none. (`ci-gate / CI passed` only appears when CI ends, so "missing" alone means nothing while CI runs.) |
 | `head_activity_at` | Newest of the head commit's committer date (`GET /pulls/{n}/commits`) and every head check run's `started_at` / `completed_at`; `null` when none is known. |
 | `failed_attempts_since_epoch` | Number of **distinct commit SHAs** of the PR (`GET /pulls/{n}/commits`) with at least one required check run concluding `failure`, `timed_out` or `action_required` and `completed_at` after the epoch, or a trusted `execute-plan-scope` status in `failure`/`error` created after the epoch. One push = one attempt. |

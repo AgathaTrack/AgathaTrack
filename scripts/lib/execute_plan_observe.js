@@ -253,6 +253,20 @@ async function observe(client, ctx, { now, sleep }) {
   const remOpen = newest(rem.filter((p) => p.state === 'open'));
   const mergedRem = rem.filter((p) => p.merged_at && epoch && ms(p.merged_at) > ms(epoch)).length;
 
+  const supportHeadRe = new RegExp(
+    `^cursor/${snapshot.plan_id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-support-(\\d+)-\\d+$`,
+  );
+  const openByPhase = {};
+  const mergedByPhase = {};
+  for (const def of snapshot.phases) {
+    const related = intoInteg.filter((p) => {
+      const m = supportHeadRe.exec(p.head.ref || '');
+      return m && m[1] === String(def.id);
+    });
+    openByPhase[def.id] = related.filter((p) => p.state === 'open').length;
+    mergedByPhase[def.id] = related.filter((p) => p.merged_at && epoch && ms(p.merged_at) > ms(epoch)).length;
+  }
+
   return {
     now,
     control: {
@@ -272,6 +286,7 @@ async function observe(client, ctx, { now, sleep }) {
     },
     release: { pr: await mostRecent({ head: integ, base: 'main' }) },
     remedial: { open_pr: remOpen ? await observePr(client, remOpen, prOpts('main')) : null, merged_since_epoch: mergedRem },
+    support: { open_by_phase: openByPhase, merged_by_phase: mergedByPhase },
     uat: null,
   };
 }

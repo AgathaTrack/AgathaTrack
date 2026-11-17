@@ -52,13 +52,21 @@ const V2_CAPS = {
   launches_per_phase: 25,
   remedial_rounds: 10,
   sync_attempts: 8,
+  support_merges_per_phase: 10,
   daily_launches: 150,
   phases: 8,
   companions: 12,
 };
 const V2_DEFAULTS = {
   window_days: 7,
-  budgets: { ci_per_phase: 8, launches_per_phase: 15, remedial_rounds: 6, sync_attempts: 5, daily_launches: 80 },
+  budgets: {
+    ci_per_phase: 8,
+    launches_per_phase: 15,
+    remedial_rounds: 6,
+    sync_attempts: 5,
+    support_merges_per_phase: 3,
+    daily_launches: 80,
+  },
 };
 
 /** Status comment retains this many launch rows; must cover daily_launches and per-phase totals plus the release bucket (contracts §3.1). */

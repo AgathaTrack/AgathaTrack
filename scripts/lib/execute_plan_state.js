@@ -24,7 +24,7 @@ const SCOPE_CAUSE = {
   'too-many-files': 'the diff is too large for the scope check to list',
 };
 const SCOPE_SIDE_FIX_HINT = (reason) => `execute-plan-scope is ${reason}: ${SCOPE_CAUSE[reason] || 'see the check summary'}. `
-  + 'Plan-linked side fixes belong in a PR into **main** (not integration; body "Unblocks: plan <id> phase <n>"), then sync integration and resume (runbooks §7.5)';
+  + 'Plan-linked side fixes: integration PR on cursor/<plan>-support-<phase>-<n> with body "Unblocks: plan <id> phase <n>", or main per runbooks §7.5 until retired.';
 const HOLD_LABEL = 'execute-plan-hold';
 const BLOCKED_LABEL = 'execute-plan-blocked';
 const BLOCKED_BODY_RE = /<!-- execute-plan-blocked:\s*([\s\S]*?)-->/;
@@ -93,6 +93,24 @@ function openPlanPrs(obs) {
   if (obs.release && obs.release.pr && obs.release.pr.state === 'open') out.push({ label: 'release PR', pr: obs.release.pr });
   if (obs.remedial && obs.remedial.open_pr) out.push({ label: 'remedial PR', pr: obs.remedial.open_pr });
   return out;
+}
+
+function supportBudgetViolation(snapshot, obs) {
+  const support = obs.support;
+  if (!support) return null;
+  const limit = snapshot.settings.budgets.support_merges_per_phase;
+  for (const def of snapshot.phases || []) {
+    const id = def.id;
+    const open = (support.open_by_phase && support.open_by_phase[id]) || 0;
+    if (open > 1) {
+      return { reason: 'ci-budget', detail: `phase ${id}: ${open} open support PRs (max 1)` };
+    }
+    const merged = (support.merged_by_phase && support.merged_by_phase[id]) || 0;
+    if (merged >= limit) {
+      return { reason: 'ci-budget', detail: `phase ${id}: ${merged} support merges since epoch (limit ${limit})` };
+    }
+  }
+  return null;
 }
 
 function computeBudgets(ctx) {
@@ -320,6 +338,8 @@ function decide(snapshot, obs, opts) {
   const ctx = normalize({ snapshot, obs, opts, control });
   // D1
   if (control.stopped) return finish(ctx, { state: 'stopped', stop: { reason: control.reason, detail: stopReasonDetail(ctx) } });
+  const supportStop = supportBudgetViolation(snapshot, obs);
+  if (supportStop) return finish(ctx, { state: 'stopped', stop: supportStop });
   // D2
   if (obs.uat) return decideUat(snapshot, obs, { ...ctx, prLadder, applyLeaseRules, finish, wait, driver, agent });
   // D3

@@ -177,7 +177,7 @@ async function enforceStop(clients, ctx, decision, now) {
     const { category } = snapshot
       ? categorizePull({ head_ref: headRef, base_ref: baseRef }, snapshot)
       : { category: null };
-    if (category === 'sync-resolve' || category === 'remedial') {
+    if (category === 'sync-resolve' || category === 'remedial' || category === 'support') {
       let outcome;
       try {
         outcome = await deps.runScopeCheck(read, {

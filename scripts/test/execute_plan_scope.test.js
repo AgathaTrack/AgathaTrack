@@ -10,6 +10,8 @@ const {
   classifyPath,
   evaluateDiff,
   validateBundleBudgetRatchet,
+  parseUnblocksFromBody,
+  validateSupportLinkage,
 } = require('../lib/execute_plan_scope');
 
 const PLAN = 'proof-build-label-7f3a';
@@ -353,6 +355,43 @@ test('approved_sensitive_paths respects phase forbidden_paths', () => {
   assert.equal(verdict('db/migrations/099_x.sql', 'phase', '1', snap), 'forbidden');
 });
 
+test('support category uses phase path rules', () => {
+  assert.equal(verdict('server/routes/pets.js', 'support', '1'), 'allowed');
+  assert.equal(verdict('server/routes/auth/x.js', 'support', '1'), 'forbidden');
+  const stopped = { stopped: true, reason: 'needs-owner' };
+  const okWhileStopped = evaluate(['server/routes/pets.js'], 'support', '1', { stopped });
+  assert.deepEqual([okWhileStopped.conclusion, okWhileStopped.title], ['success', 'ok']);
+});
+
+test('support-merged server file does not fail release drift/protected check', () => {
+  const r = evaluate(['server/routes/pets.js'], 'release', null, { ownPlanFilesVerified: true });
+  assert.deepEqual([r.conclusion, r.title], ['success', 'ok']);
+});
+
+test('validateSupportLinkage and Unblocks parsing', () => {
+  const body = `Intro\n\nUnblocks: plan ${PLAN} phase 1\n`;
+  assert.deepEqual(parseUnblocksFromBody(body), { ok: true, planId: PLAN, phaseId: '1' });
+  assert.equal(validateSupportLinkage({
+    body,
+    snapshot: SNAP,
+    headRef: `cursor/${PLAN}-support-1-2`,
+    phaseId: '1',
+  }), null);
+  assert.deepEqual(parseUnblocksFromBody('Unblocks: plan x phase 1\nUnblocks: bad\n'), { ok: false, reason: 'invalid' });
+  assert.match(validateSupportLinkage({
+    body: 'no unblocks',
+    snapshot: SNAP,
+    headRef: `cursor/${PLAN}-support-1-2`,
+    phaseId: '1',
+  }), /Unblocks/);
+  assert.match(validateSupportLinkage({
+    body,
+    snapshot: SNAP,
+    headRef: `cursor/${PLAN}-support-2-1`,
+    phaseId: '2',
+  }), /does not match branch phase/);
+});
+
 test('unsupported integration PR fails closed', () => {
   const r = evaluate(['server/a.js'], 'unsupported');
   assert.deepEqual([r.conclusion, r.title], ['failure', 'unsupported']);
@@ -364,6 +403,7 @@ test('categorizePull for each category and null', () => {
     [`cursor/${PLAN}-p12`, I, { category: 'phase', phaseId: '12' }],
     ['main', I, { category: 'sync', phaseId: null }],
     [`cursor/${PLAN}-sync-2`, I, { category: 'sync-resolve', phaseId: null }],
+    [`cursor/${PLAN}-support-1-1`, I, { category: 'support', phaseId: '1' }],
     [I, 'main', { category: 'release', phaseId: null }],
     [`cursor/${PLAN}-remedial-1`, 'main', { category: 'remedial', phaseId: null }],
     [`cursor/${PLAN}-p1`, 'main', { category: null, phaseId: null }],

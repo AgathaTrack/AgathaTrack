@@ -31,7 +31,7 @@ GitHub (state-machine §4). This exact object is the worked example of the hash 
   "settings": {
     "release_owner_review": false,
     "tier3_blocking": false,
-    "budgets": { "ci_per_phase": 3, "launches_per_phase": 5, "remedial_rounds": 3, "sync_attempts": 2, "daily_launches": 20 }
+    "budgets": { "ci_per_phase": 3, "launches_per_phase": 5, "remedial_rounds": 3, "sync_attempts": 2, "support_merges_per_phase": 3, "daily_launches": 20 }
   },
   "protected_paths_version": 1,
   "phases": [
@@ -164,8 +164,9 @@ byte-identical skip applies, plus paths **absent on both** the PR head and `main
 deletions carried in from `main`), except the plan's own `.agents/plans/*` files. Files that differ from `main` are evaluated normally (protected, forbidden, phase
 union with **allowed_paths from any phase overriding another phase's `forbidden_paths` on release,
 remedial, and sync-resolve**; within a single phase PR, that phase's `forbidden_paths` still beat its
-own `allowed_paths`), own-plan verification). PR bodies may still cite `Unblocks: plan …` for humans; enforcement
-does not parse them.
+own `allowed_paths`), own-plan verification). **Support PRs** (`cursor/<plan_id>-support-<phase>-<n>` → integration)
+must include exactly one body line `Unblocks: plan <id> phase <n>` matching the branch; scope enforcement
+parses it at check time. Legacy side fixes into `main` may cite `Unblocks:` for humans only until runbooks §7.5 is retired.
 
 **Phase web bundle ratchet:** when a phase PR touches `scripts/ci/web-bundle-budget.json`, each
 numeric cap may increase by at most 1.5% versus the merge base of the PR base branch (integration)

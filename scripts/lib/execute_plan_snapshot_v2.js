@@ -21,7 +21,14 @@ const TOP_KEYS = [
   'protected_paths_version', 'phases', 'approval_hash',
 ];
 const OPTIONAL_SNAPSHOT_KEYS = ['source_issue'];
-const BUDGET_KEYS = ['ci_per_phase', 'launches_per_phase', 'remedial_rounds', 'sync_attempts', 'daily_launches'];
+const BUDGET_KEYS = [
+  'ci_per_phase',
+  'launches_per_phase',
+  'remedial_rounds',
+  'sync_attempts',
+  'support_merges_per_phase',
+  'daily_launches',
+];
 const PHASE_EXCEPTIONS = new Set(['tests', 'docs']);
 const FORBIDDEN_HEADINGS = new Set(['contract', 'rules', 'process']);
 
@@ -174,7 +181,10 @@ function validateSnapshotV2(snapshot, { planMarkdown } = {}) {
   const budgets = settings.budgets;
   if (!budgets || typeof budgets !== 'object') fail('settings.budgets must be an object');
   for (const key of BUDGET_KEYS) {
-    const value = budgets[key];
+    let value = budgets[key];
+    if (value == null && key === 'support_merges_per_phase') {
+      value = V2_DEFAULTS.budgets.support_merges_per_phase;
+    }
     if (!Number.isInteger(value) || value < 1) fail(`settings.budgets.${key} must be an integer >= 1`);
     if (value > V2_CAPS[key]) fail(`settings.budgets.${key} exceeds the cap of ${V2_CAPS[key]}`);
   }

@@ -17,6 +17,7 @@
       "launches_per_phase": 5,
       "remedial_rounds": 3,
       "sync_attempts": 2,
+      "support_merges_per_phase": 3,
       "daily_launches": 20
     }
   },

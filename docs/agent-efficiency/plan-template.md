@@ -124,6 +124,7 @@ Defaults from `V2_DEFAULTS` in `scripts/lib/execute_plan_constants.js` (each val
 | `launches_per_phase` | 15 | 25 |
 | `remedial_rounds` | 6 | 10 |
 | `sync_attempts` | 5 | 8 |
+| `support_merges_per_phase` | 3 | 10 |
 | `daily_launches` | 80 | 150 |
 
 These are loop breakers, not working limits: ordinary phases use a fraction of them, and only a run
