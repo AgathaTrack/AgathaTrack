@@ -107,6 +107,29 @@ function buildPipelineImplementPrompt(issue, repoUrl, method) {
   return `${extra}${buildAgentPrompt(payload)}`;
 }
 
+function buildLightPlanContinuePrompt(issue, repoUrl) {
+  const labels = (issue.labels?.nodes || issue.labels || []).map((l) =>
+    typeof l === 'string' ? l : l.name,
+  );
+  const payload = buildAgentPayload(
+    {
+      number: issue.number,
+      url: issue.url,
+      title: issue.title,
+      body: issue.body || '',
+      labels,
+    },
+    repoUrl,
+  );
+  const lines = [
+    `continue light-plan #${issue.number}`,
+    '',
+    ...deliveryHandoffLines('light-plan', issue.number),
+    buildAgentPrompt(payload),
+  ];
+  return lines.join('\n');
+}
+
 async function applyImplementNeedsOwner({
   owner,
   repo,
@@ -325,6 +348,7 @@ module.exports = {
   implementLaunchReadiness,
   canQueueImplement,
   buildPipelineImplementPrompt,
+  buildLightPlanContinuePrompt,
   deliveryHandoffLines,
   applyImplementLaunch,
 };

@@ -86,7 +86,7 @@ Do not end the turn while the release PR is open or Pre-UAT is unfinished, excep
 
 ## Recovery
 
-If the run is cut off (platform limit, crash, or the owner stops it), a new session resumes with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this.
+If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When the issue has `pipeline-beta` and `ISSUE_PIPELINE=on`, the issue-pipeline monitor relaunches the same prompt automatically while `busy` remains (`github-issue-workflow.md` §In progress — monitor).
 
 ## Stop and ask
 

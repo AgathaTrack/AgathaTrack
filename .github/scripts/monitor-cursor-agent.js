@@ -66,6 +66,20 @@ function extractPrUrl(run) {
   return null;
 }
 
+function issueLabelNames(issue) {
+  if (!issue) {
+    return [];
+  }
+  return (issue.labels?.nodes || issue.labels || []).map((l) =>
+    typeof l === 'string' ? l : l.name,
+  );
+}
+
+function lightPlanBusyActive(issue) {
+  const labels = issueLabelNames(issue);
+  return labels.includes('light-plan') && labels.includes('busy');
+}
+
 function detectBlockedResult(run) {
   const text = (run.result?.text || run.text || '').toLowerCase();
   const blockedPatterns = [
@@ -202,7 +216,21 @@ async function monitorIssue({
   const prUrl = extractPrUrl(run);
   const summary = run.result?.text || run.text || '';
   const failed = status === 'ERROR' || status === 'CANCELLED' || status === 'EXPIRED';
-  const blocked = failed || (!prUrl && detectBlockedResult(run));
+  const genuinelyBlocked = detectBlockedResult(run);
+  const blocked = failed || (!prUrl && genuinelyBlocked);
+
+  if (
+  lightPlanBusyActive(issue)
+    && !prUrl
+    && !genuinelyBlocked
+  ) {
+    return {
+      issueNumber,
+      action: 'light-plan-resume',
+      status,
+      reason: summary.trim() || (failed ? `run ${status}` : 'no PR URL'),
+    };
+  }
 
   if (blocked) {
     const reason =
@@ -312,4 +340,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { monitorIssue, extractPrUrl, detectBlockedResult };
+module.exports = {
+  monitorIssue,
+  extractPrUrl,
+  detectBlockedResult,
+  lightPlanBusyActive,
+  issueLabelNames,
+};
