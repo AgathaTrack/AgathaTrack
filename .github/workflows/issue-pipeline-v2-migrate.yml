@@ -1,0 +1,49 @@
+name: Issue pipeline v2 migration
+
+# One-off (#2385 run C, P7a): maps each open board issue's legacy state to Stage + Blocked.
+# Manual only. The default is a dry run that logs the plan; `apply` writes, and only works when
+# ENGINE_PAT belongs to a login in .github/pipeline-agents.json `engine.logins`.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Write the plan (default is a dry run that only logs it)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: issue-pipeline-v2-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: issue-pipeline-v2-migrate
+    runs-on: ubuntu-latest
+    environment: automation
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Plan or apply the migration
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_PROJECTS_PAT: ${{ secrets.ENGINE_PAT }}
+          GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
+          GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [ "$APPLY" = "true" ]; then
+            node scripts/issue_pipeline_v2_migrate.js --apply
+          else
+            node scripts/issue_pipeline_v2_migrate.js
+          fi
