@@ -213,7 +213,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const live = writesAllowed(runMode, identity);
   const fields = io.fields || (await loadOrgFields({ org: owner, token: projectsPat }));
 
-  const rows = await list({ projectId, statusFieldId, projectsPat });
+  const rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true });
   const numbers = rows
     .map((row) => row.issue)
     .filter(

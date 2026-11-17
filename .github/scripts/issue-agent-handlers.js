@@ -687,6 +687,10 @@ Deploy commit \`${commitSha}\` contains merge \`${mergeSha}\`, but the programme
       }
       seen.add(issueNumber);
       const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+      if (ownedByV2Engine(issue)) {
+        results.push({ issueNumber, status: 'skipped-v2-owned' });
+        continue;
+      }
       if (isPlanControlIssue(issue)) {
         results.push({ issueNumber, status: 'skipped-plan-control' });
         continue;

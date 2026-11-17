@@ -234,6 +234,7 @@ run_governance() {
   node --test scripts/issue_pipeline_v2_reopen.test.js
   node --test .github/scripts/pipeline-v2-owner.test.js
   node --test .github/scripts/issue-agent-handlers.test.js
+  node --test .github/scripts/github-project-lib.test.js
   node --test scripts/stage_mirror_decide.test.js
   node --test scripts/db/normalize-schema-dump.test.js
   node scripts/db/check-migration-manifest.js

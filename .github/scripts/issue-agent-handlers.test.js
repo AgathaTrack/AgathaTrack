@@ -448,3 +448,26 @@ test('v2 engine owns the issue: the prod handler does not close it', async (t) =
   assert.deepEqual(calls, []);
   assert.equal(result.results[0].status, 'skipped-v2-owned');
 });
+
+test('v2 engine owns the issue: the prod fallback without project config does not close it', async (t) => {
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'on' });
+  const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Fixes #2335');
+  io.fetchPullsForCommit = async () => [{ body: 'Fixes #2335' }];
+  io.closeIssue = async () => {
+    calls.push('close');
+  };
+  const result = await handleProdDeployResult({
+    owner: 'KanopeeKa',
+    repo: 'AgathaTrack',
+    commitSha: '866eff89a7ea402f2c60d365cc9c2d7cf49a163c',
+    prodTag: 'v1.2.3',
+    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/2',
+    token: 'test-token',
+    projectsPat: null,
+    projectId: null,
+    statusFieldId: null,
+    io,
+  });
+  assert.deepEqual(calls, []);
+  assert.equal(result.results[0].status, 'skipped-v2-owned');
+});

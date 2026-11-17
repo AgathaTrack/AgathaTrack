@@ -39,3 +39,15 @@ test('labels are fetched only when a scope label makes them matter', async () =>
   assert.equal(await v2OwnsLazy({ getLabels, env: { ISSUE_PIPELINE_V2: 'on', ISSUE_PIPELINE_V2_LABEL: 'pipeline-beta' } }), true);
   assert.equal(fetched, 1);
 });
+
+const { inEngineScope } = require('./pipeline-v2-owner');
+
+test('only the Pawpet board and the engine repository are in the engine scope', () => {
+  const env = { GITHUB_REPOSITORY: 'AgathaTrack/AgathaTrack' };
+  assert.equal(inEngineScope({ boardKey: 'pawpet', issueRepoSlug: 'AgathaTrack/AgathaTrack', env }), true);
+  assert.equal(inEngineScope({ boardKey: 'pawpet', issueRepoSlug: 'agathatrack/agathatrack', env }), true, 'case-insensitive');
+  assert.equal(inEngineScope({ boardKey: 'atsupport', issueRepoSlug: 'AgathaTrack/AgathaTrack', env }), false);
+  assert.equal(inEngineScope({ boardKey: 'pawpet', issueRepoSlug: 'AgathaTrack/AgathaTrackPrivate', env }), false);
+  assert.equal(inEngineScope({ boardKey: 'pawpet', issueRepoSlug: 'AgathaTrack/AgathaTrack', env: {}, defaultRepoSlug: 'AgathaTrack/AgathaTrack' }), true, 'falls back to the board repo');
+  assert.equal(inEngineScope({ boardKey: 'pawpet', issueRepoSlug: 'x/y', env: {} }), false);
+});

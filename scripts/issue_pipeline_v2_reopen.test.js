@@ -87,8 +87,11 @@ test('runner: only closed issues on a delivery column, closed as completed, in a
   };
   const fetched = [];
   const applied = [];
+  let listArgs = null;
   const result = await run({
-    listProjectIssues: async () => [
+    listProjectIssues: async (args) => {
+      listArgs = args;
+      return [
       { status: 'In Main', issue: ref(1, 'CLOSED') },
       { status: 'In Main', issue: ref(2, 'CLOSED') },
       { status: 'In Main', issue: ref(3, 'CLOSED') },
@@ -96,11 +99,13 @@ test('runner: only closed issues on a delivery column, closed as completed, in a
       { status: 'In UAT', issue: ref(5, 'CLOSED') },
       { status: 'Done', issue: ref(6, 'CLOSED') },
       { status: 'Done', issue: ref(7, 'CLOSED') },
-    ],
+      ];
+    },
     getIssue: async (n) => { fetched.push(n); return issues[n]; },
     listIssueComments: async (args) => (args.issueNumber === 5 ? [{ user: { login: 'pawpet-engine' }, body: buildReopened({ stage: 'In UAT' }), created_at: '2026-11-17T00:00:00Z' }] : []),
     applyAction: async ({ action, ctx }) => { applied.push([ctx.issueNumber, action.type]); return { applied: [], calls: [] }; },
   });
+  assert.equal(listArgs.includeClosed, true, 'the board reader must be asked for closed issues, it drops them by default');
   assert.deepEqual(fetched.sort(), [1, 2, 3, 4, 5], 'Done rows are never fetched');
   const byIssue = Object.fromEntries(result.actions.map((entry) => [entry.issue, entry.action.type]));
   // 2 (not planned), 3 (manual-only) and 4 (Backlog) are dropped before decide(); 5 was already reopened once

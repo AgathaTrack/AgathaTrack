@@ -51,4 +51,14 @@ async function v2OwnsLazy({ getLabels, env = process.env }) {
   return v2Owns({ labels: await getLabels(), env });
 }
 
-module.exports = { pipelineV2Mode, pipelineV2ScopeLabel, labelNames, v2Owns, v2OwnsLazy };
+/**
+ * The engine reads one board (Pawpet) of one repository. Other boards (ATSupport) and other
+ * repositories' issues are never engine-owned, whatever the soak label says.
+ */
+function inEngineScope({ boardKey, issueRepoSlug, env = process.env, defaultRepoSlug = '' }) {
+  const engineRepo = String(env.GITHUB_REPOSITORY || defaultRepoSlug || '').toLowerCase();
+  return boardKey === 'pawpet' && engineRepo !== '' && String(issueRepoSlug || '').toLowerCase() === engineRepo;
+}
+
+module.exports = {
+  inEngineScope, pipelineV2Mode, pipelineV2ScopeLabel, labelNames, v2Owns, v2OwnsLazy };
