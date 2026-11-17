@@ -41,6 +41,7 @@ function facts(comments, reactionsByComment, edits, over = {}) {
   return { mode: 'dry-run', now: NOW, onBoard: true, stage: 'In analysis', labels: [], bodyHash: over.bodyHash || 'h1', ...derived };
 }
 const verdict = (f) => decide(f, config);
+const verdictBoth = (f) => decide(f, { ...config, launchRunners: ['cursor', 'claude'] });
 
 test('review request: the marker round-trips hash, assignee and history', () => {
   const body = buildReviewRequest({ hash: 'abc123', assigned: 'pawpet-bot', history: ['pawpet-claude'] });
@@ -134,10 +135,10 @@ test('scenario: six votes and agent edits without convergence → Blocked no-con
 
 test('scenario: no vote, every eligible agent timed out → Blocked stalled; one left → reassigned', () => {
   const stale = request('h1', { at: '2026-11-16T10:00:00Z', assigned: 'pawpet-bot', history: [] });
-  const oneLeft = verdict(facts([stale], {}, [edit('KanopeeKa', '2026-11-16T09:50:00Z')]));
+  const oneLeft = verdictBoth(facts([stale], {}, [edit('KanopeeKa', '2026-11-16T09:50:00Z')]));
   assert.deepEqual([oneLeft.type, oneLeft.agent], ['reassign', 'pawpet-claude']);
   const both = request('h1', { at: '2026-11-16T10:00:00Z', assigned: 'pawpet-claude', history: ['pawpet-bot'] });
-  const stalled = verdict(facts([both], {}, [edit('KanopeeKa', '2026-11-16T09:50:00Z')]));
+  const stalled = verdictBoth(facts([both], {}, [edit('KanopeeKa', '2026-11-16T09:50:00Z')]));
   assert.deepEqual([stalled.type, stalled.reason], ['set-blocked', 'stalled']);
 });
 

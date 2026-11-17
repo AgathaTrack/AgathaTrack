@@ -121,7 +121,7 @@ listed agent); the engine never clears the flag.
   In analysis). The run is not a delivery: no `busy` label, no PR. With too little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
   Definition of Done) and 👍s the spec request, so the engine moves the issue to In analysis. A failed start is only logged;
-  the pickup timeout reassigns. Agents on other runners (`claude`) are assigned only.
+  the pickup timeout reassigns. Agents on other runners (`claude`) are assigned only. Pickup rotation (spec, review, intent review, wake) is LRU over self-starting agents only (`launchRunners`); the full `agents` list still counts for votes, convergence and manual assignment. A runner leaves this limit when added to `launchRunners` with a launcher.
 
 ### Delivery contract
 
