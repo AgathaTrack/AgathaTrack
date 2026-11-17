@@ -29,7 +29,6 @@ const fields = {
   stage: { id: 1, name: 'Stage', options: [] },
   blocked: { id: 2, name: 'Blocked', options: [] },
   attempts: { id: 3, name: 'Attempts', options: [] },
-  totalN: { id: 4, name: 'Total N', options: [] },
 };
 const ref = (number, extra = {}) => ({ number, state: 'OPEN', repository: { name: 'r', owner: { login: 'o' } }, ...extra });
 

@@ -201,7 +201,7 @@ test('runner: a To do issue reads its comments and reactions; Backlog and Done c
         config,
         fields: {
           stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] },
-          attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] },
+          attempts: { id: 3, name: 'Attempts', options: [] },
         },
         listProjectIssues: async () => [1, 2, 3].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } })),
         getIssue: async (n) => issues[n],

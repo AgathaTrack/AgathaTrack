@@ -6,7 +6,6 @@ const FIELD_NAMES = {
   stage: 'Stage',
   blocked: 'Blocked',
   attempts: 'Attempts',
-  totalN: 'Total N',
 };
 
 function findOrgField(fields, name) {
@@ -53,7 +52,7 @@ function entryNumber(entry) {
   return Number.isFinite(value) ? value : 0;
 }
 
-/** Parse an issue's `issue_field_values` into the four engine fields. */
+/** Parse an issue's `issue_field_values` into the three engine fields. */
 function parseIssueFields(issue, fields) {
   const values = issue?.issue_field_values || [];
   const byId = new Map(values.map((entry) => [entryFieldId(entry), entry]));
@@ -61,7 +60,6 @@ function parseIssueFields(issue, fields) {
     stage: entryText(byId.get(fields.stage.id)),
     blocked: entryText(byId.get(fields.blocked.id)),
     attempts: entryNumber(byId.get(fields.attempts.id)),
-    totalN: entryNumber(byId.get(fields.totalN.id)),
   };
 }
 

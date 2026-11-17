@@ -54,7 +54,6 @@ const fields = {
   stage: { id: 1, name: 'Stage', options: [] },
   blocked: { id: 2, name: 'Blocked', options: [] },
   attempts: { id: 3, name: 'Attempts', options: [] },
-  totalN: { id: 4, name: 'Total N', options: [] },
 };
 const ref = (number, state, extra = {}) => ({ number, state, repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } }, ...extra });
 const stage = (name) => [{ field_id: 1, single_select_option: { name } }];
