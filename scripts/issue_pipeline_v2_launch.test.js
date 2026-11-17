@@ -24,6 +24,15 @@ test('delivery method accepts the formats real issues use: bold, backticks, tabl
   assert.equal(deliveryMethod('### Scope\n\n**Method:** `light-plan`'), 'PR', 'only inside the Delivery plan section');
 });
 
+test('delivery method needs a whole token in a field position', () => {
+  assert.equal(deliveryMethod('### Delivery plan\n\nMethod: execute-plan-beta'), 'PR', 'suffix');
+  assert.equal(deliveryMethod('### Delivery plan\n\nMethod: `light-plan-v2`'), 'PR', 'suffix in backticks');
+  assert.equal(deliveryMethod('### Delivery plan\n\nThe method: light-plan'), 'PR', 'incidental prose');
+  assert.equal(deliveryMethod('### Delivery plan\n\nWe chose the Method: light-plan because'), 'PR', 'mid-line');
+  assert.equal(deliveryMethod('### Delivery plan\n\nintro\n1. **Method:** `light-plan`'), 'light-plan', 'list item');
+  assert.equal(deliveryMethod('### Delivery plan\n\n> Method: execute-plan'), 'execute-plan', 'quote');
+});
+
 test('delivery method comes from the Delivery plan section, defaulting to PR', () => {
   assert.equal(deliveryMethod('### Delivery plan\n\nMethod: light-plan\nPlan: x'), 'light-plan');
   assert.equal(deliveryMethod('### Delivery plan\n\nmethod: Execute-Plan\n### Next\nMethod: PR'), 'execute-plan');

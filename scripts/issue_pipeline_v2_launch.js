@@ -67,11 +67,21 @@ function deliveryMethod(body) {
   }
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((line) => /^#{1,4}\s/.test(line));
-  const section = (end < 0 ? rest : rest.slice(0, end)).join('\n');
-  // The label may be bold, backticked or in a table: `Method: PR`, `**Method:** \`light-plan\``,
-  // `| **Mechanism** | \`PR\` — ... |`. The first delivery method named after it wins.
-  const match = /(?:method|mechanism)\b[\s*:|`_-]*(light-plan|execute-plan|PR)\b/i.exec(section);
-  return (match && METHODS.find((method) => method.toLowerCase() === match[1].toLowerCase())) || 'PR';
+  const section = end < 0 ? rest : rest.slice(0, end);
+  // The label must start the line (after an optional list marker, quote or table pipe) and be
+  // followed by a colon or table pipe, so prose such as "the method: light-plan" is never read as
+  // an instruction. Bold, backticks and table cells around the label and value are allowed:
+  // `Method: PR`, `**Method:** \`light-plan\``, `| **Mechanism** | \`PR\` — ... |`.
+  // The value must be a whole token: `execute-plan-beta` is not `execute-plan`.
+  const field =
+    /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\|?\s*[*_]*(?:method|mechanism)[*_]*\s*[:|][*_\s`|]*(light-plan|execute-plan|PR)(?![\w-])/i;
+  for (const line of section) {
+    const match = field.exec(line);
+    if (match) {
+      return METHODS.find((method) => method.toLowerCase() === match[1].toLowerCase());
+    }
+  }
+  return 'PR';
 }
 
 /**
