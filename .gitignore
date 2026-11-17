@@ -73,6 +73,7 @@ flutter_app/coverage/
 .prod-backend-deploy/
 .backend-deploy-staging/
 .ci-uat-ssh-remote.sh
+.ci-uat-r11-verify.sh
 actionlint
 flutter_app/_coverage_shards/
 server/coverage/
