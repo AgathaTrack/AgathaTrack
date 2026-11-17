@@ -188,6 +188,7 @@ async function monitorIssue({
   projectId,
   statusFieldId,
   found: providedFound,
+  allowLightPlanResume = false,
 }) {
   // Callers that already selected a trusted marker pass it in (issue pipeline monitor).
   const found =
@@ -219,16 +220,13 @@ async function monitorIssue({
   const genuinelyBlocked = detectBlockedResult(run);
   const blocked = failed || (!prUrl && genuinelyBlocked);
 
-  if (
-  lightPlanBusyActive(issue)
-    && !prUrl
-    && !genuinelyBlocked
-  ) {
+  if (allowLightPlanResume && lightPlanBusyActive(issue) && !genuinelyBlocked) {
     return {
       issueNumber,
       action: 'light-plan-resume',
       status,
-      reason: summary.trim() || (failed ? `run ${status}` : 'no PR URL'),
+      prUrl: prUrl || null,
+      reason: summary.trim() || (failed ? `run ${status}` : prUrl ? 'session ended' : 'no PR URL'),
     };
   }
 

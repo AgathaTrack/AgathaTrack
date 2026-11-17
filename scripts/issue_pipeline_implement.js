@@ -351,4 +351,5 @@ module.exports = {
   buildLightPlanContinuePrompt,
   deliveryHandoffLines,
   applyImplementLaunch,
+  applyImplementNeedsOwner,
 };

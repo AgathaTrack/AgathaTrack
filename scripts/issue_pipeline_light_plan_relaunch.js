@@ -1,15 +1,21 @@
 'use strict';
 
+const path = require('path');
 const {
   fetchIssue,
   assignIssue,
   setLabels,
   upsertMarkerComment,
 } = require('../.github/scripts/github-project-lib');
-const { buildDispatchComment } = require('../.github/scripts/agent-payload-lib');
+const { buildDispatchComment, buildRunMarker } = require('../.github/scripts/agent-payload-lib');
 const { launchAgent, botLaunchEnvVars } = require('../.github/scripts/launch-cursor-agent');
 const { buildLightPlanContinuePrompt } = require('./issue_pipeline_implement');
 const { loadIssueState, upsertPipelineState } = require('./issue_pipeline_state_load');
+const {
+  parseAgentPathsBlock,
+  evaluateDeliveryPaths,
+  listTrackedFiles,
+} = require('./issue_pipeline_delivery');
 const OWNER_LOGIN = 'KanopeeKa';
 const RUN_MARKER_PREFIX = '<!-- cursor-agent-run:';
 const RELAUNCH_MARKER = '<!-- pipeline-light-plan-relaunch -->';
@@ -35,14 +41,69 @@ function lightPlanBusyActive(issue) {
 /**
  * Pure policy for when a terminal run should queue a light-plan resume instead of blocking.
  */
-function lightPlanResumeEligible({ issue, prUrl, genuinelyBlocked }) {
+function lightPlanResumeEligible({ issue, genuinelyBlocked }) {
   if (!issue || genuinelyBlocked) {
     return false;
   }
-  if (prUrl) {
-    return false;
-  }
   return lightPlanBusyActive(issue);
+}
+
+async function finalizeTerminalRunMarker({ owner, repo, issueNumber, marker, reason, token, assignToken, io }) {
+  if (!marker) {
+    return;
+  }
+  const updatedMarker = {
+    ...marker,
+    status: 'blocked',
+    completedAt: new Date().toISOString(),
+    reason,
+  };
+  await (io.upsertMarkerComment || upsertMarkerComment)({
+    owner,
+    repo,
+    issueNumber,
+    marker: RUN_MARKER_PREFIX,
+    body: `${buildRunMarker(updatedMarker)}\n\nMonitor: ${reason}`,
+    token: assignToken || token,
+  });
+}
+
+async function applyRelaunchLaunchFailed({
+  owner,
+  repo,
+  issueNumber,
+  token,
+  assignToken,
+  marker,
+  detail,
+  io = {},
+}) {
+  if (marker) {
+    await finalizeTerminalRunMarker({
+      owner,
+      repo,
+      issueNumber,
+      marker,
+      reason: 'launch-failed',
+      token,
+      assignToken,
+      io,
+    });
+  }
+  await (io.setLabels || setLabels)(owner, repo, issueNumber, ['needs-owner'], ['busy'], token);
+  await (io.assignIssue || assignIssue)(owner, repo, issueNumber, OWNER_LOGIN, assignToken || token);
+  await (io.upsertMarkerComment || upsertMarkerComment)({
+    owner,
+    repo,
+    issueNumber,
+    marker: RELAUNCH_MARKER,
+    body: `${RELAUNCH_MARKER}
+## Light-plan relaunch failed
+
+Reason: **launch-failed**. ${detail || ''}`,
+    token: assignToken || token,
+  });
+  return { relaunch: false, reason: 'launch-failed', detail };
 }
 
 async function applyStuckNeedsOwner({
@@ -54,6 +115,7 @@ async function applyStuckNeedsOwner({
   state,
   stuck,
   dryRun,
+  marker,
   io = {},
 }) {
   const nextState = {
@@ -63,6 +125,18 @@ async function applyStuckNeedsOwner({
   };
   if (dryRun) {
     return { stuckLimit: true, dryRun: true, stuck, nextState };
+  }
+  if (marker) {
+    await finalizeTerminalRunMarker({
+      owner,
+      repo,
+      issueNumber,
+      marker,
+      reason: 'stuck',
+      token,
+      assignToken,
+      io,
+    });
   }
   await (io.setLabels || setLabels)(owner, repo, issueNumber, ['needs-owner'], ['busy'], token);
   await (io.assignIssue || assignIssue)(owner, repo, issueNumber, OWNER_LOGIN, assignToken || token);
@@ -99,12 +173,58 @@ async function applyLightPlanRelaunch({
   token,
   assignToken,
   dryRun,
+  priorMarker,
+  repoRoot = path.join(__dirname, '..'),
   io = {},
 }) {
   const fetch = io.fetchIssue || fetchIssue;
   const issue = await fetch(owner, repo, issueNumber, token);
   if (!lightPlanBusyActive(issue)) {
     return { skipped: true, reason: 'not-light-plan-busy' };
+  }
+
+  const parsed = parseAgentPathsBlock(issue.body || '');
+  const pathCheck = parsed.ok
+    ? evaluateDeliveryPaths(
+        parsed.globs,
+        (io.listTrackedFiles || listTrackedFiles)(repoRoot),
+      )
+    : { ok: false, reason: parsed.reason };
+  if (!pathCheck.ok) {
+    if (dryRun) {
+      return { dryRun: true, relaunch: false, reason: 'path-gate', pathCheck };
+    }
+    await finalizeTerminalRunMarker({
+      owner,
+      repo,
+      issueNumber,
+      marker: priorMarker,
+      reason: pathCheck.reason || 'sensitive-paths',
+      token,
+      assignToken,
+      io,
+    });
+    await (io.setLabels || setLabels)(
+      owner,
+      repo,
+      issueNumber,
+      ['needs-owner'],
+      ['busy'],
+      token,
+    );
+    await (io.assignIssue || assignIssue)(owner, repo, issueNumber, OWNER_LOGIN, assignToken || token);
+    await (io.upsertMarkerComment || upsertMarkerComment)({
+      owner,
+      repo,
+      issueNumber,
+      marker: RELAUNCH_MARKER,
+      body: `${RELAUNCH_MARKER}
+## Light-plan relaunch blocked
+
+Reason: **${pathCheck.reason || 'sensitive-paths'}** (path gate).`,
+      token: assignToken || token,
+    });
+    return { relaunch: false, reason: 'path-gate', pathCheck };
   }
 
   const { state } = await loadIssueState(owner, repo, issueNumber, token, io);
@@ -121,6 +241,7 @@ async function applyLightPlanRelaunch({
       state,
       stuck: nextStuck,
       dryRun,
+      marker: priorMarker,
       io,
     });
   }
@@ -149,17 +270,32 @@ async function applyLightPlanRelaunch({
       envVars: botLaunchEnvVars(process.env),
     });
   } catch (error) {
-    return {
-      relaunch: false,
-      reason: 'launch-failed',
-      detail: String(error.message || error).slice(0, 300),
-    };
+    const detail = String(error.message || error).slice(0, 300);
+    return applyRelaunchLaunchFailed({
+      owner,
+      repo,
+      issueNumber,
+      token,
+      assignToken,
+      marker: priorMarker,
+      detail,
+      io,
+    });
   }
 
   const agentId = launched?.agent?.id;
   const runId = launched?.run?.id;
   if (!agentId || !runId) {
-    return { relaunch: false, reason: 'launch-failed', detail: 'missing agent/run id' };
+    return applyRelaunchLaunchFailed({
+      owner,
+      repo,
+      issueNumber,
+      token,
+      assignToken,
+      marker: priorMarker,
+      detail: 'missing agent/run id',
+      io,
+    });
   }
 
   const marker = {
@@ -173,6 +309,7 @@ async function applyLightPlanRelaunch({
     relaunchStuck: nextStuck,
   };
 
+  // Record the new run before handoff writes so a failed write is resumed, not double-launched.
   await (io.upsertMarkerComment || upsertMarkerComment)({
     owner,
     repo,
@@ -182,36 +319,46 @@ async function applyLightPlanRelaunch({
     token: assignToken || token,
   });
 
-  const nextState = {
-    ...state,
-    stuck: nextStuck,
-    run_id: runId,
-    owner_reason: null,
-  };
-  await upsertPipelineState({
-    owner,
-    repo,
-    issueNumber,
-    assignToken,
-    state: nextState,
-    summaryLine: `Monitor: relaunch light-plan (\`stuck=${nextStuck}\`)`,
-    io,
-  });
+  try {
+    const nextState = {
+      ...state,
+      stuck: nextStuck,
+      run_id: runId,
+      owner_reason: null,
+    };
+    await upsertPipelineState({
+      owner,
+      repo,
+      issueNumber,
+      assignToken,
+      state: nextState,
+      summaryLine: `Monitor: relaunch light-plan (\`stuck=${nextStuck}\`)`,
+      io,
+    });
 
-  await (io.assignIssue || assignIssue)(owner, repo, issueNumber, 'pawpet-bot', assignToken || token);
-  await (io.setLabels || setLabels)(owner, repo, issueNumber, ['busy'], [], token);
+    await (io.assignIssue || assignIssue)(owner, repo, issueNumber, 'pawpet-bot', assignToken || token);
+    await (io.setLabels || setLabels)(owner, repo, issueNumber, ['busy'], [], token);
 
-  await (io.upsertMarkerComment || upsertMarkerComment)({
-    owner,
-    repo,
-    issueNumber,
-    marker: RELAUNCH_MARKER,
-    body: `${RELAUNCH_MARKER}
+    await (io.upsertMarkerComment || upsertMarkerComment)({
+      owner,
+      repo,
+      issueNumber,
+      marker: RELAUNCH_MARKER,
+      body: `${RELAUNCH_MARKER}
 ## Light-plan monitor relaunch
 
 Continue prompt dispatched (\`continue light-plan #${issueNumber}\`). \`stuck\` is **${nextStuck}**.`,
-    token: assignToken || token,
-  });
+      token: assignToken || token,
+    });
+  } catch (handoffError) {
+    return {
+      relaunched: true,
+      runId,
+      stuck: nextStuck,
+      handoffIncomplete: true,
+      detail: String(handoffError.message || handoffError).slice(0, 300),
+    };
+  }
 
   return { relaunched: true, runId, stuck: nextStuck };
 }
@@ -223,4 +370,5 @@ module.exports = {
   lightPlanResumeEligible,
   applyLightPlanRelaunch,
   applyStuckNeedsOwner,
+  applyRelaunchLaunchFailed,
 };

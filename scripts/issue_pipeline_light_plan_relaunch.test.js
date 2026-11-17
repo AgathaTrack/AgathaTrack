@@ -16,18 +16,8 @@ const busyLightPlanIssue = {
 };
 
 test('lightPlanResumeEligible requires busy + light-plan and no genuine block', () => {
-  assert.equal(
-    lightPlanResumeEligible({ issue: busyLightPlanIssue, prUrl: null, genuinelyBlocked: false }),
-    true,
-  );
-  assert.equal(
-    lightPlanResumeEligible({ issue: busyLightPlanIssue, prUrl: 'https://x', genuinelyBlocked: false }),
-    false,
-  );
-  assert.equal(
-    lightPlanResumeEligible({ issue: busyLightPlanIssue, prUrl: null, genuinelyBlocked: true }),
-    false,
-  );
+  assert.equal(lightPlanResumeEligible({ issue: busyLightPlanIssue, genuinelyBlocked: false }), true);
+  assert.equal(lightPlanResumeEligible({ issue: busyLightPlanIssue, genuinelyBlocked: true }), false);
   assert.equal(lightPlanBusyActive({ labels: [{ name: 'PR' }, { name: 'busy' }] }), false);
 });
 
@@ -40,6 +30,8 @@ test('buildLightPlanContinuePrompt leads with continue line', () => {
   assert.match(prompt, /light-plan\/SKILL\.md/);
 });
 
+const pathsBlock = '```agent-paths\n{"globs":["scripts/**"]}\n```';
+
 test('applyLightPlanRelaunch dry-run does not launch', async () => {
   let launched = false;
   const result = await applyLightPlanRelaunch({
@@ -50,7 +42,7 @@ test('applyLightPlanRelaunch dry-run does not launch', async () => {
     assignToken: 'bot',
     dryRun: true,
     io: {
-      fetchIssue: async () => busyLightPlanIssue,
+      fetchIssue: async () => ({ ...busyLightPlanIssue, body: pathsBlock }),
       fetchAllIssueComments: async () => [],
       launchAgent: async () => {
         launched = true;
@@ -104,7 +96,13 @@ function graphqlIssueResponse() {
 
 function mockFetchForMonitor({ runPayload, onGithubPost }) {
   return async (url, init) => {
-    if (String(url).includes('api.cursor.com')) {
+    let parsed;
+    try {
+      parsed = new URL(String(url));
+    } catch {
+      parsed = null;
+    }
+    if (parsed && parsed.hostname === 'api.cursor.com') {
       return {
         ok: true,
         status: 200,
@@ -112,10 +110,10 @@ function mockFetchForMonitor({ runPayload, onGithubPost }) {
         json: async () => runPayload,
       };
     }
-    if (String(url).includes('graphql')) {
+    if (parsed && parsed.hostname === 'api.github.com' && parsed.pathname === '/graphql') {
       return graphqlIssueResponse();
     }
-    if (onGithubPost && String(url).startsWith('https://api.github.com')) {
+    if (onGithubPost && parsed && parsed.hostname === 'api.github.com') {
       onGithubPost(url, init);
     }
     return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
@@ -134,11 +132,60 @@ test('monitorIssue returns light-plan-resume for terminal FINISHED without PR', 
       issueNumber: 5,
       token: 't',
       apiKey: 'k',
+      allowLightPlanResume: true,
       found: {
         marker: { agentId: 'a', runId: 'b', status: 'running' },
       },
     });
     assert.equal(result.action, 'light-plan-resume');
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
+test('monitorIssue resumes light-plan with phase PR when pipeline caller', async () => {
+  const origFetch = global.fetch;
+  global.fetch = mockFetchForMonitor({
+    runPayload: {
+      status: 'FINISHED',
+      result: { text: 'paused' },
+      git: { branches: [{ prUrl: 'https://github.com/o/r/pull/9' }] },
+    },
+  });
+  try {
+    const result = await monitorIssue({
+      owner: 'o',
+      repo: 'r',
+      issueNumber: 5,
+      token: 't',
+      apiKey: 'k',
+      allowLightPlanResume: true,
+      found: { marker: { agentId: 'a', runId: 'b', status: 'running' } },
+    });
+    assert.equal(result.action, 'light-plan-resume');
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
+test('legacy monitor treats light-plan terminal run with PR as completed', async () => {
+  const origFetch = global.fetch;
+  global.fetch = mockFetchForMonitor({
+    runPayload: {
+      status: 'FINISHED',
+      git: { branches: [{ prUrl: 'https://github.com/o/r/pull/9' }] },
+    },
+  });
+  try {
+    const result = await monitorIssue({
+      owner: 'o',
+      repo: 'r',
+      issueNumber: 5,
+      token: 't',
+      apiKey: 'k',
+      found: { marker: { agentId: 'a', runId: 'b', status: 'running' } },
+    });
+    assert.equal(result.action, 'completed');
   } finally {
     global.fetch = origFetch;
   }
@@ -165,6 +212,7 @@ test('monitorIssue still blocks light-plan when agent text is genuinely blocked'
       issueNumber: 5,
       token: 't',
       apiKey: 'k',
+      allowLightPlanResume: true,
       found: {
         marker: { agentId: 'a', runId: 'b', status: 'running' },
       },

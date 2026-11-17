@@ -88,6 +88,7 @@ async function applyMonitorTick({
     projectId,
     statusFieldId,
     found,
+    allowLightPlanResume: true,
   });
 
   if (result.action === 'light-plan-resume') {
@@ -108,6 +109,7 @@ async function applyMonitorTick({
       token,
       assignToken,
       dryRun: false,
+      priorMarker: found?.marker,
     });
     return { action: 'monitor', lightPlanResume: true, monitor: result, ...relaunch };
   }
