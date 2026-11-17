@@ -229,6 +229,7 @@ run_governance() {
   node --test scripts/issue_pipeline_v2_review.test.js
   node --test scripts/issue_pipeline_v2_apply.test.js
   node --test scripts/issue_pipeline_v2_launch.test.js
+  node --test scripts/issue_pipeline_v2_release.test.js
   node --test scripts/stage_mirror_decide.test.js
   node --test scripts/db/normalize-schema-dump.test.js
   node scripts/db/check-migration-manifest.js

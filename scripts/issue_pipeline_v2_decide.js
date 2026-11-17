@@ -255,9 +255,14 @@ function decideInProgress(facts, config) {
     delivery.lastActivityAt != null &&
     facts.now - delivery.lastActivityAt >= config.limits.stalledInactivityHours * HOUR;
   if (!delivery.busy || inactive) {
-    return delivery.resumed
-      ? setBlocked('stalled', 'progress.stalled')
-      : { type: 'resume', row: 'progress.resume' };
+    if (delivery.resumed) {
+      return setBlocked('stalled', 'progress.stalled');
+    }
+    const method = facts.deliveryMethod || 'PR';
+    const capable = launchableAgents(config, method);
+    return capable.length === 0
+      ? setBlocked('stalled', 'progress.no-launchable-agent')
+      : { type: 'resume', agent: pickAgent(capable, facts), method, row: 'progress.resume' };
   }
   return none('progress.working');
 }

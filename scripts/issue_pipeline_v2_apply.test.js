@@ -77,9 +77,11 @@ test('wake posts the marker once and rings the agent', async () => {
 test('set-stage Done writes the field and closes as completed', async () => {
   const { sent, restFn } = recorder();
   await applyAction({ action: { type: 'set-stage', to: 'Done', close: true }, ctx: ctx({ restFn }) });
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].body.state, 'closed');
-  assert.equal(sent[0].body.state_reason, 'completed');
+  assert.equal(sent[0].path, '/repos/o/r/issues/7/labels');
+  assert.deepEqual(sent[0].body, { labels: ['in-prod'] });
+  assert.equal(sent[1].method, 'DELETE');
+  assert.equal(sent[2].body.state, 'closed');
+  assert.equal(sent[2].body.state_reason, 'completed');
 });
 
 test('dry run records the same calls but sends none', async () => {
@@ -92,7 +94,7 @@ test('dry run records the same calls but sends none', async () => {
 test('none with no counters sends nothing; unknown types are unsupported', async () => {
   const { sent, restFn } = recorder();
   assert.deepEqual((await applyAction({ action: { type: 'none' }, ctx: ctx({ restFn }) })).applied, []);
-  assert.deepEqual((await applyAction({ action: { type: 'resume' }, ctx: ctx({ restFn }) })).applied, ['unsupported:resume']);
+  assert.deepEqual((await applyAction({ action: { type: 'request-intent-review' }, ctx: ctx({ restFn }) })).applied, ['unsupported:request-intent-review']);
   assert.deepEqual(sent, []);
 });
 
