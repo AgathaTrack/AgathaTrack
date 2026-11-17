@@ -305,8 +305,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         },
       });
       actions[actions.length - 1].applied = result.applied;
-      if (result.applied.some((entry) => entry.startsWith('launch:'))) {
-        wip += 1; // a started run takes a slot; a failed launch does not
+      if (inScope && result.applied.some((entry) => entry.startsWith('launch:'))) {
+        wip += 1; // a started run takes a slot; a failed launch or an out-of-scope simulation does not
       }
     } catch (error) {
       // One issue's failure must not stop the rest of the board; the run still ends red.
