@@ -124,6 +124,23 @@ test('snapshot caps: raising a budget rejected', () => {
   assert.throws(() => build({ windowDays: 15 }), /window_days/);
 });
 
+test('validateSnapshotV2 defaults support_merges_per_phase on legacy snapshots', () => {
+  const s = rehash({
+    ...build(),
+    settings: {
+      ...build().settings,
+      budgets: {
+        ci_per_phase: 3,
+        launches_per_phase: 5,
+        remedial_rounds: 3,
+        sync_attempts: 2,
+        daily_launches: 20,
+      },
+    },
+  });
+  validateSnapshotV2(s, { planMarkdown: PLAN_MD });
+});
+
 test('snapshot caps: lowering accepted', () => {
   const s = rehash({
     ...build(),

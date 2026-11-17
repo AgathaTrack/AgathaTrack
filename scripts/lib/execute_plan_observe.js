@@ -253,12 +253,16 @@ async function observe(client, ctx, { now, sleep }) {
   const remOpen = newest(rem.filter((p) => p.state === 'open'));
   const mergedRem = rem.filter((p) => p.merged_at && epoch && ms(p.merged_at) > ms(epoch)).length;
 
-  const supportPrefix = `cursor/${snapshot.plan_id}-support-`;
+  const supportHeadRe = new RegExp(
+    `^cursor/${snapshot.plan_id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-support-(\\d+)-\\d+$`,
+  );
   const openByPhase = {};
   const mergedByPhase = {};
   for (const def of snapshot.phases) {
-    const phasePrefix = `${supportPrefix}${def.id}-`;
-    const related = intoInteg.filter((p) => p.head.ref.startsWith(phasePrefix));
+    const related = intoInteg.filter((p) => {
+      const m = supportHeadRe.exec(p.head.ref || '');
+      return m && m[1] === String(def.id);
+    });
     openByPhase[def.id] = related.filter((p) => p.state === 'open').length;
     mergedByPhase[def.id] = related.filter((p) => p.merged_at && epoch && ms(p.merged_at) > ms(epoch)).length;
   }

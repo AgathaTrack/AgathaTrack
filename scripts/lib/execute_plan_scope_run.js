@@ -180,6 +180,10 @@ async function loadPlanControl(client, issue, planId, now) {
 /** @returns {Promise<{ conclusion: string, title: string, summary: string, planId: string|null }>} */
 async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, headRepo, repo, now }) {
   const mode = forbiddenGateMode();
+  const supportHead = parseSupportHeadRef(headRef);
+  if (supportHead && headRepo !== repo) {
+    return result('failure', 'unblocks', 'support PR must not come from a fork', supportHead.planId);
+  }
   if (headRepo !== repo) return result('success', 'ok', 'not an execute-plan PR (fork)');
 
   const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
@@ -191,8 +195,6 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
     if (!planId) return nonPlanInfrastructureOutcome('config', e, mode);
     return result('failure', 'error', e.message, planId);
   }
-
-  const supportHead = parseSupportHeadRef(headRef);
 
   let files;
   let prAuthor = null;
@@ -251,10 +253,17 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
     return result('failure', 'error', e.message, planId);
   }
 
+  if (supportHead && baseRef !== snapshot.integration_branch) {
+    return result('failure', 'unblocks', 'support PRs must target the plan integration branch', planId);
+  }
+
   const { category, phaseId } = categorizePull({ head_ref: headRef, base_ref: baseRef }, snapshot);
   if (category === 'support') {
     const linkErr = validateSupportLinkage({ body: pullBody, snapshot, headRef, phaseId });
     if (linkErr) return result('failure', 'unblocks', linkErr, planId);
+    if (stopped.stopped && (stopped.reason === 'approval-invalid' || stopped.reason === 'expired' || stopped.reason === 'revoked')) {
+      return result('failure', 'unblocks', `support PR requires valid plan approval (${stopped.reason})`, planId);
+    }
   }
   const stopExempt = stopped.stopped && exemptFromStopPublish(category);
   const ownPlanFilesVerified = category === 'release' && files.length > 0

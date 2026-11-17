@@ -204,6 +204,27 @@ test('support PR missing Unblocks → failure unblocks', async () => {
   assert.deepEqual([res.conclusion, res.title], ['failure', 'unblocks']);
 });
 
+test('fork with support head → failure unblocks', async () => {
+  const { client } = setup({ files: ['server/bin/server.js'], prBody: `Unblocks: plan ${PLAN} phase 1\n` });
+  const res = await runScopeCheck(client, {
+    ...phasePr,
+    headRef: `cursor/${PLAN}-support-1-1`,
+    baseRef: INTEGRATION,
+    headRepo: 'evil/fork',
+  });
+  assert.deepEqual([res.conclusion, res.title], ['failure', 'unblocks']);
+});
+
+test('support PR to main → failure unblocks', async () => {
+  const { client } = setup({ files: ['server/bin/server.js'], prBody: `Unblocks: plan ${PLAN} phase 1\n` });
+  const res = await runScopeCheck(client, {
+    ...phasePr,
+    headRef: `cursor/${PLAN}-support-1-1`,
+    baseRef: 'main',
+  });
+  assert.deepEqual([res.conclusion, res.title], ['failure', 'unblocks']);
+});
+
 test('support PR in scope with Unblocks → success', async () => {
   const { client } = setup({
     files: ['server/bin/server.js'],

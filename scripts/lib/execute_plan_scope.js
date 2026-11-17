@@ -122,14 +122,18 @@ function parseSupportHeadRef(headRef) {
 
 /** @returns {{ ok: true, planId: string, phaseId: string }|{ ok: false, reason: 'missing'|'duplicate'|'invalid' }} */
 function parseUnblocksFromBody(body) {
-  const matches = [];
-  for (const line of String(body || '').split('\n')) {
+  let found = null;
+  for (const rawLine of String(body || '').split('\n')) {
+    const line = rawLine.replace(/\s+$/, '');
+    if (!/^Unblocks:/.test(line.trimStart())) continue;
     const m = UNBLOCKS_LINE_RE.exec(line.trim());
-    if (m) matches.push({ planId: m[1], phaseId: m[2] });
+    if (!m) return { ok: false, reason: 'invalid' };
+    const entry = { planId: m[1], phaseId: m[2] };
+    if (found) return { ok: false, reason: 'duplicate' };
+    found = entry;
   }
-  if (matches.length === 0) return { ok: false, reason: 'missing' };
-  if (matches.length > 1) return { ok: false, reason: 'duplicate' };
-  return { ok: true, planId: matches[0].planId, phaseId: matches[0].phaseId };
+  if (!found) return { ok: false, reason: 'missing' };
+  return { ok: true, planId: found.planId, phaseId: found.phaseId };
 }
 
 /**
@@ -145,6 +149,7 @@ function validateSupportLinkage({ body, snapshot, headRef, phaseId }) {
   const parsed = parseUnblocksFromBody(body);
   if (!parsed.ok) {
     if (parsed.reason === 'missing') return 'PR body must contain exactly one Unblocks: plan <id> phase <n> line';
+    if (parsed.reason === 'invalid') return 'PR body has an invalid Unblocks: line';
     return 'PR body must not contain multiple Unblocks: lines';
   }
   if (parsed.planId !== snapshot.plan_id) return `Unblocks plan ${parsed.planId} does not match snapshot`;

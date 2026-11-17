@@ -377,6 +377,7 @@ test('validateSupportLinkage and Unblocks parsing', () => {
     headRef: `cursor/${PLAN}-support-1-2`,
     phaseId: '1',
   }), null);
+  assert.deepEqual(parseUnblocksFromBody('Unblocks: plan x phase 1\nUnblocks: bad\n'), { ok: false, reason: 'invalid' });
   assert.match(validateSupportLinkage({
     body: 'no unblocks',
     snapshot: SNAP,
