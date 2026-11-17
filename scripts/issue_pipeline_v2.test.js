@@ -213,12 +213,23 @@ test('In analysis: a new hash gets a new request, excluding the last editor', ()
 });
 
 test('In analysis: nobody else eligible after a thumbs-down, the editor revises', () => {
-  const action = rowOf({
+  const action = rowOfBoth({
     stage: 'In analysis',
     lastBodyEditor: 'pawpet-claude',
     review: { requestedHash: 'h1', requestedAt: NOW, votes: [vote('pawpet-bot', 'down')] },
   });
   assert.deepEqual([action.type, action.agent], ['reassign', 'pawpet-claude']);
+});
+
+test('In analysis: a non-startable editor is never put back on the request; nobody left stalls', () => {
+  const action = rowOf({
+    stage: 'In analysis',
+    lastBodyEditor: 'pawpet-claude',
+    review: { requestedHash: 'h1', requestedAt: NOW, votes: [vote('pawpet-bot', 'down')] },
+  });
+  assert.deepEqual([action.type, action.reason], ['set-blocked', 'stalled']);
+  const none = { ...config, launchRunners: ['nobody'] };
+  assert.deepEqual([decide(facts({}), none).type, decide(facts({}), none).row], ['set-blocked', 'todo.stalled']);
 });
 
 test('In analysis: timeout reassigns, then stalls once every eligible agent timed out', () => {

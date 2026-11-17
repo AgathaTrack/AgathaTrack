@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   buildLaunchAcked, buildLaunchFailed, buildLaunchRecord, deriveLaunchFacts, deliveryMethod, launchIssue,
+  STAGE_PROMPTS,
 } = require('./issue_pipeline_v2_launch');
 const { applyAction } = require('./issue_pipeline_v2_apply');
 const { decide } = require('./issue_pipeline_v2_decide');
@@ -130,6 +131,45 @@ test('launchIssue: busy label, run, and cleanup when the API fails', async () =>
   await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', deps }), /preflight: nope/);
 });
 
+function realSafetyDeps(launches) {
+  return {
+    safety: require('../.github/scripts/agent-safety-lib'),
+    payload: { buildAgentPayload: () => ({}), buildAgentPrompt: () => 'prompt' },
+    lib: { setLabels: async () => {} },
+    launcher: { launchAgent: async (args) => { launches.push(args); return { agent: { id: 'a', url: 'u' }, run: { id: 'r' } }; } },
+  };
+}
+
+test('launchIssue (real preflight): a Ready issue with none of the retired approval labels is launched', async () => {
+  const launches = [];
+  const issue = { number: 7, title: 'Fix a thing', body: '### Summary\n\nsmall change', labels: [{ name: 'pipeline-beta' }] };
+  const run = await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', deps: realSafetyDeps(launches) });
+  assert.equal(run.runId, 'r');
+  assert.equal(launches.length, 1);
+});
+
+test('launchIssue (real preflight): the blocking-label and risky-scope checks still stop a delivery', async () => {
+  const launches = [];
+  const blocked = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }] };
+  await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue: blocked, token: 't', apiKey: 'k', deps: realSafetyDeps(launches) }), /preflight: .*blocking label/);
+  assert.equal(launches.length, 0);
+});
+
+test('launchIssue: a spec, review or intent-review doorbell skips the preflight and the busy label', async () => {
+  for (const stage of ['To do', 'In analysis', 'In Main']) {
+    const launches = [];
+    const labels = [];
+    const deps = realSafetyDeps(launches);
+    deps.lib = { setLabels: async (o, r, n, add, remove) => labels.push([add, remove]) };
+    // `busy` and `blocked` would stop a delivery; a spec pass on such an issue must still run
+    const issue = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }, { name: 'busy' }] };
+    await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', stage, deps });
+    assert.equal(launches.length, 1, stage);
+    assert.deepEqual(labels, [], `${stage}: no busy label`);
+    assert.ok(launches[0].promptText.includes(STAGE_PROMPTS[stage]), stage);
+  }
+});
+
 test('apply launch: a started run is never recorded as a failure when the record comment fails', async () => {
   let launches = 0;
   const bodies = [];
@@ -223,7 +263,6 @@ test('Ready with a busy issue and no launch record moves on; the dry-run plan sh
 });
 
 test('stage prompts exist for the spec and review doorbells', () => {
-  const { STAGE_PROMPTS } = require('./issue_pipeline_v2_launch');
   assert.match(STAGE_PROMPTS['To do'], /SPEC PASS[\s\S]*Blocked[\s\S]*question/);
   assert.match(STAGE_PROMPTS['In analysis'], /ADVERSARIAL REVIEW/);
 });

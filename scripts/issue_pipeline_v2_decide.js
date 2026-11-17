@@ -101,7 +101,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     const next = pickAgent(eligible, facts);
     return next
       ? { type: 'reassign', stage, agent: next, row: `${rowPrefix}.assign` }
-      : none(`${rowPrefix}.no-agent`);
+      : setBlocked('stalled', `${rowPrefix}.stalled`); // nobody the engine can start is left to ask
   }
   if (facts.now - state.requestedAt < timeoutMs) {
     return none(`${rowPrefix}.waiting`);
@@ -126,6 +126,9 @@ function decideToDo(facts, config) {
     return setStage('In analysis', 'todo.dor-pass', { evidence: { passedBy: spec.passedBy } });
   }
   const logins = selfStartingLogins(config);
+  if (logins.length === 0) {
+    return setBlocked('stalled', 'todo.stalled');
+  }
   if (!spec.requestedAt) {
     return {
       type: 'request-spec',
@@ -177,10 +180,13 @@ function decideInAnalysis(facts, config) {
 
   const logins = selfStartingLogins(config);
   let eligible = logins.filter((login) => login !== editor && !voted.has(login));
-  if (eligible.length === 0 && editorIsAgent) {
-    eligible = [editor]; // nobody else left: the last editor revises
+  if (eligible.length === 0 && logins.includes(editor)) {
+    eligible = [editor]; // nobody else left: the last editor revises, if the engine can start it
   }
   if (review.requestedHash !== facts.bodyHash) {
+    if (eligible.length === 0) {
+      return setBlocked('stalled', 'analysis.stalled');
+    }
     return {
       type: 'request-review',
       hash: facts.bodyHash,
@@ -284,6 +290,9 @@ function decideInMain(facts, config) {
     const startable = selfStartingLogins(config);
     const independent = startable.filter((login) => !authors.has(login));
     const pool = independent.length > 0 ? independent : startable;
+    if (pool.length === 0) {
+      return none('main.no-agent'); // intent review never gates; nobody the engine can start
+    }
     return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };
   }
   if (facts.uatContainsLatestMerge) {

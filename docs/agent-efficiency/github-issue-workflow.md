@@ -116,12 +116,20 @@ listed agent); the engine never clears the flag.
 - **Delivery plan:** the method (`PR`, `light-plan` or `execute-plan`, read from the body's `Method:` line, default `PR`),
   the planned work, the `agent-paths` block and the Definition of Done are written into the body during review. After
   convergence the body is frozen except for Definition of Done ticks.
-- **Doorbell run:** when the engine posts, reassigns or wakes a spec or review request for an agent whose runner is in
-  `launchRunners` (`cursor`), it also starts a Cursor run with the stage's task (spec pass in To do, adversarial review in
-  In analysis). The run is not a delivery: no `busy` label, no PR. With too little information it writes a best-effort spec,
+- **Doorbell run:** when the engine posts, reassigns or wakes a spec, review or intent-review request for an agent whose
+  runner is in `launchRunners` (`cursor`), it also starts a Cursor run with the stage's task (spec pass in To do,
+  adversarial review in In analysis, intent review in In Main). The run is not a delivery: no `busy` label, no PR, and it
+  skips the legacy launch preflight. With too little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
   Definition of Done) and 👍s the spec request, so the engine moves the issue to In analysis. A failed start is only logged;
-  the pickup timeout reassigns. Agents on other runners (`claude`) are assigned only. Pickup rotation (spec, review, intent review, wake) is LRU over self-starting agents only (`launchRunners`); the full `agents` list still counts for votes, convergence and manual assignment. A runner leaves this limit when added to `launchRunners` with a launcher.
+  the pickup timeout reassigns. Agents on other runners (`claude`) are assigned only. Every pickup (spec, review, intent review, wake, and the last editor asked to revise) goes only to agents whose runner is in `launchRunners`; when none is left, To do and In analysis set `Blocked=stalled` and intent review is skipped. Within one tick the least recently used agent is picked; the order is not kept across ticks, so the first pickup follows config order and the pickup timeout is what moves a request to the next agent. The full `agents` list still counts for votes and convergence.
+- **Launch preflight:** a delivery launch (Ready, and the one resume) still runs the legacy safety preflight
+  (`.github/scripts/agent-safety-lib.js`): the risky-scope and blocking-label (`busy`, `manual-only`, `blocked`) checks
+  stand; an issue waiting on a human has `Blocked` set, which the engine never launches. Its `agent-approved` and `human-reviewed` label requirements are retired under v2, where a
+  converged review and Ready are the approval, so the engine supplies those two labels to the check itself. A refusal
+  records `v2:launch-failed` with the reason and counts as a failed start.
+- **Tick log:** each tick logs `pipeline_v2_action` before applying an action and `pipeline_v2_applied` after, with what
+  was done (`launch:`, `launch-failed:`, `doorbell:`, `doorbell-failed:<agent>:<reason>`, comments, writes).
 
 ### Delivery contract
 
