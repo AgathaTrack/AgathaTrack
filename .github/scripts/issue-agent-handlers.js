@@ -17,6 +17,8 @@ const {
 const { resolveCoordinationIssue } = require('../../scripts/lib/uat_queue_sync');
 
 const ASSIGNEE = process.env.AGENT_ASSIGNEE || 'KanopeeKa';
+const { labelNames, v2Owns } = require('./pipeline-v2-owner');
+
 const TRUSTED_UAT_BRANCH_AUTHORS = new Set(['pawpet-bot', 'pawpet-claude']);
 const UAT_BRANCH_MARKER = '<!-- agent-uat-branch -->';
 const MERGE_COMMIT_RE = /Merge commit:\s*`([0-9a-f]{40})`/i;
@@ -92,6 +94,14 @@ function parseLinkedIssues(prBody, { includeRefs = true } = {}) {
 function isPlanControlIssue(issue) {
   const title = String(issue?.title || '').trim();
   return /^(?:\[)?execute-plan\b/i.test(title);
+}
+
+/**
+ * Issues the v2 engine owns (ISSUE_PIPELINE_V2=on, within the soak label if one is set) are left to
+ * it: these handlers would move Status after the first merged PR, remove `busy` and reopen.
+ */
+function ownedByV2Engine(issue) {
+  return v2Owns({ labels: labelNames(issue) });
 }
 
 function ioOr(io) {
@@ -195,6 +205,11 @@ async function handleMergedPr({
   const results = [];
   for (const issueNumber of issueNumbers) {
     const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+    if (ownedByV2Engine(issue)) {
+      results.push({ issueNumber, expectedTag, status: 'skipped-v2-owned' });
+      console.log(`Issue #${issueNumber}: owned by the v2 engine, merge handler leaves it alone`);
+      continue;
+    }
     await api.setLabels(owner, repo, issueNumber, [], ['busy'], token);
     await api.reopenIssue(owner, repo, issueNumber, token);
 
@@ -428,6 +443,11 @@ async function handleUatWorkflowResult({
   const results = [];
   for (const issueNumber of issueNumbers) {
     const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+    if (ownedByV2Engine(issue)) {
+      results.push({ issueNumber, status: 'skipped-v2-owned' });
+      console.log(`Issue #${issueNumber}: owned by the v2 engine, UAT notify leaves it alone`);
+      continue;
+    }
     if (isPlanControlIssue(issue)) {
       results.push({ issueNumber, status: 'skipped-plan-control' });
       console.log(
@@ -580,6 +600,10 @@ async function handleProdDeployResult({
       continue;
     }
     const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+    if (ownedByV2Engine(issue)) {
+      results.push({ issueNumber, status: 'skipped-v2-owned' });
+      continue;
+    }
     if (isPlanControlIssue(issue)) {
       results.push({ issueNumber, status: 'skipped-plan-control' });
       continue;
@@ -663,6 +687,10 @@ Deploy commit \`${commitSha}\` contains merge \`${mergeSha}\`, but the programme
       }
       seen.add(issueNumber);
       const issue = await api.fetchIssue(owner, repo, issueNumber, token);
+      if (ownedByV2Engine(issue)) {
+        results.push({ issueNumber, status: 'skipped-v2-owned' });
+        continue;
+      }
       if (isPlanControlIssue(issue)) {
         results.push({ issueNumber, status: 'skipped-plan-control' });
         continue;

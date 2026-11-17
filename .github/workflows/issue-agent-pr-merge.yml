@@ -36,6 +36,8 @@ jobs:
           GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
           HANDLER_MODE: pr-merged
+          ISSUE_PIPELINE_V2: ${{ vars.ISSUE_PIPELINE_V2 }}
+          ISSUE_PIPELINE_V2_LABEL: ${{ vars.ISSUE_PIPELINE_V2_LABEL }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}

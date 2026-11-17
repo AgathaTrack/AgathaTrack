@@ -8,6 +8,7 @@ const {
   fetchIssue,
   graphql,
 } = require('../.github/scripts/github-project-lib');
+const { inEngineScope, labelNames, v2OwnsLazy } = require('../.github/scripts/pipeline-v2-owner');
 const { decideStageMirror } = require('./stage_mirror_decide');
 const { loadStageMirrorBoards } = require('./stage_mirror_config');
 const {
@@ -120,6 +121,23 @@ async function reconcileBoard({
     }
     const issueOwner = row.issue.repository?.owner?.login || board.owner;
     const issueRepo = row.issue.repository?.name || board.repo;
+
+    // The v2 engine owns Stage for its issues; mirroring Status over it would undo its decisions.
+    // Only the Pawpet board's issues in the engine's repository: ATSupport and others stay mirrored.
+    const ownedByV2 =
+      inEngineScope({
+        boardKey: board.key,
+        issueRepoSlug: `${issueOwner}/${issueRepo}`,
+        defaultRepoSlug: `${board.owner}/${board.repo}`,
+      }) &&
+      (await v2OwnsLazy({
+        getLabels: async () =>
+          labelNames(await fetchIssue(issueOwner, issueRepo, issueNum, projectsPat)),
+      }));
+    if (ownedByV2) {
+      stats.noop += 1;
+      continue;
+    }
 
     stats.scanned += 1;
     const P = row.status || '';

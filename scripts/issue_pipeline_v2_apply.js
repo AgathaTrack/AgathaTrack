@@ -13,7 +13,7 @@ const { buildFieldWrites } = require('./issue_pipeline_v2_fields');
 const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
 const { buildReviewRequest } = require('./issue_pipeline_v2_review');
 const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
-const { buildResume } = require('./issue_pipeline_v2_release');
+const { buildReopened, buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 
 /**
@@ -146,6 +146,11 @@ async function applyAction({ action: decided, ctx }) {
         'comment:intent-review',
       );
       await assign(action.agent);
+      break;
+    case 'reopen':
+      await request('PATCH', base, { state: 'open' });
+      applied.push('reopen');
+      await comment(buildReopened({ stage: action.stage }), 'comment:reopened');
       break;
     case 'resume': {
       let ok = true;

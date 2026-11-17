@@ -316,6 +316,14 @@ function decide(facts, config) {
   if (stage === null) {
     return none('unknown-stage');
   }
+  if (facts.closed) {
+    // Closed while delivery was under way (a merge auto-closed it, for example): an issue must stay
+    // open until Done. Once only: a second close is deliberate. `not_planned` is always deliberate.
+    const underway = ['In progress', 'In Main', 'In UAT'].includes(stage);
+    return underway && facts.closeReason === 'completed' && !facts.reopenedBefore
+      ? { type: 'reopen', stage, row: 'closed.reopen' }
+      : none('closed');
+  }
   if (facts.blocked) {
     // Only a human comment wakes a blocked issue, once per comment; the engine never clears the flag.
     const answered = (facts.wokenFor || []).includes(facts.humanCommentId);

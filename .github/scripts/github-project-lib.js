@@ -281,11 +281,34 @@ const PROJECT_ITEM_FIELD_VALUES_FRAGMENT = `
   }
 `;
 
+/**
+ * Board rows from raw project items. Open issues only unless `includeClosed`: every legacy caller
+ * wants open issues; the v2 engine also reads closed ones to reopen an issue closed before Done.
+ */
+function projectRowsFromItems(items, { statusFieldId, syncedFieldId = null, includeClosed = false }) {
+  return items
+    .map((item) => {
+      const issue = item.content;
+      if (!issue || (!includeClosed && issue.state !== 'OPEN')) return null;
+      const row = {
+        projectItemId: item.id,
+        status: getIssueProjectStatus(item, statusFieldId),
+        issue,
+      };
+      if (syncedFieldId) {
+        row.syncedStage = getProjectItemTextField(item, syncedFieldId);
+      }
+      return row;
+    })
+    .filter(Boolean);
+}
+
 async function listProjectIssues({
   projectId,
   statusFieldId,
   projectsPat,
   syncedFieldId = null,
+  includeClosed = false,
 }) {
   const items = [];
   let after = null;
@@ -332,21 +355,7 @@ async function listProjectIssues({
     after = page.pageInfo.endCursor;
   }
 
-  return items
-    .map((item) => {
-      const issue = item.content;
-      if (!issue || issue.state !== 'OPEN') return null;
-      const row = {
-        projectItemId: item.id,
-        status: getIssueProjectStatus(item, statusFieldId),
-        issue,
-      };
-      if (syncedFieldId) {
-        row.syncedStage = getProjectItemTextField(item, syncedFieldId);
-      }
-      return row;
-    })
-    .filter(Boolean);
+  return projectRowsFromItems(items, { statusFieldId, syncedFieldId, includeClosed });
 }
 
 async function searchEligibleIssues(owner, repo, token) {
@@ -498,6 +507,7 @@ module.exports = {
   updateProjectStatus,
   fetchProjectV2Item,
   listProjectIssues,
+  projectRowsFromItems,
   PROJECT_ITEMS_PAGE_SIZE,
   searchEligibleIssues,
   fetchAllIssueComments,
