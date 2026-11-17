@@ -114,7 +114,20 @@ const STAGE_PROMPTS = {
     'challenge intent, scope, delivery method, acceptance criteria and risks. If it needs changes, edit the body (your edit counts as ' +
     'your approval; the other agent must then vote) and say what changed in a comment. If it is sound, react 👍 on the engine\'s latest ' +
     '`v2:review-request` comment; if not, react 👎 with a comment explaining why. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
+  'In Main':
+    'Stage task: INTENT REVIEW (the engine assigned you this issue; do not implement or edit it). Follow ' +
+    '`.cursor/skills/intent-review-agent/SKILL.md`: review what shipped (the merged PRs named in the engine\'s latest ' +
+    '`v2:intent-review` comment) against the issue\'s original intent, file each real finding as a follow-up issue that ' +
+    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last.',
 };
+
+/**
+ * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
+ * only launched from Ready, after a converged review. The legacy labels are retired, so the
+ * engine supplies them for a delivery launch. The risky-scope and blocking-label checks stay.
+ * Spec, review and intent-review doorbells start no delivery and skip the preflight.
+ */
+const V2_APPROVAL_LABELS = ['agent-approved', 'human-reviewed'];
 
 async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', stage, deps = {} }) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
@@ -123,9 +136,12 @@ async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', s
   const lib = deps.lib || require('../.github/scripts/github-project-lib');
 
   const labels = (issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
-  const preflight = preflightIssue({ title: issue.title, body: issue.body, labels: labels.map((name) => ({ name })) });
-  if (!preflight.ok) {
-    throw new Error(`preflight: ${preflight.reason}`);
+  if (!stage) {
+    const preflightLabels = [...new Set([...labels, ...V2_APPROVAL_LABELS])];
+    const preflight = preflightIssue({ title: issue.title, body: issue.body, labels: preflightLabels.map((name) => ({ name })) });
+    if (!preflight.ok) {
+      throw new Error(`preflight: ${preflight.reason}`);
+    }
   }
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const payload = payloadLib.buildAgentPayload(
@@ -161,6 +177,7 @@ module.exports = {
   METHODS,
   METHOD_PROMPTS,
   STAGE_PROMPTS,
+  V2_APPROVAL_LABELS,
   buildLaunchRecord,
   buildLaunchFailed,
   buildLaunchAcked,

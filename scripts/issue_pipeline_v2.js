@@ -351,13 +351,20 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         },
       });
       actions[actions.length - 1].applied = result.applied;
+      // The action line above is logged before it is applied, so say what actually happened.
+      if (result.applied.length > 0) {
+        console.log(JSON.stringify({ event: 'pipeline_v2_applied', issue: entry.number, applied: result.applied }));
+      }
       if (inScope && result.applied.some((entry) => entry.startsWith('launch:'))) {
         wip += 1; // a started run takes a slot; a failed launch or an out-of-scope simulation does not
       }
     } catch (error) {
       // One issue's failure must not stop the rest of the board; the run still ends red.
-      console.error(JSON.stringify({ event: 'pipeline_v2_error', issue: entry.number, message: error.message }));
-      errors.push({ issue: entry.number, message: error.message });
+      if (Array.isArray(error?.applied) && error.applied.length > 0) {
+        console.log(JSON.stringify({ event: 'pipeline_v2_applied', issue: entry.number, applied: error.applied, partial: true }));
+      }
+      console.error(JSON.stringify({ event: 'pipeline_v2_error', issue: entry.number, message: error?.message ?? String(error) }));
+      errors.push({ issue: entry.number, message: error?.message ?? String(error) });
     }
   }
   return { mode: runMode, issueCount: entries.length, wip, actions, errors };
