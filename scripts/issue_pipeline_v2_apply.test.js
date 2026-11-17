@@ -138,3 +138,29 @@ test('identity fails closed', async () => {
   assert.equal(writesAllowed('dry-run', ok), false);
   assert.equal(writesAllowed('on', { ok: false }), false);
 });
+
+test('a launch or reassign write keeps the Stage and Blocked the issue already holds', async () => {
+  // The issue-fields PATCH replaces the whole set; Attempts alone used to remove Stage.
+  for (const action of [
+    { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 1 },
+    { type: 'reassign', stage: 'Ready', agent: 'pawpet-claude', attempts: 1 },
+  ]) {
+    const { sent, restFn } = recorder();
+    const facts = { spec: { commentId: 55, assignedTo: 'pawpet-bot', timedOut: [] } };
+    await applyAction({
+      action,
+      ctx: ctx({ restFn, facts, parsed: { stage: 'Ready', blocked: 'stalled', attempts: 0 } }),
+    });
+    const patch = sent.filter((c) => c.path === '/repos/o/r/issues/7' && c.body?.issue_field_values).at(-1);
+    const values = patch.body.issue_field_values;
+    assert.deepEqual(values.map((v) => v.field_id).sort(), [1, 2, 3], action.type);
+    assert.equal(values.find((v) => v.field_id === 1).value, 'Ready', action.type);
+    assert.equal(values.find((v) => v.field_id === 2).value, 'stalled', action.type);
+  }
+});
+
+test('withCurrentValues: writes win, empty and zero current values are left out', () => {
+  const { withCurrentValues } = require('./issue_pipeline_v2_fields');
+  assert.deepEqual(withCurrentValues({ stage: 'Ready', blocked: '', attempts: 0 }, { stage: 'Done', attempts: 0 }), { stage: 'Done', attempts: 0 });
+  assert.deepEqual(withCurrentValues({ stage: '', blocked: '', attempts: 2 }, { blocked: 'stalled' }), { blocked: 'stalled', attempts: 2 });
+});

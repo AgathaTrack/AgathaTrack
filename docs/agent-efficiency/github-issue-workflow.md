@@ -74,6 +74,9 @@ This is a rule, not a permission: agent tokens can write org issue fields. **Boo
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
 From `on`, only the engine writes `Stage`. `Blocked` set means a human is needed; the engine never clears it.
 
+The issue-fields `PATCH` replaces an issue's whole value set, so every engine write sends the values the issue already holds
+(`withCurrentValues`); a write of `Attempts` alone would remove `Stage` and `Blocked`. Agents patching fields by hand do the same.
+
 **One writer per issue.** While `ISSUE_PIPELINE_V2=on` (within `ISSUE_PIPELINE_V2_LABEL` when it is set), the legacy
 merge, UAT and prod handlers and the Stage ↔ Status mirror skip the issues the engine owns. Left running they would
 move `Status` after the *first* merged PR, remove `busy` and reopen, and the mirror would copy that into `Stage`.

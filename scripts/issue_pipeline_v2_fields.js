@@ -90,6 +90,22 @@ function buildFieldWrites(fields, writes) {
 }
 
 /**
+ * The issue-fields PATCH replaces the issue's whole value set: a field left out of the payload is
+ * removed (a launch that wrote only Attempts wiped Stage). So every write carries the values the
+ * issue already holds. Keys in `writes` come first and win; empty or zero current values are
+ * skipped, which is the same as the field being unset.
+ */
+function withCurrentValues(parsed, writes) {
+  const merged = { ...writes };
+  for (const key of Object.keys(FIELD_NAMES)) {
+    if (!(key in merged) && parsed?.[key]) {
+      merged[key] = parsed[key];
+    }
+  }
+  return merged;
+}
+
+/**
  * Apply field writes to one issue. `dryRun` only logs, so `dry-run` mode never writes.
  * The engine never clears `Blocked`, so there is deliberately no clear operation.
  */
@@ -123,5 +139,6 @@ module.exports = {
   loadOrgFields,
   parseIssueFields,
   buildFieldWrites,
+  withCurrentValues,
   writeIssueFields,
 };

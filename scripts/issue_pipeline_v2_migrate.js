@@ -18,7 +18,7 @@
 const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/github-project-lib');
 const { canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadConfig } = require('./issue_pipeline_v2_config');
-const { loadOrgFields, parseIssueFields, writeIssueFields } = require('./issue_pipeline_v2_fields');
+const { loadOrgFields, parseIssueFields, withCurrentValues, writeIssueFields } = require('./issue_pipeline_v2_fields');
 const { checkEngineIdentity } = require('./issue_pipeline_v2_identity');
 
 const isControlIssue = (title) => /^(?:\[)?execute-plan\b/i.test(String(title || '').trim());
@@ -86,7 +86,7 @@ async function run({ owner, repo, projectsPat, projectId, statusFieldId, apply, 
     const entry = { issue: ref.number, from: { stage: parsed.stage, status: row.status, blocked: parsed.blocked }, writes, notes };
     if (Object.keys(writes).length > 0 && apply) {
       await (io.writeIssueFields || writeIssueFields)({
-        owner, repo, issueNumber: ref.number, token: projectsPat, fields, writes, dryRun: false,
+        owner, repo, issueNumber: ref.number, token: projectsPat, fields, writes: withCurrentValues(parsed, writes), dryRun: false,
       });
       entry.applied = true;
     }
