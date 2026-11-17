@@ -115,6 +115,8 @@ async function applyAction({ action: decided, ctx }) {
       let run = null;
       let failure = null;
       try {
+        // The launcher marks the issue `busy` before the handoff; the plan shows that request too.
+        calls.push({ method: 'POST', path: `${base}/labels`, body: { labels: ['busy'] } });
         run = ctx.dryRun ? { runId: 'dry-run', agentUrl: '' } : await ctx.launchFn({ agent: action.agent, method: action.method });
         calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
       } catch (error) {
@@ -139,6 +141,7 @@ async function applyAction({ action: decided, ctx }) {
           agent: action.agent,
           issueNumber: ctx.issueNumber,
           prNumbers: ctx.facts.delivery?.mergedPrNumbers,
+          mergeSha: ctx.facts.delivery?.lastMergeSha,
         }),
         'comment:intent-review',
       );

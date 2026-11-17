@@ -76,7 +76,15 @@ function deliveryMethod(body) {
  * Start one Cursor run for the issue. Reuses the existing launcher and prompt builder, so the
  * run is the same as an old-engine launch. `deps` is for tests.
  */
-async function launchIssue({ owner, repo, issue, token, apiKey, deps = {} }) {
+const METHOD_PROMPTS = {
+  PR: '',
+  'light-plan':
+    'Delivery method: light-plan. Deliver this issue with the procedure in `.cursor/skills/light-plan/SKILL.md` (integration branch, phase PRs, one release PR that `Refs` this issue).',
+  'execute-plan':
+    'Delivery method: execute-plan. Deliver this issue with the procedure in `.cursor/skills/execute-plan/SKILL.md` (a frozen v2 plan driven by `tick`).',
+};
+
+async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', deps = {} }) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
   const payloadLib = deps.payload || require('../.github/scripts/agent-payload-lib');
   const launcher = deps.launcher || require('../.github/scripts/launch-cursor-agent');
@@ -92,7 +100,7 @@ async function launchIssue({ owner, repo, issue, token, apiKey, deps = {} }) {
     { number: issue.number, url: issue.html_url, title: issue.title, body: issue.body || '', labels },
     repoUrl,
   );
-  const promptText = payloadLib.buildAgentPrompt(payload);
+  const promptText = [payloadLib.buildAgentPrompt(payload), METHOD_PROMPTS[method] || ''].filter(Boolean).join('\n\n');
 
   await lib.setLabels(owner, repo, issue.number, ['busy'], [], token);
   let launched;
@@ -117,6 +125,7 @@ async function launchIssue({ owner, repo, issue, token, apiKey, deps = {} }) {
 
 module.exports = {
   METHODS,
+  METHOD_PROMPTS,
   buildLaunchRecord,
   buildLaunchFailed,
   buildLaunchAcked,

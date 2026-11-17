@@ -149,18 +149,56 @@ test('runner: one failing issue does not stop the board, and two Ready issues re
         listIssueComments: async () => [],
         applyAction: async ({ action, ctx: c }) => {
           if (c.issueNumber === 1) throw new Error('boom');
-          return { applied: [action.type], calls: [] };
+          if (c.issueNumber === 2) return { applied: [`launch-failed:${action.agent}`], calls: [] };
+          return { applied: [`${action.type}:${action.agent}`], calls: [] };
         },
       },
     });
     assert.deepEqual(result.errors, [{ issue: 1, message: 'boom' }]);
     const types = result.actions.map((entry) => [entry.issue, entry.action.type, entry.action.reason]);
-    // wip limit is 2: issue 1 failed to apply (no slot taken), 2 and 3 launch, 4 queues
-    assert.deepEqual(types.map((t) => t[1]), ['launch', 'launch', 'launch', 'none']);
-    assert.equal(result.actions[3].action.reason, 'ready.queued');
+    // wip limit is 2: 1 failed to apply and 2's launch failed (neither takes a slot), 3 and 4 launch
+    assert.deepEqual(types.map((t) => t[1]), ['launch', 'launch', 'launch', 'launch']);
+    board.push({ issue: { number: 5, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } });
+    const third = await tick({
+      owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
+      io: {
+        config,
+        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
+        listProjectIssues: async () => board.slice(2),
+        getIssue: async (n) => ready(n),
+        listIssueComments: async () => [],
+        applyAction: async ({ action }) => ({ applied: [`${action.type}:${action.agent}`], calls: [] }),
+      },
+    });
+    assert.deepEqual(third.actions.map((entry) => entry.action.reason || entry.action.type), ['launch', 'launch', 'ready.queued']);
   } finally {
     console.error = origError;
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;
   }
+});
+
+test('launch prompt carries the delivery method; PR adds nothing', async () => {
+  const prompts = [];
+  const deps = {
+    safety: { preflightIssue: () => ({ ok: true }) },
+    payload: { buildAgentPayload: () => ({}), buildAgentPrompt: () => 'base' },
+    lib: { setLabels: async () => {} },
+    launcher: { launchAgent: async ({ promptText }) => { prompts.push(promptText); return { agent: { id: 'a' }, run: { id: 'r' } }; } },
+  };
+  const issue = { number: 7, title: 't', body: 'b', labels: [] };
+  for (const method of ['PR', 'light-plan', 'execute-plan']) {
+    await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', method, deps });
+  }
+  assert.equal(prompts[0], 'base');
+  assert.match(prompts[1], /light-plan\/SKILL\.md/);
+  assert.match(prompts[2], /execute-plan\/SKILL\.md/);
+});
+
+test('Ready with a busy issue and no launch record moves on; the dry-run plan shows the busy label', async () => {
+  const ready = { mode: 'on', onBoard: true, stage: 'Ready', now: 1e12, wip: 0, deliveryMethod: 'PR', launch: { busy: true, failures: 0 } };
+  assert.deepEqual([decide(ready, config).type, decide(ready, config).to], ['set-stage', 'In progress']);
+  const { ctx: c } = ctx({ dryRun: true });
+  const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 }, ctx: c });
+  assert.deepEqual(result.calls[0], { method: 'POST', path: '/repos/o/r/issues/7/labels', body: { labels: ['busy'] } });
 });

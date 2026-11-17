@@ -206,8 +206,10 @@ function backoffDelayMs(failures, config) {
 function decideReady(facts, config) {
   const launch = facts.launch || {};
   const failures = launch.failures || 0;
-  if (launch.runId && launch.busy) {
-    return setStage('In progress', 'ready.launched', { evidence: { runId: launch.runId } });
+  // `busy` is set by the launcher before the handoff, so it also covers a run whose record comment
+  // was lost: never launch again over an issue that is already busy.
+  if (launch.busy) {
+    return setStage('In progress', 'ready.launched', { evidence: { runId: launch.runId || null } });
   }
   if (launch.runId && facts.now - launch.startedAt < config.limits.ackWindowMin * MIN) {
     return none('ready.waiting-ack');
