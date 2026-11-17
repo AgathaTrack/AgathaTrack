@@ -1,8 +1,9 @@
 name: Issue pipeline v2
 
-# Run A of #2385: dry-run only. ISSUE_PIPELINE_V2 is its own switch (off | dry-run | on) and is
-# deliberately separate from ISSUE_PIPELINE, which controls the old engine. Default is off.
-# The runner never writes in this run; event triggers arrive with the review lane (P3).
+# Pipeline v2 (#2385). ISSUE_PIPELINE_V2 is its own switch (off | dry-run | on) and is deliberately
+# separate from ISSUE_PIPELINE, which controls the old engine. Default is off. dry-run logs the
+# decisions and the requests they would make; only `on`, with ENGINE_PAT belonging to a login in
+# .github/pipeline-agents.json `engine.logins`, writes.
 on:
   schedule:
     - cron: '11,41 * * * *'
@@ -39,9 +40,12 @@ jobs:
       - name: Tick pipeline v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_PROJECTS_PAT: ${{ secrets.GH_PROJECTS_PAT }}
+          # The v2 engine runs as its own account; the script reads this variable name.
+          GH_PROJECTS_PAT: ${{ secrets.ENGINE_PAT }}
           GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
+          cursor_api_key: ${{ secrets.cursor_api_key }}
+          EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
           ISSUE_PIPELINE_V2: ${{ vars.ISSUE_PIPELINE_V2 }}
           ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
         run: node scripts/issue_pipeline_v2.js
