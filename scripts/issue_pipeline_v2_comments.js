@@ -86,36 +86,58 @@ function deriveSpecFacts({ comments, reactions, config, engineLogins, editors })
 }
 
 /**
- * True when the last comment is from a human with write access (not a listed agent), so a
- * blocked issue should wake its stage agent.
+ * True when a human with write access commented after the last comment by a listed agent or the
+ * engine, so a blocked issue should wake its stage agent. Humans are write-access users who are
+ * neither listed agents, nor the engine identity, nor bots. There is no block timestamp in the
+ * data the engine reads, so the last agent or engine comment is the anchor; run B records which
+ * comment it already woke the agent for, so one reply wakes it once.
  */
 function humanCommentSinceBlock(comments, config) {
-  const last = [...(comments || [])].sort((a, b) => a.created_at.localeCompare(b.created_at)).pop();
-  if (!last) {
-    return false;
+  const agents = new Set(agentLogins(config));
+  const engine = new Set(config.engine?.logins || []);
+  const sorted = [...(comments || [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const isMachine = (comment) => agents.has(comment.user?.login) || engine.has(comment.user?.login);
+  let anchor = -1;
+  sorted.forEach((comment, index) => {
+    if (isMachine(comment)) {
+      anchor = index;
+    }
+  });
+  return sorted
+    .slice(anchor + 1)
+    .some((comment) => comment.user?.type !== 'Bot' && WRITE_ASSOCIATIONS.has(comment.author_association));
+}
+
+/**
+ * Read every page of a REST list. A page shorter than `perPage` is the last one; `maxPages`
+ * bounds a runaway (30 pages = 3000 items, far beyond any real issue).
+ */
+async function fetchAllPages({ path, token, restFn = rest, perPage = 100, maxPages = 30 }) {
+  const all = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = await restFn('GET', `${path}?per_page=${perPage}&page=${page}`, token);
+    all.push(...(batch || []));
+    if (!batch || batch.length < perPage) {
+      break;
+    }
   }
-  const author = last.user?.login;
-  return (
-    !agentLogins(config).includes(author) &&
-    last.user?.type !== 'Bot' &&
-    WRITE_ASSOCIATIONS.has(last.author_association)
-  );
+  return all;
 }
 
 async function listIssueComments({ owner, repo, issueNumber, token, restFn = rest }) {
-  return restFn(
-    'GET',
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments?per_page=100`,
+  return fetchAllPages({
+    path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`,
     token,
-  );
+    restFn,
+  });
 }
 
 async function listCommentReactions({ owner, repo, commentId, token, restFn = rest }) {
-  return restFn(
-    'GET',
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/comments/${commentId}/reactions?per_page=100`,
+  return fetchAllPages({
+    path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/comments/${commentId}/reactions`,
     token,
-  );
+    restFn,
+  });
 }
 
 module.exports = {
@@ -126,6 +148,7 @@ module.exports = {
   findSpecRequest,
   deriveSpecFacts,
   humanCommentSinceBlock,
+  fetchAllPages,
   listIssueComments,
   listCommentReactions,
 };

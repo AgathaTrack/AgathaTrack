@@ -4,30 +4,42 @@ const { graphql } = require('../.github/scripts/github-project-lib');
 
 /**
  * Body edit history. REST and the issue timeline record no body edits, so the editor of the last
- * body change comes from `userContentEdits` (#2385). Oldest first.
+ * body change comes from `userContentEdits` (#2385). The connection is paged backwards from the
+ * newest edit, so an issue with more than one page of edits is still read in full. Oldest first.
  * @returns {Promise<{ author: string|null, edits: Array<{ editor: string|null, editedAt: string }> }>}
  */
-async function fetchBodyEdits({ owner, repo, issueNumber, token, graphqlFn = graphql }) {
-  const data = await graphqlFn(
-    token,
-    `query($owner: String!, $repo: String!, $number: Int!) {
-      repository(owner: $owner, name: $repo) {
-        issue(number: $number) {
-          author { login }
-          userContentEdits(last: 50) { nodes { editedAt editor { login } } }
+async function fetchBodyEdits({ owner, repo, issueNumber, token, graphqlFn = graphql, maxPages = 20 }) {
+  const edits = [];
+  let author = null;
+  let before = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const data = await graphqlFn(
+      token,
+      `query($owner: String!, $repo: String!, $number: Int!, $before: String) {
+        repository(owner: $owner, name: $repo) {
+          issue(number: $number) {
+            author { login }
+            userContentEdits(last: 100, before: $before) {
+              pageInfo { hasPreviousPage startCursor }
+              nodes { editedAt editor { login } }
+            }
+          }
         }
-      }
-    }`,
-    { owner, repo, number: Number(issueNumber) },
-  );
-  const issue = data?.repository?.issue;
-  const nodes = issue?.userContentEdits?.nodes || [];
-  return {
-    author: issue?.author?.login || null,
-    edits: nodes
-      .map((node) => ({ editor: node.editor?.login || null, editedAt: node.editedAt }))
-      .sort((a, b) => a.editedAt.localeCompare(b.editedAt)),
-  };
+      }`,
+      { owner, repo, number: Number(issueNumber), before },
+    );
+    const issue = data?.repository?.issue;
+    author = author || issue?.author?.login || null;
+    const connection = issue?.userContentEdits;
+    for (const node of connection?.nodes || []) {
+      edits.push({ editor: node.editor?.login || null, editedAt: node.editedAt });
+    }
+    if (!connection?.pageInfo?.hasPreviousPage) {
+      break;
+    }
+    before = connection.pageInfo.startCursor;
+  }
+  return { author, edits: edits.sort((a, b) => a.editedAt.localeCompare(b.editedAt)) };
 }
 
 /** Who last edited an issue comment (null when it was never edited). */
