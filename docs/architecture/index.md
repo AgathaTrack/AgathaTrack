@@ -94,7 +94,7 @@ Product domains are documented under [/docs/domains/](/docs/domains/). Each row 
 
 One health entry as a care series: open occurrences, agenda row, occurrence screen, detail view, and server-confirmed completion. Programme: [`care-next-occurrence-c1a7`](../../.agents/plans/care-next-occurrence-c1a7.md) child F.
 
-**Persistence (2026-11-17):** PostgreSQL tables remain `health_entries` / `health_occurrences`; domain language is Care Item. Rule **D-CIE-045** in [care-item-evolution.md](/docs/domains/pet_care/features/care-item-evolution.md). Physical rename is deferred backlog ([#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)); [#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542) closed Option B.
+**Persistence (2026-11-17):** PostgreSQL tables remain `health_entries` / `health_occurrences`; domain language is Care Item. Wire/API/export names stay `health_*` (D-CIE-045). [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405) tracks an optional **table-only** rename; [#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542) closed Option B.
 
 | | Path |
 |---|------|
