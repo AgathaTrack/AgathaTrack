@@ -1,0 +1,133 @@
+'use strict';
+
+/**
+ * Pipeline v2 action executor (#2385 run B). `applyAction` turns one decision into REST calls.
+ * Every call goes through one `request` function: in a dry run it only records the call, so the
+ * planned requests are the same ones a live run would make. The caller decides live or dry from
+ * the mode and the engine identity check; nothing here reads the environment.
+ */
+
+const { rest } = require('../.github/scripts/github-project-lib');
+const { agentLogins } = require('./issue_pipeline_v2_config');
+const { buildFieldWrites } = require('./issue_pipeline_v2_fields');
+const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
+const { buildReviewRequest } = require('./issue_pipeline_v2_review');
+
+/**
+ * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
+ * and the display-only `Total N` counter. The counter is written even when the decision is
+ * `none`, so a stable issue's counter does not go stale.
+ */
+function buildWrites({ action, parsed, counters }) {
+  const writes = {};
+  if (action.type === 'set-stage') {
+    writes.stage = action.to;
+    writes.attempts = 0;
+  } else if (action.type === 'set-blocked') {
+    writes.blocked = action.reason;
+  } else if (
+    action.type === 'reassign' &&
+    Number.isFinite(action.attempts) &&
+    action.attempts !== parsed.attempts
+  ) {
+    writes.attempts = action.attempts;
+  }
+  return { ...writes, ...counters };
+}
+
+/**
+ * The doorbell: ring one agent by assigning it. Humans on the issue stay assigned, other agents
+ * do not, so exactly one agent holds the turn. The assignee is a notification; no decision reads it.
+ */
+function doorbellAssignees(current, agent, config) {
+  const agents = new Set(agentLogins(config));
+  const humans = (current || []).filter((login) => !agents.has(login));
+  return [...humans, agent];
+}
+
+function issuePath({ owner, repo, issueNumber }) {
+  return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`;
+}
+
+/**
+ * @param {object} args
+ * @param {object} args.action        a `decide()` result
+ * @param {object} args.ctx           { owner, repo, issueNumber, token, config, fields, parsed,
+ *                                      assignees, counters, facts, dryRun, restFn }
+ * @returns {Promise<{ applied: string[], calls: Array<{method: string, path: string, body?: object}> }>}
+ */
+async function applyAction({ action, ctx }) {
+  const calls = [];
+  const live = ctx.restFn || rest;
+  const request = async (method, path, body) => {
+    calls.push({ method, path, ...(body ? { body } : {}) });
+    return ctx.dryRun ? { id: 0 } : live(method, path, ctx.token, body);
+  };
+  const base = issuePath(ctx);
+  const applied = [];
+
+  const assign = async (agent) => {
+    await request('PATCH', base, { assignees: doorbellAssignees(ctx.assignees, agent, ctx.config) });
+    applied.push(`assign:${agent}`);
+  };
+  const comment = async (body, label) => {
+    await request('POST', `${base}/comments`, { body });
+    applied.push(label);
+  };
+  const editComment = async (id, body, label) => {
+    await request('PATCH', `/repos/${encodeURIComponent(ctx.owner)}/${encodeURIComponent(ctx.repo)}/issues/comments/${id}`, { body });
+    applied.push(label);
+  };
+
+  switch (action.type) {
+    case 'request-spec':
+      await comment(buildSpecRequest({ assigned: action.agent }), 'comment:spec-request');
+      await assign(action.agent);
+      break;
+    case 'request-review':
+      await comment(
+        buildReviewRequest({ hash: action.hash, assigned: action.agent }),
+        'comment:review-request',
+      );
+      await assign(action.agent);
+      break;
+    case 'reassign': {
+      const inReview = action.stage === 'In analysis';
+      const held = inReview ? ctx.facts.review : ctx.facts.spec;
+      const history = [...new Set([...(held?.timedOut || []), ...(held?.assignedTo ? [held.assignedTo] : [])])];
+      const body = inReview
+        ? buildReviewRequest({ hash: ctx.facts.review.requestedHash, assigned: action.agent, history })
+        : buildSpecRequest({ assigned: action.agent, history });
+      await editComment(held.commentId, body, `edit:${inReview ? 'review' : 'spec'}-request`);
+      await assign(action.agent);
+      break;
+    }
+    case 'wake-stage-agent':
+      await comment(buildWake({ commentId: action.commentId, agent: action.agent }), 'comment:wake');
+      await assign(action.agent);
+      break;
+    case 'set-stage':
+    case 'set-blocked':
+    case 'none':
+      break;
+    default:
+      return { applied: [`unsupported:${action.type}`], calls };
+  }
+
+  const writes = buildWrites({ action, parsed: ctx.parsed, counters: ctx.counters || {} });
+  const patch = {};
+  if (Object.keys(writes).length > 0) {
+    patch.issue_field_values = buildFieldWrites(ctx.fields, writes);
+  }
+  if (action.type === 'set-stage' && action.close) {
+    patch.state = 'closed';
+    patch.state_reason = 'completed';
+  }
+  if (Object.keys(patch).length > 0) {
+    await request('PATCH', base, patch);
+    applied.push(`fields:${Object.keys(writes).join(',') || 'state'}`);
+  }
+  return { applied, calls };
+}
+
+module.exports = { buildWrites, doorbellAssignees, applyAction };

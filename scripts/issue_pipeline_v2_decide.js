@@ -55,6 +55,13 @@ function canonicalStage(raw) {
   return STAGES.find((stage) => stage.toLowerCase() === text) || null;
 }
 
+/** The agent a wake rings: the one holding the stage's request, else the least recently used. */
+function wakeAgent(facts, stage, config) {
+  const holder =
+    stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
+  return holder || pickAgent(agentLogins(config), facts);
+}
+
 function none(reason) {
   return { type: 'none', reason };
 }
@@ -290,8 +297,17 @@ function decide(facts, config) {
     return none('unknown-stage');
   }
   if (facts.blocked) {
-    // Only a human comment wakes a blocked issue; the engine never clears the flag.
-    return facts.humanCommentSinceBlock ? { type: 'wake-stage-agent', stage, row: 'blocked.wake' } : none('blocked');
+    // Only a human comment wakes a blocked issue, once per comment; the engine never clears the flag.
+    const answered = (facts.wokenFor || []).includes(facts.humanCommentId);
+    return facts.humanCommentSinceBlock && !answered
+      ? {
+          type: 'wake-stage-agent',
+          stage,
+          agent: wakeAgent(facts, stage, config),
+          commentId: facts.humanCommentId,
+          row: 'blocked.wake',
+        }
+      : none(answered ? 'blocked.already-woken' : 'blocked');
   }
   if (!String(facts.stage || '').trim() && facts.followUp) {
     return facts.followUp.depth <= config.limits.followUpMaxDepth

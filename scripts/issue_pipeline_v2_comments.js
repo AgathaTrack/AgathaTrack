@@ -92,7 +92,7 @@ function deriveSpecFacts({ comments, reactions, config, engineLogins, editors })
  * data the engine reads, so the last agent or engine comment is the anchor; run B records which
  * comment it already woke the agent for, so one reply wakes it once.
  */
-function humanCommentSinceBlock(comments, config) {
+function humanCommentsSinceBlock(comments, config) {
   const agents = new Set(agentLogins(config));
   const engine = new Set(config.engine?.logins || []);
   const sorted = [...(comments || [])].sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -105,7 +105,41 @@ function humanCommentSinceBlock(comments, config) {
   });
   return sorted
     .slice(anchor + 1)
-    .some((comment) => comment.user?.type !== 'Bot' && WRITE_ASSOCIATIONS.has(comment.author_association));
+    .filter((comment) => comment.user?.type !== 'Bot' && WRITE_ASSOCIATIONS.has(comment.author_association));
+}
+
+function humanCommentSinceBlock(comments, config) {
+  return humanCommentsSinceBlock(comments, config).length > 0;
+}
+
+/** The newest qualifying human comment (what a wake answers), or null. */
+function latestHumanComment(comments, config) {
+  return humanCommentsSinceBlock(comments, config).pop() || null;
+}
+
+const WAKE = 'v2:wake';
+
+/** The engine's "wake" note; the marker records which human comment it answered. */
+function buildWake({ commentId, agent }) {
+  return [
+    `<!-- ${WAKE} comment=${commentId} -->`,
+    `@${agent}: the owner or a maintainer replied above. Re-read the issue and continue; you may clear \`Blocked\` once you have what you need.`,
+  ].join('\n');
+}
+
+/** Ids of human comments the engine already woke an agent for. */
+function wokenCommentIds(comments, engineLogins) {
+  const engine = new Set(engineLogins || []);
+  const ids = [];
+  for (const comment of comments || []) {
+    const match = engine.has(comment.user?.login)
+      ? new RegExp(`<!--\\s*${WAKE}\\s+comment=(\\d+)\\s*-->`).exec(comment.body || '')
+      : null;
+    if (match) {
+      ids.push(Number(match[1]));
+    }
+  }
+  return ids;
 }
 
 /**
@@ -148,6 +182,10 @@ module.exports = {
   findSpecRequest,
   deriveSpecFacts,
   humanCommentSinceBlock,
+  latestHumanComment,
+  buildWake,
+  wokenCommentIds,
+  WAKE,
   fetchAllPages,
   listIssueComments,
   listCommentReactions,
