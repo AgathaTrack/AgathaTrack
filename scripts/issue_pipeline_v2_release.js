@@ -121,6 +121,8 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
       lastMergeSha: merges.at(-1)?.mergeSha || null,
       lastActivityAt: times.length > 0 ? Math.max(...times) : null,
       resumed: (comments || []).some((c) => markerNote(c, engine, RESUME)),
+      // Only a run the engine started is the engine's to resume; a hand-driven issue has no record.
+      engineLaunched: (comments || []).some((c) => markerNote(c, engine, 'v2:launch')),
     },
     intentReview: { requested: intentReviewRequested(comments, engine, merges.at(-1)?.mergeSha) },
     prAuthors: [...new Set(prs.filter((pr) => pr.merged).map((pr) => pr.author).filter(Boolean))],

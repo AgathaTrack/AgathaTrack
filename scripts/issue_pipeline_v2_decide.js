@@ -257,6 +257,9 @@ function decideInProgress(facts, config) {
     delivery.lastActivityAt != null &&
     facts.now - delivery.lastActivityAt >= config.limits.stalledInactivityHours * HOUR;
   if (!delivery.busy || inactive) {
+    if (!delivery.engineLaunched) {
+      return none('progress.hand-driven'); // not started by the engine, so not the engine's to restart
+    }
     if (delivery.resumed) {
       return setBlocked('stalled', 'progress.stalled');
     }

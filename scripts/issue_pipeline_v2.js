@@ -34,6 +34,10 @@ const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_grap
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
 
+function now0() {
+  return Date.now();
+}
+
 function mode() {
   return resolvePipelineMode(process.env.ISSUE_PIPELINE_V2);
 }
@@ -232,6 +236,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     });
   }
   let wip = countWip(entries);
+  // Least recently used, within this tick: each agent rung is remembered so the next pick moves on.
+  const lastUsed = {};
+  let clock = now0();
+  const scopeLabel = io.scopeLabel !== undefined ? io.scopeLabel : process.env.ISSUE_PIPELINE_V2_LABEL || '';
   const now = Date.now();
   const actions = [];
   const errors = [];
@@ -249,16 +257,22 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           now,
           runMode,
         }),
+        agentLastUsed: { ...lastUsed },
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
       };
       if (!String(entry.parsed.stage || '').trim() && parseFollowUp(entry.issue.body)) {
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
+      if (action.agent) {
+        clock += 1;
+        lastUsed[action.agent] = clock;
+      }
+      const inScope = !scopeLabel || entry.labels.includes(scopeLabel);
       const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });
       console.log(
-        JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live, issue: entry.number, action, counters }),
+        JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action, counters }),
       );
       const result = await (io.applyAction || applyAction)({
         action,
@@ -273,7 +287,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           assignees: (entry.issue.assignees || []).map((a) => a.login),
           counters,
           facts,
-          dryRun: !live,
+          // With a scope label, only labelled issues are written to; the rest are still decided and logged.
+          dryRun: !live || !inScope,
           restFn: io.restFn,
           launchFn:
             io.launchFn ||
