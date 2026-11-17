@@ -497,6 +497,7 @@ Opened from a picker, the flow is replaced by `QuickAddPersonSheet` and returns 
 | R-12 | Only the four migrations in §3.3 are pre-approved; numbers are assigned when the landing PR opens ([parallel-programmes §5.5](/docs/agent-efficiency/parallel-programmes.md)); CARE's `083_care_occurrence_model` lands first. Any other schema or data change halts the plan (`escalation`) |
 | R-13 | Architecture tests (server and Flutter) are merge-blocking guards for I2, I6 and the Flutter façade rule |
 | R-14 | Contact photo upload is out of scope. Avatars use the linked-account photo when available, otherwise a monogram |
+| R-01-SUNSET | Vet sunset ([#1653](https://github.com/AgathaTrack/AgathaTrack/issues/1653)): web soak — R-01b rejects `vetId`/`vet_id` writes 7d after R-01a prod (no `MIN_CLIENT_BUILD`/426 v1); custody `vet` from `primary_vet`; keep `legacy_vet_id`; sequence R-01a→b→c; Backlog until To do; R-01c needs migration PR owner approval |
 
 ---
 
