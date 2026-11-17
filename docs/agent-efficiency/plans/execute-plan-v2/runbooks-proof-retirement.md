@@ -148,9 +148,12 @@ Keep repository-level copies of moved secrets until the #1941 PR is merged and v
   `<!-- execute-plan-blocked: … -->` marker from the open phase PR (the ladder still treats them
   as a stop signal until cleared).
   Scope stays the same; time and budgets restart from that comment. Changing the plan's **goal** means a new plan.
-- **Out-of-scope fix the plan needs** (scope stop or `ci-budget` naming scope violations): open an
-  ordinary PR **into `main`** (not integration; `execute-plan-scope` is red `unsupported` on integration
-  targets), body `Unblocks: plan <plan_id> phase <n>` for the audit trail, merge it, then sync integration.
+- **Out-of-scope fix the plan needs** (scope stop or `ci-budget` naming scope violations):
+  - **Preferred (integration):** branch `cursor/<plan_id>-support-<phase>-<n>` → integration, body line
+    `Unblocks: plan <plan_id> phase <n>` (enforced). At most one open support PR per phase; merged count
+    bounded by `support_merges_per_phase` in the plan snapshot (default 3).
+  - **Legacy (main):** ordinary PR **into `main`**, same `Unblocks:` line for audit only; merge, sync integration.
+    Use when the fix must land on `main` first or until the integration route is retired after proof use.
   Release PRs treat paths identical to `main` as no-ops (contracts §3.3a). Until merged, hold the phase PR with
   `execute-plan-hold` if a worker would otherwise relaunch.
 - **Revoke**: add label `autonomous-revoked` or comment `revoke-autonomous <plan_id>`. Auto-merge

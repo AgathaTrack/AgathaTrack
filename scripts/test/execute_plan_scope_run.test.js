@@ -62,7 +62,14 @@ function planComments(extra = []) {
   return [APPROVE, ackComment(APPROVE.id), statusComment(), ...extra];
 }
 
-function setup({ issue = CONTROL_ISSUE, comments = planComments(), files = [], extra = {}, prAuthor = 'pawpet-bot' } = {}) {
+function setup({
+  issue = CONTROL_ISSUE,
+  comments = planComments(),
+  files = [],
+  extra = {},
+  prAuthor = 'pawpet-bot',
+  prBody = '',
+} = {}) {
   const routes = {
     ...workflowRunRoute(REPO),
     [ISSUES_KEY]: { body: [issue] },
@@ -70,7 +77,7 @@ function setup({ issue = CONTROL_ISSUE, comments = planComments(), files = [], e
     [`GET ${R}/issues/77/comments?per_page=100`]: { body: comments },
     [`GET ${R}/contents/.agents/plans/${PLAN}.snapshot.json?ref=${INIT_SHA}`]: file(SNAP_JSON),
     [`GET ${R}/contents/.agents/plans/${PLAN}.md?ref=${INIT_SHA}`]: file(PLAN_MD),
-    [`GET ${R}/pulls/5`]: { body: { user: { login: prAuthor }, head: { sha: phasePr.headSha, ref: phasePr.headRef } } },
+    [`GET ${R}/pulls/5`]: { body: { user: { login: prAuthor }, body: prBody, head: { sha: phasePr.headSha, ref: phasePr.headRef } } },
     [`GET ${R}/pulls/5/files?per_page=100`]: { body: files.map((filename) => ({ filename })) },
     [`GET ${R}/pulls/5/reviews?per_page=100`]: { body: [] },
     ...extra,
@@ -173,8 +180,41 @@ test('cross-plan head into integration → unsupported with remediation summary'
   const { client } = setup({ files: ['server/bin/server.js'] });
   const res = await runScopeCheck(client, { ...phasePr, headRef: 'cursor/other-plan-p9' });
   assert.deepEqual([res.conclusion, res.title, res.planId], ['failure', 'unsupported', PLAN]);
-  assert.match(res.summary, /main/);
+  assert.match(res.summary, /support/);
   assert.doesNotMatch(res.summary, /No violations/);
+});
+
+test('support PR without control issue → failure unblocks (fail closed)', async () => {
+  const { client } = setup({ extra: { [ISSUES_KEY]: { body: [] } } });
+  const res = await runScopeCheck(client, {
+    ...phasePr,
+    headRef: `cursor/${PLAN}-support-1-1`,
+    baseRef: INTEGRATION,
+  });
+  assert.deepEqual([res.conclusion, res.title, res.planId], ['failure', 'unblocks', PLAN]);
+});
+
+test('support PR missing Unblocks → failure unblocks', async () => {
+  const { client } = setup({ files: ['server/bin/server.js'] });
+  const res = await runScopeCheck(client, {
+    ...phasePr,
+    headRef: `cursor/${PLAN}-support-1-1`,
+    baseRef: INTEGRATION,
+  });
+  assert.deepEqual([res.conclusion, res.title], ['failure', 'unblocks']);
+});
+
+test('support PR in scope with Unblocks → success', async () => {
+  const { client } = setup({
+    files: ['server/bin/server.js'],
+    prBody: `Unblocks: plan ${PLAN} phase 1\n`,
+  });
+  const res = await runScopeCheck(client, {
+    ...phasePr,
+    headRef: `cursor/${PLAN}-support-1-1`,
+    baseRef: INTEGRATION,
+  });
+  assert.deepEqual([res.conclusion, res.title, res.planId], ['success', 'ok', PLAN]);
 });
 
 test('phase PR unclassified → failure, summary lists the file', async () => {

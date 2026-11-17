@@ -110,8 +110,50 @@ function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const SUPPORT_HEAD_RE = /^cursor\/([a-z0-9][a-z0-9-]{2,48})-support-(\d+)-(\d+)$/;
+const UNBLOCKS_LINE_RE = /^Unblocks:\s*plan\s+([a-z0-9][a-z0-9-]{2,48})\s+phase\s+(\d+)\s*$/;
+
+/** @returns {{ planId: string, phaseId: string, sequence: string }|null} */
+function parseSupportHeadRef(headRef) {
+  const m = SUPPORT_HEAD_RE.exec(String(headRef || ''));
+  if (!m) return null;
+  return { planId: m[1], phaseId: m[2], sequence: m[3] };
+}
+
+/** @returns {{ ok: true, planId: string, phaseId: string }|{ ok: false, reason: 'missing'|'duplicate'|'invalid' }} */
+function parseUnblocksFromBody(body) {
+  const matches = [];
+  for (const line of String(body || '').split('\n')) {
+    const m = UNBLOCKS_LINE_RE.exec(line.trim());
+    if (m) matches.push({ planId: m[1], phaseId: m[2] });
+  }
+  if (matches.length === 0) return { ok: false, reason: 'missing' };
+  if (matches.length > 1) return { ok: false, reason: 'duplicate' };
+  return { ok: true, planId: matches[0].planId, phaseId: matches[0].phaseId };
+}
+
 /**
- * @returns {{ category: 'phase'|'sync'|'sync-resolve'|'release'|'remedial'|'unsupported'|null, phaseId: string|null }}
+ * @returns {string|null} human-readable failure, or null when the support PR is linked correctly
+ */
+function validateSupportLinkage({ body, snapshot, headRef, phaseId }) {
+  const head = parseSupportHeadRef(headRef);
+  if (!head) return 'head ref is not a support branch';
+  if (!snapshot || snapshot.plan_id !== head.planId) return `branch plan id ${head.planId} does not match snapshot`;
+  if (String(phaseId) !== head.phaseId) return `branch phase ${head.phaseId} does not match category`;
+  const phases = Array.isArray(snapshot.phases) ? snapshot.phases : [];
+  if (!phases.some((p) => String(p.id) === String(head.phaseId))) return `phase ${head.phaseId} is not in the approved snapshot`;
+  const parsed = parseUnblocksFromBody(body);
+  if (!parsed.ok) {
+    if (parsed.reason === 'missing') return 'PR body must contain exactly one Unblocks: plan <id> phase <n> line';
+    return 'PR body must not contain multiple Unblocks: lines';
+  }
+  if (parsed.planId !== snapshot.plan_id) return `Unblocks plan ${parsed.planId} does not match snapshot`;
+  if (String(parsed.phaseId) !== String(head.phaseId)) return `Unblocks phase ${parsed.phaseId} does not match branch phase ${head.phaseId}`;
+  return null;
+}
+
+/**
+ * @returns {{ category: 'phase'|'sync'|'sync-resolve'|'release'|'remedial'|'support'|'unsupported'|null, phaseId: string|null }}
  */
 function categorizePull({ head_ref, base_ref }, snapshot) {
   const none = { category: null, phaseId: null };
@@ -127,6 +169,8 @@ function categorizePull({ head_ref, base_ref }, snapshot) {
     if (new RegExp(`^cursor/${id}-sync-\\d+$`).test(head_ref)) {
       return { category: 'sync-resolve', phaseId: null };
     }
+    const support = new RegExp(`^cursor/${id}-support-(\\d+)-\\d+$`).exec(head_ref);
+    if (support) return { category: 'support', phaseId: support[1] };
     return { category: 'unsupported', phaseId: null };
   }
   if (base_ref === 'main') {
@@ -144,7 +188,7 @@ function categorizePull({ head_ref, base_ref }, snapshot) {
  */
 function scopePhases(snapshot, category, phaseId) {
   const phases = Array.isArray(snapshot && snapshot.phases) ? snapshot.phases : [];
-  if (category === 'phase') return phases.filter((p) => String(p.id) === String(phaseId));
+  if (category === 'phase' || category === 'support') return phases.filter((p) => String(p.id) === String(phaseId));
   return phases;
 }
 
@@ -188,7 +232,7 @@ function classifyPath(file, { snapshot, category, phaseId }) {
   // Phase PRs: that phase's forbidden_paths beat its allowed_paths. Release / remedial /
   // sync-resolve: union of allowed_paths from every phase wins over another phase's ban
   // (e.g. phase 1 adds a migration, phase 2 forbids migrations — release must still pass).
-  if (category === 'phase') {
+  if (category === 'phase' || category === 'support') {
     if (matchesAny(file, forbidden)) return verdict('forbidden');
     if (matchesAny(file, allowed)) return verdict('allowed');
   } else if (matchesAny(file, allowed)) {
@@ -228,7 +272,7 @@ function isAdvisoryUnclassifiedFile(file) {
  * @returns {{ conclusion: 'success'|'failure', title: string, violations: {file:string, reason:string}[], companionsUsed: string[], advisoryUnclassified?: string[], ownerApprovedForbidden?: string[], scopeAckReviewId?: number }}
  */
 function evaluateDiff({ files, snapshot, category, phaseId, ownPlanFilesVerified, stopped, unchangedOnMain, scopeAckReview }) {
-  if (stopped && stopped.stopped && category !== 'sync-resolve' && category !== 'remedial') {
+  if (stopped && stopped.stopped && category !== 'sync-resolve' && category !== 'remedial' && category !== 'support') {
     return { conclusion: 'failure', title: 'plan-stopped', violations: [], companionsUsed: [] };
   }
   if (category == null || category === 'sync') {
@@ -312,4 +356,7 @@ module.exports = {
   classifyPath,
   evaluateDiff,
   ownPlanFiles,
+  parseSupportHeadRef,
+  parseUnblocksFromBody,
+  validateSupportLinkage,
 };

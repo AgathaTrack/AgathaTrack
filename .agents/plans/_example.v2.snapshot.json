@@ -17,6 +17,7 @@
       "launches_per_phase": 15,
       "remedial_rounds": 6,
       "sync_attempts": 5,
+      "support_merges_per_phase": 3,
       "daily_launches": 80
     }
   },
@@ -57,5 +58,5 @@
       ]
     }
   ],
-  "approval_hash": "sha256:16bd9eec8d2c794a964b8d6b3e939b6896348e9052dd83941d6af0e46f6f0671"
+  "approval_hash": "sha256:1c4b1ed28c391c553772e6542f4d3926d6f8ea2066754d6fddc0fad86261f0c4"
 }

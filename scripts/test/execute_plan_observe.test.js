@@ -258,6 +258,7 @@ test('observe fills every Observations field (all phases pending, then a phase P
   assert.deepEqual(obs.sync, { open_pr: null, resolve_pr: null, resolve_prs_since_epoch: 1 });
   assert.deepEqual(obs.release, { pr: null });
   assert.deepEqual(obs.remedial, { open_pr: null, merged_since_epoch: 1 });
+  assert.deepEqual(obs.support, { open_by_phase: { 1: 0 }, merged_by_phase: { 1: 0 } });
   assert.equal(obs.uat, null);
 });
 

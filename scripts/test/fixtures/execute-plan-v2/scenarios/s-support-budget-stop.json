@@ -1,0 +1,22 @@
+{
+  "name": "support merges exhausted → ci-budget stop",
+  "rule": "D1",
+  "snapshot_patch": {},
+  "observations_patch": {
+    "support": {
+      "open_by_phase": { "1": 0, "2": 0 },
+      "merged_by_phase": { "1": 3, "2": 0 }
+    }
+  },
+  "opts": {
+    "actor": "driver",
+    "lease": null
+  },
+  "expected": {
+    "launch": false,
+    "stop": "ci-budget",
+    "state": "stopped",
+    "actor": "driver",
+    "kind": "enforce-stop"
+  }
+}

@@ -116,7 +116,7 @@ that call this module are WP7a, not here.
 const PROTECTED_PATHS            // array of globs, exactly the list in rule 3
 const FIXED_COMPANIONS           // array of globs, rule 7
 const EXCEPTION_GLOBS            // { tests: [...], docs: [...] }, rule 6
-/** @returns {{ category: 'phase'|'sync'|'sync-resolve'|'release'|'remedial'|null, phaseId: string|null }} */
+/** @returns {{ category: 'phase'|'sync'|'sync-resolve'|'release'|'remedial'|'support'|'unsupported'|null, phaseId: string|null }} */
 function categorizePull({ head_ref, base_ref }, snapshot)
 /** @returns {{ file, verdict: 'own-plan-file'|'protected'|'forbidden'|'allowed'|'exception:tests'|'exception:docs'|'companion'|'unclassified' }} */
 function classifyPath(file, { snapshot, category, phaseId })
@@ -127,9 +127,9 @@ function evaluateDiff(args)
 
 **`categorizePull`** (`<id>` = `snapshot.plan_id`, `I` = `snapshot.integration_branch`):
 `cursor/<id>-p<n>` → `I` ⇒ `phase` (phaseId `n`); `main` → `I` ⇒ `sync`; `cursor/<id>-sync-<n>` → `I` ⇒
-`sync-resolve`; `I` → `main` ⇒ `release`; `cursor/<id>-remedial-<n>` → `main` ⇒ `remedial`;
-anything else targeting `I` with a head other than `cursor/<id>-p<n>`, `main`, or `cursor/<id>-sync-<n>` ⇒
-`unsupported` (fail closed; side PRs into `main` per runbooks §7.5);
+`sync-resolve`; `cursor/<id>-support-<phase>-<n>` → `I` ⇒ `support` (phaseId = phase); `I` → `main` ⇒ `release`;
+`cursor/<id>-remedial-<n>` → `main` ⇒ `remedial`;
+anything else targeting `I` with an unrecognised head ⇒ `unsupported` (fail closed; legacy side PRs into `main` per runbooks §7.5);
 anything else ⇒ `null`.
 
 **`evaluateDiff` rules** (globs via `globToRegExp` from `scripts/lib/execute_plan_schema.js:72`; **no brace expansion** — list every glob separately):

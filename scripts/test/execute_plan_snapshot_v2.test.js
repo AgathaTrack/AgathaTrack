@@ -125,7 +125,20 @@ test('snapshot caps: raising a budget rejected', () => {
 });
 
 test('snapshot caps: lowering accepted', () => {
-  const s = rehash({ ...build(), settings: { ...build().settings, budgets: { ci_per_phase: 1, launches_per_phase: 1, remedial_rounds: 1, sync_attempts: 1, daily_launches: 1 } } });
+  const s = rehash({
+    ...build(),
+    settings: {
+      ...build().settings,
+      budgets: {
+        ci_per_phase: 1,
+        launches_per_phase: 1,
+        remedial_rounds: 1,
+        sync_attempts: 1,
+        support_merges_per_phase: 1,
+        daily_launches: 1,
+      },
+    },
+  });
   validateSnapshotV2(s, { planMarkdown: PLAN_MD });
 });
 

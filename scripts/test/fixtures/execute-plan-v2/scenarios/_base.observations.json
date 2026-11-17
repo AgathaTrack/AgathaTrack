@@ -53,5 +53,9 @@
     "open_pr": null,
     "merged_since_epoch": 0
   },
+  "support": {
+    "open_by_phase": { "1": 0, "2": 0 },
+    "merged_by_phase": { "1": 0, "2": 0 }
+  },
   "uat": null
 }

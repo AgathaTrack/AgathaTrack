@@ -21,7 +21,14 @@ const TOP_KEYS = [
   'protected_paths_version', 'phases', 'approval_hash',
 ];
 const OPTIONAL_SNAPSHOT_KEYS = ['source_issue'];
-const BUDGET_KEYS = ['ci_per_phase', 'launches_per_phase', 'remedial_rounds', 'sync_attempts', 'daily_launches'];
+const BUDGET_KEYS = [
+  'ci_per_phase',
+  'launches_per_phase',
+  'remedial_rounds',
+  'sync_attempts',
+  'support_merges_per_phase',
+  'daily_launches',
+];
 const PHASE_EXCEPTIONS = new Set(['tests', 'docs']);
 const FORBIDDEN_HEADINGS = new Set(['contract', 'rules', 'process']);
 
