@@ -3,7 +3,7 @@ title: UAT live operations runbook
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-08-22
+last_updated: 2026-11-17
 tags: [e2e, uat, runbook]
 ---
 # UAT live E2E & deploy operations runbook
@@ -11,6 +11,8 @@ tags: [e2e, uat, runbook]
 Institutional knowledge from UAT `@smoke` / deploy hardening (July 2026). Use this to **triage failures fast** and **avoid reintroducing** the same classes of bug.
 
 **Related:** [uat-backend-node-modules-runbook.md](../pipelines/uat-backend-node-modules-runbook.md) · [e2e-navigation-contract.md](../e2e-navigation-contract.md) · [e2e/README.md](../../e2e/README.md) · **[uat-waf-queue-lessons.md](./uat-waf-queue-lessons.md)** (Jul 2026 incident chain)
+
+**Care occurrences (R11):** after a deploy that ships care DB changes, confirm SSH migrations succeeded in the deploy log before trusting live UAT care data, then follow [care-tick.md](../ops/care-tick.md) for reset and cron order (migration **083** → reset → host tick). Operational sign-off: [AgathaTrack#1546](https://github.com/AgathaTrack/AgathaTrack/issues/1546).
 
 ---
 

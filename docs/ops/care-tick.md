@@ -3,7 +3,7 @@ title: Care tick — host cron runbook
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-10-05
+last_updated: 2026-11-17
 tags: [ops, cron, care, occurrences]
 ---
 # Care tick — host cron runbook
@@ -140,6 +140,18 @@ node scripts/care/repair_occurrences.js --dry-run
 Full rules: [care-item-evolution.md](../domains/pet_care/features/care-item-evolution.md) (Remediation — not recorded stale open) and CSM D-CSM-023.
 
 When `docs/ops/prod-backup-restore-plan.md` Step 3 (cron-as-code) lands, move these lines into its managed `# BEGIN agatha` / `# END agatha` block and delete the manual entries.
+
+## R11 operational verification checklist (UAT)
+
+Tracked on [DEBT-OPS-R11 (#1546)](https://github.com/AgathaTrack/AgathaTrack/issues/1546). Paste evidence on that issue before closing; merging the docs PR alone does not complete R11.
+
+| WP | What | Evidence to attach on #1546 |
+|----|------|------------------------------|
+| **WP1** | After a `main` deploy: **Deploy UAT** SSH migrate + **UAT post-deploy smoke** job green (required Tier 2 gate; not optional **UAT live E2E**, which is advisory) | `deploy-uat.yml` Actions run URL; migration log (no ownership errors); **UAT post-deploy smoke** job link |
+| **WP2** | Cron every 15 minutes on UAT backend | One-shot `care_tick.js` output; cPanel cron line; after **30–45 minutes**, `tail` of `~/logs/care_tick_uat.log` showing at least one scheduled cron line (not only the install-time manual run) |
+| **WP3** | Post-reset data health | `repair_occurrences.js --dry-run` → **0 violations** (paste full summary line) |
+
+Order: deploy with migration **083** → **UAT post-deploy smoke** green → **reset** per [UAT reset](#uat-reset) → install cron → WP2/WP3 checks. Optional: advisory **UAT live E2E** on the same promote path ([uat-deploy-tiers.md](../e2e/uat-deploy-tiers.md)). Do not enable production cron until the [production reset](#production-reset-one-off-2026-10) / empty-DB policy in this doc applies to that host.
 
 ## Related
 

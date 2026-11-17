@@ -242,7 +242,7 @@
 | DEBT-D-FORM | Close when B1–B4 done | [#1543](https://github.com/KanopeeKa/AgathaCheck/issues/1543) |
 | DEBT-PRIV-DROP | Track until D1 merged | [#1544](https://github.com/KanopeeKa/AgathaCheck/issues/1544) |
 | DEBT-ARCH-CYCLE | Until C1 resolved | [#1545](https://github.com/KanopeeKa/AgathaCheck/issues/1545) |
-| DEBT-OPS-R11 | UAT live / cron / reset | [#1546](https://github.com/KanopeeKa/AgathaCheck/issues/1546) |
+| DEBT-OPS-R11 | UAT live / cron / reset | [#1546](https://github.com/AgathaTrack/AgathaTrack/issues/1546) |
 | DEBT-DOC-STALE | Stale compat-route docs | [#1547](https://github.com/KanopeeKa/AgathaCheck/issues/1547) |
 | DEBT-1476 | Occurrence detail decideDone context | [#1476](https://github.com/KanopeeKa/AgathaCheck/issues/1476) (open after GOV repro) |
 
