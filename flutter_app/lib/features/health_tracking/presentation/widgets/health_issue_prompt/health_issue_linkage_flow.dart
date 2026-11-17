@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../../core/utils/calendar_date.dart';
 import '../../../../../l10n/app_localizations.dart';
 import '../../../../care_taxonomy/care_taxonomy.dart';
-import '../../../domain/entities/health_entry.dart';
 import '../../../domain/entities/health_issue.dart';
 import '../../controllers/care_schedule_controller.dart';
 import '../../providers/health_issue_providers.dart';
@@ -44,48 +42,18 @@ class HealthIssueLinkageFlow {
     );
   }
 
-  static Future<void> maybePromptAfterPlannedVetCompletion(
-    BuildContext context,
-    WidgetRef ref,
-    HealthEntry entry,
-  ) async {
-    if (!shouldPromptPlannedVetCompletion(
-      careSetting: entry.careSetting ?? CareSetting.other,
-      carePlanning: entry.carePlanning ?? CarePlanningMode.planned,
-      healthIssueId: entry.healthIssueId,
-    )) {
-      return;
-    }
-
-    await _runPrompt(
-      context,
-      ref,
-      petId: entry.petId,
-      entryId: entry.id,
-      prompt: showPlannedVetCompletionHealthIssuePrompt,
-      onPlanNextVisit: () {
-        if (!context.mounted) return;
-        context.push('/pet/${entry.petId}/health/add');
-      },
-    );
-  }
-
   static Future<void> _runPrompt(
     BuildContext context,
     WidgetRef ref, {
     required String petId,
     required String entryId,
     required Future<VetHealthIssuePromptChoice?> Function(BuildContext) prompt,
-    VoidCallback? onPlanNextVisit,
   }) async {
     final choice = await prompt(context);
     if (!context.mounted || choice == null) return;
 
     switch (choice) {
       case VetHealthIssuePromptChoice.dismiss:
-        return;
-      case VetHealthIssuePromptChoice.planNextVisit:
-        onPlanNextVisit?.call();
         return;
       case VetHealthIssuePromptChoice.linkExisting:
         await _linkExistingIssue(context, ref, petId: petId, entryId: entryId);

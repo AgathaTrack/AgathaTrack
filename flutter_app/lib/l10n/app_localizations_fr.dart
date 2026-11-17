@@ -2009,16 +2009,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get vetHealthIssuePromptNotRelated => 'Sans lien';
 
   @override
-  String get vetPlannedCompletionHealthIssuePromptTitle =>
-      'Le vétérinaire a-t-il identifié quelque chose de nouveau à suivre ?';
-
-  @override
-  String get vetHealthIssuePromptNo => 'Non';
-
-  @override
-  String get vetHealthIssuePlanNextVisit => 'Planifier la prochaine visite';
-
-  @override
   String get healthIssueQuickPickInjury => 'Blessure ou maladie';
 
   @override
@@ -7847,19 +7837,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get careChooseCompletionDate => 'Choisir une autre date';
 
   @override
-  String get careAddDetails => 'Ajouter des détails';
-
-  @override
-  String get careAddDetailsTitle => 'Ajouter des détails';
-
-  @override
-  String get careDetailsSaved => 'Détails enregistrés';
-
-  @override
-  String get careDetailsSaveFailed =>
-      'Impossible d\'enregistrer les détails. Réessayez.';
-
-  @override
   String get careCategoryBlockProductDoseTitle => 'Produit et quantité';
 
   @override
@@ -7915,10 +7892,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get careProviderContactsUnavailable =>
       'Impossible de charger les contacts';
-
-  @override
-  String get undoCompleteFailed =>
-      'Impossible d\'annuler la complétion. Réessayez.';
 
   @override
   String get careContextAwayEntryTitle => 'Je serai absent';

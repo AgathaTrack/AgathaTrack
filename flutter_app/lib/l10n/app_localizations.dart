@@ -3487,24 +3487,6 @@ abstract class AppLocalizations {
   /// **'Not related'**
   String get vetHealthIssuePromptNotRelated;
 
-  /// No description provided for @vetPlannedCompletionHealthIssuePromptTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Did the vet identify anything new to track?'**
-  String get vetPlannedCompletionHealthIssuePromptTitle;
-
-  /// No description provided for @vetHealthIssuePromptNo.
-  ///
-  /// In en, this message translates to:
-  /// **'No'**
-  String get vetHealthIssuePromptNo;
-
-  /// No description provided for @vetHealthIssuePlanNextVisit.
-  ///
-  /// In en, this message translates to:
-  /// **'Plan the next visit'**
-  String get vetHealthIssuePlanNextVisit;
-
   /// No description provided for @healthIssueQuickPickInjury.
   ///
   /// In en, this message translates to:
@@ -13465,30 +13447,6 @@ abstract class AppLocalizations {
   /// **'Choose another date'**
   String get careChooseCompletionDate;
 
-  /// No description provided for @careAddDetails.
-  ///
-  /// In en, this message translates to:
-  /// **'Add details'**
-  String get careAddDetails;
-
-  /// No description provided for @careAddDetailsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Add details'**
-  String get careAddDetailsTitle;
-
-  /// No description provided for @careDetailsSaved.
-  ///
-  /// In en, this message translates to:
-  /// **'Details saved'**
-  String get careDetailsSaved;
-
-  /// No description provided for @careDetailsSaveFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not save details. Try again.'**
-  String get careDetailsSaveFailed;
-
   /// No description provided for @careCategoryBlockProductDoseTitle.
   ///
   /// In en, this message translates to:
@@ -13596,12 +13554,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Contacts could not be loaded'**
   String get careProviderContactsUnavailable;
-
-  /// No description provided for @undoCompleteFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not undo completion. Try again.'**
-  String get undoCompleteFailed;
 
   /// No description provided for @careContextAwayEntryTitle.
   ///

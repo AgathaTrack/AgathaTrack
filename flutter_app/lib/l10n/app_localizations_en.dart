@@ -1985,16 +1985,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vetHealthIssuePromptNotRelated => 'Not related';
 
   @override
-  String get vetPlannedCompletionHealthIssuePromptTitle =>
-      'Did the vet identify anything new to track?';
-
-  @override
-  String get vetHealthIssuePromptNo => 'No';
-
-  @override
-  String get vetHealthIssuePlanNextVisit => 'Plan the next visit';
-
-  @override
   String get healthIssueQuickPickInjury => 'Injury or illness';
 
   @override
@@ -7715,18 +7705,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get careChooseCompletionDate => 'Choose another date';
 
   @override
-  String get careAddDetails => 'Add details';
-
-  @override
-  String get careAddDetailsTitle => 'Add details';
-
-  @override
-  String get careDetailsSaved => 'Details saved';
-
-  @override
-  String get careDetailsSaveFailed => 'Could not save details. Try again.';
-
-  @override
   String get careCategoryBlockProductDoseTitle => 'Product and amount';
 
   @override
@@ -7781,9 +7759,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get careProviderContactsUnavailable => 'Contacts could not be loaded';
-
-  @override
-  String get undoCompleteFailed => 'Could not undo completion. Try again.';
 
   @override
   String get careContextAwayEntryTitle => 'I\'ll be away';
