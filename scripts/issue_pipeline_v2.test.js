@@ -250,9 +250,13 @@ test('In progress: working, resume once, stalled, finished', () => {
   const stage = 'In progress';
   const busy = { busy: true, lastActivityAt: NOW - MIN };
   assert.equal(rowOf({ stage, delivery: busy }).reason, 'progress.working');
-  assert.equal(rowOf({ stage, delivery: { busy: false } }).type, 'resume');
-  assert.equal(rowOf({ stage, delivery: { busy: false, resumed: true } }).reason, 'stalled');
-  assert.equal(rowOf({ stage, delivery: { busy: true, lastActivityAt: NOW - 25 * 60 * MIN } }).type, 'resume');
+  const mine = { engineLaunched: true };
+  assert.equal(rowOf({ stage, delivery: { ...mine, busy: false } }).type, 'resume');
+  assert.equal(rowOf({ stage, delivery: { ...mine, busy: false, resumed: true } }).reason, 'stalled');
+  assert.equal(rowOf({ stage, delivery: { ...mine, busy: true, lastActivityAt: NOW - 25 * 60 * MIN } }).type, 'resume');
+  // a hand-driven issue (no engine launch record) is never restarted or blocked by the engine
+  assert.equal(rowOf({ stage, delivery: { busy: false } }).reason, 'progress.hand-driven');
+  assert.equal(rowOf({ stage, delivery: { busy: false, resumed: true } }).reason, 'progress.hand-driven');
   const done = { busy: false, dodComplete: true, openLinkedPrs: 0, mergedIntoMain: 1 };
   const finished = rowOf({ stage, delivery: done });
   assert.deepEqual([finished.to, finished.then], ['In Main', ['request-intent-review']]);
