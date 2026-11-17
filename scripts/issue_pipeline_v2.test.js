@@ -356,11 +356,20 @@ test('fields: dry-run logs and never calls the API', async () => {
   const fields = await loadOrgFields({ org: 'o', token: 't', restFn: async () => orgFieldDefs() });
   const logs = [];
   const result = await writeIssueFields({
+    owner: 'o', repo: 'r', issueNumber: 7, token: 'pat', fields,
+    writes: { blocked: 'question' }, parsed: { stage: 'Ready', blocked: '', attempts: 2 }, dryRun: true,
+    restFn: async () => { throw new Error('must not be called'); },
+    log: (line) => logs.push(JSON.parse(line)),
+  });
+  assert.deepEqual(logs[0].writes, { blocked: 'question', stage: 'Ready', attempts: 2 });
+  logs.length = 0;
+  const result2 = await writeIssueFields({
     owner: 'o', repo: 'r', issueNumber: 7, token: 'pat', fields, writes: { blocked: 'question' }, dryRun: true,
     restFn: async () => { throw new Error('must not be called'); },
     log: (line) => logs.push(JSON.parse(line)),
   });
   assert.equal(result.dryRun, true);
+  assert.equal(result2.dryRun, true);
   assert.deepEqual(logs[0], { event: 'pipeline_v2_field_write', dry_run: true, issue: 7, writes: { blocked: 'question' } });
 });
 

@@ -105,9 +105,15 @@ function withCurrentValues(parsed, writes) {
   return merged;
 }
 
+/** PATCH payload for `issue_field_values` after carrying current parsed values the write omits. */
+function buildIssueFieldPatch(fields, writes, parsed) {
+  return buildFieldWrites(fields, withCurrentValues(parsed, writes));
+}
+
 /**
  * Apply field writes to one issue. `dryRun` only logs, so `dry-run` mode never writes.
  * The engine never clears `Blocked`, so there is deliberately no clear operation.
+ * Pass `parsed` so omitted fields are carried (PATCH replaces the whole value set).
  */
 async function writeIssueFields({
   owner,
@@ -116,13 +122,15 @@ async function writeIssueFields({
   token,
   fields,
   writes,
+  parsed,
   dryRun,
   restFn = rest,
   log = console.log,
 }) {
-  const payload = buildFieldWrites(fields, writes);
+  const merged = parsed ? withCurrentValues(parsed, writes) : writes;
+  const payload = buildFieldWrites(fields, merged);
   if (dryRun) {
-    log(JSON.stringify({ event: 'pipeline_v2_field_write', dry_run: true, issue: issueNumber, writes }));
+    log(JSON.stringify({ event: 'pipeline_v2_field_write', dry_run: true, issue: issueNumber, writes: merged }));
     return { dryRun: true, payload };
   }
   await restFn(
@@ -139,6 +147,7 @@ module.exports = {
   loadOrgFields,
   parseIssueFields,
   buildFieldWrites,
+  buildIssueFieldPatch,
   withCurrentValues,
   writeIssueFields,
 };

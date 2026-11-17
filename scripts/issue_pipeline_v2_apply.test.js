@@ -164,3 +164,30 @@ test('withCurrentValues: writes win, empty and zero current values are left out'
   assert.deepEqual(withCurrentValues({ stage: 'Ready', blocked: '', attempts: 0 }, { stage: 'Done', attempts: 0 }), { stage: 'Done', attempts: 0 });
   assert.deepEqual(withCurrentValues({ stage: '', blocked: '', attempts: 2 }, { blocked: 'stalled' }), { blocked: 'stalled', attempts: 2 });
 });
+
+test('set-stage and set-blocked field patches keep the other values the issue holds', async () => {
+  const { sent, restFn } = recorder();
+  const parsed = { stage: 'Ready', blocked: 'stalled', attempts: 3 };
+  await applyAction({
+    action: { type: 'set-stage', to: 'Done', close: false },
+    ctx: ctx({ restFn, parsed: { ...parsed } }),
+  });
+  let patch = sent.filter((c) => c.body?.issue_field_values).at(-1);
+  let values = patch.body.issue_field_values;
+  assert.deepEqual(values.map((v) => v.field_id).sort(), [1, 2, 3]);
+  assert.equal(values.find((v) => v.field_id === 1).value, 'Done');
+  assert.equal(values.find((v) => v.field_id === 2).value, 'stalled');
+  assert.equal(values.find((v) => v.field_id === 3).value, 0);
+
+  sent.length = 0;
+  await applyAction({
+    action: { type: 'set-blocked', reason: 'stalled' },
+    ctx: ctx({ restFn, parsed: { ...parsed, blocked: '' } }),
+  });
+  patch = sent.filter((c) => c.body?.issue_field_values).at(-1);
+  values = patch.body.issue_field_values;
+  assert.deepEqual(values.map((v) => v.field_id).sort(), [1, 2, 3]);
+  assert.equal(values.find((v) => v.field_id === 1).value, 'Ready');
+  assert.equal(values.find((v) => v.field_id === 2).value, 'stalled');
+  assert.equal(values.find((v) => v.field_id === 3).value, 3);
+});
