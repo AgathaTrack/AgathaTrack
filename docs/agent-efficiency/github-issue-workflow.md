@@ -187,9 +187,10 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 Optional **human- or agent-invoked** holistic acceptance on a **parent** issue (or the issue linked from a delivery PR). It does not replace pipeline v2 **intent review** (In Main, non-gating) or the engine path to **Done** after UAT/prod.
 
 1. **Eligibility:** Parent issues only — not bodies with `<!-- v2:follow-up of=#n -->`.
-2. **Labels:** `aat-start` clears `AAT-passed` / `AAT-failed` and sets `AAT-progress`; `aat-pass` / `aat-fail` set the verdict (skill + `scripts/github_issue_workflow.js`).
-3. **Checks:** Original intent and NFRs, merged code on `main`, behaviour in the running app, final code review.
-4. **Fail:** One small remediation PR (`Refs #parent`) or one P0 follow-up sub-issue (`v2:follow-up`, empty `Stage` → To do); re-run AAT on the parent when remediation is done.
+2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment. **Verdict record:** `<!-- v2:aat verdict=… merge=… -->` on the issue (engine #2424).
+3. **INCONCLUSIVE:** `aat-inconclusive` posts the marker and clears progress/pass/fail labels when live verification cannot run (not a product fail).
+4. **Checks:** Original intent and NFRs, code at the merge SHA under test, built Flutter web + single-origin stack, final code review.
+5. **Fail:** Remediation after the verdict — small PR (`Refs #parent`) or P0 follow-up (`v2:follow-up`, Priority field `P0`); engine re-launches AAT when ready. Agents do not close pipeline issues on PASS.
 
 Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md).
 
