@@ -215,6 +215,9 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
 
   const issue = planId ? await findControlIssue(client, planId) : null;
   if (!planId || !issue) {
+    if (baseRef !== 'main') {
+      return result('success', 'ok', 'not an execute-plan PR');
+    }
     const evaluation = evaluateNonPlanForbidden({
       files,
       scopeAckReview,
@@ -227,9 +230,8 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
 
   let snapshot;
   let stopped;
-  let control;
   try {
-    ({ snapshot, stopped, control } = await loadPlanControl(client, issue, planId, now));
+    ({ snapshot, stopped } = await loadPlanControl(client, issue, planId, now));
   } catch (e) {
     return result('failure', 'error', e.message, planId);
   }
