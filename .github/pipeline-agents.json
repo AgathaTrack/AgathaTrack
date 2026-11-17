@@ -21,6 +21,7 @@
   "engine": {
     "logins": ["pawpet-engine"]
   },
+  "launchRunners": ["cursor"],
   "limits": {
     "wip": 2,
     "reviewTimeoutMin": 30,

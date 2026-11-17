@@ -92,7 +92,7 @@ test('dry run records the same calls but sends none', async () => {
 test('none with no counters sends nothing; unknown types are unsupported', async () => {
   const { sent, restFn } = recorder();
   assert.deepEqual((await applyAction({ action: { type: 'none' }, ctx: ctx({ restFn }) })).applied, []);
-  assert.deepEqual((await applyAction({ action: { type: 'launch' }, ctx: ctx({ restFn }) })).applied, ['unsupported:launch']);
+  assert.deepEqual((await applyAction({ action: { type: 'resume' }, ctx: ctx({ restFn }) })).applied, ['unsupported:resume']);
   assert.deepEqual(sent, []);
 });
 

@@ -12,6 +12,7 @@ const { agentLogins } = require('./issue_pipeline_v2_config');
 const { buildFieldWrites } = require('./issue_pipeline_v2_fields');
 const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
 const { buildReviewRequest } = require('./issue_pipeline_v2_review');
+const { buildLaunchAcked, buildLaunchFailed, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 
 /**
  * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
@@ -26,7 +27,7 @@ function buildWrites({ action, parsed, counters }) {
   } else if (action.type === 'set-blocked') {
     writes.blocked = action.reason;
   } else if (
-    action.type === 'reassign' &&
+    (action.type === 'reassign' || action.type === 'launch') &&
     Number.isFinite(action.attempts) &&
     action.attempts !== parsed.attempts
   ) {
@@ -56,7 +57,8 @@ function issuePath({ owner, repo, issueNumber }) {
  *                                      assignees, counters, facts, dryRun, restFn }
  * @returns {Promise<{ applied: string[], calls: Array<{method: string, path: string, body?: object}> }>}
  */
-async function applyAction({ action, ctx }) {
+async function applyAction({ action: decided, ctx }) {
+  let action = decided;
   const calls = [];
   const live = ctx.restFn || rest;
   const request = async (method, path, body) => {
@@ -106,7 +108,29 @@ async function applyAction({ action, ctx }) {
       await comment(buildWake({ commentId: action.commentId, agent: action.agent }), 'comment:wake');
       await assign(action.agent);
       break;
+    case 'launch': {
+      let attempts = action.attempts;
+      try {
+        const run = ctx.dryRun
+          ? { runId: 'dry-run', agentUrl: '' }
+          : await ctx.launchFn({ agent: action.agent, method: action.method });
+        calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
+        await comment(buildLaunchRecord({ runId: run.runId, agent: action.agent, agentUrl: run.agentUrl }), 'comment:launch');
+        applied.unshift(`launch:${action.agent}`);
+      } catch (error) {
+        attempts = (action.attempts || 0) + 1;
+        await comment(buildLaunchFailed({ agent: action.agent, reason: error.message }), 'comment:launch-failed');
+        applied.unshift(`launch-failed:${action.agent}`);
+      }
+      // The launch is one of the failed runs until the agent reports busy, so record the count now.
+      action = { ...action, attempts };
+      break;
+    }
     case 'set-stage':
+      if (action.to === 'In progress' && ctx.facts.launch?.runId) {
+        await comment(buildLaunchAcked({ runId: ctx.facts.launch.runId }), 'comment:launch-acked');
+      }
+      break;
     case 'set-blocked':
     case 'none':
       break;

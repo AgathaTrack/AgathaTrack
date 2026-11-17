@@ -12,6 +12,7 @@ const { bodySha } = require('./issue_pipeline_state');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
+const { deliveryMethod, deriveLaunchFacts, launchIssue } = require('./issue_pipeline_v2_launch');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 const {
@@ -65,7 +66,7 @@ async function resolveEditors({ comments, config, token, io }) {
 async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
   const canonical = canonicalStage(entry.parsed.stage);
   const blocked = Boolean(entry.parsed.blocked);
-  if (!(canonical === 'To do' || canonical === 'In analysis' || blocked)) {
+  if (!(canonical === 'To do' || canonical === 'In analysis' || canonical === 'Ready' || blocked)) {
     return {};
   }
   const comments = await (io.listIssueComments || listIssueComments)({
@@ -81,6 +82,17 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
     facts.humanCommentId = human ? human.id : null;
     facts.wokenFor = wokenCommentIds(comments, config.engine.logins);
     return facts;
+  }
+  if (canonical === 'Ready') {
+    return {
+      deliveryMethod: deliveryMethod(entry.issue.body),
+      launch: deriveLaunchFacts({
+        comments,
+        engineLogins: config.engine.logins,
+        labels: entry.labels,
+        attempts: entry.parsed.attempts,
+      }),
+    };
   }
   const editors = await resolveEditors({ comments, config, token, io });
   const engineLogins = config.engine.logins;
@@ -203,6 +215,17 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts,
         dryRun: !live,
         restFn: io.restFn,
+        launchFn:
+          io.launchFn ||
+          (() =>
+            launchIssue({
+              owner,
+              repo,
+              issue: entry.issue,
+              token: projectsPat,
+              apiKey: process.env.CURSOR_API_KEY || process.env.cursor_api_key,
+              deps: io.launchDeps,
+            })),
       },
     });
     actions[actions.length - 1].applied = result.applied;

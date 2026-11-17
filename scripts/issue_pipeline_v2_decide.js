@@ -30,7 +30,7 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
-const { agentLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, launchableAgents } = require('./issue_pipeline_v2_config');
 
 const STAGES = [
   'Backlog',
@@ -228,13 +228,17 @@ function decideReady(facts, config) {
       return none('ready.backoff');
     }
   }
-  const capable = config.agents
-    .filter((agent) => agent.methods.includes(facts.deliveryMethod))
-    .map((agent) => agent.login);
+  const capable = launchableAgents(config, facts.deliveryMethod);
   if (capable.length === 0) {
     return setBlocked('launch-failed', 'ready.no-capable-agent');
   }
-  return { type: 'launch', agent: pickAgent(capable, facts), method: facts.deliveryMethod, row: 'ready.launch' };
+  return {
+    type: 'launch',
+    agent: pickAgent(capable, facts),
+    method: facts.deliveryMethod,
+    attempts: failed,
+    row: 'ready.launch',
+  };
 }
 
 function decideInProgress(facts, config) {
