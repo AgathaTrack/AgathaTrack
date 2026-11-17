@@ -14,6 +14,16 @@ const engine = ['pawpet-engine'];
 const at = (minute) => `2026-11-17T10:${String(minute).padStart(2, '0')}:00Z`;
 const note = (body, minute, login = 'pawpet-engine') => ({ id: minute, user: { login }, body, created_at: at(minute) });
 
+test('delivery method accepts the formats real issues use: bold, backticks, tables', () => {
+  assert.equal(deliveryMethod('### Delivery plan\n\n**Method:** `light-plan` (3 phases + release)\n\n**Goal:** x'), 'light-plan', '#1545');
+  assert.equal(deliveryMethod('### Delivery plan\n\n| Field | Value |\n|---|---|\n| **Mechanism** | `PR` — one PR to `main` |'), 'PR', '#2335');
+  assert.equal(deliveryMethod('### Delivery plan\n\n**Method:** execute-plan'), 'execute-plan');
+  assert.equal(deliveryMethod('### Delivery plan\n\n- Method: `Light-Plan`\n'), 'light-plan', 'case-insensitive');
+  assert.equal(deliveryMethod('### Delivery plan\n\n**Method:** `PR`\nlater light-plan is mentioned'), 'PR', 'the first one after the label wins');
+  assert.equal(deliveryMethod('### Delivery plan\n\nThe plan is a light-plan.'), 'PR', 'needs the Method label');
+  assert.equal(deliveryMethod('### Scope\n\n**Method:** `light-plan`'), 'PR', 'only inside the Delivery plan section');
+});
+
 test('delivery method comes from the Delivery plan section, defaulting to PR', () => {
   assert.equal(deliveryMethod('### Delivery plan\n\nMethod: light-plan\nPlan: x'), 'light-plan');
   assert.equal(deliveryMethod('### Delivery plan\n\nmethod: Execute-Plan\n### Next\nMethod: PR'), 'execute-plan');

@@ -68,7 +68,9 @@ function deliveryMethod(body) {
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((line) => /^#{1,4}\s/.test(line));
   const section = (end < 0 ? rest : rest.slice(0, end)).join('\n');
-  const match = /^\s*Method:\s*([A-Za-z-]+)/im.exec(section);
+  // The label may be bold, backticked or in a table: `Method: PR`, `**Method:** \`light-plan\``,
+  // `| **Mechanism** | \`PR\` — ... |`. The first delivery method named after it wins.
+  const match = /(?:method|mechanism)\b[\s*:|`_-]*(light-plan|execute-plan|PR)\b/i.exec(section);
   return (match && METHODS.find((method) => method.toLowerCase() === match[1].toLowerCase())) || 'PR';
 }
 
