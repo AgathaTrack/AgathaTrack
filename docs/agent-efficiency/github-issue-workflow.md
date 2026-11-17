@@ -124,8 +124,8 @@ listed agent); the engine never clears the flag.
   Definition of Done) and 👍s the spec request, so the engine moves the issue to In analysis. A failed start is only logged;
   the pickup timeout reassigns. Agents on other runners (`claude`) are assigned only.
 - **Launch preflight:** a delivery launch (Ready, and the one resume) still runs the legacy safety preflight
-  (`.github/scripts/agent-safety-lib.js`): the risky-scope and blocking-label (`busy`, `manual-only`, `question`,
-  `blocked`) checks stand. Its `agent-approved` and `human-reviewed` label requirements are retired under v2, where a
+  (`.github/scripts/agent-safety-lib.js`): the risky-scope and blocking-label (`busy`, `manual-only`, `blocked`) checks
+  stand; an issue waiting on a human has `Blocked` set, which the engine never launches. Its `agent-approved` and `human-reviewed` label requirements are retired under v2, where a
   converged review and Ready are the approval, so the engine supplies those two labels to the check itself. A refusal
   records `v2:launch-failed` with the reason and counts as a failed start.
 - **Tick log:** each tick logs `pipeline_v2_action` before applying an action and `pipeline_v2_applied` after, with what

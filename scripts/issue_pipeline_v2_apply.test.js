@@ -88,6 +88,25 @@ test('a failed doorbell launch never fails the tick', async () => {
   assert.ok(result.applied.includes('doorbell-failed:pawpet-bot:cursor down'), 'the reason is kept');
 });
 
+test('a request that fails after others went out carries what was applied', async () => {
+  let calls = 0;
+  const restFn = async () => { calls += 1; if (calls === 2) throw new Error('assign failed'); return { id: 1 }; };
+  await assert.rejects(
+    applyAction({ action: { type: 'request-spec', agent: 'pawpet-bot' }, ctx: ctx({ restFn }) }),
+    (error) => error.message === 'assign failed' && JSON.stringify(error.applied) === JSON.stringify(['comment:spec-request']),
+  );
+});
+
+test('a doorbell that rejects with a non-Error keeps its reason', async () => {
+  const { restFn } = recorder();
+  const withRunners = { ...config, launchRunners: ['cursor'], agents: [{ login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }] };
+  const result = await applyAction({
+    action: { type: 'request-spec', agent: 'pawpet-bot' },
+    ctx: ctx({ restFn, config: withRunners, launchFn: async () => { throw 'rate limited'; } }),
+  });
+  assert.ok(result.applied.includes('doorbell-failed:pawpet-bot:rate limited'));
+});
+
 test('request-review carries the hash', async () => {
   const { sent, restFn } = recorder();
   await applyAction({ action: { type: 'request-review', agent: 'pawpet-bot', hash: 'abc' }, ctx: ctx({ restFn }) });
