@@ -106,7 +106,7 @@ test('non-plan PR into integration is not scanned (base not main)', async () => 
   const res = await runScopeCheck(client, {
     ...phasePr,
     headRef: 'cursor/misc-feature-x',
-    baseRef: INTEGRATION,
+    baseRef: 'cursor/misc-dev-294b',
   });
   assert.deepEqual([res.conclusion, res.title, res.summary], ['success', 'ok', 'not an execute-plan PR']);
 });
