@@ -14,6 +14,25 @@ const engine = ['pawpet-engine'];
 const at = (minute) => `2026-11-17T10:${String(minute).padStart(2, '0')}:00Z`;
 const note = (body, minute, login = 'pawpet-engine') => ({ id: minute, user: { login }, body, created_at: at(minute) });
 
+test('delivery method accepts the formats real issues use: bold, backticks, tables', () => {
+  assert.equal(deliveryMethod('### Delivery plan\n\n**Method:** `light-plan` (3 phases + release)\n\n**Goal:** x'), 'light-plan', '#1545');
+  assert.equal(deliveryMethod('### Delivery plan\n\n| Field | Value |\n|---|---|\n| **Mechanism** | `PR` — one PR to `main` |'), 'PR', '#2335');
+  assert.equal(deliveryMethod('### Delivery plan\n\n**Method:** execute-plan'), 'execute-plan');
+  assert.equal(deliveryMethod('### Delivery plan\n\n- Method: `Light-Plan`\n'), 'light-plan', 'case-insensitive');
+  assert.equal(deliveryMethod('### Delivery plan\n\n**Method:** `PR`\nlater light-plan is mentioned'), 'PR', 'the first one after the label wins');
+  assert.equal(deliveryMethod('### Delivery plan\n\nThe plan is a light-plan.'), 'PR', 'needs the Method label');
+  assert.equal(deliveryMethod('### Scope\n\n**Method:** `light-plan`'), 'PR', 'only inside the Delivery plan section');
+});
+
+test('delivery method needs a whole token in a field position', () => {
+  assert.equal(deliveryMethod('### Delivery plan\n\nMethod: execute-plan-beta'), 'PR', 'suffix');
+  assert.equal(deliveryMethod('### Delivery plan\n\nMethod: `light-plan-v2`'), 'PR', 'suffix in backticks');
+  assert.equal(deliveryMethod('### Delivery plan\n\nThe method: light-plan'), 'PR', 'incidental prose');
+  assert.equal(deliveryMethod('### Delivery plan\n\nWe chose the Method: light-plan because'), 'PR', 'mid-line');
+  assert.equal(deliveryMethod('### Delivery plan\n\nintro\n1. **Method:** `light-plan`'), 'light-plan', 'list item');
+  assert.equal(deliveryMethod('### Delivery plan\n\n> Method: execute-plan'), 'execute-plan', 'quote');
+});
+
 test('delivery method comes from the Delivery plan section, defaulting to PR', () => {
   assert.equal(deliveryMethod('### Delivery plan\n\nMethod: light-plan\nPlan: x'), 'light-plan');
   assert.equal(deliveryMethod('### Delivery plan\n\nmethod: Execute-Plan\n### Next\nMethod: PR'), 'execute-plan');
@@ -201,4 +220,10 @@ test('Ready with a busy issue and no launch record moves on; the dry-run plan sh
   const { ctx: c } = ctx({ dryRun: true });
   const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 }, ctx: c });
   assert.deepEqual(result.calls[0], { method: 'POST', path: '/repos/o/r/issues/7/labels', body: { labels: ['busy'] } });
+});
+
+test('stage prompts exist for the spec and review doorbells', () => {
+  const { STAGE_PROMPTS } = require('./issue_pipeline_v2_launch');
+  assert.match(STAGE_PROMPTS['To do'], /SPEC PASS[\s\S]*Blocked[\s\S]*question/);
+  assert.match(STAGE_PROMPTS['In analysis'], /ADVERSARIAL REVIEW/);
 });

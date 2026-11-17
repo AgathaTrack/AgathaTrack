@@ -339,9 +339,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           restFn: io.restFn,
           launchFn:
             io.launchFn ||
-            (({ method }) =>
+            (({ method, stage }) =>
               launchIssue({
                 method,
+                stage,
                 owner,
                 repo,
                 issue: entry.issue,

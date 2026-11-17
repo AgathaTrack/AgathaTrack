@@ -83,10 +83,29 @@ async function applyAction({ action: decided, ctx }) {
     applied.push(label);
   };
 
+  // Doorbell: an agent the engine can start is also launched for the spec or review it was asked to do.
+  // A failed ring never fails the tick; the pickup timeout reassigns if nobody answers.
+  const ring = async (agent, stage) => {
+    const entry = (ctx.config.agents || []).find((candidate) => candidate.login === agent);
+    if (!entry || !(ctx.config.launchRunners || []).includes(entry.runner) || !['To do', 'In analysis'].includes(stage)) {
+      return;
+    }
+    try {
+      if (!ctx.dryRun) {
+        await ctx.launchFn({ agent, stage });
+      }
+      calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent, stage } });
+      applied.push(`doorbell:${agent}`);
+    } catch {
+      applied.push(`doorbell-failed:${agent}`);
+    }
+  };
+
   switch (action.type) {
     case 'request-spec':
       await comment(buildSpecRequest({ assigned: action.agent }), 'comment:spec-request');
       await assign(action.agent);
+      await ring(action.agent, 'To do');
       break;
     case 'request-review':
       await comment(
@@ -94,6 +113,7 @@ async function applyAction({ action: decided, ctx }) {
         'comment:review-request',
       );
       await assign(action.agent);
+      await ring(action.agent, 'In analysis');
       break;
     case 'reassign': {
       const inReview = action.stage === 'In analysis';
@@ -104,11 +124,13 @@ async function applyAction({ action: decided, ctx }) {
         : buildSpecRequest({ assigned: action.agent, history });
       await editComment(held.commentId, body, `edit:${inReview ? 'review' : 'spec'}-request`);
       await assign(action.agent);
+      await ring(action.agent, action.stage);
       break;
     }
     case 'wake-stage-agent':
       await comment(buildWake({ commentId: action.commentId, agent: action.agent }), 'comment:wake');
       await assign(action.agent);
+      await ring(action.agent, ctx.facts.stage);
       break;
     case 'launch': {
       let attempts = action.attempts;
