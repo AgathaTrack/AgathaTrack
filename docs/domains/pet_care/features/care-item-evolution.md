@@ -5,7 +5,7 @@ audience: both
 domain: pet_care
 feature_id: care_item
 status: active
-last_updated: 2026-11-16
+last_updated: 2026-11-17
 related_prs: [1797, 1805, 1812, 1817, 2129, 2145]
 ---
 
@@ -137,6 +137,7 @@ Four principles:
 | D-CIE-042 | History refreshes after care commands | After a successful Done, Skip, or Undo (including snackbar undo), the Care item **History** module and other detail occurrence surfaces reflect server state without leaving the screen or reloading the page. Shared `careDataChangedProvider` invalidates past/open occurrence caches. | Live | 2026-11-08 | — |
 | D-CIE-043 | Paused hides occurrence actions on the Care item view | While an item is paused, per-occurrence Mark as done, Skip, Change date and bulk skip are not offered on the Care item view; acting on occurrences happens after Resume (care item menu, D-CSM-028). Per-occurrence controls live only on `CareItemNeedsAttentionSection` when the item is active with a server schedule (`as_of` on list reads). | Live | 2026-11-08 | — |
 | D-CIE-044 | Care item view fallback is read-only, no occurrence rows | `CareItemDatesSection` renders only when `CareItemNeedsAttentionSection` cannot: the paused banner (D-CIE-043), or the read-only legacy summary when an active entry lacks `as_of`. No occurrence rows, no actions, no retry. The server emits `as_of` on every care-item read and command response (`careItemReadAdditions`), so active items always reach `CareItemNeedsAttentionSection`; the former zoned rows were dead UI. | Live | 2026-11-16 | — |
+| D-CIE-045 | **Persistence names stay `health_*`; product says Care Item** | PostgreSQL tables `health_entries` and `health_occurrences` are the authoritative store for a Care Item and its scheduled occurrences. **Wire/API/GDPR names stay `health_*` indefinitely** (`/api/health-entries`, `health_entry_id`, export keys) unless a **separate** breaking-API programme is approved. Optional deferred work ([#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)) is **physical table rename only** — it must not change HTTP paths, DTOs or export keys. DEBT-D-RENAME closed Option B ([#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542)); do not rename tables opportunistically in other PRs. | Live | 2026-11-17 | — |
 
 ## Vet visit schema (API slice — PR-14)
 
