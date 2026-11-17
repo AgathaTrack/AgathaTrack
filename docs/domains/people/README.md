@@ -3,7 +3,7 @@ title: People domain
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-10-08
+last_updated: 2026-11-17
 tags: [domain, people, households]
 ---
 
@@ -36,7 +36,7 @@ Part of the AgathaTrack domain-first documentation tree. Cross-cutting architect
 | Households + sharing integration | Shipped | `people-client-core-7f3b` c7 |
 | Cross-feature consumers + integration E2E | Shipped | `people-client-integration-7f3b` |
 | Absence guest access + timezone (D24) | Shipped | `people-care-team-a58d` p4 |
-| Vet table sunset | Debt | [#1653](https://github.com/AgathaTrack/AgathaTrack/issues/1653) |
+| Vet table sunset (R-01) | In progress | [#1653](https://github.com/AgathaTrack/AgathaTrack/issues/1653) — **R-01-SUNSET** on `main` ([#2407](https://github.com/AgathaTrack/AgathaTrack/pull/2407)); R-01a→c stacked PRs |
 
 Residual gaps: [people-domain-refactor.md](changes/people-domain-refactor.md) §4.
 
