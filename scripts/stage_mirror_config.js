@@ -20,6 +20,29 @@ const ATSUPPORT_COLUMNS = [
   'Done',
 ];
 
+/**
+ * Exact org `Stage` single-select spellings (GitHub rejects PATCH with wrong casing).
+ * Board columns may differ case (`In Analysis` ↔ `In analysis`); matching is case-insensitive.
+ */
+const STAGE_ORG_FIELD_OPTIONS = [
+  'Backlog',
+  'To do',
+  'In analysis',
+  'Ready',
+  'In progress',
+  'In Main',
+  'In UAT',
+  'Done',
+  'New',
+  'Triaged',
+  'Waiting on user',
+  'Engineering done',
+];
+
+function stageOrgFieldOptions() {
+  return [...STAGE_ORG_FIELD_OPTIONS];
+}
+
 function parseRepoSlug(slug) {
   const text = String(slug || '').trim();
   const parts = text.split('/');
@@ -88,6 +111,7 @@ function loadStageMirrorBoards({ defaultOwner, defaultRepo }) {
 module.exports = {
   PAWPET_COLUMNS,
   ATSUPPORT_COLUMNS,
+  stageOrgFieldOptions,
   loadStageMirrorBoards,
   parseRepoSlug,
 };

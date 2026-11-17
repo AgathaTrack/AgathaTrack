@@ -47,6 +47,7 @@ jobs:
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
           GH_PAWPET_SYNCED_STAGE_FIELD_ID: ${{ secrets.GH_PAWPET_SYNCED_STAGE_FIELD_ID }}
           GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID: ${{ secrets.GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID }}
+          STAGE_ISSUE_FIELD_ID: ${{ secrets.STAGE_ISSUE_FIELD_ID }}
           STAGE_MIRROR: ${{ vars.STAGE_MIRROR }}
           STAGE_MIRROR_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || '' }}
           ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
