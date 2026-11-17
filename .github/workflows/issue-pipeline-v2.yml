@@ -1,8 +1,9 @@
 name: Issue pipeline v2
 
-# Run A of #2385: dry-run only. ISSUE_PIPELINE_V2 is its own switch (off | dry-run | on) and is
-# deliberately separate from ISSUE_PIPELINE, which controls the old engine. Default is off.
-# The runner never writes in this run; event triggers arrive with the review lane (P3).
+# Pipeline v2 (#2385). ISSUE_PIPELINE_V2 is its own switch (off | dry-run | on) and is deliberately
+# separate from ISSUE_PIPELINE, which controls the old engine. Default is off. dry-run logs the
+# decisions and the requests they would make; only `on`, with ENGINE_PAT belonging to a login in
+# .github/pipeline-agents.json `engine.logins`, writes.
 on:
   schedule:
     - cron: '11,41 * * * *'

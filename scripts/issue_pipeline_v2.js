@@ -231,64 +231,74 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       labels: (issue.labels || []).map((label) => label.name || label),
     });
   }
-  const wip = countWip(entries);
+  let wip = countWip(entries);
   const now = Date.now();
   const actions = [];
+  const errors = [];
   for (const entry of entries) {
     if (only && entry.number !== only) {
       continue;
     }
-    const facts = {
-      ...buildBaseFacts({
-        issue: entry.issue,
-        parsed: entry.parsed,
-        onBoard: true,
-        wip,
-        now,
-        runMode,
-      }),
-      ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
-    };
-    if (!String(entry.parsed.stage || '').trim() && parseFollowUp(entry.issue.body)) {
-      facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
+    try {
+      const facts = {
+        ...buildBaseFacts({
+          issue: entry.issue,
+          parsed: entry.parsed,
+          onBoard: true,
+          wip,
+          now,
+          runMode,
+        }),
+        ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
+      };
+      if (!String(entry.parsed.stage || '').trim() && parseFollowUp(entry.issue.body)) {
+        facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
+      }
+      const action = decide(facts, config);
+      const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
+      actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });
+      console.log(
+        JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live, issue: entry.number, action, counters }),
+      );
+      const result = await (io.applyAction || applyAction)({
+        action,
+        ctx: {
+          owner,
+          repo,
+          issueNumber: entry.number,
+          token: projectsPat,
+          config,
+          fields,
+          parsed: entry.parsed,
+          assignees: (entry.issue.assignees || []).map((a) => a.login),
+          counters,
+          facts,
+          dryRun: !live,
+          restFn: io.restFn,
+          launchFn:
+            io.launchFn ||
+            (() =>
+              launchIssue({
+                owner,
+                repo,
+                issue: entry.issue,
+                token: projectsPat,
+                apiKey: process.env.CURSOR_API_KEY || process.env.cursor_api_key,
+                deps: io.launchDeps,
+              })),
+        },
+      });
+      actions[actions.length - 1].applied = result.applied;
+      if (action.type === 'launch') {
+        wip += 1; // the next Ready issue in this tick sees the slot as taken
+      }
+    } catch (error) {
+      // One issue's failure must not stop the rest of the board; the run still ends red.
+      console.error(JSON.stringify({ event: 'pipeline_v2_error', issue: entry.number, message: error.message }));
+      errors.push({ issue: entry.number, message: error.message });
     }
-    const action = decide(facts, config);
-    const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
-    actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });
-    console.log(
-      JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live, issue: entry.number, action, counters }),
-    );
-    const result = await (io.applyAction || applyAction)({
-      action,
-      ctx: {
-        owner,
-        repo,
-        issueNumber: entry.number,
-        token: projectsPat,
-        config,
-        fields,
-        parsed: entry.parsed,
-        assignees: (entry.issue.assignees || []).map((a) => a.login),
-        counters,
-        facts,
-        dryRun: !live,
-        restFn: io.restFn,
-        launchFn:
-          io.launchFn ||
-          (() =>
-            launchIssue({
-              owner,
-              repo,
-              issue: entry.issue,
-              token: projectsPat,
-              apiKey: process.env.CURSOR_API_KEY || process.env.cursor_api_key,
-              deps: io.launchDeps,
-            })),
-      },
-    });
-    actions[actions.length - 1].applied = result.applied;
   }
-  return { mode: runMode, issueCount: entries.length, wip, actions };
+  return { mode: runMode, issueCount: entries.length, wip, actions, errors };
 }
 
 async function main() {
@@ -310,6 +320,9 @@ async function main() {
     only,
   });
   console.log(JSON.stringify({ event: 'pipeline_v2_tick', ...result, actions: result.actions?.length }));
+  if (result.errors?.length > 0) {
+    process.exitCode = 1;
+  }
 }
 
 if (require.main === module) {

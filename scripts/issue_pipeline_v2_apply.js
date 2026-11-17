@@ -112,17 +112,22 @@ async function applyAction({ action: decided, ctx }) {
       break;
     case 'launch': {
       let attempts = action.attempts;
+      let run = null;
+      let failure = null;
       try {
-        const run = ctx.dryRun
-          ? { runId: 'dry-run', agentUrl: '' }
-          : await ctx.launchFn({ agent: action.agent, method: action.method });
+        run = ctx.dryRun ? { runId: 'dry-run', agentUrl: '' } : await ctx.launchFn({ agent: action.agent, method: action.method });
         calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
+      } catch (error) {
+        failure = error;
+      }
+      // Only the launch call is guarded: a run that started must be recorded, never retried as a failure.
+      if (failure) {
+        attempts = (action.attempts || 0) + 1;
+        await comment(buildLaunchFailed({ agent: action.agent, reason: failure.message }), 'comment:launch-failed');
+        applied.unshift(`launch-failed:${action.agent}`);
+      } else {
         await comment(buildLaunchRecord({ runId: run.runId, agent: action.agent, agentUrl: run.agentUrl }), 'comment:launch');
         applied.unshift(`launch:${action.agent}`);
-      } catch (error) {
-        attempts = (action.attempts || 0) + 1;
-        await comment(buildLaunchFailed({ agent: action.agent, reason: error.message }), 'comment:launch-failed');
-        applied.unshift(`launch-failed:${action.agent}`);
       }
       // The launch is one of the failed runs until the agent reports busy, so record the count now.
       action = { ...action, attempts };

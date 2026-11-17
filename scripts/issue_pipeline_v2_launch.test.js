@@ -110,3 +110,57 @@ test('launchIssue: busy label, run, and cleanup when the API fails', async () =>
   deps.safety = { preflightIssue: () => ({ ok: false, reason: 'nope' }) };
   await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', deps }), /preflight: nope/);
 });
+
+test('apply launch: a started run is never recorded as a failure when the record comment fails', async () => {
+  let launches = 0;
+  const bodies = [];
+  const { ctx: c } = ctx({
+    launchFn: async () => { launches += 1; return { runId: 'r1' }; },
+    restFn: async (method, path, token, body) => {
+      bodies.push(body);
+      if (bodies.length === 1) throw new Error('comment API down');
+      return {};
+    },
+  });
+  await assert.rejects(
+    applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 }, ctx: c }),
+    /comment API down/,
+  );
+  assert.equal(launches, 1);
+  assert.equal(bodies.length, 1, 'no launch-failed comment follows a run that started');
+});
+
+test('runner: one failing issue does not stop the board, and two Ready issues respect the WIP limit', async () => {
+  const { tick } = require('./issue_pipeline_v2');
+  const prior = process.env.ISSUE_PIPELINE_V2;
+  process.env.ISSUE_PIPELINE_V2 = 'dry-run';
+  const origError = console.error;
+  console.error = () => {};
+  try {
+    const ready = (number) => ({ number, body: '', labels: [], issue_field_values: [{ field_id: 1, single_select_option: { name: 'Ready' } }] });
+    const board = [1, 2, 3, 4].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }));
+    const result = await tick({
+      owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
+      io: {
+        config,
+        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
+        listProjectIssues: async () => board,
+        getIssue: async (n) => ready(n),
+        listIssueComments: async () => [],
+        applyAction: async ({ action, ctx: c }) => {
+          if (c.issueNumber === 1) throw new Error('boom');
+          return { applied: [action.type], calls: [] };
+        },
+      },
+    });
+    assert.deepEqual(result.errors, [{ issue: 1, message: 'boom' }]);
+    const types = result.actions.map((entry) => [entry.issue, entry.action.type, entry.action.reason]);
+    // wip limit is 2: issue 1 failed to apply (no slot taken), 2 and 3 launch, 4 queues
+    assert.deepEqual(types.map((t) => t[1]), ['launch', 'launch', 'launch', 'none']);
+    assert.equal(result.actions[3].action.reason, 'ready.queued');
+  } finally {
+    console.error = origError;
+    if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
+    else process.env.ISSUE_PIPELINE_V2 = prior;
+  }
+});
