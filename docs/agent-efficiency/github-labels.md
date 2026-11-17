@@ -97,6 +97,24 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 
 ---
 
+## Agent acceptance (`/AgentAcceptance`)
+
+| Label | Purpose |
+|-------|---------|
+| `AAT-progress` | AAT run in progress — set by `aat-start` |
+| `AAT-passed` | Holistic acceptance passed — issue may close when policy allows |
+| `AAT-failed` | Acceptance failed — remediation PR or P0 sub-issue required |
+
+**Marker (authoritative for automation):** last line of the verdict comment — `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->` (appended by the CLI).
+
+**CLI:** `node scripts/github_issue_workflow.js aat-start|aat-pass|aat-fail|aat-inconclusive --issue <n> [--merge <sha>]`  
+`aat-start` creates labels via `gh label create --force` when missing.  
+**Procedure:** [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md)
+
+Do not run AAT on issues whose body contains `<!-- v2:follow-up of=#… -->`.
+
+---
+
 ## Debt / review follow-up issues
 
 | Label | Purpose |

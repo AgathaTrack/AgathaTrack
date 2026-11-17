@@ -7,6 +7,10 @@
  *   node scripts/github_issue_workflow.js set-status --issue <n> --status "In Progress"
  *   node scripts/github_issue_workflow.js comment --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js start-work --issue <n> --body "..."
+ *   node scripts/github_issue_workflow.js aat-start --issue <n>
+ *   node scripts/github_issue_workflow.js aat-pass --issue <n> --body-file <path> [--merge <sha>]
+ *   node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> [--merge <sha>]
+ *   node scripts/github_issue_workflow.js aat-inconclusive --issue <n> --body-file <path> [--merge <sha>]
  */
 
 const { spawnSync } = require('child_process');
@@ -16,6 +20,14 @@ const {
   updateIssueProjectStatus,
 } = require('./lib/execute_plan_project');
 const { parseFlags, readBody } = require('./lib/github_issue_workflow_lib');
+const { aatLabelPlan, appendAatMarker } = require('./lib/github_issue_workflow_aat');
+const { resolveAatMergeSha } = require('./lib/github_issue_workflow_aat_merge');
+
+const AAT_LABEL_SPECS = [
+  { name: 'AAT-progress', color: 'fbca04', description: 'Agent acceptance in progress' },
+  { name: 'AAT-passed', color: '0e8a16', description: 'Agent acceptance passed' },
+  { name: 'AAT-failed', color: 'b60205', description: 'Agent acceptance failed' },
+];
 
 function usage() {
   console.error(`Usage:
@@ -23,13 +35,44 @@ function usage() {
   node scripts/github_issue_workflow.js start-work --issue <n> [--body text | --body-file path]
   node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
-Agents do not write the Project Status field — use comments + the \`busy\` label. The org field Stage follows the who-writes-what rule in docs/agent-efficiency/github-issue-workflow.md.
+  aat-start --issue <n>
+  aat-pass | aat-fail | aat-inconclusive --issue <n> (--body | --body-file) [--merge <40-char-sha>]
+
+Agents do not write the Project Status field — use comments + the \`busy\` label. See .cursor/skills/agent-acceptance/SKILL.md
 See docs/agent-efficiency/github-labels.md`);
   process.exit(1);
 }
 
 function printJson(obj) {
   console.log(JSON.stringify(obj, null, 2));
+}
+
+function ensureAatLabels() {
+  const { owner, repo } = resolveRepository();
+  const repoSlug = `${owner}/${repo}`;
+  const created = [];
+  for (const spec of AAT_LABEL_SPECS) {
+    const args = [
+      'label',
+      'create',
+      spec.name,
+      '--repo',
+      repoSlug,
+      '--color',
+      spec.color,
+      '--description',
+      spec.description,
+      '--force',
+    ];
+    const result = spawnSync('gh', args, { encoding: 'utf8' });
+    if (result.status !== 0 && !/already exists/i.test(result.stderr || '')) {
+      throw new Error(
+        `gh label create failed for ${spec.name}: ${result.stderr || result.stdout}`,
+      );
+    }
+    created.push(spec.name);
+  }
+  return { ok: true, labels: created };
 }
 
 function editIssueLabels(issueNumber, { add = [], remove = [] } = {}) {
@@ -43,10 +86,35 @@ function editIssueLabels(issueNumber, { add = [], remove = [] } = {}) {
   const result = spawnSync('gh', args, { encoding: 'utf8' });
   if (result.status !== 0) {
     throw new Error(
-      `gh issue edit failed with exit ${result.status}: ${result.stderr || result.stdout}`
+      `gh issue edit failed with exit ${result.status}: ${result.stderr || result.stdout}`,
     );
   }
   return { ok: true, issueNumber, added: add, removed: remove };
+}
+
+function aatLabelTransition(issueNumber, outcome) {
+  const { add, remove } = aatLabelPlan(outcome);
+  return editIssueLabels(issueNumber, { add, remove });
+}
+
+/** Comment first (with marker), then labels. Marker is authoritative for the engine. */
+async function aatVerdict({ issueNumber, outcome, verdict, flags }) {
+  const body = readBody(flags);
+  if (!body) {
+    throw new Error('aat verdict requires --body or --body-file');
+  }
+  const { owner, repo } = resolveRepository();
+  const mergeSha = await resolveAatMergeSha({
+    issueNumber,
+    owner,
+    repo,
+    merge: flags.merge,
+  });
+  const commentBody = appendAatMarker(body, verdict, mergeSha);
+  const commentResult = await postIssueComment(issueNumber, commentBody);
+  const labelResult =
+    outcome === 'inconclusive' ? aatLabelTransition(issueNumber, 'inconclusive') : aatLabelTransition(issueNumber, outcome);
+  return { mergeSha, comment: commentResult, labels: labelResult };
 }
 
 async function main() {
@@ -75,6 +143,30 @@ async function main() {
       const commentResult = await postIssueComment(issueNumber, body);
       const labelResult = editIssueLabels(issueNumber, { add: ['busy'] });
       printJson({ comment: commentResult, labels: labelResult });
+      break;
+    }
+
+    case 'aat-start': {
+      const ensured = ensureAatLabels();
+      const labels = aatLabelTransition(issueNumber, 'start');
+      printJson({ ensureLabels: ensured, labels });
+      break;
+    }
+
+    case 'aat-pass': {
+      printJson(await aatVerdict({ issueNumber, outcome: 'pass', verdict: 'pass', flags }));
+      break;
+    }
+
+    case 'aat-fail': {
+      printJson(await aatVerdict({ issueNumber, outcome: 'fail', verdict: 'fail', flags }));
+      break;
+    }
+
+    case 'aat-inconclusive': {
+      printJson(
+        await aatVerdict({ issueNumber, outcome: 'inconclusive', verdict: 'inconclusive', flags }),
+      );
       break;
     }
 
