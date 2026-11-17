@@ -6,7 +6,7 @@ status: proposed
 folds_into: docs/domains/people/features/people-care-team.md
 plan: people-domain-refactor-7f3b
 status_since: 2026-09-29
-last_updated: 2026-11-02
+last_updated: 2026-11-17
 ---
 
 # People domain refactor — target model, gap analysis and delivery plan
@@ -14,7 +14,7 @@ last_updated: 2026-11-02
 **Status:** proposed 2026-09-29. **Execute-plan:** [`people-domain-refactor-7f3b`](/.agents/plans/people-domain-refactor-7f3b.md) (roadmap of four child plans, each landing on `main` in its slot of the [shared landing order](/docs/agent-efficiency/parallel-programmes.md)). Supersedes the remaining scope of `people-vet-unify-a58d` (closed as completed 2026-09-29; its seed check moves to `people-server-7f3b` s3).
 **Canonical product spec (unchanged):** [people-care-team.md](/docs/domains/people/features/people-care-team.md) (D1–D28) · wording: [vocabulary.md](/docs/domains/people/features/vocabulary.md).
 
-This document is the **engineering and UX target** for the People domain (UI label *Contacts* in English, *Autour de vos animaux* in French). It does not change product decisions D1–D28. Where it adds decisions, they are listed in §6 (R-01 … R-14) and apply only to *how* the spec is built.
+This document is the **engineering and UX target** for the People domain (UI label *Contacts* in English, *Autour de vos animaux* in French). It does not change product decisions D1–D28. Where it adds decisions, they are listed in §6 (R-01 … R-14, **R-01-SUNSET**) and apply only to *how* the spec is built.
 
 ---
 
@@ -475,7 +475,7 @@ Opened from a picker, the flow is replaced by `QuickAddPersonSheet` and returns 
    - `reconcilePeopleVets.js` becomes `rebuildAll()` from People. It's idempotent and safe to run after deploy.
 2. **Keep the app green between children.** `people-client-core-7f3b` c1 re-implements the old `peopleContactsProvider` as a deprecated adapter over the new repository, so pet profile, care, Away Planning and the report keep working until `people-client-integration-7f3b` i1 migrates them. i3 deletes the adapters.
 3. **Compat routes stay.** `/pc/vets/*` and `/account/people` keep redirecting. Legacy vet deep links resolve through `GET /api/people/contacts/by-legacy-vet/:vetId`.
-4. **Sunset (after this plan).** Dropping `vets` and `pets.vet_id` needs a minimum-client-version gate. `people-client-integration-7f3b` i3 opens a tracked debt issue for it.
+4. **Sunset (after this plan).** Dropping `vets` and `pets.vet_id` is tracked on [#1653](https://github.com/AgathaTrack/AgathaTrack/issues/1653). **Superseded for v1:** minimum-client-version gate — see §6 **R-01-SUNSET** (web soak + separate R-01a/b/c PRs).
 
 ---
 
@@ -497,7 +497,7 @@ Opened from a picker, the flow is replaced by `QuickAddPersonSheet` and returns 
 | R-12 | Only the four migrations in §3.3 are pre-approved; numbers are assigned when the landing PR opens ([parallel-programmes §5.5](/docs/agent-efficiency/parallel-programmes.md)); CARE's `083_care_occurrence_model` lands first. Any other schema or data change halts the plan (`escalation`) |
 | R-13 | Architecture tests (server and Flutter) are merge-blocking guards for I2, I6 and the Flutter façade rule |
 | R-14 | Contact photo upload is out of scope. Avatars use the linked-account photo when available, otherwise a monogram |
-| R-01-SUNSET | Vet sunset ([#1653](https://github.com/AgathaTrack/AgathaTrack/issues/1653)): web soak — R-01b rejects `vetId`/`vet_id` writes 7d after R-01a prod (no `MIN_CLIENT_BUILD`/426 v1); custody `vet` from `primary_vet`; keep `legacy_vet_id`; sequence R-01a→b→c; Backlog until To do; R-01c needs migration PR owner approval |
+| R-01-SUNSET | Vet sunset ([#1653](https://github.com/AgathaTrack/AgathaTrack/issues/1653)): **Gate** — web soak; R-01b rejects `vetId`/`vet_id` writes 7d after R-01a production deploy (no `MIN_CLIENT_BUILD`/426 v1). **Rollout** — three separate PRs only (R-01a client cutover → R-01b adaptor removal → R-01c destructive migration); never one combined release PR. **Custody** — preserve transfer payload `vet` object shape; derive from People `primary_vet`, not `pets.vet_id`. **Schema** — keep `people_contacts.legacy_vet_id` after `vets` drop. **Start** — Backlog until owner moves #1653 to To do; R-01c merge still needs owner approval on the migration PR. |
 
 ---
 
