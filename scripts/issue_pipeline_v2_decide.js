@@ -30,7 +30,7 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
-const { agentLogins, launchableAgents } = require('./issue_pipeline_v2_config');
+const { agentLogins, launchableAgents, selfStartingLogins } = require('./issue_pipeline_v2_config');
 
 const STAGES = [
   'Backlog',
@@ -59,7 +59,7 @@ function canonicalStage(raw) {
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  return holder || pickAgent(agentLogins(config), facts);
+  return holder || pickAgent(selfStartingLogins(config), facts);
 }
 
 function none(reason) {
@@ -125,7 +125,7 @@ function decideToDo(facts, config) {
   if (spec.passedBy) {
     return setStage('In analysis', 'todo.dor-pass', { evidence: { passedBy: spec.passedBy } });
   }
-  const logins = agentLogins(config);
+  const logins = selfStartingLogins(config);
   if (!spec.requestedAt) {
     return {
       type: 'request-spec',
@@ -175,7 +175,7 @@ function decideInAnalysis(facts, config) {
     return setBlocked('no-convergence', 'analysis.no-convergence');
   }
 
-  const logins = agentLogins(config);
+  const logins = selfStartingLogins(config);
   let eligible = logins.filter((login) => login !== editor && !voted.has(login));
   if (eligible.length === 0 && editorIsAgent) {
     eligible = [editor]; // nobody else left: the last editor revises
@@ -281,8 +281,9 @@ function decideInMain(facts, config) {
   }
   if (!facts.intentReview?.requested) {
     const authors = new Set(facts.prAuthors || []);
-    const independent = agentLogins(config).filter((login) => !authors.has(login));
-    const pool = independent.length > 0 ? independent : agentLogins(config);
+    const startable = selfStartingLogins(config);
+    const independent = startable.filter((login) => !authors.has(login));
+    const pool = independent.length > 0 ? independent : startable;
     return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };
   }
   if (facts.uatContainsLatestMerge) {

@@ -126,7 +126,7 @@ listed agent); the engine never clears the flag.
   skips the legacy launch preflight. With too little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
   Definition of Done) and 👍s the spec request, so the engine moves the issue to In analysis. A failed start is only logged;
-  the pickup timeout reassigns. Agents on other runners (`claude`) are assigned only.
+  the pickup timeout reassigns. Agents on other runners (`claude`) are assigned only. Pickup rotation (spec, review, intent review, wake) is LRU over self-starting agents only (`launchRunners`); the full `agents` list still counts for votes, convergence and manual assignment. A runner leaves this limit when added to `launchRunners` with a launcher.
 - **Launch preflight:** a delivery launch (Ready, and the one resume) still runs the legacy safety preflight
   (`.github/scripts/agent-safety-lib.js`): the risky-scope and blocking-label (`busy`, `manual-only`, `blocked`) checks
   stand; an issue waiting on a human has `Blocked` set, which the engine never launches. Its `agent-approved` and `human-reviewed` label requirements are retired under v2, where a
