@@ -143,7 +143,7 @@ Match on dedupe key (see [autonomous-pr-policy.md](./autonomous-pr-policy.md) §
 
 ## Project status (control issue)
 
-Per `docs/agent-efficiency/github-issue-workflow.md`. **Cloud Agents do not update Project board columns** — use comments + `busy` instead. Debt issues get `start-work` only when picked up.
+Per `docs/agent-efficiency/github-issue-workflow.md`. **Cloud Agents do not write the Project `Status` field** — use comments + `busy`; `Stage` follows the who-writes-what table in that doc. Debt issues get `start-work` only when picked up.
 
 | Stage | Agent action |
 |-------|----------------|

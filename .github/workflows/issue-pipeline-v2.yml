@@ -47,5 +47,7 @@ jobs:
           cursor_api_key: ${{ secrets.cursor_api_key }}
           EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
           ISSUE_PIPELINE_V2: ${{ vars.ISSUE_PIPELINE_V2 }}
+          # Soak scope: when set (e.g. pipeline-beta), `on` writes only to issues with this label.
+          ISSUE_PIPELINE_V2_LABEL: ${{ vars.ISSUE_PIPELINE_V2_LABEL }}
           ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
         run: node scripts/issue_pipeline_v2.js

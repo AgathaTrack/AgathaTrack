@@ -26,6 +26,11 @@ or stale canonical doc update, or a missing `## Docs` section, is **blocking**
 — even when the reviewer labels it nit, minor or optional. Fix it in the next
 push; never defer it to a debt issue.
 
+## Issue links
+
+A PR for an issue says `Refs #n`, never `Closes` / `Fixes` / `Resolves`
+([delivery contract](../../../docs/agent-efficiency/github-issue-workflow.md#delivery-contract)).
+
 ## Everything else
 
 - Triage and debt conventions: `docs/agent-efficiency/autonomous-pr-policy.md` (§Babysit skill family · §Automatic reviews:

@@ -68,7 +68,7 @@ test('delivery facts: merges into main, open PRs, activity ignores the engine, m
   const facts = deriveDeliveryFacts({ issue: { body: '- [ ] x', labels: [{ name: 'busy' }] }, prs, comments, engineLogins: engine });
   assert.deepEqual(facts.delivery, {
     busy: true, dodComplete: true, openLinkedPrs: 1, mergedIntoMain: 2, mergedPrNumbers: [1, 2], lastMergeSha: 'bbb',
-    lastActivityAt: Date.parse('2026-11-14T00:00:00Z'), resumed: true,
+    lastActivityAt: Date.parse('2026-11-14T00:00:00Z'), resumed: true, engineLaunched: false,
   });
   assert.equal(facts.intentReview.requested, false, 'a non-engine marker does not count');
   assert.deepEqual(facts.prAuthors, ['pawpet-bot', 'pawpet-claude']);
@@ -97,7 +97,7 @@ test('deploy lookup: the newest successful run of the deploy workflow, never env
 });
 
 test('resume: one agent restart is recorded even when it fails; no launchable agent stalls', async () => {
-  const facts = { mode: 'on', onBoard: true, stage: 'In progress', now: 1e12, deliveryMethod: 'PR', delivery: { busy: false } };
+  const facts = { mode: 'on', onBoard: true, stage: 'In progress', now: 1e12, deliveryMethod: 'PR', delivery: { busy: false, engineLaunched: true } };
   const action = decide(facts, config);
   assert.deepEqual([action.type, action.agent], ['resume', 'pawpet-bot']);
   assert.equal(decide({ ...facts, deliveryMethod: 'carrier' }, config).type, 'set-blocked');
@@ -204,6 +204,83 @@ test('runner: an empty-stage follow-up goes to To do within depth 2, to Backlog 
     assert.equal((await run(10)).row, 'followup.todo');
     assert.equal((await run(20)).to, 'Backlog', '20 -> 10 -> 2 -> 1 is three deep');
     assert.equal((await run(20)).row, 'followup.too-deep');
+  } finally {
+    if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
+    else process.env.ISSUE_PIPELINE_V2 = prior;
+  }
+});
+
+test('runner: agents alternate within a tick, and a scope label limits where `on` writes', async () => {
+  const prior = process.env.ISSUE_PIPELINE_V2;
+  process.env.ISSUE_PIPELINE_V2 = 'on';
+  try {
+    const todo = (number, label) => ({ number, body: '', labels: label ? [{ name: label }] : [], issue_field_values: [{ field_id: 1, single_select_option: { name: 'To do' } }] });
+    const issues = { 1: todo(1, 'pipeline-beta'), 2: todo(2), 3: todo(3, 'pipeline-beta') };
+    const board = [1, 2, 3].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }));
+    const seen = [];
+    const run = (scopeLabel) => tick({
+      owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
+      io: {
+        config,
+        scopeLabel,
+        checkEngineIdentity: async () => ({ ok: true, login: 'pawpet-engine' }),
+        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
+        listProjectIssues: async () => board,
+        getIssue: async (n) => issues[n],
+        listIssueComments: async () => [],
+        applyAction: async ({ action, ctx: c }) => { seen.push([c.issueNumber, action.agent, c.dryRun]); return { applied: [], calls: [] }; },
+      },
+    });
+    await run('');
+    assert.deepEqual(seen.map((s) => s[1]), ['pawpet-bot', 'pawpet-claude', 'pawpet-bot'], 'least recently used alternates');
+    assert.deepEqual(seen.map((s) => s[2]), [false, false, false]);
+    seen.length = 0;
+    await run('pipeline-beta');
+    assert.deepEqual(seen.map((s) => [s[0], s[2]]), [[1, false], [2, true], [3, false]], 'only labelled issues are written to');
+  } finally {
+    if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
+    else process.env.ISSUE_PIPELINE_V2 = prior;
+  }
+});
+
+test('engineLaunched: a run record counts, a failed-launch record does not', () => {
+  const note = (body, login = 'pawpet-engine') => ({ user: { login }, body, created_at: '2026-11-10T00:00:00Z' });
+  const launched = (comments) => deriveDeliveryFacts({ issue: { body: '', labels: [] }, prs: [], comments, engineLogins: engine }).delivery.engineLaunched;
+  assert.equal(launched([note('<!-- v2:launch run=r1 agent=pawpet-bot -->')]), true);
+  assert.equal(launched([note('<!-- v2:launch-acked run=r1 -->')]), true);
+  assert.equal(launched([note('<!-- v2:launch-failed agent=pawpet-bot -->')]), false, 'nothing was started');
+  assert.equal(launched([note('<!-- v2:launch run=r1 agent=pawpet-bot -->', 'someone')]), false, 'engine comments only');
+  assert.equal(launched([]), false);
+});
+
+test('runner: a simulated out-of-scope launch does not take a WIP slot from an in-scope issue', async () => {
+  const prior = process.env.ISSUE_PIPELINE_V2;
+  process.env.ISSUE_PIPELINE_V2 = 'on';
+  try {
+    const field = (name) => [{ field_id: 1, single_select_option: { name } }];
+    const issues = {
+      1: { number: 1, body: '', labels: [], issue_field_values: field('In progress') },
+      10: { number: 10, body: '', labels: [], issue_field_values: field('Ready') },
+      11: { number: 11, body: '', labels: [{ name: 'pipeline-beta' }], issue_field_values: field('Ready') },
+    };
+    const board = [1, 10, 11].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }));
+    const result = await tick({
+      owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
+      io: {
+        config,
+        scopeLabel: 'pipeline-beta',
+        checkEngineIdentity: async () => ({ ok: true, login: 'pawpet-engine' }),
+        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
+        listProjectIssues: async () => board,
+        getIssue: async (n) => issues[n],
+        listIssueComments: async () => [],
+        listLinkedPrs: async () => [],
+        applyAction: async ({ action }) => ({ applied: action.type === 'launch' ? [`launch:${action.agent}`] : [], calls: [] }),
+      },
+    });
+    const byIssue = Object.fromEntries(result.actions.map((entry) => [entry.issue, entry.action]));
+    assert.equal(byIssue[10].type, 'launch', 'decided and logged');
+    assert.equal(byIssue[11].type, 'launch', 'the in-scope issue still gets the free slot (limit 2, one In progress)');
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;

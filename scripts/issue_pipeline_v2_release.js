@@ -96,6 +96,14 @@ function markerNote(comment, engine, marker) {
   );
 }
 
+/** A run the engine started: `v2:launch` or `v2:launch-acked`, never `v2:launch-failed` (nothing started). */
+function engineStartedRun(comment, engine) {
+  return (
+    engine.has(comment.user?.login) &&
+    /<!--\s*v2:launch(?:-acked)?(?![\w-])/.test(comment.body || '')
+  );
+}
+
 /**
  * Delivery facts for In progress, In Main and In UAT.
  * `lastActivityAt` is the newest linked-PR update or non-engine comment: the engine's own
@@ -121,6 +129,8 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
       lastMergeSha: merges.at(-1)?.mergeSha || null,
       lastActivityAt: times.length > 0 ? Math.max(...times) : null,
       resumed: (comments || []).some((c) => markerNote(c, engine, RESUME)),
+      // Only a run the engine started is the engine's to resume; a hand-driven issue has no record.
+      engineLaunched: (comments || []).some((c) => engineStartedRun(c, engine)),
     },
     intentReview: { requested: intentReviewRequested(comments, engine, merges.at(-1)?.mergeSha) },
     prAuthors: [...new Set(prs.filter((pr) => pr.merged).map((pr) => pr.author).filter(Boolean))],

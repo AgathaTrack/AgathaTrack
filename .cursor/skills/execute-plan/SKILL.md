@@ -16,6 +16,12 @@ docs belong on `main` first (normal docs PR) — **never** on `-init`; see
 
 Run `node scripts/execute_plan_runtime.js init <plan_id>`, end the session with the printed approval line.
 
+## Issue-pipeline delivery
+
+When the pipeline launched the work for an issue, follow its delivery contract
+([`github-issue-workflow.md` §Delivery contract](../../../docs/agent-efficiency/github-issue-workflow.md#delivery-contract)):
+`Refs #n` in every PR, Definition of Done ticks, `busy` released at the end.
+
 ## Worker session
 
 Run `env -u OWNER_GH_TOKEN -u BOT_GH_TOKEN node scripts/execute_plan_runtime.js tick <plan_id> --json --actor agent`, do the one `agent`
