@@ -30,7 +30,7 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
-const { agentLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, launchableAgents } = require('./issue_pipeline_v2_config');
 
 const STAGES = [
   'Backlog',
@@ -53,6 +53,13 @@ function canonicalStage(raw) {
     return 'Backlog';
   }
   return STAGES.find((stage) => stage.toLowerCase() === text) || null;
+}
+
+/** The agent a wake rings: the one holding the stage's request, else the least recently used. */
+function wakeAgent(facts, stage, config) {
+  const holder =
+    stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
+  return holder || pickAgent(agentLogins(config), facts);
 }
 
 function none(reason) {
@@ -221,13 +228,17 @@ function decideReady(facts, config) {
       return none('ready.backoff');
     }
   }
-  const capable = config.agents
-    .filter((agent) => agent.methods.includes(facts.deliveryMethod))
-    .map((agent) => agent.login);
+  const capable = launchableAgents(config, facts.deliveryMethod);
   if (capable.length === 0) {
     return setBlocked('launch-failed', 'ready.no-capable-agent');
   }
-  return { type: 'launch', agent: pickAgent(capable, facts), method: facts.deliveryMethod, row: 'ready.launch' };
+  return {
+    type: 'launch',
+    agent: pickAgent(capable, facts),
+    method: facts.deliveryMethod,
+    attempts: failed,
+    row: 'ready.launch',
+  };
 }
 
 function decideInProgress(facts, config) {
@@ -290,8 +301,17 @@ function decide(facts, config) {
     return none('unknown-stage');
   }
   if (facts.blocked) {
-    // Only a human comment wakes a blocked issue; the engine never clears the flag.
-    return facts.humanCommentSinceBlock ? { type: 'wake-stage-agent', stage, row: 'blocked.wake' } : none('blocked');
+    // Only a human comment wakes a blocked issue, once per comment; the engine never clears the flag.
+    const answered = (facts.wokenFor || []).includes(facts.humanCommentId);
+    return facts.humanCommentSinceBlock && !answered
+      ? {
+          type: 'wake-stage-agent',
+          stage,
+          agent: wakeAgent(facts, stage, config),
+          commentId: facts.humanCommentId,
+          row: 'blocked.wake',
+        }
+      : none(answered ? 'blocked.already-woken' : 'blocked');
   }
   if (!String(facts.stage || '').trim() && facts.followUp) {
     return facts.followUp.depth <= config.limits.followUpMaxDepth

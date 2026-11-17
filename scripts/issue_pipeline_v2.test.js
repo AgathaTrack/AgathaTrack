@@ -10,7 +10,8 @@ const {
   buildFieldWrites,
   writeIssueFields,
 } = require('./issue_pipeline_v2_fields');
-const { tick, buildWrites, WRITES_ENABLED } = require('./issue_pipeline_v2');
+const { tick } = require('./issue_pipeline_v2');
+const { buildWrites } = require('./issue_pipeline_v2_apply');
 
 const config = loadConfig();
 const MIN = 60 * 1000;
@@ -59,10 +60,18 @@ test('guards: mode, board, manual-only, unknown stage', () => {
 
 test('guards: a Blocked issue only wakes on a human comment and is never cleared', () => {
   assert.equal(rowOf({ blocked: 'question' }).reason, 'blocked');
-  assert.deepEqual(
-    rowOf({ blocked: 'question', humanCommentSinceBlock: true }),
-    { type: 'wake-stage-agent', stage: 'To do', row: 'blocked.wake' },
+  const wake = rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7 });
+  assert.deepEqual([wake.type, wake.stage, wake.row, wake.commentId], ['wake-stage-agent', 'To do', 'blocked.wake', 7]);
+  assert.equal(wake.agent, 'pawpet-bot', 'with no request holder the least recently used agent is rung');
+  assert.equal(
+    rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, spec: { assignedTo: 'pawpet-claude' } }).agent,
+    'pawpet-claude',
+    'the agent holding the stage request is rung',
   );
+  // a human comment is answered once
+  const again = rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, wokenFor: [7] });
+  assert.deepEqual([again.type, again.reason], ['none', 'blocked.already-woken']);
+  assert.equal(rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 8, wokenFor: [7] }).type, 'wake-stage-agent');
 });
 
 test('empty Stage reads as Backlog; follow-ups get To do within depth 2, Backlog beyond', () => {
@@ -384,8 +393,9 @@ test('runner: off does nothing; dry-run decides over the board and never writes'
     assert.equal(off.skipped, true);
 
     process.env.ISSUE_PIPELINE_V2 = 'on';
-    assert.equal(WRITES_ENABLED, false);
-    const result = await tick({ ...args, io: boardIo() });
+    const sent = [];
+    const result = await tick({ ...args, io: boardIo({ restFn: async (...call) => { sent.push(call); return {}; } }) });
+    assert.deepEqual(sent, [], 'no engine identity configured, so nothing is sent');
     assert.equal(result.issueCount, 3, 'closed, other-repo and same-name-other-owner issues are not read');
     assert.equal(result.wip, 0, 'manual-only issues do not take WIP');
     const byIssue = Object.fromEntries(result.actions.map((entry) => [entry.issue, entry.action]));
@@ -412,7 +422,7 @@ test('writes: stage and blocked changes, attempts on reassign, and the counter e
   assert.deepEqual(buildWrites({ action: { type: 'none' }, parsed, counters: {} }), {});
 });
 
-test('runner: a counter-only change reaches the writer (as a dry run while writes are disabled)', async () => {
+test('runner: a counter-only change reaches the applier (as a dry run without an engine identity)', async () => {
   const prior = process.env.ISSUE_PIPELINE_V2;
   process.env.ISSUE_PIPELINE_V2 = 'on';
   const written = [];
@@ -421,7 +431,7 @@ test('runner: a counter-only change reaches the writer (as a dry run while write
     const io = boardIo({
       listProjectIssues: async () => [{ issue: { number: 4, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }],
       getIssue: async () => stale,
-      writeIssueFields: async (args) => { written.push(args); },
+      applyAction: async (args) => { written.push(args); return { applied: [], calls: [] }; },
     });
     io.config = { ...io.config, engine: { logins: ['engine'] } };
     // an agent edit after the first request counts as one vote, so Total N should read 1
@@ -432,8 +442,8 @@ test('runner: a counter-only change reaches the writer (as a dry run while write
     io.fetchBodyEdits = async () => ({ author: 'KanopeeKa', edits: [{ editor: 'pawpet-claude', editedAt: '2026-11-16T09:30:00Z' }] });
     await tick({ owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S', io });
     assert.equal(written.length, 1);
-    assert.equal(written[0].dryRun, true, 'writes stay disabled in run A');
-    assert.equal(written[0].writes.totalN, 1);
+    assert.equal(written[0].ctx.dryRun, true, 'the token is not a configured engine identity');
+    assert.equal(written[0].ctx.counters.totalN, 1);
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;

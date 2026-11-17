@@ -39,9 +39,12 @@ jobs:
       - name: Tick pipeline v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_PROJECTS_PAT: ${{ secrets.GH_PROJECTS_PAT }}
+          # The v2 engine runs as its own account; the script reads this variable name.
+          GH_PROJECTS_PAT: ${{ secrets.ENGINE_PAT }}
           GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
+          cursor_api_key: ${{ secrets.cursor_api_key }}
+          EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
           ISSUE_PIPELINE_V2: ${{ vars.ISSUE_PIPELINE_V2 }}
           ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
         run: node scripts/issue_pipeline_v2.js

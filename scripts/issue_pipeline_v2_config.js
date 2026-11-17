@@ -56,6 +56,10 @@ function validateConfig(config) {
       }
     }
   }
+  const runners = config?.launchRunners;
+  if (!Array.isArray(runners) || runners.length === 0 || runners.some((r) => typeof r !== 'string')) {
+    problems.push('launchRunners must be a non-empty list of runner names the engine can start');
+  }
   const limits = config?.limits || {};
   for (const key of LIMIT_KEYS) {
     if (!Number.isFinite(limits[key]) || limits[key] <= 0) {
@@ -72,6 +76,13 @@ function validateConfig(config) {
   return config;
 }
 
+/** Agents with `method` whose runner the engine can start itself. */
+function launchableAgents(config, method) {
+  return config.agents
+    .filter((agent) => agent.methods.includes(method) && config.launchRunners.includes(agent.runner))
+    .map((agent) => agent.login);
+}
+
 /** Logins of the listed agents, in config order. */
 function agentLogins(config) {
   return config.agents.map((agent) => agent.login);
@@ -81,4 +92,4 @@ function loadConfig(file = DEFAULT_CONFIG_PATH) {
   return validateConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
 }
 
-module.exports = { DEFAULT_CONFIG_PATH, KNOWN_METHODS, validateConfig, loadConfig, agentLogins };
+module.exports = { DEFAULT_CONFIG_PATH, KNOWN_METHODS, validateConfig, loadConfig, agentLogins, launchableAgents };

@@ -3,7 +3,7 @@
 
 /**
  * Pipeline v2 runner (#2385, run A). Reads the Pawpet board, builds facts per issue, calls
- * `decide()` and logs the action. Field writes are disabled until run B: this tick never writes.
+ * `decide()` and logs the action. Writes happen only in `on` mode with a token that is the configured engine identity.
  */
 
 const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/github-project-lib');
@@ -11,18 +11,19 @@ const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
-const { loadOrgFields, parseIssueFields, writeIssueFields } = require('./issue_pipeline_v2_fields');
+const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
+const { deliveryMethod, deriveLaunchFacts, launchIssue } = require('./issue_pipeline_v2_launch');
+const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
+const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 const {
   deriveSpecFacts,
-  humanCommentSinceBlock,
+  latestHumanComment,
+  wokenCommentIds,
   listIssueComments,
   listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
 const { deriveReviewFacts, findReviewRequests, totalNWrite } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
-
-/** Flipped on in run B, together with the launch and release stages. */
-const WRITES_ENABLED = false;
 
 function mode() {
   return resolvePipelineMode(process.env.ISSUE_PIPELINE_V2);
@@ -65,7 +66,7 @@ async function resolveEditors({ comments, config, token, io }) {
 async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
   const canonical = canonicalStage(entry.parsed.stage);
   const blocked = Boolean(entry.parsed.blocked);
-  if (!(canonical === 'To do' || canonical === 'In analysis' || blocked)) {
+  if (!(canonical === 'To do' || canonical === 'In analysis' || canonical === 'Ready' || blocked)) {
     return {};
   }
   const comments = await (io.listIssueComments || listIssueComments)({
@@ -76,8 +77,22 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
   });
   const facts = {};
   if (blocked) {
-    facts.humanCommentSinceBlock = humanCommentSinceBlock(comments, config);
+    const human = latestHumanComment(comments, config);
+    facts.humanCommentSinceBlock = Boolean(human);
+    facts.humanCommentId = human ? human.id : null;
+    facts.wokenFor = wokenCommentIds(comments, config.engine.logins);
     return facts;
+  }
+  if (canonical === 'Ready') {
+    return {
+      deliveryMethod: deliveryMethod(entry.issue.body),
+      launch: deriveLaunchFacts({
+        comments,
+        engineLogins: config.engine.logins,
+        labels: entry.labels,
+        attempts: entry.parsed.attempts,
+      }),
+    };
   }
   const editors = await resolveEditors({ comments, config, token, io });
   const engineLogins = config.engine.logins;
@@ -114,28 +129,6 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
   return { ...facts, ...derived };
 }
 
-/**
- * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
- * and the display-only `Total N` counter. The counter is written even when the decision is
- * `none`, so a stable issue's counter does not go stale.
- */
-function buildWrites({ action, parsed, counters }) {
-  const writes = {};
-  if (action.type === 'set-stage') {
-    writes.stage = action.to;
-    writes.attempts = 0;
-  } else if (action.type === 'set-blocked') {
-    writes.blocked = action.reason;
-  } else if (
-    action.type === 'reassign' &&
-    Number.isFinite(action.attempts) &&
-    action.attempts !== parsed.attempts
-  ) {
-    writes.attempts = action.attempts;
-  }
-  return { ...writes, ...counters };
-}
-
 function countWip(entries) {
   return entries.filter(
     (entry) =>
@@ -153,6 +146,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const getIssue =
     io.getIssue ||
     ((number) => rest('GET', `/repos/${owner}/${repo}/issues/${number}`, projectsPat));
+  const identity = runMode === 'on'
+    ? await (io.checkEngineIdentity || checkEngineIdentity)({ token: projectsPat, config })
+    : { ok: false, reason: 'not-in-on-mode' };
+  const live = writesAllowed(runMode, identity);
   const fields = io.fields || (await loadOrgFields({ org: owner, token: projectsPat }));
 
   const rows = await list({ projectId, statusFieldId, projectsPat });
@@ -201,20 +198,37 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
     actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });
     console.log(
-      JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: WRITES_ENABLED, issue: entry.number, action, counters }),
+      JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live, issue: entry.number, action, counters }),
     );
-    const writes = buildWrites({ action, parsed: entry.parsed, counters });
-    if (Object.keys(writes).length > 0) {
-      await (io.writeIssueFields || writeIssueFields)({
+    const result = await (io.applyAction || applyAction)({
+      action,
+      ctx: {
         owner,
         repo,
         issueNumber: entry.number,
         token: projectsPat,
+        config,
         fields,
-        writes,
-        dryRun: !(WRITES_ENABLED && runMode === 'on'),
-      });
-    }
+        parsed: entry.parsed,
+        assignees: (entry.issue.assignees || []).map((a) => a.login),
+        counters,
+        facts,
+        dryRun: !live,
+        restFn: io.restFn,
+        launchFn:
+          io.launchFn ||
+          (() =>
+            launchIssue({
+              owner,
+              repo,
+              issue: entry.issue,
+              token: projectsPat,
+              apiKey: process.env.CURSOR_API_KEY || process.env.cursor_api_key,
+              deps: io.launchDeps,
+            })),
+      },
+    });
+    actions[actions.length - 1].applied = result.applied;
   }
   return { mode: runMode, issueCount: entries.length, wip, actions };
 }
@@ -247,4 +261,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { tick, buildBaseFacts, buildCommentFacts, buildWrites, countWip, WRITES_ENABLED };
+module.exports = { tick, buildBaseFacts, buildCommentFacts, buildWrites, countWip };
