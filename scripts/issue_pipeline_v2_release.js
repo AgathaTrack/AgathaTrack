@@ -105,6 +105,7 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
       dodComplete: dodComplete(issue.body),
       openLinkedPrs: prs.filter((pr) => pr.state === 'open').length,
       mergedIntoMain: merges.length,
+      mergedPrNumbers: merges.map((pr) => pr.number),
       lastMergeSha: merges.at(-1)?.mergeSha || null,
       lastActivityAt: times.length > 0 ? Math.max(...times) : null,
       resumed: (comments || []).some((c) => markerNote(c, engine, RESUME)),

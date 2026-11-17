@@ -19,6 +19,7 @@ const {
   latestDeploySha,
   listLinkedPrs,
 } = require('./issue_pipeline_v2_release');
+const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 const {
@@ -248,6 +249,9 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       }),
       ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
     };
+    if (!String(entry.parsed.stage || '').trim() && parseFollowUp(entry.issue.body)) {
+      facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
+    }
     const action = decide(facts, config);
     const counters = facts.totalVotes === undefined ? {} : totalNWrite(entry.parsed.totalN, facts.totalVotes);
     actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action, counters });

@@ -12,6 +12,7 @@ const { agentLogins } = require('./issue_pipeline_v2_config');
 const { buildFieldWrites } = require('./issue_pipeline_v2_fields');
 const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
 const { buildReviewRequest } = require('./issue_pipeline_v2_review');
+const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
 const { buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 
@@ -127,6 +128,17 @@ async function applyAction({ action: decided, ctx }) {
       action = { ...action, attempts };
       break;
     }
+    case 'request-intent-review':
+      await comment(
+        buildIntentReviewRequest({
+          agent: action.agent,
+          issueNumber: ctx.issueNumber,
+          prNumbers: ctx.facts.delivery?.mergedPrNumbers,
+        }),
+        'comment:intent-review',
+      );
+      await assign(action.agent);
+      break;
     case 'resume': {
       let ok = true;
       try {

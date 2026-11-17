@@ -94,7 +94,7 @@ test('dry run records the same calls but sends none', async () => {
 test('none with no counters sends nothing; unknown types are unsupported', async () => {
   const { sent, restFn } = recorder();
   assert.deepEqual((await applyAction({ action: { type: 'none' }, ctx: ctx({ restFn }) })).applied, []);
-  assert.deepEqual((await applyAction({ action: { type: 'request-intent-review' }, ctx: ctx({ restFn }) })).applied, ['unsupported:request-intent-review']);
+  assert.deepEqual((await applyAction({ action: { type: 'bogus' }, ctx: ctx({ restFn }) })).applied, ['unsupported:bogus']);
   assert.deepEqual(sent, []);
 });
 

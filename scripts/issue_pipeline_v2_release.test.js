@@ -67,7 +67,7 @@ test('delivery facts: merges into main, open PRs, activity ignores the engine, m
   ];
   const facts = deriveDeliveryFacts({ issue: { body: '- [ ] x', labels: [{ name: 'busy' }] }, prs, comments, engineLogins: engine });
   assert.deepEqual(facts.delivery, {
-    busy: true, dodComplete: true, openLinkedPrs: 1, mergedIntoMain: 2, lastMergeSha: 'bbb',
+    busy: true, dodComplete: true, openLinkedPrs: 1, mergedIntoMain: 2, mergedPrNumbers: [1, 2], lastMergeSha: 'bbb',
     lastActivityAt: Date.parse('2026-11-14T00:00:00Z'), resumed: true,
   });
   assert.equal(facts.intentReview.requested, false, 'a non-engine marker does not count');
@@ -130,6 +130,69 @@ test('runner: release stages read PRs and deploys; In Main waits for UAT, In UAT
     assert.equal((await run('In Main', { deploySha: async () => 'd', deployContains: async () => false })).reason, 'main.waiting-uat');
     assert.equal((await run('In Main', { deploySha: async () => 'd', deployContains: async () => true })).to, 'In UAT');
     assert.equal((await run('In UAT', { deploySha: async () => 'd', deployContains: async () => true })).to, 'Done');
+  } finally {
+    if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
+    else process.env.ISSUE_PIPELINE_V2 = prior;
+  }
+});
+
+const { buildIntentReviewRequest, parseFollowUp, followUpDepth } = require('./issue_pipeline_v2_intent');
+
+test('intent review: the request carries the marker the delivery facts read back', () => {
+  const body = buildIntentReviewRequest({ agent: 'pawpet-claude', issueNumber: 5, prNumbers: [11, 12] });
+  assert.match(body, /v2:intent-review agent=pawpet-claude/);
+  assert.match(body, /#11, #12/);
+  assert.match(body, /v2:follow-up of=#5/);
+  const facts = deriveDeliveryFacts({
+    issue: { body: '', labels: [] }, prs: [], engineLogins: engine,
+    comments: [{ user: { login: 'pawpet-engine' }, body, created_at: '2026-11-10T00:00:00Z' }],
+  });
+  assert.equal(facts.intentReview.requested, true);
+});
+
+test('intent review: apply posts the request and rings the agent', async () => {
+  const sent = [];
+  await applyAction({
+    action: { type: 'request-intent-review', agent: 'pawpet-claude' },
+    ctx: {
+      owner: 'o', repo: 'r', issueNumber: 5, token: 'p', config, fields: {}, parsed: {}, assignees: ['human'], counters: {},
+      facts: { delivery: { mergedPrNumbers: [11] } }, dryRun: false,
+      restFn: async (method, path, token, body) => { sent.push({ path, body }); return {}; },
+    },
+  });
+  assert.match(sent[0].body.body, /v2:intent-review agent=pawpet-claude/);
+  assert.deepEqual(sent[1].body.assignees, ['human', 'pawpet-claude']);
+});
+
+test('follow-up depth is counted from the parents, bounded, and cycle safe', async () => {
+  assert.equal(parseFollowUp('<!-- v2:follow-up of=#7 -->\ntext'), 7);
+  assert.equal(parseFollowUp('plain'), null);
+  const bodies = { 7: '<!-- v2:follow-up of=#3 -->', 3: 'root', 8: '<!-- v2:follow-up of=#9 -->', 9: '<!-- v2:follow-up of=#8 -->' };
+  const getIssue = async (n) => ({ body: bodies[n] });
+  assert.equal(await followUpDepth({ body: 'root', getIssue }), 0);
+  assert.equal(await followUpDepth({ body: '<!-- v2:follow-up of=#3 -->', getIssue }), 1);
+  assert.equal(await followUpDepth({ body: '<!-- v2:follow-up of=#7 -->', getIssue }), 2);
+  assert.equal(await followUpDepth({ body: '<!-- v2:follow-up of=#8 -->', getIssue }), 2, 'a cycle stops');
+});
+
+test('runner: an empty-stage follow-up goes to To do within depth 2, to Backlog beyond', async () => {
+  const prior = process.env.ISSUE_PIPELINE_V2;
+  process.env.ISSUE_PIPELINE_V2 = 'dry-run';
+  try {
+    const bodies = { 10: '<!-- v2:follow-up of=#2 -->', 2: '<!-- v2:follow-up of=#1 -->', 1: 'root', 20: '<!-- v2:follow-up of=#10 -->' };
+    const run = async (number) => (await tick({
+      owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
+      io: {
+        config,
+        fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] }, totalN: { id: 4, name: 'Total N', options: [] } },
+        listProjectIssues: async () => [{ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }],
+        getIssue: async (n) => ({ number: n, body: bodies[n], labels: [], issue_field_values: [] }),
+      },
+    })).actions[0].action;
+    assert.equal((await run(10)).to, 'To do');
+    assert.equal((await run(10)).row, 'followup.todo');
+    assert.equal((await run(20)).to, 'Backlog', '20 -> 10 -> 2 -> 1 is three deep');
+    assert.equal((await run(20)).row, 'followup.too-deep');
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;
