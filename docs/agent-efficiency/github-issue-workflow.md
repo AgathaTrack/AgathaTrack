@@ -75,6 +75,11 @@ This is a rule, not a permission: agent tokens can write org issue fields. **Boo
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
 From `on`, only the engine writes `Stage`. `Blocked` set means a human is needed; the engine never clears it.
 
+**One writer per issue.** While `ISSUE_PIPELINE_V2=on` (within `ISSUE_PIPELINE_V2_LABEL` when it is set), the legacy
+merge, UAT and prod handlers and the Stage ↔ Status mirror skip the issues the engine owns. Left running they would
+move `Status` after the *first* merged PR, remove `busy` and reopen, and the mirror would copy that into `Stage`.
+`on` without a valid engine identity ends the tick red, because the legacy writers have already stepped aside.
+
 ### Transitions
 
 One action per issue per tick; every transition is a field write.
@@ -95,6 +100,7 @@ One action per issue per tick; every transition is a field write.
 | In Main | the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
 | In UAT | the newest successful `deploy-prod.yml` run's commit contains it | → Done, issue closed, `in-prod` added |
 | none | a follow-up (see below) of depth 1 or 2 | → To do; deeper → Backlog |
+| In progress / In Main / In UAT | the issue was closed (as completed) before Done, for example by a merge | reopened once (`v2:reopened` comment); a second close, a `not_planned` close and a `manual-only` issue are left alone |
 | any | an AGENTS.md escalation item is hit | stays, `Blocked=decision` |
 | any | a human changes `Stage` or clears `Blocked` | as set |
 
@@ -156,6 +162,8 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 - **Soak:** `dry-run` for a day; then `on` with `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`, taking one sandbox issue
   To do → Done and sending one to each `Blocked` reason; then `on` for the board (clear the label variable).
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
+- **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
+  race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
 
 ### Labels (v2)
 

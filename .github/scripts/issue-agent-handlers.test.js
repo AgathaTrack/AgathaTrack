@@ -344,3 +344,107 @@ test('handleProdDeployResult skips light-plan with open checklist', async () => 
 
   assert.equal(result.results[0].status, 'skipped-open-checklist');
 });
+
+function withV2Env(t, env) {
+  const keys = ['ISSUE_PIPELINE_V2', 'ISSUE_PIPELINE_V2_LABEL'];
+  const prior = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  for (const key of keys) {
+    delete process.env[key];
+  }
+  Object.assign(process.env, env);
+  t.after(() => {
+    for (const key of keys) {
+      if (prior[key] === undefined) delete process.env[key];
+      else process.env[key] = prior[key];
+    }
+  });
+}
+
+const mergedArgs = {
+  owner: 'KanopeeKa',
+  repo: 'AgathaTrack',
+  prNumber: 2417,
+  prBody: 'Refs #2335',
+  mergeSha: '866eff89a7ea402f2c60d365cc9c2d7cf49a163c',
+  token: 'test-token',
+  projectsPat: 'projects-pat',
+  projectId: 'project',
+  statusFieldId: 'status-field',
+};
+
+test('v2 engine owns the issue: the merge handler leaves it alone (no busy removal, reopen, status or comment)', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'on' });
+  const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Refs #2335');
+  const result = await handleMergedPr({ ...mergedArgs, io });
+  assert.deepEqual(calls, []);
+  assert.equal(result.results[0].status, 'skipped-v2-owned');
+});
+
+test('v2 dry-run or off: the merge handler works as before', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  for (const mode of ['dry-run', 'off']) {
+    withV2Env(t, { ISSUE_PIPELINE_V2: mode });
+    const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
+    const result = await handleMergedPr({ ...mergedArgs, io });
+    assert.deepEqual(calls, ['labels', 'reopen', 'status', 'comment'], mode);
+    assert.equal(result.results[0].status, 'In Main');
+  }
+});
+
+test('with a soak label only labelled issues are skipped by the merge handler', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'on', ISSUE_PIPELINE_V2_LABEL: 'pipeline-beta' });
+  const unlabelled = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED', labels: { nodes: [{ name: 'task' }] } }, 'Refs #2335');
+  const a = await handleMergedPr({ ...mergedArgs, io: unlabelled.io });
+  assert.deepEqual(unlabelled.calls, ['labels', 'reopen', 'status', 'comment']);
+  assert.equal(a.results[0].status, 'In Main');
+  const labelled = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN', labels: { nodes: [{ name: 'pipeline-beta' }] } }, 'Refs #2335');
+  const b = await handleMergedPr({ ...mergedArgs, io: labelled.io });
+  assert.deepEqual(labelled.calls, []);
+  assert.equal(b.results[0].status, 'skipped-v2-owned');
+});
+
+test('v2 engine owns the issue: the UAT handler leaves it alone', async (t) => {
+  stubQueue(t, 'syncDeployResult');
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'on' });
+  const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Refs #2335');
+  const result = await handleUatWorkflowResult({
+    owner: 'KanopeeKa',
+    repo: 'AgathaTrack',
+    deployRef: 'uat-261117-2417',
+    conclusion: 'success',
+    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/1',
+    token: 'test-token',
+    projectsPat: 'projects-pat',
+    projectId: 'project',
+    statusFieldId: 'status-field',
+    io,
+  });
+  assert.deepEqual(calls, []);
+  assert.equal(result.results[0].status, 'skipped-v2-owned');
+});
+
+test('v2 engine owns the issue: the prod handler does not close it', async (t) => {
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'on' });
+  const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Refs #2335');
+  io.listProjectIssues = async () => [{ status: 'In UAT', issue: { number: 2335 } }];
+  io.fetchAllIssueComments = async () => [];
+  io.closeIssue = async () => {
+    calls.push('close');
+  };
+  const result = await handleProdDeployResult({
+    owner: 'KanopeeKa',
+    repo: 'AgathaTrack',
+    commitSha: '866eff89a7ea402f2c60d365cc9c2d7cf49a163c',
+    prodTag: 'v1.2.3',
+    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/2',
+    token: 'test-token',
+    projectsPat: 'projects-pat',
+    projectId: 'project',
+    statusFieldId: 'status-field',
+    io,
+  });
+  assert.deepEqual(calls, []);
+  assert.equal(result.results[0].status, 'skipped-v2-owned');
+});

@@ -14,6 +14,7 @@ const { rest } = require('../.github/scripts/github-project-lib');
 const { fetchAllPages } = require('./issue_pipeline_v2_comments');
 
 const RESUME = 'v2:resume';
+const REOPENED = 'v2:reopened';
 const INTENT_REVIEW = 'v2:intent-review';
 
 /** Does `body` link to the issue with a closing or `Refs` keyword? */
@@ -137,6 +138,19 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
   };
 }
 
+/** The engine reopened this issue once; a second close is then taken as deliberate. */
+function reopenedByEngine(comments, engineLogins) {
+  const engine = new Set(engineLogins || []);
+  return (comments || []).some((comment) => markerNote(comment, engine, REOPENED));
+}
+
+function buildReopened({ stage }) {
+  return [
+    `<!-- ${REOPENED} -->`,
+    `This issue was closed while its \`Stage\` was **${stage}**, before Done. An issue stays open until production has the merge, so it was reopened. If the close was deliberate, set \`Stage\` to Backlog or Done, or label it \`manual-only\`; the engine does not reopen it a second time.`,
+  ].join('\n');
+}
+
 function buildResume({ agent, ok }) {
   return [
     `<!-- ${RESUME} agent=${agent} ok=${ok ? 1 : 0} -->`,
@@ -193,6 +207,8 @@ module.exports = {
   dodComplete,
   deriveDeliveryFacts,
   buildResume,
+  reopenedByEngine,
+  buildReopened,
   latestDeploySha,
   deployContains,
 };

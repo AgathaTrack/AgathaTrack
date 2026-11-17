@@ -49,6 +49,8 @@ jobs:
           GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID: ${{ secrets.GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID }}
           STAGE_ISSUE_FIELD_ID: ${{ secrets.STAGE_ISSUE_FIELD_ID }}
           STAGE_MIRROR: ${{ vars.STAGE_MIRROR }}
+          ISSUE_PIPELINE_V2: ${{ vars.ISSUE_PIPELINE_V2 }}
+          ISSUE_PIPELINE_V2_LABEL: ${{ vars.ISSUE_PIPELINE_V2_LABEL }}
           STAGE_MIRROR_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || '' }}
           ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}

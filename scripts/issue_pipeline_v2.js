@@ -18,6 +18,7 @@ const {
   deriveDeliveryFacts,
   latestDeploySha,
   listLinkedPrs,
+  reopenedByEngine,
 } = require('./issue_pipeline_v2_release');
 const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
@@ -116,8 +117,8 @@ const deploys = {
  * so a board of mostly Backlog and Done issues costs no extra calls.
  */
 async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
-  if (entry.labels.includes('manual-only')) {
-    return {}; // decide() ignores it, so spend no calls on it
+  if (entry.labels.includes('manual-only') || entry.closed) {
+    return {}; // decide() ignores it (or reads only the issue itself), so spend no calls on it
   }
   const canonical = canonicalStage(entry.parsed.stage);
   const blocked = Boolean(entry.parsed.blocked);
@@ -190,6 +191,7 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
 function countWip(entries) {
   return entries.filter(
     (entry) =>
+      !entry.closed &&
       canonicalStage(entry.stage) === 'In progress' && !entry.labels.includes('manual-only'),
   ).length;
 }
@@ -235,6 +237,34 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       labels: (issue.labels || []).map((label) => label.name || label),
     });
   }
+  // Closed board items still on a delivery column (Status In progress / In Main / In UAT): a merge
+  // may have auto-closed an issue that is still being delivered. Only those whose Stage is a
+  // delivery stage and that were closed as completed can need reopening.
+  const closedNumbers = rows
+    .filter(
+      (row) =>
+        row.issue &&
+        row.issue.state === 'CLOSED' &&
+        row.issue.repository?.name === repo &&
+        row.issue.repository?.owner?.login === owner &&
+        ['in progress', 'in main', 'in uat'].includes(String(row.status || '').trim().toLowerCase()),
+    )
+    .map((row) => row.issue.number);
+  for (const number of closedNumbers) {
+    const issue = await getIssue(number);
+    if (!issue) {
+      continue;
+    }
+    const parsed = parseIssueFields(issue, fields);
+    const labels = (issue.labels || []).map((label) => label.name || label);
+    if (
+      issue.state_reason === 'completed' &&
+      ['In progress', 'In Main', 'In UAT'].includes(canonicalStage(parsed.stage)) &&
+      !labels.includes('manual-only')
+    ) {
+      entries.push({ number, issue, parsed, stage: parsed.stage, labels, closed: true });
+    }
+  }
   let wip = countWip(entries);
   // Least recently used, within this tick: each agent rung is remembered so the next pick moves on.
   const lastUsed = {};
@@ -243,6 +273,12 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const now = Date.now();
   const actions = [];
   const errors = [];
+  if (runMode === 'on' && !identity.ok) {
+    // `on` with no valid engine identity writes nothing, while the legacy handlers already step
+    // aside for engine-owned issues: say so loudly instead of stalling quietly.
+    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: `engine identity: ${identity.reason}` }));
+    errors.push({ issue: null, message: `engine identity: ${identity.reason}` });
+  }
   for (const entry of entries) {
     if (only && entry.number !== only) {
       continue;
@@ -260,6 +296,17 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         agentLastUsed: { ...lastUsed },
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
       };
+      if (entry.closed) {
+        const comments = await (io.listIssueComments || listIssueComments)({
+          owner,
+          repo,
+          issueNumber: entry.number,
+          token: projectsPat,
+        });
+        facts.closed = true;
+        facts.closeReason = entry.issue.state_reason;
+        facts.reopenedBefore = reopenedByEngine(comments, config.engine.logins);
+      }
       if (!String(entry.parsed.stage || '').trim() && parseFollowUp(entry.issue.body)) {
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
