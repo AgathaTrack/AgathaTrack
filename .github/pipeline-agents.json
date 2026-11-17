@@ -19,7 +19,7 @@
     }
   ],
   "engine": {
-    "logins": []
+    "logins": ["pawpet-engine"]
   },
   "limits": {
     "wip": 2,
