@@ -1,7 +1,7 @@
 'use strict';
 
 const { rest } = require('../.github/scripts/github-project-lib');
-const { agentLogins, resolveAgent, sharedActsAs } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent, isSharedActsAs, entryActsAs } = require('./issue_pipeline_v2_config');
 const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const SPEC_REQUEST = 'v2:spec-request';
@@ -87,10 +87,12 @@ function deriveSpecFacts({
   const assignedTo = resolveAgent(config, request.assigned)?.id || request.assigned;
   const timedOut = (request.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
   let passedBy = null;
-  const poolNeedsSigned = sharedActsAs(config).length > 0;
-  if (poolNeedsSigned && !voteKey) {
+  const assignedEntry = resolveAgent(config, request.assigned);
+  const assignedActsAs = assignedEntry ? entryActsAs(assignedEntry) : request.assigned;
+  const assigneeNeedsSigned = isSharedActsAs(config, assignedActsAs);
+  if (assigneeNeedsSigned && !voteKey) {
     passedBy = null;
-  } else if (poolNeedsSigned && voteKey && bodyHash && issueNumber) {
+  } else if (assigneeNeedsSigned && voteKey && bodyHash && issueNumber) {
     const specUp = findVerifiedVerdicts({
       comments,
       config,
@@ -112,6 +114,7 @@ function deriveSpecFacts({
       (reaction) =>
         reaction.content === '+1' &&
         agents.has(reaction.user?.login) &&
+        !isSharedActsAs(config, reaction.user?.login) &&
         Date.parse(reaction.created_at) >= since,
     );
     passedBy = passed ? passed.user.login : null;

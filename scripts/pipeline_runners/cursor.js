@@ -38,7 +38,7 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, runSecr
     { number: issue.number, url: issue.html_url, title: issue.title, body: issue.body || '', labels },
     repoUrl,
   );
-  const prompts = stagePromptsForConfig(config);
+  const prompts = stagePromptsForConfig(config, agent);
   const extra = stage ? prompts[stage] : METHOD_PROMPTS[method];
   const promptText = [payloadLib.buildAgentPrompt(payload), extra || ''].filter(Boolean).join('\n\n');
 

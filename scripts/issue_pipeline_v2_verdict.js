@@ -78,7 +78,7 @@ function findVerifiedVerdicts({
   kinds,
   sinceMs,
 }) {
-  if (!useSignedVerdicts(config) || !voteKey || !bodyHash) {
+  if (!voteKey || !bodyHash) {
     return [];
   }
   const timeoutMin = limits?.reviewTimeoutMin || 30;

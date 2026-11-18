@@ -54,7 +54,7 @@ async function main() {
   appendEnv('PIPELINE_STAGE', stage);
 
   const issue = await rest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`, token);
-  const prompts = stagePromptsForConfig(config);
+  const prompts = stagePromptsForConfig(config, agent);
   const extra = stage ? prompts[stage] : METHOD_PROMPTS[method];
   const prompt = [
     `You are pipeline agent \`${agentId}\` (\`@${agent.actsAs}\`).`,

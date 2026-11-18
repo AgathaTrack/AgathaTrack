@@ -1,7 +1,7 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
-const { agentLogins, resolveAgent, entryId, entryActsAs, sharedActsAs } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent, entryId, entryActsAs, sharedActsAs, isSharedActsAs } = require('./issue_pipeline_v2_config');
 const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const REVIEW_REQUEST = 'v2:review-request';
@@ -100,11 +100,16 @@ function deriveReviewFacts({
     return { review: {}, lastBodyEditor, totalVotes: 0 };
   }
   const votes = [];
-  const poolNeedsSigned = sharedActsAs(config).length > 0;
-  const sharedLogins = new Set(poolNeedsSigned ? sharedActsAs(config) : []);
-  const signed = poolNeedsSigned && voteKey && bodyHash && issueNumber;
+  const sharedLogins = new Set(sharedActsAs(config));
   const enteredAt = Date.parse(requests[0].comment.created_at);
-  if (signed) {
+  for (const request of requests) {
+    votes.push(
+      ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }).filter(
+        (vote) => !(isSharedActsAs(config, vote.login) || (sharedLogins.has(vote.login) && !voteKey)),
+      ),
+    );
+  }
+  if (voteKey && bodyHash && issueNumber) {
     for (const verdict of findVerifiedVerdicts({
       comments,
       config,
@@ -132,13 +137,22 @@ function deriveReviewFacts({
         at: verdict.at,
       });
     }
-  } else {
-    for (const request of requests) {
-      votes.push(
-        ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }).filter(
-          (vote) => !(poolNeedsSigned && !voteKey && sharedLogins.has(vote.login)),
-        ),
-      );
+  }
+  let editorAgentId = null;
+  if (voteKey && bodyHash && issueNumber) {
+    const editClaims = findVerifiedVerdicts({
+      comments,
+      config,
+      engineLogins,
+      issueNumber,
+      bodyHash,
+      voteKey,
+      limits,
+      now,
+      kinds: ['edit'],
+    }).filter((verdict) => verdict.value === 'up');
+    if (editClaims.length > 0) {
+      editorAgentId = editClaims.at(-1).agentId;
     }
   }
   const newest = requests[requests.length - 1];
@@ -157,6 +171,7 @@ function deriveReviewFacts({
       commentId: newest.comment.id,
     },
     lastBodyEditor,
+    editorAgentId,
     totalVotes: votes.length + agentEdits,
   };
 }

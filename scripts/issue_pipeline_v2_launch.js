@@ -239,8 +239,11 @@ const STAGE_PROMPTS_SIGNED = {
     ),
 };
 
-function stagePromptsForConfig(config) {
-  const { sharedActsAs } = require('./issue_pipeline_v2_config');
+function stagePromptsForConfig(config, agent) {
+  const { isSharedActsAs, entryActsAs, sharedActsAs } = require('./issue_pipeline_v2_config');
+  if (agent) {
+    return isSharedActsAs(config, entryActsAs(agent)) ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
+  }
   return sharedActsAs(config).length > 0 ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
 }
 
