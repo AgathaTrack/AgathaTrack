@@ -21,5 +21,4 @@ jobs:
       - name: GET /v1/models and resolve Grok 4.7 medium
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          cursor_api_key: ${{ secrets.cursor_api_key }}
         run: node scripts/probe_cursor_pipeline_models.js
