@@ -14,7 +14,7 @@ const {
   validateMergeSha,
   lastMainMergeShaFromLinkedPrs,
 } = require('./lib/github_issue_workflow_aat');
-const { resolveAatMergeSha } = require('./lib/github_issue_workflow_aat_merge');
+const { resolveAatMergeSha, resolveGhToken } = require('./lib/github_issue_workflow_aat_merge');
 const { editIssueLabels, ensureRepoLabels } = require('./lib/github_issue_workflow_labels');
 const { createGitHubClient } = require('./lib/execute_plan_github');
 const { createFakeFetch } = require('./test/helpers/execute_plan_fake_fetch');
@@ -89,6 +89,14 @@ test('resolveAatMergeSha uses explicit --merge without API', async () => {
     },
   });
   assert.equal(sha, SAMPLE_SHA);
+});
+
+test('resolveGhToken includes PAWPET_CLAUDE_TOKEN before GITHUB_TOKEN', () => {
+  const env = {
+    GITHUB_TOKEN: 'workflow',
+    PAWPET_CLAUDE_TOKEN: 'claude',
+  };
+  assert.equal(resolveGhToken(env), 'claude');
 });
 
 test('resolveAatMergeSha requires token when merge omitted', async () => {
