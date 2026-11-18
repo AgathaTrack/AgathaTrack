@@ -122,7 +122,6 @@ class TestPetListNotifier extends PetListNotifier {
     String chipId = '',
     bool chipDismissed = false,
     String? photoPath,
-    String? vetId,
     String? organizationId,
   }) async {
     final pet = Pet(
@@ -140,7 +139,6 @@ class TestPetListNotifier extends PetListNotifier {
       chipId: chipId,
       chipDismissed: chipDismissed,
       photoPath: photoPath,
-      vetId: vetId,
       colorValue: 0xFF7E57C2,
       organizationId: organizationId,
       passedAway: false,

@@ -67,8 +67,11 @@ class PetRemoteDataSourceImpl implements PetRemoteDataSource {
     }
   }
 
+  /// Create never sends `vetId` (R-01a, #1653). Vet selection goes through
+  /// People `primary_vet`; the server still accepts the field until R-01b.
   Map<String, dynamic> _petCreatePayload(PetModel pet) {
     final payload = pet.toJson(includeWeightEntryDate: true);
+    payload.remove('vetId');
     if (isPendingPetPhotoUpload(pet.photoPath)) {
       payload.remove('photoPath');
     }

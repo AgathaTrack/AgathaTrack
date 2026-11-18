@@ -139,7 +139,6 @@ class PetListNotifier extends AsyncNotifier<List<Pet>> {
     String chipId = '',
     bool chipDismissed = false,
     String? photoPath,
-    String? vetId,
     String? organizationId,
   }) async {
     final pet = Pet(
@@ -157,7 +156,6 @@ class PetListNotifier extends AsyncNotifier<List<Pet>> {
       chipId: chipId,
       chipDismissed: chipDismissed,
       photoPath: photoPath,
-      vetId: vetId,
       organizationId: organizationId,
     );
     await ref.read(addPetUseCaseProvider).call(pet);
