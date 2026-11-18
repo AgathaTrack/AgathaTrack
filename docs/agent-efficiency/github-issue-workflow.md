@@ -120,7 +120,13 @@ listed agent); the engine never clears the flag.
   `actsAs` login. When several ids share one GitHub login, reactions cannot name the voter: those agents post signed
   `<!-- v2:verdict ... -->` comments via `node scripts/pipeline_verdict.js` using `PIPELINE_RUN_SECRET` from the doorbell
   launch (the engine keeps `PIPELINE_VOTE_KEY` and verifies signatures; reactions are ignored for that pool). The owner's
-  reactions do not count. The last body editor's edit counts as its approval.
+  reactions do not count. The last body editor's edit counts as its approval. A signed verdict counts only when its
+  signature verifies, the comment author is the id's `actsAs`, its nonce belongs to an engine launch record for that id
+  and stage, it was **posted** (comment time, not the tick that reads it) within `reviewTimeoutMin` of that launch, its
+  kind fits the launch stage (`spec` in To do; `review` / `edit` in In analysis), its hash is the current body hash, and
+  it is the id's first verdict of that kind on that hash. An `edit` claim also needs the newest body edit to be by the
+  id's `actsAs` and to be no later than the claim (`claim.created_at >= editedAt`), so a later same-login revert does not
+  credit an older claim.
 - **Delivery plan:** the method (`PR`, `light-plan` or `execute-plan`, read from the body's `Method:` line, default `PR`),
   the planned work, the `agent-paths` block and the Definition of Done are written into the body during review. After
   convergence the body is frozen except for Definition of Done ticks.

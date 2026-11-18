@@ -118,7 +118,6 @@ function deriveReviewFacts({
       bodyHash,
       voteKey,
       limits,
-      now,
       kinds: ['review'],
       sinceMs: enteredAt,
     })) {
@@ -148,9 +147,15 @@ function deriveReviewFacts({
       bodyHash,
       voteKey,
       limits,
-      now,
       kinds: ['edit'],
-    }).filter((verdict) => verdict.value === 'up');
+    }).filter(
+      // D16: the claim must follow the newest edit, and that edit must be by the id's login.
+      (verdict) =>
+        verdict.value === 'up' &&
+        lastEdit &&
+        String(lastEdit.editor || '').toLowerCase() === String(verdict.actsAs).toLowerCase() &&
+        verdict.at >= Date.parse(lastEdit.editedAt),
+    );
     if (editClaims.length > 0) {
       editorAgentId = editClaims.at(-1).agentId;
     }

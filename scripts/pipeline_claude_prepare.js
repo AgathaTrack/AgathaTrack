@@ -6,7 +6,7 @@
  */
 
 const fs = require('fs');
-const { rest, parseRepo } = require('../.github/scripts/github-project-lib');
+const { parseRepo } = require('../.github/scripts/github-project-lib');
 const { loadConfig, resolveAgent } = require('./issue_pipeline_v2_config');
 const { deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 const { METHOD_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
@@ -47,13 +47,13 @@ async function main() {
     throw new Error(`unknown agent ${agentId}`);
   }
   const runSecret = deriveRunSecret(voteKey, issueNumber, agentId, stage, nonce);
+  console.log(`::add-mask::${runSecret}`);
   appendEnv('PIPELINE_RUN_SECRET', runSecret);
   appendEnv('PIPELINE_AGENT_ID', agentId);
   appendEnv('PIPELINE_RUN_NONCE', nonce);
   appendEnv('PIPELINE_ISSUE', String(issueNumber));
   appendEnv('PIPELINE_STAGE', stage);
 
-  const issue = await rest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`, token);
   const prompts = stagePromptsForConfig(config, agent);
   const extra = stage ? prompts[stage] : METHOD_PROMPTS[method];
   const prompt = [
@@ -62,7 +62,6 @@ async function main() {
     extra || '',
     'Follow AGENTS.md and CLAUDE.md in this repository.',
     `Issue URL: https://github.com/${owner}/${repo}/issues/${issueNumber}`,
-    issue.title ? `Title: ${issue.title}` : '',
   ]
     .filter(Boolean)
     .join('\n\n');
