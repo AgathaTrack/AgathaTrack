@@ -218,19 +218,21 @@ function main() {
   const fullHigh = countHighCriticalMeta(full.auditJson);
   const { ghsas, unmapped } = walkHighCritical(full.auditJson);
 
+  // Checked before the metadata early return: metadata counts and the
+  // vulnerabilities map must not be trusted to agree.
+  if (unmapped.size > 0) {
+    console.error(
+      `npm audit gate: ${pkg} has high/critical advisories without a GHSA id (${[...unmapped].sort().join(', ')}); allowlist cannot cover them; fail closed.`,
+    );
+    process.exit(1);
+  }
+
   if (fullHigh === 0) {
     if (allowlistState.active.length) {
       warnStaleAllowlist(allowlistState.active);
     }
     console.log(`npm audit gate: ${pkg} ok (production clean; no high/critical in full tree).`);
     process.exit(0);
-  }
-
-  if (unmapped.size > 0) {
-    console.error(
-      `npm audit gate: ${pkg} has high/critical advisories without a GHSA id (${[...unmapped].sort().join(', ')}); allowlist cannot cover them; fail closed.`,
-    );
-    process.exit(1);
   }
 
   if (ghsas.size === 0) {
