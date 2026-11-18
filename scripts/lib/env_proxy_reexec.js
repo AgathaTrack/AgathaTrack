@@ -6,7 +6,8 @@
  * read ALL_PROXY. Sandboxed agent sessions reach GitHub only through an egress proxy that
  * injects credentials, so a direct fetch is refused with 401 "Bad credentials".
  *
- * Scripts that call GitHub with fetch call reexecWithEnvProxy() at the top of the file.
+ * CLI entry points that call GitHub with fetch call reexecWithEnvProxy() when
+ * `require.main === module`, before loading modules that perform fetch.
  * When a proxy is configured and the flag is missing, the script re-runs itself once in a
  * child process with the flag set and exits with the child's status. ALL_PROXY is mapped to
  * HTTPS_PROXY for the child, because Node ignores ALL_PROXY. Only http(s) proxy URLs are
