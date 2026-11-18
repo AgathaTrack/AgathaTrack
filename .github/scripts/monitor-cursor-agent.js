@@ -92,6 +92,8 @@ function detectBlockedResult(run) {
     'cannot reproduce',
     'not enough context',
     'please clarify',
+    // light-plan §Stop and ask: an owner stop leaves `busy` set but must not be resumed.
+    'owner decision',
   ];
   return blockedPatterns.some((pattern) => text.includes(pattern));
 }

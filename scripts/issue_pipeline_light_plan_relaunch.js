@@ -309,17 +309,18 @@ Reason: **${pathCheck.reason || 'sensitive-paths'}** (path gate).`,
     relaunchStuck: nextStuck,
   };
 
-  // Record the new run before handoff writes so a failed write is resumed, not double-launched.
-  await (io.upsertMarkerComment || upsertMarkerComment)({
-    owner,
-    repo,
-    issueNumber,
-    marker: RUN_MARKER_PREFIX,
-    body: buildDispatchComment(marker),
-    token: assignToken || token,
-  });
-
   try {
+    // Record the new run first so a failed later write is resumed, not double-launched. A throw here
+    // is reported as handoffIncomplete instead of escaping before state is saved.
+    await (io.upsertMarkerComment || upsertMarkerComment)({
+      owner,
+      repo,
+      issueNumber,
+      marker: RUN_MARKER_PREFIX,
+      body: buildDispatchComment(marker),
+      token: assignToken || token,
+    });
+
     const nextState = {
       ...state,
       stuck: nextStuck,
