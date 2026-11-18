@@ -32,7 +32,7 @@ A barrel export is removable without new violations only when no consumer outsid
 
 | Barrel | Symbol(s) | Consumers outside owner | Decision |
 |--------|-----------|-------------------------|----------|
-| `health_tracking.dart` | `syncAbsenceResolution` (`care_item_absence_resolution_sync.dart`) | None. Both consumers are `health_tracking` widgets that import the file directly. | **Removed (P2).** Behaviour-preserving; no feature edge changes. |
+| `health_tracking.dart` | `absenceSliceConflictsOnDate`, `wireDateForOccurrence`, `primaryAbsenceConflictDate` (`care_item_absence_resolution_sync.dart`) | `experience/presentation/care_item/occurrence/` (`occurrence_schedule_section.dart`, `occurrence_absence_section.dart`) and experience tests | **Keep.** Removing the export breaks the experience build (R6 on those imports). `syncAbsenceResolution` is used only by `health_tracking` widgets that import the file directly, so the export looked dead, but the file's other helpers are not. |
 | `health_tracking.dart` | `careItemAbsenceContextProvider`, `healthAbsenceContextRemoteProvider` (`care_item_absence_providers.dart`) | `experience/presentation/care_item/{detail,occurrence}/` (5 files); `pet_care/context/.../away_plan_care_review_section.dart` | **Keep.** Removal → R6 on composition imports; move to experience → R1 for health_tracking internals; move to care_item → R5 cycle. |
 | `health_tracking.dart` | `invalidateCareItemDetailData`, `invalidateCareScheduleProviders` (`care_item_detail_refresh.dart`) | `experience/.../care_item_detail_with_absence_refresh.dart`; `pet_care/context/.../away_plan_care_review_section.dart` | **Keep.** Same reasoning. |
 | `pet_care.dart` | 16 `care_surface` widgets, tokens and value types | 17 files under `experience/presentation/care_item/**`; 5 files under `experience/presentation/pet_profile/**` and `screens/**` | **Keep.** Removal → R6 on 22 composition files. Moving them to `core/widgets` is a forced refactor that removes no feature edge (`experience→pet_care` exists through other symbols). |
@@ -42,7 +42,7 @@ Tests: the 11 detail tests under `test/features/care_item/presentation/detail/` 
 ## Decision log (2026-11-18)
 
 - **P1 — inventory:** table above.
-- **P2 — barrel hygiene:** one export removed (`syncAbsenceResolution`, no outside consumers). The remaining exports each have consumers outside their owner. Removing them creates R6/R1/R5 violations, or is a forced refactor with no edge reduction, so they are kept.
+- **P2 — barrel hygiene:** no export removed. The `care_item_absence_resolution_sync.dart` export looked unused, because its `syncAbsenceResolution` has no outside consumer. But the same file's helpers are used by experience occurrence screens through the barrel. Removing it broke the web build in CI (2026-11-18), so it was restored. Every remaining export has consumers outside its owner. Removing any of them creates R6/R1/R5 violations or is a forced refactor with no edge reduction, so P2 is not executed.
 - **P3 — gates, docs, debt:** `node scripts/check_feature_imports.js` green (R1=R2=R3=R5=R6=R7=R8=0, 35 feature edges). No `--update-baseline` (no edges dropped). This document corrected to match the code. `DEBT-ARCH-CYCLE` is recorded in `docs/debt/debt.md` as a residual open row, not closed: the 35 baselined edges and the three R4 leaf exceptions remain until ARCH-G.
 
 Structural import-cycle split remains **deferred** to ARCH-G.

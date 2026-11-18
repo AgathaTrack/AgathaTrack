@@ -25,6 +25,7 @@ export 'presentation/widgets/health_entry_card.dart';
 export 'presentation/controllers/care_schedule_controller.dart';
 export 'presentation/controllers/health_entry_form_constants.dart';
 export 'presentation/providers/care_item_absence_providers.dart';
+export 'presentation/providers/care_item_absence_resolution_sync.dart';
 export 'presentation/providers/care_item_detail_refresh.dart';
 export 'presentation/providers/care_provider_contacts_provider.dart';
 export 'presentation/widgets/care_provider_field.dart';
