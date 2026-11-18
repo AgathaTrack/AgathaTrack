@@ -106,6 +106,30 @@ test('isPlanControlIssue matches execute-plan titles only', () => {
   assert.equal(isPlanControlIssue({ title: 'Bell stays wrong after mark-all-read' }), false);
 });
 
+const MOCK_ORG_FIELDS = {
+  stage: {
+    id: 1,
+    name: 'Stage',
+    options: ['Backlog', 'Ready', 'In Main', 'In UAT', 'Done'],
+  },
+  blocked: { id: 2, name: 'Blocked', options: ['question'] },
+  attempts: { id: 3, name: 'Attempts', options: [] },
+};
+
+function prodProjectIo(extra = {}) {
+  const stageByIssue =
+    extra.stageByIssue ||
+    ((issueNumber) => (issueNumber === 50 || issueNumber === 2363 || issueNumber === 2335 ? 'In UAT' : 'Ready'));
+  return {
+    loadOrgFields: async () => MOCK_ORG_FIELDS,
+    readIssueOrgStage: async ({ issueNumber }) => ({
+      stage: stageByIssue(issueNumber),
+      fields: MOCK_ORG_FIELDS,
+    }),
+    ...extra,
+  };
+}
+
 function recordingIo(issue, prBody) {
   const calls = [];
   const io = {
@@ -303,9 +327,10 @@ test('handleProdDeployResult closes In UAT issues when merge is in deploy', asyn
   const deploySha = 'c'.repeat(40);
   const calls = [];
   const io = {
+    ...prodProjectIo(),
     listProjectIssues: async () => [
-      { status: 'In UAT', issue: { number: 50 } },
-      { status: 'Ready', issue: { number: 99 } },
+      { status: 'Ready', issue: { number: 50 } },
+      { status: 'In UAT', issue: { number: 99 } },
     ],
     fetchAllIssueComments: async () => [
       {
@@ -344,10 +369,58 @@ test('handleProdDeployResult closes In UAT issues when merge is in deploy', asyn
   assert.deepEqual(calls, ['stage', 'labels', 'close', 'comment']);
 });
 
+test('handleProdDeployResult matches org Stage, not the board Status column', async () => {
+  const mergeSha = 'e'.repeat(40);
+  const deploySha = 'f'.repeat(40);
+  const calls = [];
+  const io = {
+    ...prodProjectIo({ stageByIssue: () => 'In UAT' }),
+    listProjectIssues: async () => [{ status: 'In Main', issue: { number: 77 } }],
+    fetchAllIssueComments: async () => [
+      {
+        user: { login: 'pawpet-bot' },
+        body: `<!-- agent-uat-branch -->\nMerge commit: \`${mergeSha}\``,
+        updated_at: '2026-11-16T12:00:00Z',
+      },
+    ],
+    fetchIssue: async () => ({
+      number: 77,
+      title: 'Bug fix',
+      body: 'Done',
+      labels: { nodes: [{ name: 'busy' }] },
+    }),
+    compareCommits: async () => ({ status: 'ahead' }),
+    setIssueStage: async () => calls.push('stage'),
+    setLabels: async () => calls.push('labels'),
+    closeIssue: async () => calls.push('close'),
+    upsertMarkerComment: async (args) => {
+      calls.push('comment');
+      assert.match(args.body, /Stage: \*\*Done\*\*/);
+    },
+  };
+
+  const result = await handleProdDeployResult({
+    owner: 'AgathaTrack',
+    repo: 'AgathaTrack',
+    commitSha: deploySha,
+    prodTag: 'v1.2.3',
+    workflowUrl: 'https://example.com/runs/1',
+    token: 'test',
+    projectsPat: 'pat',
+    projectId: 'pid',
+    statusFieldId: 'sid',
+    io,
+  });
+
+  assert.equal(result.results[0].status, 'closed');
+  assert.deepEqual(calls, ['stage', 'labels', 'close', 'comment']);
+});
+
 test('handleProdDeployResult skips light-plan with open checklist', async () => {
   const mergeSha = 'd'.repeat(40);
   const io = {
-    listProjectIssues: async () => [{ status: 'In UAT', issue: { number: 2363 } }],
+    ...prodProjectIo(),
+    listProjectIssues: async () => [{ status: 'Ready', issue: { number: 2363 } }],
     fetchAllIssueComments: async () => [
       {
         user: { login: 'pawpet-claude' },
@@ -463,8 +536,10 @@ test('v2 engine owns the issue: the UAT handler leaves it alone', async (t) => {
 test('v2 engine owns the issue: the prod handler does not close it', async (t) => {
   withV2Env(t, { ISSUE_PIPELINE_V2: 'on' });
   const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Refs #2335');
-  io.listProjectIssues = async () => [{ status: 'In UAT', issue: { number: 2335 } }];
-  io.fetchAllIssueComments = async () => [];
+  Object.assign(io, prodProjectIo(), {
+    listProjectIssues: async () => [{ status: 'In UAT', issue: { number: 2335 } }],
+    fetchAllIssueComments: async () => [],
+  });
   io.closeIssue = async () => {
     calls.push('close');
   };

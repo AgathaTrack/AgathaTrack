@@ -127,6 +127,25 @@ async function setIssueStage({ owner, repo, issueNumber, stageName, projectsPat 
   });
 }
 
+function normalizeStageName(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function stageIs(actual, expected) {
+  return normalizeStageName(actual) === normalizeStageName(expected);
+}
+
+/** Org `Stage` field (not the project Status column). */
+async function readIssueOrgStage({ owner, repo, issueNumber, projectsPat, fields }) {
+  const orgFields = fields || (await loadOrgFields({ org: owner, token: projectsPat }));
+  const issue = await rest(
+    'GET',
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`,
+    projectsPat,
+  );
+  return { stage: parseIssueFields(issue, orgFields).stage, fields: orgFields };
+}
+
 function ioOr(io) {
   return {
     fetchIssue: io?.fetchIssue || fetchIssue,
@@ -140,6 +159,8 @@ function ioOr(io) {
     setLabels: io?.setLabels || setLabels,
     reopenIssue: io?.reopenIssue || reopenIssue,
     setIssueStage: io?.setIssueStage || setIssueStage,
+    readIssueOrgStage: io?.readIssueOrgStage || readIssueOrgStage,
+    loadOrgFields: io?.loadOrgFields || ((args) => loadOrgFields(args)),
     upsertMarkerComment: io?.upsertMarkerComment || upsertMarkerComment,
     assignIssue: io?.assignIssue || assignIssue,
     closeIssue: io?.closeIssue || closeIssue,
@@ -568,7 +589,7 @@ Deploy commit \`${commitSha}\` includes delivery merge \`${mergeSha}\`.
 
 - Prod tag: \`${prodTag || 'n/a'}\`
 - Workflow: ${workflowUrl}
-- Project status: **Done**
+- Stage: **Done**
 - Issue closed; \`busy\` removed.`,
     token,
   });
@@ -592,13 +613,21 @@ async function handleProdDeployResult({
   const results = [];
 
   if (projectsPat && projectId && statusFieldId) {
+    const orgFields = await api.loadOrgFields({ org: owner, token: projectsPat });
     const board = await api.listProjectIssues({ projectId, statusFieldId, projectsPat });
     for (const entry of board) {
-    if (entry.status !== 'In UAT') {
-      continue;
-    }
     const issueNumber = entry.issue?.number;
     if (!issueNumber) {
+      continue;
+    }
+    const { stage } = await api.readIssueOrgStage({
+      owner,
+      repo,
+      issueNumber,
+      projectsPat,
+      fields: orgFields,
+    });
+    if (!stageIs(stage, 'In UAT')) {
       continue;
     }
     const issue = await api.fetchIssue(owner, repo, issueNumber, token);
