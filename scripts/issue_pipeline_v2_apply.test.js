@@ -95,6 +95,10 @@ test('request-spec also starts a Cursor run for an agent whose runner the engine
   const dry = await applyAction({ action: { type: 'request-review', agent: 'pawpet-bot', hash: 'h' }, ctx: ctx({ restFn, launchFn, config: withRunners, dryRun: true }) });
   assert.equal(launches.length, 1, 'a dry run sends nothing');
   assert.ok(dry.calls.some((call) => call.path === 'cursor:/v1/agents' && call.body.stage === 'In analysis'));
+  assert.ok(
+    dry.calls.some((call) => call.method === 'POST' && call.path.endsWith('/labels') && call.body?.labels?.includes('busy')),
+    'dry-run plan includes the busy label handoff',
+  );
 });
 
 test('request-intent-review also rings a launchable agent, for the In Main stage', async () => {
@@ -182,6 +186,40 @@ test('set-stage Done writes the field and closes as completed', async () => {
   assert.equal(sent[1].method, 'DELETE');
   const patch = sent.find((c) => c.method === 'PATCH' && c.body?.state === 'closed');
   assert.equal(patch.body.state_reason, 'completed');
+});
+
+const pipelineFields = {
+  stage: { id: 1, name: 'Stage', options: ['To do', 'In analysis', 'Ready', 'In progress', 'Done'] },
+  blocked: { id: 2, name: 'Blocked', options: ['stalled', 'question'] },
+  attempts: { id: 3, name: 'Attempts', options: [] },
+};
+
+test('set-stage to In analysis removes busy after a doorbell spec pass', async () => {
+  const { sent, restFn } = recorder();
+  await applyAction({
+    action: { type: 'set-stage', to: 'In analysis' },
+    ctx: ctx({ restFn, fields: pipelineFields }),
+  });
+  const removed = sent.find((c) => c.method === 'DELETE' && c.path.endsWith('/labels/busy'));
+  assert.ok(removed, 'busy cleared when the stage advances');
+});
+
+test('set-stage to In progress keeps busy for delivery ack', async () => {
+  const { sent, restFn } = recorder();
+  await applyAction({
+    action: { type: 'set-stage', to: 'In progress' },
+    ctx: ctx({ restFn, fields: pipelineFields, facts: { launch: { runId: 'r1' } } }),
+  });
+  assert.ok(!sent.some((c) => c.method === 'DELETE' && c.path.endsWith('/labels/busy')));
+});
+
+test('set-blocked removes busy when the agent escalates or asks a question', async () => {
+  const { sent, restFn } = recorder();
+  await applyAction({
+    action: { type: 'set-blocked', reason: 'question' },
+    ctx: ctx({ restFn, fields: pipelineFields }),
+  });
+  assert.ok(sent.some((c) => c.method === 'DELETE' && c.path.endsWith('/labels/busy')));
 });
 
 test('dry run records the same calls but sends none', async () => {

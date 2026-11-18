@@ -78,6 +78,16 @@ async function applyAction({ action: decided, ctx }) {
   };
   const base = issuePath(ctx);
   const applied = [];
+  const isGithubNotFound = (error) => /failed \(404\)/.test(String(error?.message ?? ''));
+  const deleteBusyLabel = async () => {
+    try {
+      await request('DELETE', `${base}/labels/busy`);
+    } catch (error) {
+      if (!isGithubNotFound(error)) {
+        throw error;
+      }
+    }
+  };
   try {
 
     const assign = async (agent) => {
@@ -118,6 +128,9 @@ async function applyAction({ action: decided, ctx }) {
           if (!runId) {
             throw new Error('doorbell launch missing run id');
           }
+        }
+        if (ctx.dryRun) {
+          calls.push({ method: 'POST', path: `${base}/labels`, body: { labels: ['busy'] } });
         }
         calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent, stage, nonce } });
         await comment(
@@ -300,14 +313,21 @@ async function applyAction({ action: decided, ctx }) {
       case 'set-stage':
         if (action.to === 'Done') {
           await request('POST', `${base}/labels`, { labels: ['in-prod'] });
-          await request('DELETE', `${base}/labels/busy`).catch(() => {}); // already gone is fine
+          await deleteBusyLabel();
           applied.push('labels:in-prod');
+        } else if (action.to !== 'In progress') {
+          // Doorbell work (spec, review) ends on stage advance; delivery keeps `busy` until In progress ack.
+          await deleteBusyLabel();
+          applied.push('labels:busy-removed');
         }
         if (action.to === 'In progress' && action.row === 'ready.launched' && ctx.facts.launch?.runId) {
           await comment(buildLaunchAcked({ runId: ctx.facts.launch.runId }), 'comment:launch-acked');
         }
         break;
       case 'set-blocked':
+        await deleteBusyLabel();
+        applied.push('labels:busy-removed');
+        break;
       case 'none':
         break;
       default:

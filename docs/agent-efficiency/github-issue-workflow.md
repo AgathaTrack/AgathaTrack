@@ -56,7 +56,7 @@ Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the 
 | `Stage` | org issue field, **is the board column** | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
 | `Blocked` | org issue field | empty, or `question` · `no-convergence` · `launch-failed` · `decision` · `stalled` · `paused` |
 | `Attempts` | number | engine retry counter (reassignments, failed launches); reset on every `Stage` change |
-| `busy` | label | a delivery agent is actively working |
+| `busy` | label | an agent is actively working (delivery or a doorbell stage task) |
 | `manual-only` | label | hand-driven: the engine never touches the issue (it takes no WIP slot) |
 | body | issue body | the spec, then the agreed Delivery plan and Definition of Done |
 
@@ -135,8 +135,11 @@ listed agent); the engine never clears the flag.
 - **Doorbell run:** when the engine posts, reassigns or wakes a spec, review or intent-review request for an agent whose
   runner is in `launchRunners` (`cursor` and/or `claude`), it also starts a run with the stage's task (Cursor via the
   Agents API; Claude via `pipeline-claude-run.yml` workflow dispatch with `run-name: pipeline-claude-<nonce>`). Spec pass in To do,
-  adversarial review in In analysis, intent review in In Main). The run is not a delivery: no `busy` label, no PR, and it
-  skips the legacy launch preflight. With too little information it writes a best-effort spec,
+  adversarial review in In analysis, intent review in In Main). The run is not a delivery (no PR) and skips the legacy
+  launch preflight; the launcher sets `busy` like a delivery handoff (except the non-interactive **acceptance** doorbell).
+  The engine removes `busy` when the stage advances (spec → In analysis, review → Ready) or when it sets `Blocked`;
+  intent-review agents remove it with `node scripts/github_issue_workflow.js finish-work --issue <n>` when done. With too
+  little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
   Definition of Done) and signs spec pass (`pipeline_verdict.js spec up`, or 👍 on the request when `actsAs` logins are
   unique), so the engine moves the issue to In analysis. A failed start is only logged;

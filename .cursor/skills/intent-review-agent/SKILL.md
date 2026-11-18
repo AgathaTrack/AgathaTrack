@@ -22,6 +22,7 @@ When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exis
 
    Leave `Stage` empty. The engine puts it in To do while the follow-up chain is at most two issues deep, and in Backlog beyond that. Write the finding so it passes the Definition of Ready on its own.
 4. Post **one comment** on the original issue: what you checked, which follow-ups you filed (links), and what you found fine. Nothing to file is a valid result; say so in one line.
+5. Remove the `busy` label: `node scripts/github_issue_workflow.js finish-work --issue <n>`.
 
 ## Rules
 
