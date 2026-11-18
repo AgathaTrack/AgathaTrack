@@ -7,6 +7,7 @@
  *   node scripts/github_issue_workflow.js set-status --issue <n> --status "In Progress"
  *   node scripts/github_issue_workflow.js comment --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js start-work --issue <n> --body "..."
+ *   node scripts/github_issue_workflow.js finish-work --issue <n>
  *   node scripts/github_issue_workflow.js aat-start --issue <n>
  *   node scripts/github_issue_workflow.js aat-pass --issue <n> --body-file <path> [--merge <sha>]
  *   node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> --reason scope|implementation|quality [--merge <sha>]
@@ -37,6 +38,7 @@ function usage() {
   console.error(`Usage:
   node scripts/github_issue_workflow.js comment --issue <n> [--body text | --body-file path]
   node scripts/github_issue_workflow.js start-work --issue <n> [--body text | --body-file path]
+  node scripts/github_issue_workflow.js finish-work --issue <n>
   node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
   aat-start --issue <n>
@@ -121,6 +123,13 @@ async function main() {
       const commentResult = await postIssueComment(issueNumber, body);
       const labelResult = await editIssueLabels(client, issueNumber, { add: ['busy'] });
       printJson({ comment: commentResult, labels: labelResult });
+      break;
+    }
+
+    case 'finish-work': {
+      const client = makeWorkflowClient();
+      const labelResult = await editIssueLabels(client, issueNumber, { remove: ['busy'] });
+      printJson({ labels: labelResult });
       break;
     }
 

@@ -302,12 +302,19 @@ async function applyAction({ action: decided, ctx }) {
           await request('POST', `${base}/labels`, { labels: ['in-prod'] });
           await request('DELETE', `${base}/labels/busy`).catch(() => {}); // already gone is fine
           applied.push('labels:in-prod');
+        } else if (action.to !== 'In progress') {
+          // Doorbell work (spec, review) ends on stage advance; delivery keeps `busy` until In progress ack.
+          await request('DELETE', `${base}/labels/busy`).catch(() => {});
+          applied.push('labels:busy-removed');
         }
         if (action.to === 'In progress' && action.row === 'ready.launched' && ctx.facts.launch?.runId) {
           await comment(buildLaunchAcked({ runId: ctx.facts.launch.runId }), 'comment:launch-acked');
         }
         break;
       case 'set-blocked':
+        await request('DELETE', `${base}/labels/busy`).catch(() => {});
+        applied.push('labels:busy-removed');
+        break;
       case 'none':
         break;
       default:
