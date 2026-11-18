@@ -135,8 +135,8 @@ test('live relaunch stops at the path gate', async () => {
   assert.equal(calls.launched, 0);
 });
 
-test('a failing run-marker write after launch is reported, not thrown', async () => {
-  const { io } = liveIo({
+test('a failing run-marker write after launch fails closed to the owner', async () => {
+  const { io, calls } = liveIo({
     upsertMarkerComment: async () => {
       throw new Error('write failed');
     },
@@ -144,6 +144,9 @@ test('a failing run-marker write after launch is reported, not thrown', async ()
   const result = await applyLightPlanRelaunch({ ...liveArgs, io });
   assert.equal(result.relaunched, true);
   assert.equal(result.handoffIncomplete, true);
+  assert.equal(result.failedClosed, true);
+  assert.ok(calls.labels.some((l) => l.add.includes('needs-owner') && l.remove.includes('busy')));
+  assert.deepEqual(calls.assigned, ['KanopeeKa']);
 });
 
 test('detectBlockedResult treats an owner-decision stop as blocked', () => {
