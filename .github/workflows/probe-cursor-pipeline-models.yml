@@ -1,0 +1,25 @@
+name: Probe Cursor pipeline models
+
+# Owner / agent: resolve model ids for issue pipeline (#2428). workflow_dispatch only.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe-cursor-pipeline-models
+    runs-on: ubuntu-latest
+    environment: automation
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: GET /v1/models and resolve Grok 4.7 medium
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          cursor_api_key: ${{ secrets.cursor_api_key }}
+        run: node scripts/probe_cursor_pipeline_models.js
