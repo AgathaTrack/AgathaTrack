@@ -154,6 +154,57 @@ test('non-plan owner-authored PR skips forbidden scan', async () => {
   assert.deepEqual([res.conclusion, res.title, res.summary], ['success', 'ok', 'owner-authored PR (forbidden-path gate skipped)']);
 });
 
+test('non-plan PR into integration makes no GitHub reads, so an API outage stays ok', async () => {
+  const { client, fake } = setup({
+    extra: { [`GET ${R}/pulls/5`]: { status: 502, body: { message: 'Bad Gateway' } } },
+  });
+  const res = await runScopeCheck(client, { ...phasePr, headRef: 'feature/x', baseRef: 'cursor/misc-dev-294b' });
+  assert.deepEqual([res.conclusion, res.title, res.summary], ['success', 'ok', 'not an execute-plan PR']);
+  assert.equal(fake.calls.length, 0);
+});
+
+test('non-plan PR on main: unreadable reviews fail closed in enforce mode', async () => {
+  const prev = process.env.FORBIDDEN_GATE_MODE;
+  process.env.FORBIDDEN_GATE_MODE = 'enforce';
+  try {
+    const { client } = setup({
+      files: ['docs/readme.md'],
+      extra: { [`GET ${R}/pulls/5/reviews?per_page=100`]: { status: 502, body: { message: 'Bad Gateway' } } },
+    });
+    const res = await runScopeCheck(client, { ...phasePr, headRef: 'feature/x', baseRef: 'main' });
+    assert.deepEqual([res.conclusion, res.title], ['failure', 'error']);
+    assert.match(res.summary, /Non-plan reviews failed/);
+  } finally {
+    if (prev === undefined) delete process.env.FORBIDDEN_GATE_MODE;
+    else process.env.FORBIDDEN_GATE_MODE = prev;
+  }
+});
+
+test('non-plan PR on main: unreadable reviews stay advisory in report-only mode', async () => {
+  const prev = process.env.FORBIDDEN_GATE_MODE;
+  process.env.FORBIDDEN_GATE_MODE = 'report-only';
+  try {
+    const { client } = setup({
+      files: ['docs/readme.md'],
+      extra: { [`GET ${R}/pulls/5/reviews?per_page=100`]: { status: 502, body: { message: 'Bad Gateway' } } },
+    });
+    const res = await runScopeCheck(client, { ...phasePr, headRef: 'feature/x', baseRef: 'main' });
+    assert.deepEqual([res.conclusion, res.title], ['success', 'error-advisory']);
+  } finally {
+    if (prev === undefined) delete process.env.FORBIDDEN_GATE_MODE;
+    else process.env.FORBIDDEN_GATE_MODE = prev;
+  }
+});
+
+test('phase PR: unreadable reviews keep the scope result (no owner ack, no crash)', async () => {
+  const { client } = setup({
+    files: ['server/bin/server.js', 'server/test/x.test.js'],
+    extra: { [`GET ${R}/pulls/5/reviews?per_page=100`]: { status: 502, body: { message: 'Bad Gateway' } } },
+  });
+  const res = await runScopeCheck(client, phasePr);
+  assert.deepEqual([res.conclusion, res.title, res.planId], ['success', 'ok', PLAN]);
+});
+
 test('phase PR in scope → success', async () => {
   const { client } = setup({ files: ['server/bin/server.js', 'server/test/x.test.js'] });
   const res = await runScopeCheck(client, phasePr);

@@ -40,7 +40,7 @@ defaults confirmed.
 
 **Round 1 (Fable, accepted by Opus):** the spec is split into a folder (500-line limit, one
 session per WP); identity default = machine user with a classic PAT (`owner.type = User`, so
-fine-grained PATs are not available); `agent-pr-safety-gate.yml` stays untouched until WP10;
+fine-grained PATs are not available); `agent-pr-safety-gate.yml` was retired by WP10 / #1980;
 sync uses a merge-commit PR (the integration ruleset requires PRs); the Claude Code `Stop` hook
 is optional; the driver uses one global concurrency group in v1.
 

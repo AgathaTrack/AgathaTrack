@@ -187,31 +187,27 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
   if (headRepo !== repo) return result('success', 'ok', 'not an execute-plan PR (fork)');
 
   const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
+  // Non-plan PRs outside `main` are out of the forbidden-path gate's scope: no GitHub reads (pre-#1980 behaviour).
+  const isNonPlan = !planId && !supportHead;
+  if (isNonPlan && baseRef !== 'main') return result('success', 'ok', 'not an execute-plan PR');
 
   let config;
   try {
     config = await loadConfig(client);
   } catch (e) {
-    if (!planId) return nonPlanInfrastructureOutcome('config', e, mode);
+    if (isNonPlan) return nonPlanInfrastructureOutcome('config', e, mode);
     return result('failure', 'error', e.message, planId);
   }
 
   let files;
   let prAuthor = null;
   let pullBody = '';
-  let scopeAckReview = null;
   try {
     const pull = await client.getPull(prNumber);
     prAuthor = pull.user && pull.user.login;
     pullBody = pull.body || '';
     const pullFiles = await client.listPullFiles(prNumber);
     files = [...new Set(pullFiles.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))];
-    const reviews = await client.listPullReviews(prNumber);
-    scopeAckReview = findOwnerScopeAckReview(reviews, {
-      headSha,
-      owners: config.owners || [],
-      botLogin: config.bot_login,
-    });
   } catch (e) {
     if (!planId) {
       if (e instanceof PullFilesOverflow) return nonPlanInfrastructureOutcome('file list', e, mode);
@@ -219,6 +215,20 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
     }
     if (e instanceof PullFilesOverflow) return result('failure', 'too-many-files', e.message, planId);
     throw e;
+  }
+
+  // Owner ack is best-effort on plan PRs (an unreadable list means no ack, as before #1980).
+  // Non-plan PRs fail closed through the infra outcome instead.
+  let scopeAckReview = null;
+  try {
+    const reviews = await client.listPullReviews(prNumber);
+    scopeAckReview = findOwnerScopeAckReview(reviews, {
+      headSha,
+      owners: config.owners || [],
+      botLogin: config.bot_login,
+    });
+  } catch (e) {
+    if (isNonPlan) return nonPlanInfrastructureOutcome('reviews', e, mode);
   }
 
   const issue = planId ? await findControlIssue(client, planId) : null;
