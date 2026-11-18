@@ -90,8 +90,30 @@ function buildFieldWrites(fields, writes) {
 }
 
 /**
+ * The issue-fields PATCH replaces the issue's whole value set: a field left out of the payload is
+ * removed (a launch that wrote only Attempts wiped Stage). So every write carries the values the
+ * issue already holds. Keys in `writes` come first and win; empty or zero current values are
+ * skipped, which is the same as the field being unset.
+ */
+function withCurrentValues(parsed, writes) {
+  const merged = { ...writes };
+  for (const key of Object.keys(FIELD_NAMES)) {
+    if (!(key in merged) && parsed?.[key]) {
+      merged[key] = parsed[key];
+    }
+  }
+  return merged;
+}
+
+/** PATCH payload for `issue_field_values` after carrying current parsed values the write omits. */
+function buildIssueFieldPatch(fields, writes, parsed) {
+  return buildFieldWrites(fields, withCurrentValues(parsed, writes));
+}
+
+/**
  * Apply field writes to one issue. `dryRun` only logs, so `dry-run` mode never writes.
  * The engine never clears `Blocked`, so there is deliberately no clear operation.
+ * Pass `parsed` so omitted fields are carried (PATCH replaces the whole value set).
  */
 async function writeIssueFields({
   owner,
@@ -100,13 +122,15 @@ async function writeIssueFields({
   token,
   fields,
   writes,
+  parsed,
   dryRun,
   restFn = rest,
   log = console.log,
 }) {
-  const payload = buildFieldWrites(fields, writes);
+  const merged = parsed ? withCurrentValues(parsed, writes) : writes;
+  const payload = buildFieldWrites(fields, merged);
   if (dryRun) {
-    log(JSON.stringify({ event: 'pipeline_v2_field_write', dry_run: true, issue: issueNumber, writes }));
+    log(JSON.stringify({ event: 'pipeline_v2_field_write', dry_run: true, issue: issueNumber, writes: merged }));
     return { dryRun: true, payload };
   }
   await restFn(
@@ -123,5 +147,7 @@ module.exports = {
   loadOrgFields,
   parseIssueFields,
   buildFieldWrites,
+  buildIssueFieldPatch,
+  withCurrentValues,
   writeIssueFields,
 };
