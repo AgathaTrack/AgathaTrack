@@ -108,7 +108,7 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 **Marker (authoritative for automation):** last line of the verdict comment — `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->` (appended by the CLI).
 
 **CLI:** `node scripts/github_issue_workflow.js aat-start|aat-pass|aat-fail|aat-inconclusive --issue <n> [--merge <sha>]`  
-`aat-start` creates labels via `gh label create --force` when missing.  
+Labels and comments use the GitHub REST API (`createGitHubClient`); `aat-start` ensures repo labels via REST when missing. Set `GH_TOKEN` (Cursor / pawpet-bot) or `PAWPET_CLAUDE_TOKEN` (Claude Code) before running — not a stale workflow `GITHUB_TOKEN` alone.  
 **Procedure:** [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md)
 
 Do not run AAT on issues whose body contains `<!-- v2:follow-up of=#… -->`.
