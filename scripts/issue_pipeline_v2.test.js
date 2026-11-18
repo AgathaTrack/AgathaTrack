@@ -68,8 +68,17 @@ test('guards: a Blocked issue only wakes on a human comment and is never cleared
   assert.equal(wake.agent, 'pawpet-bot', 'with no request holder the least recently used agent is rung');
   assert.equal(
     rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, spec: { assignedTo: 'pawpet-claude' } }).agent,
+    'pawpet-bot',
+    'a holder the engine cannot start is not woken; a startable agent is',
+  );
+  assert.equal(
+    rowOfBoth({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, spec: { assignedTo: 'pawpet-claude' } }).agent,
     'pawpet-claude',
-    'the agent holding the stage request is rung',
+    'a startable holder is the one woken',
+  );
+  assert.equal(
+    decide(facts({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7 }), { ...config, launchRunners: ['nobody'] }).reason,
+    'blocked.no-agent',
   );
   // a human comment is answered once
   const again = rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, wokenFor: [7] });
@@ -106,6 +115,8 @@ test('pickup rotation only draws from agents the engine can start (launchRunners
   for (const action of picks) {
     assert.equal(action.agent, 'pawpet-bot', action.row);
   }
+  const held = rowOf({ spec: { requestedAt: NOW - 5 * MIN, assignedTo: 'pawpet-claude' } });
+  assert.deepEqual([held.type, held.agent, held.row], ['reassign', 'pawpet-bot', 'todo.reassign'], 'a non-startable assignee does not sit out the timeout');
   for (const stage of ['To do', 'In analysis']) {
     const key = stage === 'To do' ? 'spec' : 'review';
     const late = rowOf({ stage, lastBodyEditor: null, [key]: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-bot' } });
@@ -151,7 +162,7 @@ test('In analysis: after a human edit two agents are needed; the editor cannot a
     lastBodyEditor: 'KanopeeKa',
     review: { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'pawpet-claude', votes: [vote('pawpet-bot', 'up')] },
   });
-  assert.equal(one.type, 'none');
+  assert.deepEqual([one.type, one.reason], ['set-blocked', 'stalled'], 'the only startable agent has already voted');
   const two = rowOf({
     stage: 'In analysis',
     lastBodyEditor: 'KanopeeKa',
@@ -167,7 +178,7 @@ test('In analysis: after a human edit two agents are needed; the editor cannot a
     lastBodyEditor: 'pawpet-bot',
     review: { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'pawpet-claude', votes: [vote('pawpet-bot', 'up')] },
   });
-  assert.equal(self.type, 'none');
+  assert.deepEqual([self.type, self.agent], ['reassign', 'pawpet-bot'], 'the startable editor is asked at once');
 });
 
 test('In analysis: votes on an older hash and thumbs-down do not approve', () => {
