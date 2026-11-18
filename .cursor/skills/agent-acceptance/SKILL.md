@@ -180,7 +180,7 @@ Post **exactly one** final comment, then run the CLI (marker appended by the scr
 | Verdict | Command |
 |---------|---------|
 | PASS | `node scripts/github_issue_workflow.js aat-pass --issue <n> --body-file <path> [--merge <sha>]` |
-| FAIL | `node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> [--merge <sha>]` |
+| FAIL | `node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> --reason scope` (or `implementation` or `quality`) `[--merge <sha>]` |
 | INCONCLUSIVE | `node scripts/github_issue_workflow.js aat-inconclusive --issue <n> --body-file <path> [--merge <sha>]` |
 
 The script **posts the comment first**, then updates labels (`AAT-passed` / `AAT-failed` / none for inconclusive). The last line of the posted comment is always `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->` — authoritative for the engine (#2424).
