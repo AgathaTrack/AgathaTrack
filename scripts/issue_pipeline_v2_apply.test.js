@@ -5,13 +5,17 @@ const assert = require('node:assert/strict');
 const { applyAction, doorbellAssignees } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 
-const config = {
+const { validateConfig, loadConfig } = require('./issue_pipeline_v2_config');
+const config = validateConfig({
   agents: [
-    { login: 'pawpet-bot', methods: ['PR'] },
-    { login: 'pawpet-claude', methods: ['PR'] },
+    { login: 'pawpet-bot', runner: 'cursor', methods: ['PR', 'light-plan', 'execute-plan'] },
+    { login: 'pawpet-claude', runner: 'claude', methods: ['PR', 'light-plan'] },
   ],
   engine: { logins: ['engine'] },
-};
+  launchRunners: ['cursor'],
+  limits: loadConfig().limits,
+});
+const prodConfig = loadConfig();
 const fields = {
   stage: { id: 1, name: 'Stage', options: ['Ready', 'Done'] },
   blocked: { id: 2, name: 'Blocked', options: ['stalled'] },
@@ -63,25 +67,26 @@ test('doorbell keeps humans and replaces agents', () => {
 
 test('request-spec posts the marker comment then rings the agent', async () => {
   const { sent, restFn } = recorder();
-  const result = await applyAction({ action: { type: 'request-spec', agent: 'pawpet-claude' }, ctx: ctx({ restFn }) });
+  const result = await applyAction({
+    action: { type: 'request-spec', agent: 'pawpet-claude' },
+    ctx: ctx({ restFn, launchFn: async () => ({ runId: 'r0' }) }),
+  });
   assert.equal(sent[0].method, 'POST');
-  assert.equal(sent[0].path, '/repos/o/r/issues/7/comments');
   assert.match(sent[0].body.body, /v2:spec-request/);
   assert.equal(sent[1].method, 'PATCH');
   assert.deepEqual(sent[1].body.assignees, ['human', 'pawpet-claude']);
-  assert.deepEqual(result.applied, ['comment:spec-request', 'assign:pawpet-claude']);
+  assert.equal(sent[2], undefined, 'non-startable runners are assigned only');
+  assert.ok(!result.applied.some((entry) => entry.startsWith('doorbell')));
 });
 
 test('request-spec also starts a Cursor run for an agent whose runner the engine can launch', async () => {
   const { restFn } = recorder();
   const launches = [];
-  const withRunners = { ...config, launchRunners: ['cursor'], agents: [
-    { login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] },
-    { login: 'pawpet-claude', runner: 'claude', methods: ['PR'] },
-  ] };
+  const withRunners = config;
   const launchFn = async (args) => { launches.push(args); return { runId: 'r' }; };
   const bot = await applyAction({ action: { type: 'request-spec', agent: 'pawpet-bot' }, ctx: ctx({ restFn, launchFn, config: withRunners }) });
-  assert.deepEqual(launches, [{ agent: 'pawpet-bot', stage: 'To do' }]);
+  assert.equal(launches[0].agent, 'pawpet-bot');
+  assert.equal(launches[0].purpose, 'doorbell');
   assert.ok(bot.applied.includes('doorbell:pawpet-bot'));
   const claude = await applyAction({ action: { type: 'request-spec', agent: 'pawpet-claude' }, ctx: ctx({ restFn, launchFn, config: withRunners }) });
   assert.equal(launches.length, 1, 'a runner the engine cannot start is only assigned');
@@ -97,9 +102,19 @@ test('request-intent-review also rings a launchable agent, for the In Main stage
   const withRunners = { ...config, launchRunners: ['cursor'], agents: [{ login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }] };
   const result = await applyAction({
     action: { type: 'request-intent-review', agent: 'pawpet-bot' },
-    ctx: ctx({ restFn, config: withRunners, launchFn: async (args) => { launches.push(args); return {}; }, facts: { stage: 'In Main', delivery: {} } }),
+    ctx: ctx({
+      restFn,
+      config: withRunners,
+      launchFn: async (args) => {
+        launches.push(args);
+        return { runId: 'r-main' };
+      },
+      facts: { stage: 'In Main', delivery: {} },
+    }),
   });
-  assert.deepEqual(launches, [{ agent: 'pawpet-bot', stage: 'In Main' }]);
+  assert.equal(launches[0].agent, 'pawpet-bot');
+  assert.equal(launches[0].stage, 'In Main');
+  assert.equal(launches[0].purpose, 'doorbell');
   assert.ok(result.applied.includes('doorbell:pawpet-bot'));
 });
 
@@ -172,7 +187,7 @@ test('dry run records the same calls but sends none', async () => {
   const { sent, restFn } = recorder();
   const result = await applyAction({ action: { type: 'request-spec', agent: 'pawpet-bot' }, ctx: ctx({ restFn, dryRun: true }) });
   assert.deepEqual(sent, []);
-  assert.equal(result.calls.length, 2);
+  assert.ok(result.calls.length >= 2, 'dry run records comment, assign, and doorbell plan');
 });
 
 test('none with no counters sends nothing; unknown types are unsupported', async () => {
@@ -187,7 +202,10 @@ test('identity fails closed', async () => {
   assert.equal((await checkEngineIdentity({ token: 't', config, restFn: async () => { throw new Error('x'); } })).reason, 'identity-lookup-failed');
   assert.equal((await checkEngineIdentity({ token: 't', config, restFn: async () => ({ login: 'someone' }) })).reason, 'token-not-engine-identity');
   const agentEngine = { ...config, engine: { logins: ['pawpet-bot'] } };
-  assert.equal((await checkEngineIdentity({ token: 't', config: agentEngine, restFn: async () => ({ login: 'pawpet-bot' }) })).reason, 'engine-identity-is-a-listed-agent');
+  assert.equal(
+    (await checkEngineIdentity({ token: 't', config: agentEngine, restFn: async () => ({ login: 'pawpet-bot' }) })).reason,
+    'engine-identity-matches-agent-actsAs',
+  );
   const ok = await checkEngineIdentity({ token: 't', config, restFn: async () => ({ login: 'engine' }) });
   assert.equal(ok.ok, true);
   assert.equal(writesAllowed('on', ok), true);

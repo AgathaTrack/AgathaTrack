@@ -18,7 +18,7 @@
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
  *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
- *   agentLastUsed   { login: epoch ms } for least-recently-used pickup
+ *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (in-tick)
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
  *   review          { requestedHash, requestedAt, assignedTo, timedOut[], votes[{login,vote,hash}] }
  *   wip             issues currently In progress (manual-only excluded)
@@ -30,7 +30,15 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
-const { agentLogins, launchableAgents, selfStartingLogins } = require('./issue_pipeline_v2_config');
+const {
+  agentLogins,
+  agentActsAs,
+  launchableAgents,
+  resolveAgent,
+  startableIds,
+  entryId,
+  entryActsAs,
+} = require('./issue_pipeline_v2_config');
 
 const STAGES = [
   'Backlog',
@@ -62,7 +70,7 @@ function canonicalStage(raw) {
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  const startable = selfStartingLogins(config);
+  const startable = startableIds(config);
   if (holder && startable.includes(holder)) {
     return holder;
   }
@@ -104,8 +112,23 @@ function timedOutSet(state, now, timeoutMs) {
 /** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  if (state.ringFailed && state.assignedTo) {
+    const timedOut = new Set([...(state.timedOut || []), state.assignedTo]);
+    const remaining = eligible.filter((login) => !timedOut.has(login));
+    const next = pickAgent(remaining, facts);
+    if (!next) {
+      return setBlocked('stalled', `${rowPrefix}.stalled`);
+    }
+    return {
+      type: 'reassign',
+      stage,
+      agent: next,
+      attempts: timedOut.size,
+      row: `${rowPrefix}.reassign`,
+    };
+  }
   const held = state.assignedTo;
-  const startable = new Set(selfStartingLogins(config));
+  const startable = new Set(startableIds(config));
   // No assignee yet, or the assignee is not one the engine can start: pick now. Waiting out
   // reviewTimeoutMin for pawpet-claude is the churn this interim fix exists to stop.
   // `eligible` is who may be asked next, which is narrower than startable (it drops the editor
@@ -148,7 +171,7 @@ function decideToDo(facts, config) {
   if (spec.passedBy) {
     return setStage('In analysis', 'todo.dor-pass', { evidence: { passedBy: spec.passedBy } });
   }
-  const logins = selfStartingLogins(config);
+  const logins = startableIds(config);
   if (!spec.requestedAt) {
     return {
       type: 'request-spec',
@@ -166,6 +189,14 @@ function decideToDo(facts, config) {
   });
 }
 
+function voterKey(vote, config) {
+  if (vote.agentId) {
+    return vote.agentId;
+  }
+  const matches = (config.agents || []).filter((agent) => entryActsAs(agent) === vote.login);
+  return matches.length === 1 ? entryId(matches[0]) : vote.login;
+}
+
 function approvalsOnCurrentHash(facts, config) {
   const editor = facts.lastBodyEditor || null;
   const logins = new Set(agentLogins(config));
@@ -175,9 +206,16 @@ function approvalsOnCurrentHash(facts, config) {
     if (vote.hash !== facts.bodyHash || !logins.has(vote.login)) {
       continue;
     }
-    voted.add(vote.login);
-    if (vote.vote === 'up' && vote.login !== editor) {
-      voters.add(vote.login);
+    const key = voterKey(vote, config);
+    voted.add(key);
+    if (vote.vote === 'up') {
+      if (vote.agentId) {
+        if (!facts.editorAgentId || vote.agentId !== facts.editorAgentId) {
+          voters.add(key);
+        }
+      } else if (vote.login !== editor) {
+        voters.add(key);
+      }
     }
   }
   return { editor, editorIsAgent: logins.has(editor), up: voters, voted };
@@ -198,10 +236,23 @@ function decideInAnalysis(facts, config) {
     return setBlocked('no-convergence', 'analysis.no-convergence');
   }
 
-  const logins = selfStartingLogins(config);
-  let eligible = logins.filter((login) => login !== editor && !voted.has(login));
+  const ids = startableIds(config);
+  const sharedEditor = editorIsAgent && editor;
+  let eligible = ids.filter((id) => {
+    if (voted.has(id)) {
+      return false;
+    }
+    if (!sharedEditor || agentActsAs(config, id) !== editor) {
+      return true;
+    }
+    const sharers = ids.filter((candidate) => agentActsAs(config, candidate) === editor);
+    return sharers.length > 1;
+  });
   if (eligible.length === 0 && editorIsAgent) {
-    eligible = [editor]; // nobody else left: the last editor revises
+    const editorId = resolveAgent(config, editor)?.id;
+    if (editorId && ids.includes(editorId)) {
+      eligible = [editorId];
+    }
   }
   if (review.requestedHash !== facts.bodyHash) {
     return {
@@ -303,9 +354,9 @@ function decideInMain(facts, config) {
     return none('main.no-merge');
   }
   if (!facts.intentReview?.requested) {
-    const authors = new Set(facts.prAuthors || []);
-    const startable = selfStartingLogins(config);
-    const independent = startable.filter((login) => !authors.has(login));
+    const startable = startableIds(config);
+    const deliverer = facts.deliveryLaunchAgentId || null;
+    const independent = deliverer ? startable.filter((id) => id !== deliverer) : startable;
     const pool = independent.length > 0 ? independent : startable;
     if (pool.length > 0) {
       return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };

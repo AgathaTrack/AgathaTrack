@@ -16,7 +16,18 @@ const {
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
 const { tick } = require('./issue_pipeline_v2');
 
-const config = { ...loadConfig(), engine: { logins: ['engine'] } };
+const { validateConfig } = require('./issue_pipeline_v2_config');
+const limits = loadConfig().limits;
+const config = validateConfig({
+  agents: [
+    { login: 'pawpet-bot', runner: 'cursor', methods: ['PR', 'light-plan', 'execute-plan'] },
+    { login: 'pawpet-claude', runner: 'claude', methods: ['PR', 'light-plan'] },
+  ],
+  engine: { logins: ['engine'] },
+  launchRunners: ['cursor'],
+  limits,
+});
+const prodConfig = { ...loadConfig(), engine: { logins: ['engine'] } };
 const NOW = Date.parse('2026-11-16T12:00:00Z');
 
 let nextId = 100;

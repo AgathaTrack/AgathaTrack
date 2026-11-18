@@ -1,7 +1,8 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
-const { agentLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent, entryId, entryActsAs, sharedActsAs, isSharedActsAs } = require('./issue_pipeline_v2_config');
+const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const REVIEW_REQUEST = 'v2:review-request';
 
@@ -9,13 +10,16 @@ const REVIEW_REQUEST = 'v2:review-request';
  * The engine's "review requested for <hash>" comment (#2385 §In Analysis). One per body hash; a
  * reassignment edits the same comment, and the marker keeps the agents already tried.
  */
-function buildReviewRequest({ hash, assigned, history = [] }) {
+function buildReviewRequest({ hash, assigned, history = [], config }) {
+  const entry = assigned && config ? resolveAgent(config, assigned) : null;
+  const id = entry?.id || assigned || '';
+  const mention = entry?.actsAs || assigned;
   return [
-    `<!-- ${REVIEW_REQUEST} hash=${hash} assigned=${assigned || ''} history=${history.join(',')} -->`,
+    `<!-- ${REVIEW_REQUEST} hash=${hash} assigned=${id} history=${history.join(',')} -->`,
     `## Review requested for \`${hash}\``,
     '',
     assigned
-      ? `@${assigned}: review this version of the issue (\`.cursor/skills/review-agent/SKILL.md\`).`
+      ? `@${mention}: review this version of the issue (\`.cursor/skills/review-agent/SKILL.md\`).`
       : 'Waiting for a reviewer.',
     '',
     'Listed agents vote with 👍 / 👎 **on this comment** and write their reasoning as a separate comment.',
@@ -74,7 +78,20 @@ function votesOnRequest({ request, reactions, config }) {
  *   totalVotes      votes cast since the issue entered In analysis (the first trusted request):
  *                   one per listed agent per request hash, plus agent body edits after it
  */
-function deriveReviewFacts({ comments, reactionsByComment, edits, bodyAuthor, config, engineLogins, editors }) {
+function deriveReviewFacts({
+  comments,
+  reactionsByComment,
+  edits,
+  bodyAuthor,
+  config,
+  engineLogins,
+  editors,
+  issueNumber,
+  bodyHash,
+  voteKey,
+  limits,
+  now,
+}) {
   const requests = findReviewRequests(comments, engineLogins, editors);
   const agents = new Set(agentLogins(config));
   const lastEdit = (edits || [])[edits.length - 1];
@@ -83,26 +100,78 @@ function deriveReviewFacts({ comments, reactionsByComment, edits, bodyAuthor, co
     return { review: {}, lastBodyEditor, totalVotes: 0 };
   }
   const votes = [];
+  const sharedLogins = new Set(sharedActsAs(config));
+  const enteredAt = Date.parse(requests[0].comment.created_at);
   for (const request of requests) {
     votes.push(
-      ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }),
+      ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }).filter(
+        (vote) => !(isSharedActsAs(config, vote.login) || (sharedLogins.has(vote.login) && !voteKey)),
+      ),
     );
   }
+  if (voteKey && bodyHash && issueNumber) {
+    for (const verdict of findVerifiedVerdicts({
+      comments,
+      config,
+      engineLogins,
+      issueNumber,
+      bodyHash,
+      voteKey,
+      limits,
+      now,
+      kinds: ['review'],
+      sinceMs: enteredAt,
+    })) {
+      if (verdict.kind !== 'review') {
+        continue;
+      }
+      const vote = verdict.value === 'up' ? 'up' : verdict.value === 'down' ? 'down' : null;
+      if (!vote) {
+        continue;
+      }
+      votes.push({
+        login: verdict.actsAs,
+        agentId: verdict.agentId,
+        vote,
+        hash: verdict.hash,
+        at: verdict.at,
+      });
+    }
+  }
+  let editorAgentId = null;
+  if (voteKey && bodyHash && issueNumber) {
+    const editClaims = findVerifiedVerdicts({
+      comments,
+      config,
+      engineLogins,
+      issueNumber,
+      bodyHash,
+      voteKey,
+      limits,
+      now,
+      kinds: ['edit'],
+    }).filter((verdict) => verdict.value === 'up');
+    if (editClaims.length > 0) {
+      editorAgentId = editClaims.at(-1).agentId;
+    }
+  }
   const newest = requests[requests.length - 1];
-  const enteredAt = Date.parse(requests[0].comment.created_at);
   const agentEdits = (edits || []).filter(
     (edit) => agents.has(edit.editor) && Date.parse(edit.editedAt) >= enteredAt,
   ).length;
+  const assignedTo = resolveAgent(config, newest.parsed.assigned)?.id || newest.parsed.assigned;
+  const timedOut = (newest.parsed.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
   return {
     review: {
       requestedHash: newest.parsed.hash,
       requestedAt: Date.parse(newest.comment.updated_at || newest.comment.created_at),
-      assignedTo: newest.parsed.assigned,
-      timedOut: newest.parsed.history,
+      assignedTo,
+      timedOut,
       votes,
       commentId: newest.comment.id,
     },
     lastBodyEditor,
+    editorAgentId,
     totalVotes: votes.length + agentEdits,
   };
 }

@@ -11,15 +11,19 @@
  */
 
 const { INTENT_REVIEW } = require('./issue_pipeline_v2_release');
+const { resolveAgent } = require('./issue_pipeline_v2_config');
 
 const FOLLOW_UP = /<!--\s*v2:follow-up\s+of=#(\d+)\s*-->/i;
 
 /** The request comment. The marker is what `deriveDeliveryFacts` reads back as `requested`. */
-function buildIntentReviewRequest({ agent, issueNumber, prNumbers = [], mergeSha }) {
+function buildIntentReviewRequest({ agent, issueNumber, prNumbers = [], mergeSha, config }) {
+  const entry = config ? resolveAgent(config, agent) : null;
+  const id = entry?.id || agent;
+  const mention = entry?.actsAs || agent;
   const merged = prNumbers.length > 0 ? prNumbers.map((n) => `#${n}`).join(', ') : 'the merged change';
   return [
-    `<!-- ${INTENT_REVIEW} agent=${agent} merge=${mergeSha} -->`,
-    `@${agent}: intent review of #${issueNumber}. Review what shipped in ${merged} against the issue's original intent (its summary, problem and Definition of Done), not against the diff alone.`,
+    `<!-- ${INTENT_REVIEW} agent=${id} merge=${mergeSha} -->`,
+    `@${mention}: intent review of #${issueNumber}. Review what shipped in ${merged} against the issue's original intent (its summary, problem and Definition of Done), not against the diff alone.`,
     '',
     `File each real finding as a new issue that starts with \`<!-- v2:follow-up of=#${issueNumber} -->\`, and say here which ones you filed. Leave their \`Stage\` empty; the engine puts them in To do. Nothing to file is a valid result: say so once.`,
   ].join('\n');

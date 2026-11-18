@@ -9,10 +9,11 @@
 const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/github-project-lib');
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
+const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 const { applyWipOverride, loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
-const { deliveryMethod, deriveLaunchFacts, launchIssue } = require('./issue_pipeline_v2_launch');
+const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
 const {
   deployContains,
   deriveDeliveryFacts,
@@ -82,6 +83,10 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
   const facts = {
     deliveryMethod: deliveryMethod(entry.issue.body),
     ...deriveDeliveryFacts({ issue: entry.issue, prs, comments, engineLogins: config.engine.logins }),
+    deliveryLaunchAgentId: require('./issue_pipeline_v2_launch').newestDeliveryLaunchAgentId({
+      comments,
+      engineLogins: config.engine.logins,
+    }),
   };
   const environment = { 'In Main': 'UAT', 'In UAT': 'PROD' }[canonical];
   if (environment) {
@@ -116,7 +121,7 @@ const deploys = {
  * Facts that need comments, reactions or edit history. Only read for the stages that use them,
  * so a board of mostly Backlog and Done issues costs no extra calls.
  */
-async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
+async function buildCommentFacts({ owner, repo, entry, config, token, io, runMode, now = Date.now() }) {
   if (entry.labels.includes('manual-only') || entry.closed) {
     return {}; // decide() ignores it (or reads only the issue itself), so spend no calls on it
   }
@@ -155,13 +160,36 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
   }
   const editors = await resolveEditors({ comments, config, token, io });
   const engineLogins = config.engine.logins;
+  const bodyHash = bodySha(entry.issue.body);
+  const voteKey = process.env.PIPELINE_VOTE_KEY || '';
+  const verdictCtx = {
+    issueNumber: entry.number,
+    bodyHash,
+    voteKey,
+    limits: config.limits,
+    now,
+  };
   const reactionsOf = (commentId) =>
     (io.listCommentReactions || listCommentReactions)({ owner, repo, commentId, token });
 
   if (canonical === 'To do') {
-    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors });
+    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, ...verdictCtx });
     const reactions = probe.commentId ? await reactionsOf(probe.commentId) : [];
-    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins, editors });
+    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins, editors, ...verdictCtx });
+    if (facts.spec.assignedTo && runMode === 'on') {
+      facts.spec.ringFailed = await doorbellRingFailed({
+        comments,
+        engineLogins,
+        config,
+        agentId: facts.spec.assignedTo,
+        stage: 'To do',
+        sinceMs: facts.spec.requestedAt,
+        owner,
+        repo,
+        token,
+        io,
+      });
+    }
     return facts;
   }
 
@@ -184,8 +212,24 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io }) {
     config,
     engineLogins,
     editors,
+    ...verdictCtx,
   });
-  return { ...facts, ...derived };
+  const merged = { ...facts, ...derived };
+  if (merged.review?.assignedTo && runMode === 'on') {
+    merged.review.ringFailed = await doorbellRingFailed({
+      comments,
+      engineLogins,
+      config,
+      agentId: merged.review.assignedTo,
+      stage: 'In analysis',
+      sinceMs: merged.review.requestedAt,
+      owner,
+      repo,
+      token,
+      io,
+    });
+  }
+  return merged;
 }
 
 function countWip(entries) {
@@ -295,7 +339,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           runMode,
         }),
         agentLastUsed: { ...lastUsed },
-        ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
+        ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io, runMode, now })),
       };
       if (entry.closed) {
         const comments = await (io.listIssueComments || listIssueComments)({
@@ -338,17 +382,32 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           restFn: io.restFn,
           launchFn:
             io.launchFn ||
-            (({ method, stage }) =>
-              launchIssue({
+            (({ agent, method, stage, purpose = 'delivery', nonce, runSecret }) => {
+              const launchNonce = nonce || (purpose === 'delivery' ? randomNonceHex() : undefined);
+              const voteKey = process.env.PIPELINE_VOTE_KEY || '';
+              const secret =
+                runSecret ||
+                (voteKey && launchNonce ? deriveRunSecret(voteKey, entry.number, agent, stage || 'Ready', launchNonce) : '');
+              return launchIssue({
+                agent,
                 method,
                 stage,
+                purpose,
+                nonce: launchNonce,
+                runSecret: secret,
+                config,
                 owner,
                 repo,
                 issue: entry.issue,
                 token: projectsPat,
                 apiKey: process.env.CURSOR_API_KEY || process.env.cursor_api_key,
-                deps: io.launchDeps,
-              })),
+                deps: {
+                  ...(io.launchDeps || {}),
+                  dispatchToken: projectsPat,
+                  restFn: io.restFn,
+                },
+              });
+            }),
         },
       });
       actions[actions.length - 1].applied = result.applied;
