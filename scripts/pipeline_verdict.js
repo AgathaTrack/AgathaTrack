@@ -73,6 +73,16 @@ async function cmdEdit({ flags, repo, number, token }) {
   await rest('PATCH', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}`, token, {
     body: next,
   });
+  const newBody = await fetchIssueBody({ owner, repo: name, number, token });
+  const newHash = bodySha(newBody);
+  const agentId = requireEnv('PIPELINE_AGENT_ID');
+  const nonce = requireEnv('PIPELINE_RUN_NONCE');
+  const runSecret = requireEnv('PIPELINE_RUN_SECRET');
+  const sig = verdictSignature(runSecret, number, agentId, nonce, 'edit', newHash, 'up');
+  const comment = buildVerdictComment({ agentId, nonce, kind: 'edit', hash: newHash, value: 'up', sig });
+  await rest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}/comments`, token, {
+    body: comment,
+  });
 }
 
 async function cmdSign({ kind, value, flags, repo, number, token }) {
