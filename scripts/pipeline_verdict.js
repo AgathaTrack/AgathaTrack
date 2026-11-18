@@ -5,6 +5,7 @@
  * Pipeline v2 signed verdict CLI (#2428). Uses PIPELINE_RUN_SECRET and public PIPELINE_* env only.
  */
 
+const fs = require('node:fs');
 const { bodySha } = require('./issue_pipeline_v2_hash');
 const { verdictSignature } = require('./issue_pipeline_v2_secrets');
 const { rest, parseRepo } = require('../.github/scripts/github-project-lib');
@@ -54,6 +55,26 @@ function buildVerdictComment({ agentId, nonce, kind, hash, value, sig }) {
   ].join('\n');
 }
 
+async function cmdEdit({ flags, repo, number, token }) {
+  const fromHash = flags.from;
+  const file = flags.file;
+  if (!fromHash || !file) {
+    throw new Error('edit requires --from <hash> and --file <path>');
+  }
+  const { owner, repo: name } = parseRepo(repo);
+  const body = await fetchIssueBody({ owner, repo: name, number, token });
+  if (bodySha(body) !== fromHash) {
+    throw new Error('body hash mismatch; run read again');
+  }
+  const next = fs.readFileSync(file, 'utf8');
+  if (bodySha(next) === fromHash) {
+    throw new Error('file body matches current hash; nothing to edit');
+  }
+  await rest('PATCH', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}`, token, {
+    body: next,
+  });
+}
+
 async function cmdSign({ kind, value, flags, repo, number, token }) {
   const agentId = requireEnv('PIPELINE_AGENT_ID');
   const nonce = requireEnv('PIPELINE_RUN_NONCE');
@@ -90,6 +111,10 @@ async function main() {
   }
   if (cmd === 'read') {
     await cmdRead({ repo, number, token });
+    return;
+  }
+  if (cmd === 'edit') {
+    await cmdEdit({ flags, repo, number, token });
     return;
   }
   if (cmd === 'spec' && sub === 'up') {

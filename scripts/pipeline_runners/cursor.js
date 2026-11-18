@@ -1,6 +1,6 @@
 'use strict';
 
-const { envVarsForCursorLaunch } = require('../../.github/scripts/execute-plan-launch');
+const { envVarsForCursorLaunch, workerLaunchEnvVars } = require('../../.github/scripts/execute-plan-launch');
 
 const PUBLIC_RUN_ENV = [
   'PIPELINE_AGENT_ID',
@@ -9,7 +9,7 @@ const PUBLIC_RUN_ENV = [
   'PIPELINE_ISSUE',
 ];
 
-function pipelineRunEnvVars({ issueNumber, agentId, stage, nonce, runSecret }) {
+function pipelineRunEnvVars({ issueNumber, agentId, stage, nonce, runSecret, botToken }) {
   const vars = {
     PIPELINE_AGENT_ID: String(agentId),
     PIPELINE_ISSUE: String(issueNumber),
@@ -19,7 +19,9 @@ function pipelineRunEnvVars({ issueNumber, agentId, stage, nonce, runSecret }) {
   if (stage) {
     vars.PIPELINE_STAGE = String(stage);
   }
-  return envVarsForCursorLaunch(vars);
+  const token = botToken || process.env.EXECUTE_PLAN_BOT_TOKEN || process.env.GH_TOKEN;
+  const worker = workerLaunchEnvVars(token);
+  return envVarsForCursorLaunch({ ...worker, ...vars });
 }
 
 /**

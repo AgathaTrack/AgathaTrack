@@ -151,7 +151,14 @@ function main() {
     process.exit(1);
   }
   const ghsas = collectHighCriticalGhsas(full.auditJson);
+  const fullHighMeta = countHighCriticalMeta(full.auditJson);
   if (ghsas.size === 0) {
+    if (fullHighMeta > 0) {
+      console.error(
+        `npm audit gate: ${pkg} reports ${fullHighMeta} high/critical finding(s) but no parseable GHSA ids; fail closed.`,
+      );
+      process.exit(1);
+    }
     console.log(`npm audit gate: ${pkg} ok (production clean; no high/critical in full tree).`);
     process.exit(0);
   }

@@ -109,7 +109,10 @@ async function applyAction({ action: decided, ctx }) {
             runSecret,
             config: ctx.config,
           });
-          runId = run?.runId || runId;
+          runId = run?.runId;
+          if (!runId) {
+            throw new Error('doorbell launch missing run id');
+          }
         }
         calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent, stage, nonce } });
         await comment(
