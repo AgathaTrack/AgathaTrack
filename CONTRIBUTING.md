@@ -50,7 +50,7 @@ Governance gates in `pre-push.sh` include `scripts/check_care_item_boundary.sh`,
 Manual breakdown if needed:
 
 ```bash
-cd server && npm ci && npm audit --audit-level=high && npx jest --env=node --forceExit
+cd server && npm ci && node ../scripts/npm_audit_gate.js --package server && npx jest --env=node --forceExit
 cd flutter_app && flutter pub get && dart run build_runner build --delete-conflicting-outputs
 cd flutter_app && flutter analyze --no-fatal-warnings --no-fatal-infos
 cd flutter_app && flutter test --concurrency=1 --exclude-tags=integration
@@ -96,7 +96,7 @@ Use the PR template checklist. In summary:
 - Flutter analyze, format, and parallel domain test shards (matrix from `flutter_app/test/ci_shards.json`; `node scripts/ci/flutter-shards.mjs check` proves every active test file is owned) + merged domain coverage
 - Flutter integration test (blocking)
 - Node Jest tests + server architecture tests (`server/test/architecture/`)
-- `npm audit --audit-level=high` (server + e2e)
+- `node scripts/npm_audit_gate.js --package server|e2e` (production tree must be clean; time-boxed GHSA allowlist for dev-only findings — see `docs/pipelines/ci-cd-gates.md` §npm audit gate)
 - CodeQL (JavaScript)
 - `dart format --set-exit-if-changed` (Flutter code only, blocks merge)
 - Documentation validation: `bash scripts/validate_docs.sh --strict`
