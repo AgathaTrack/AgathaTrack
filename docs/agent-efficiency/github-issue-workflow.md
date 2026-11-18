@@ -168,8 +168,10 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 ### Launch and intent review
 
 - **Launch:** the engine starts a Cursor run through `launch-cursor-agent.js` for agents whose runner is in `launchRunners`,
-  with the method's skill procedure appended to the prompt. It records `v2:launch`, `v2:launch-failed` and `v2:launch-acked`
-  comments; `Attempts` holds the failed-run count. An issue that is already `busy` is never launched again.
+  with the method's skill procedure appended to the prompt. It records `v2:launch-pending` before the handoff, then `v2:launch`
+  (run id) after it, or `v2:launch-failed`; `v2:launch-acked` follows the agent's busy report. `Attempts` holds the failed-run
+  count. A pending record with no `busy` label is one failed start (the handoff never happened). An issue that is already
+  `busy` is never launched again.
 - **Intent review:** `v2:intent-review agent=<login> merge=<sha>` asks an agent that did not author the linked PRs to review
   the merged change against the issue's original intent (skill: `.cursor/skills/intent-review-agent`). Each finding becomes a
   new issue starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'
