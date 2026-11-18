@@ -234,7 +234,7 @@ test('doorbellRingFailed: uses module-scope runners without ReferenceError', asy
   assert.equal(failed, true);
 });
 
-test('launchIssue: a spec, review or intent-review doorbell skips the preflight and the busy label', async () => {
+test('launchIssue: a spec, review or intent-review doorbell skips the preflight but sets busy', async () => {
   for (const stage of ['To do', 'In analysis', 'In Main']) {
     const launches = [];
     const labels = [];
@@ -244,7 +244,7 @@ test('launchIssue: a spec, review or intent-review doorbell skips the preflight 
     const issue = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }, { name: 'busy' }] };
     await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', agent: 'cursor-a', config, stage, purpose: 'doorbell', deps });
     assert.equal(launches.length, 1, stage);
-    assert.deepEqual(labels, [], `${stage}: no busy label`);
+    assert.deepEqual(labels[0], [['busy'], []], `${stage}: busy at handoff`);
     if (stage === 'In Main') {
       assert.match(STAGE_PROMPTS[stage], /INTENT REVIEW/);
     } else {

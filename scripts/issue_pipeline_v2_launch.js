@@ -214,8 +214,9 @@ const METHOD_PROMPTS = {
 };
 
 /**
- * Doorbell prompts: a run started because the engine asked an agent to work on the issue's spec or
- * review. They are not deliveries, so the issue is not marked `busy` and no PR is expected.
+ * Doorbell prompts: a run started because the engine asked an agent to work on the issue's spec,
+ * review, or intent review. They are not deliveries and no PR is expected; the launcher still marks
+ * `busy` so humans can see the agent working (the engine clears it when the stage task completes).
  */
 const STAGE_PROMPTS = {
   'To do':
@@ -235,7 +236,8 @@ const STAGE_PROMPTS = {
     'Stage task: INTENT REVIEW (the engine assigned you this issue; do not implement or edit it). Follow ' +
     '`.cursor/skills/intent-review-agent/SKILL.md`: review what shipped (the merged PRs named in the engine\'s latest ' +
     '`v2:intent-review` comment) against the issue\'s original intent, file each real finding as a follow-up issue that ' +
-    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last.',
+    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last. ' +
+    'When finished, remove the `busy` label (`node scripts/github_issue_workflow.js finish-work --issue <n>`).',
   acceptance:
     'Stage task: AGENT ACCEPTANCE (non-interactive; do not ask questions and do not implement). Follow ' +
     '`.cursor/skills/agent-acceptance/SKILL.md` for issue #{{number}} and merge {{mergeSha}}. Record the verdict with ' +
@@ -276,7 +278,7 @@ function stagePromptsForConfig(config, agent) {
  * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
  * only launched from Ready, after a converged review. The legacy labels are retired, so the
  * engine supplies them for a delivery launch. The risky-scope and blocking-label checks stay.
- * Spec, review and intent-review doorbells start no delivery and skip the preflight.
+ * Spec, review and intent-review doorbells start no delivery and skip the preflight; they still set `busy`.
  */
 const V2_APPROVAL_LABELS = ['agent-approved', 'human-reviewed'];
 
@@ -312,7 +314,10 @@ async function launchIssue({
       throw new Error(`preflight: ${preflight.reason}`);
     }
   }
-  const mark = stage ? async () => {} : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
+  const mark =
+    stage === 'acceptance'
+      ? async () => {}
+      : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
   await mark(['busy'], []);
 
   const runners = deps.runners || DEFAULT_RUNNERS();

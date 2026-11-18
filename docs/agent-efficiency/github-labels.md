@@ -173,6 +173,7 @@ Per `docs/agent-efficiency/github-issue-workflow.md`. **Cloud Agents do not writ
 
 ```bash
 node scripts/github_issue_workflow.js start-work --issue <n> --body "…"
+node scripts/github_issue_workflow.js finish-work --issue <n>   # remove `busy` (e.g. intent review done)
 node scripts/github_issue_workflow.js comment --issue <n> --body "…"
 ```
 

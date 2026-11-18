@@ -7,14 +7,17 @@
  *   node scripts/github_issue_workflow.js set-status --issue <n> --status "In Progress"
  *   node scripts/github_issue_workflow.js comment --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js start-work --issue <n> --body "..."
+ *   node scripts/github_issue_workflow.js finish-work --issue <n>
  *   node scripts/github_issue_workflow.js aat-start --issue <n>
  *   node scripts/github_issue_workflow.js aat-pass --issue <n> --body-file <path> [--merge <sha>]
  *   node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> --reason scope|implementation|quality [--merge <sha>]
  *   node scripts/github_issue_workflow.js aat-inconclusive --issue <n> --body-file <path> [--merge <sha>]
  */
 
-// Must run before any GitHub call: Node's fetch needs NODE_USE_ENV_PROXY=1 at start-up in sandboxes.
-require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+// CLI only — before any GitHub fetch: sandbox egress needs NODE_USE_ENV_PROXY at process start.
+if (require.main === module) {
+  require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+}
 
 const {
   postIssueComment,
@@ -37,6 +40,7 @@ function usage() {
   console.error(`Usage:
   node scripts/github_issue_workflow.js comment --issue <n> [--body text | --body-file path]
   node scripts/github_issue_workflow.js start-work --issue <n> [--body text | --body-file path]
+  node scripts/github_issue_workflow.js finish-work --issue <n>
   node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
   aat-start --issue <n>
@@ -124,6 +128,13 @@ async function main() {
       break;
     }
 
+    case 'finish-work': {
+      const client = makeWorkflowClient();
+      const labelResult = await editIssueLabels(client, issueNumber, { remove: ['busy'] });
+      printJson({ labels: labelResult });
+      break;
+    }
+
     case 'aat-start': {
       const client = makeWorkflowClient();
       const ensured = await ensureAatLabels(client);
@@ -158,7 +169,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}

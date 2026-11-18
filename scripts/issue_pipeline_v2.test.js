@@ -177,6 +177,11 @@ test('To do: request, wait, reassign, stall, pass', () => {
     [rowOfBoth(late).type, rowOfBoth(late).agent],
     ['reassign', 'pawpet-claude'],
   );
+  const lateBusy = {
+    labels: ['busy'],
+    spec: { requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-bot', timedOut: [] },
+  };
+  assert.equal(rowOfBoth(lateBusy).reason, 'todo.waiting-busy');
   const allLate = {
     spec: { requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-claude', timedOut: ['pawpet-bot'] },
   };
