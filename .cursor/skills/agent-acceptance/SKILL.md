@@ -74,11 +74,20 @@ Cross-referenced PRs whose bodies contain `Refs|Fixes|Closes|Resolves #<n>` coun
 
 ## Phase 0 — Claim (labels only)
 
+**GitHub token:** The issue CLI uses REST for labels and comments (`scripts/lib/execute_plan_github.js`). Export a repo-scoped PAT before any `aat-*` command:
+
+| Runtime | Variable |
+|---------|----------|
+| Cursor Cloud | `GH_TOKEN` (pawpet-bot) |
+| Claude Code | `PAWPET_CLAUDE_TOKEN` or `GH_TOKEN` |
+
+Do not rely on workflow `GITHUB_TOKEN` in agent shells (often missing scope or wrong credentials → HTTP 401). Read: `.cursor/skills/cloud-github-identity/SKILL.md`.
+
 ```bash
 node scripts/github_issue_workflow.js aat-start --issue <n>
 ```
 
-Creates missing `AAT-*` labels (`gh label create --force`), removes `AAT-passed` / `AAT-failed`, adds `AAT-progress`.
+Creates missing `AAT-*` labels via REST, removes `AAT-passed` / `AAT-failed`, adds `AAT-progress`.
 
 **Standalone** may post an optional short “starting AAT” comment. **Engine** must not.
 
@@ -199,6 +208,10 @@ No code or PR work during Phases 0–6 except verdict posting.
 - Evidence on the issue; marker line must match the CLI command.
 - `aat-start` on each re-entry clears prior pass/fail labels.
 - Engine mode: non-interactive, no subscriptions, no issue close.
+
+### CLI fallback (when `aat-pass` / `aat-fail` / `aat-inconclusive` cannot run)
+
+If the token is unavailable after you set the correct env var, post the verdict comment yourself: use the same body as `--body-file`, and end with `<!-- v2:aat verdict=pass|fail|inconclusive merge=<40-char-sha> -->` (see `scripts/lib/github_issue_workflow_aat.js`). Apply label changes via GitHub UI or `gh api` only when REST from the CLI is impossible — the **marker line** is what the engine reads.
 
 ---
 

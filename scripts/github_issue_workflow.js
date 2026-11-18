@@ -13,15 +13,16 @@
  *   node scripts/github_issue_workflow.js aat-inconclusive --issue <n> --body-file <path> [--merge <sha>]
  */
 
-const { spawnSync } = require('child_process');
 const {
   postIssueComment,
   resolveRepository,
   updateIssueProjectStatus,
 } = require('./lib/execute_plan_project');
+const { createGitHubClient, resolveToken, MissingToken } = require('./lib/execute_plan_github');
 const { parseFlags, readBody } = require('./lib/github_issue_workflow_lib');
 const { aatLabelPlan, appendAatMarker } = require('./lib/github_issue_workflow_aat');
 const { resolveAatMergeSha } = require('./lib/github_issue_workflow_aat_merge');
+const { editIssueLabels, ensureRepoLabels } = require('./lib/github_issue_workflow_labels');
 
 const AAT_LABEL_SPECS = [
   { name: 'AAT-progress', color: 'fbca04', description: 'Agent acceptance in progress' },
@@ -47,58 +48,28 @@ function printJson(obj) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-function ensureAatLabels() {
+function makeWorkflowClient() {
   const { owner, repo } = resolveRepository();
-  const repoSlug = `${owner}/${repo}`;
-  const created = [];
-  for (const spec of AAT_LABEL_SPECS) {
-    const args = [
-      'label',
-      'create',
-      spec.name,
-      '--repo',
-      repoSlug,
-      '--color',
-      spec.color,
-      '--description',
-      spec.description,
-      '--force',
-    ];
-    const result = spawnSync('gh', args, { encoding: 'utf8' });
-    if (result.status !== 0 && !/already exists/i.test(result.stderr || '')) {
-      throw new Error(
-        `gh label create failed for ${spec.name}: ${result.stderr || result.stdout}`,
-      );
-    }
-    created.push(spec.name);
-  }
-  return { ok: true, labels: created };
-}
-
-function editIssueLabels(issueNumber, { add = [], remove = [] } = {}) {
-  const { owner, repo } = resolveRepository();
-  const args = ['issue', 'edit', String(issueNumber), '--repo', `${owner}/${repo}`];
-  for (const label of add) args.push('--add-label', label);
-  for (const label of remove) args.push('--remove-label', label);
-  if (add.length === 0 && remove.length === 0) {
-    return { skipped: true, reason: 'no_label_changes' };
-  }
-  const result = spawnSync('gh', args, { encoding: 'utf8' });
-  if (result.status !== 0) {
-    throw new Error(
-      `gh issue edit failed with exit ${result.status}: ${result.stderr || result.stdout}`,
+  const token = resolveToken();
+  if (!token) {
+    throw new MissingToken(
+      'Set EXECUTE_PLAN_TOKEN, GH_TOKEN, PAWPET_CLAUDE_TOKEN (Claude Code), or GITHUB_TOKEN',
     );
   }
-  return { ok: true, issueNumber, added: add, removed: remove };
+  return createGitHubClient({ repo: `${owner}/${repo}`, token });
 }
 
-function aatLabelTransition(issueNumber, outcome) {
+async function ensureAatLabels(client) {
+  return ensureRepoLabels(client, AAT_LABEL_SPECS);
+}
+
+async function aatLabelTransition(client, issueNumber, outcome) {
   const { add, remove } = aatLabelPlan(outcome);
-  return editIssueLabels(issueNumber, { add, remove });
+  return editIssueLabels(client, issueNumber, { add, remove });
 }
 
 /** Comment first (with marker), then labels. Marker is authoritative for the engine. */
-async function aatVerdict({ issueNumber, outcome, verdict, flags }) {
+async function aatVerdict({ client, issueNumber, outcome, verdict, flags }) {
   const body = readBody(flags);
   if (!body) {
     throw new Error('aat verdict requires --body or --body-file');
@@ -113,7 +84,9 @@ async function aatVerdict({ issueNumber, outcome, verdict, flags }) {
   const commentBody = appendAatMarker(body, verdict, mergeSha);
   const commentResult = await postIssueComment(issueNumber, commentBody);
   const labelResult =
-    outcome === 'inconclusive' ? aatLabelTransition(issueNumber, 'inconclusive') : aatLabelTransition(issueNumber, outcome);
+    outcome === 'inconclusive'
+      ? await aatLabelTransition(client, issueNumber, 'inconclusive')
+      : await aatLabelTransition(client, issueNumber, outcome);
   return { mergeSha, comment: commentResult, labels: labelResult };
 }
 
@@ -140,32 +113,37 @@ async function main() {
 
     case 'start-work': {
       const body = readBody(flags) || 'Work started.';
+      const client = makeWorkflowClient();
       const commentResult = await postIssueComment(issueNumber, body);
-      const labelResult = editIssueLabels(issueNumber, { add: ['busy'] });
+      const labelResult = await editIssueLabels(client, issueNumber, { add: ['busy'] });
       printJson({ comment: commentResult, labels: labelResult });
       break;
     }
 
     case 'aat-start': {
-      const ensured = ensureAatLabels();
-      const labels = aatLabelTransition(issueNumber, 'start');
+      const client = makeWorkflowClient();
+      const ensured = await ensureAatLabels(client);
+      const labels = await aatLabelTransition(client, issueNumber, 'start');
       printJson({ ensureLabels: ensured, labels });
       break;
     }
 
     case 'aat-pass': {
-      printJson(await aatVerdict({ issueNumber, outcome: 'pass', verdict: 'pass', flags }));
+      const client = makeWorkflowClient();
+      printJson(await aatVerdict({ client, issueNumber, outcome: 'pass', verdict: 'pass', flags }));
       break;
     }
 
     case 'aat-fail': {
-      printJson(await aatVerdict({ issueNumber, outcome: 'fail', verdict: 'fail', flags }));
+      const client = makeWorkflowClient();
+      printJson(await aatVerdict({ client, issueNumber, outcome: 'fail', verdict: 'fail', flags }));
       break;
     }
 
     case 'aat-inconclusive': {
+      const client = makeWorkflowClient();
       printJson(
-        await aatVerdict({ issueNumber, outcome: 'inconclusive', verdict: 'inconclusive', flags }),
+        await aatVerdict({ client, issueNumber, outcome: 'inconclusive', verdict: 'inconclusive', flags }),
       );
       break;
     }
