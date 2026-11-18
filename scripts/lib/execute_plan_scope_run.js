@@ -187,15 +187,17 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
   if (headRepo !== repo) return result('success', 'ok', 'not an execute-plan PR (fork)');
 
   const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
-  // Non-plan PRs outside `main` are out of the forbidden-path gate's scope: no GitHub reads (pre-#1980 behaviour).
-  const isNonPlan = !planId && !supportHead;
-  if (isNonPlan && baseRef !== 'main') return result('success', 'ok', 'not an execute-plan PR');
+  // The control issue is looked up before any PR read, as before #1980. A PR with no active plan
+  // issue is a non-plan PR: outside `main` it returns here with no GitHub or config read.
+  const issue = planId ? await findControlIssue(client, planId) : null;
+  const nonPlan = !(planId && issue);
+  if (!supportHead && nonPlan && baseRef !== 'main') return result('success', 'ok', 'not an execute-plan PR');
 
   let config;
   try {
     config = await loadConfig(client);
   } catch (e) {
-    if (isNonPlan) return nonPlanInfrastructureOutcome('config', e, mode);
+    if (nonPlan) return nonPlanInfrastructureOutcome('config', e, mode);
     return result('failure', 'error', e.message, planId);
   }
 
@@ -209,7 +211,7 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
     const pullFiles = await client.listPullFiles(prNumber);
     files = [...new Set(pullFiles.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))];
   } catch (e) {
-    if (!planId) {
+    if (nonPlan) {
       if (e instanceof PullFilesOverflow) return nonPlanInfrastructureOutcome('file list', e, mode);
       return nonPlanInfrastructureOutcome('PR load', e, mode);
     }
@@ -228,10 +230,9 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
       botLogin: config.bot_login,
     });
   } catch (e) {
-    if (isNonPlan) return nonPlanInfrastructureOutcome('reviews', e, mode);
+    if (nonPlan) return nonPlanInfrastructureOutcome('reviews', e, mode);
   }
 
-  const issue = planId ? await findControlIssue(client, planId) : null;
   if (supportHead) {
     if (!planId || !issue) {
       return result(
@@ -241,10 +242,7 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
         planId || supportHead.planId,
       );
     }
-  } else if (!planId || !issue) {
-    if (baseRef !== 'main') {
-      return result('success', 'ok', 'not an execute-plan PR');
-    }
+  } else if (nonPlan) {
     const evaluation = evaluateNonPlanForbidden({
       files,
       scopeAckReview,

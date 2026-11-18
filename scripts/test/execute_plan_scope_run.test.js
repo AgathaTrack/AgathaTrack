@@ -196,6 +196,25 @@ test('non-plan PR on main: unreadable reviews stay advisory in report-only mode'
   }
 });
 
+test('plan-id PR with no control issue into main: an API outage is a non-plan infra outcome, not a throw', async () => {
+  const prev = process.env.FORBIDDEN_GATE_MODE;
+  process.env.FORBIDDEN_GATE_MODE = 'enforce';
+  try {
+    const { client } = setup({
+      extra: {
+        [ISSUES_KEY]: { body: [] },
+        [`GET ${R}/pulls/5`]: { status: 502, body: { message: 'Bad Gateway' } },
+      },
+    });
+    const res = await runScopeCheck(client, { ...phasePr, baseRef: 'main' });
+    assert.deepEqual([res.conclusion, res.title], ['failure', 'error']);
+    assert.match(res.summary, /Non-plan PR load failed/);
+  } finally {
+    if (prev === undefined) delete process.env.FORBIDDEN_GATE_MODE;
+    else process.env.FORBIDDEN_GATE_MODE = prev;
+  }
+});
+
 test('phase PR: unreadable reviews keep the scope result (no owner ack, no crash)', async () => {
   const { client } = setup({
     files: ['server/bin/server.js', 'server/test/x.test.js'],
