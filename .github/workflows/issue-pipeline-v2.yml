@@ -49,5 +49,7 @@ jobs:
           ISSUE_PIPELINE_V2: ${{ vars.ISSUE_PIPELINE_V2 }}
           # Soak scope: when set (e.g. pipeline-beta), `on` writes only to issues with this label.
           ISSUE_PIPELINE_V2_LABEL: ${{ vars.ISSUE_PIPELINE_V2_LABEL }}
+          # `off` lifts the Ready queue cap (limits.wip) for the run. Any other value keeps it.
+          WIP_LIMIT: ${{ vars.WIP_LIMIT }}
           ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
         run: node scripts/issue_pipeline_v2.js

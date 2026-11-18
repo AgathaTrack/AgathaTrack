@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
+const { applyWipOverride, loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const {
   loadOrgFields,
@@ -245,6 +245,16 @@ test('In analysis: timeout reassigns, then stalls once every eligible agent time
     review: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-claude', timedOut: ['pawpet-bot'] },
   });
   assert.deepEqual([stalled.type, stalled.reason], ['set-blocked', 'stalled']);
+});
+
+test('WIP_LIMIT=off lifts the Ready queue cap; any other value keeps it', () => {
+  const ready = { stage: 'Ready', deliveryMethod: 'light-plan', wip: 5 };
+  const decideWith = (raw) => decide(facts(ready), applyWipOverride(config, raw));
+  assert.equal(decideWith(undefined).reason, 'ready.queued');
+  assert.equal(decideWith('on').reason, 'ready.queued');
+  assert.equal(decideWith('').reason, 'ready.queued');
+  assert.equal(decideWith(' OFF ').type, 'launch');
+  assert.equal(config.limits.wip, 2, 'the committed config is not mutated');
 });
 
 test('Ready: queue, launch, ack window, backoff, blocked', () => {
