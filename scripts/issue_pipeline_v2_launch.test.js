@@ -8,6 +8,7 @@ const {
   buildLaunchRecord,
   deriveLaunchFacts,
   deliveryMethod,
+  doorbellRingFailed,
   launchIssue,
   STAGE_PROMPTS,
   STAGE_PROMPTS_SIGNED,
@@ -198,6 +199,37 @@ test('launchIssue (real preflight): the blocking-label and risky-scope checks st
     /preflight: .*blocking label/,
   );
   assert.equal(launches.length, 0);
+});
+
+test('doorbellRingFailed: uses module-scope runners without ReferenceError', async () => {
+  const engineLogins = ['pawpet-engine'];
+  const at = (minute) => `2026-11-17T10:${String(minute).padStart(2, '0')}:00Z`;
+  const note = (body, minute, login = 'pawpet-engine') => ({ id: minute, user: { login }, body, created_at: at(minute) });
+  const comments = [
+    note(
+      buildLaunchRecord({
+        runId: 'r1',
+        agent: 'cursor-a',
+        purpose: 'doorbell',
+        stage: 'To do',
+        nonce: 'abc123',
+      }),
+      1,
+    ),
+  ];
+  const failed = await doorbellRingFailed({
+    comments,
+    engineLogins,
+    config,
+    agentId: 'cursor-a',
+    stage: 'To do',
+    sinceMs: 0,
+    owner: 'o',
+    repo: 'r',
+    token: 't',
+    io: { runners: { cursor: { status: async () => 'failed' } } },
+  });
+  assert.equal(failed, true);
 });
 
 test('launchIssue: a spec, review or intent-review doorbell skips the preflight and the busy label', async () => {

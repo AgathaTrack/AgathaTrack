@@ -209,7 +209,7 @@ function approvalsOnCurrentHash(facts, config) {
     const key = voterKey(vote, config);
     voted.add(key);
     if (vote.vote === 'up' && vote.login !== editor) {
-      voters.add(vote.login);
+      voters.add(key);
     }
   }
   return { editor, editorIsAgent: logins.has(editor), up: voters, voted };
@@ -231,7 +231,17 @@ function decideInAnalysis(facts, config) {
   }
 
   const ids = startableIds(config);
-  let eligible = ids.filter((id) => agentActsAs(config, id) !== editor && !voted.has(id));
+  const sharedEditor = editorIsAgent && editor;
+  let eligible = ids.filter((id) => {
+    if (voted.has(id)) {
+      return false;
+    }
+    if (!sharedEditor || agentActsAs(config, id) !== editor) {
+      return true;
+    }
+    const sharers = ids.filter((candidate) => agentActsAs(config, candidate) === editor);
+    return sharers.length > 1;
+  });
   if (eligible.length === 0 && editorIsAgent) {
     const editorId = resolveAgent(config, editor)?.id;
     if (editorId && ids.includes(editorId)) {

@@ -13,6 +13,12 @@
  */
 
 const METHODS = ['PR', 'light-plan', 'execute-plan'];
+const { resolveAgent } = require('./issue_pipeline_v2_config');
+
+const DEFAULT_RUNNERS = () => ({
+  cursor: require('./pipeline_runners/cursor'),
+  claude: require('./pipeline_runners/claude'),
+});
 
 function buildLaunchRecord({ runId, agent, agentUrl, purpose = 'delivery', stage, nonce }) {
   const attrs = [`run=${runId}`, `agent=${agent}`];
@@ -125,13 +131,17 @@ async function doorbellRingFailed({ comments, engineLogins, config, agentId, sta
   if (!runner?.status) {
     return false;
   }
-  const state = await runner.status({
-    nonce: latest.nonce,
-    owner,
-    repo,
-    deps: { dispatchToken: token, restFn: io.restFn },
-  });
-  return state === 'failed';
+  try {
+    const state = await runner.status({
+      nonce: latest.nonce,
+      owner,
+      repo,
+      deps: { dispatchToken: token, restFn: io.restFn },
+    });
+    return state === 'failed';
+  } catch {
+    return false;
+  }
 }
 
 function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
@@ -259,12 +269,6 @@ async function launchIssue({
 }) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
   const lib = deps.lib || require('../.github/scripts/github-project-lib');
-  const { resolveAgent } = require('./issue_pipeline_v2_config');
-
-const DEFAULT_RUNNERS = () => ({
-  cursor: require('./pipeline_runners/cursor'),
-  claude: require('./pipeline_runners/claude'),
-});
   const entry = resolveAgent(config, agent);
   if (!entry) {
     throw new Error(`unknown agent ${agent}`);

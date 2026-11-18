@@ -1,8 +1,8 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
-const { agentLogins, resolveAgent, entryId, entryActsAs } = require('./issue_pipeline_v2_config');
-const { findVerifiedVerdicts, useSignedVerdicts } = require('./issue_pipeline_v2_verdict');
+const { agentLogins, resolveAgent, entryId, entryActsAs, sharedActsAs } = require('./issue_pipeline_v2_config');
+const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const REVIEW_REQUEST = 'v2:review-request';
 
@@ -100,7 +100,9 @@ function deriveReviewFacts({
     return { review: {}, lastBodyEditor, totalVotes: 0 };
   }
   const votes = [];
-  const signed = useSignedVerdicts(config) && voteKey && bodyHash && issueNumber;
+  const poolNeedsSigned = sharedActsAs(config).length > 0;
+  const sharedLogins = new Set(poolNeedsSigned ? sharedActsAs(config) : []);
+  const signed = poolNeedsSigned && voteKey && bodyHash && issueNumber;
   const enteredAt = Date.parse(requests[0].comment.created_at);
   if (signed) {
     for (const verdict of findVerifiedVerdicts({
@@ -133,7 +135,9 @@ function deriveReviewFacts({
   } else {
     for (const request of requests) {
       votes.push(
-        ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }),
+        ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }).filter(
+          (vote) => !(poolNeedsSigned && !voteKey && sharedLogins.has(vote.login)),
+        ),
       );
     }
   }

@@ -1,8 +1,8 @@
 'use strict';
 
 const { rest } = require('../.github/scripts/github-project-lib');
-const { agentLogins, resolveAgent } = require('./issue_pipeline_v2_config');
-const { findVerifiedVerdicts, useSignedVerdicts } = require('./issue_pipeline_v2_verdict');
+const { agentLogins, resolveAgent, sharedActsAs } = require('./issue_pipeline_v2_config');
+const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const SPEC_REQUEST = 'v2:spec-request';
 const WRITE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
@@ -87,7 +87,10 @@ function deriveSpecFacts({
   const assignedTo = resolveAgent(config, request.assigned)?.id || request.assigned;
   const timedOut = (request.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
   let passedBy = null;
-  if (useSignedVerdicts(config) && voteKey && bodyHash && issueNumber) {
+  const poolNeedsSigned = sharedActsAs(config).length > 0;
+  if (poolNeedsSigned && !voteKey) {
+    passedBy = null;
+  } else if (poolNeedsSigned && voteKey && bodyHash && issueNumber) {
     const specUp = findVerifiedVerdicts({
       comments,
       config,

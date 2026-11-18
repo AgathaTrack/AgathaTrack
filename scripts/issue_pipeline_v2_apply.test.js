@@ -102,7 +102,15 @@ test('request-intent-review also rings a launchable agent, for the In Main stage
   const withRunners = { ...config, launchRunners: ['cursor'], agents: [{ login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }] };
   const result = await applyAction({
     action: { type: 'request-intent-review', agent: 'pawpet-bot' },
-    ctx: ctx({ restFn, config: withRunners, launchFn: async (args) => { launches.push(args); return {}; }, facts: { stage: 'In Main', delivery: {} } }),
+    ctx: ctx({
+      restFn,
+      config: withRunners,
+      launchFn: async (args) => {
+        launches.push(args);
+        return { runId: 'r-main' };
+      },
+      facts: { stage: 'In Main', delivery: {} },
+    }),
   });
   assert.equal(launches[0].agent, 'pawpet-bot');
   assert.equal(launches[0].stage, 'In Main');
