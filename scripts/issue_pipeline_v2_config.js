@@ -101,4 +101,24 @@ function loadConfig(file = DEFAULT_CONFIG_PATH) {
   return validateConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
 }
 
-module.exports = { DEFAULT_CONFIG_PATH, KNOWN_METHODS, validateConfig, loadConfig, agentLogins, launchableAgents, selfStartingLogins };
+/**
+ * Temporary switch: the repo variable `WIP_LIMIT=off` lifts the Ready queue cap (`limits.wip`) for
+ * the run. Any other value keeps the committed limit. Only `decideReady` reads the cap.
+ */
+function applyWipOverride(config, raw) {
+  if (String(raw || '').trim().toLowerCase() !== 'off') {
+    return config;
+  }
+  return { ...config, limits: { ...config.limits, wip: Infinity } };
+}
+
+module.exports = {
+  DEFAULT_CONFIG_PATH,
+  KNOWN_METHODS,
+  validateConfig,
+  loadConfig,
+  applyWipOverride,
+  agentLogins,
+  launchableAgents,
+  selfStartingLogins,
+};

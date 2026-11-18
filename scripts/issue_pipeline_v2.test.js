@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
+const { applyWipOverride, loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const {
   loadOrgFields,
@@ -247,6 +247,16 @@ test('In analysis: timeout reassigns, then stalls once every eligible agent time
   assert.deepEqual([stalled.type, stalled.reason], ['set-blocked', 'stalled']);
 });
 
+test('WIP_LIMIT=off lifts the Ready queue cap; any other value keeps it', () => {
+  const ready = { stage: 'Ready', deliveryMethod: 'light-plan', wip: 5 };
+  const decideWith = (raw) => decide(facts(ready), applyWipOverride(config, raw));
+  assert.equal(decideWith(undefined).reason, 'ready.queued');
+  assert.equal(decideWith('on').reason, 'ready.queued');
+  assert.equal(decideWith('').reason, 'ready.queued');
+  assert.equal(decideWith(' OFF ').type, 'launch');
+  assert.equal(config.limits.wip, 2, 'the committed config is not mutated');
+});
+
 test('Ready: queue, launch, ack window, backoff, blocked', () => {
   const ready = { stage: 'Ready', deliveryMethod: 'PR' };
   assert.equal(rowOf({ ...ready, wip: 2 }).reason, 'ready.queued');
@@ -460,6 +470,42 @@ test('runner: off does nothing; dry-run decides over the board and never writes'
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;
+  }
+});
+
+test('runner: WIP_LIMIT=off reaches tick; a Ready issue over the cap launches only with it', async () => {
+  const prior = { mode: process.env.ISSUE_PIPELINE_V2, wip: process.env.WIP_LIMIT };
+  const field = (name) => [{ field_id: 1, single_select_option: { name } }];
+  const board = {
+    1: { number: 1, body: '', labels: [], issue_field_values: field('Ready') },
+    10: { number: 10, body: '', labels: [], issue_field_values: field('In progress') },
+    11: { number: 11, body: '', labels: [], issue_field_values: field('In progress') },
+    12: { number: 12, body: '', labels: [], issue_field_values: field('In progress') },
+  };
+  const io = boardIo({
+    listProjectIssues: async () =>
+      [1, 10, 11, 12].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } })),
+    getIssue: async (n) => board[n],
+  });
+  const args = { owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S', only: 1, io };
+  const actionFor = async (raw) => {
+    if (raw === undefined) delete process.env.WIP_LIMIT;
+    else process.env.WIP_LIMIT = raw;
+    const result = await tick(args);
+    // A planned launch counts itself, so the total can be 4 when the Ready issue launches.
+    assert.ok(result.wip >= 3, 'three In progress issues: over the committed cap of 2');
+    return result.actions.find((entry) => entry.issue === 1).action;
+  };
+  try {
+    process.env.ISSUE_PIPELINE_V2 = 'dry-run';
+    assert.equal((await actionFor(undefined)).reason, 'ready.queued', 'no variable: the committed cap holds');
+    assert.equal((await actionFor('on')).reason, 'ready.queued', 'any other value keeps the cap');
+    assert.equal((await actionFor('off')).type, 'launch', 'WIP_LIMIT=off lets the Ready issue launch');
+  } finally {
+    if (prior.mode === undefined) delete process.env.ISSUE_PIPELINE_V2;
+    else process.env.ISSUE_PIPELINE_V2 = prior.mode;
+    if (prior.wip === undefined) delete process.env.WIP_LIMIT;
+    else process.env.WIP_LIMIT = prior.wip;
   }
 });
 
