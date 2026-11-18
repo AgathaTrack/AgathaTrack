@@ -210,6 +210,7 @@ run_governance() {
   run_prepush_gate eslint
   node --test scripts/validate_eslint.test.js
   node --test scripts/github_issue_workflow.test.js
+  node --test scripts/lib/env_proxy_reexec.test.js
   node --test scripts/lib/pipeline_path_gate.test.js
   node --test scripts/lib/pipeline_state_trust.test.js
   node --test scripts/issue_pipeline_state.test.js
@@ -236,6 +237,8 @@ run_governance() {
   node --test .github/scripts/issue-agent-handlers.test.js
   node --test .github/scripts/github-project-lib.test.js
   node --test scripts/stage_mirror_decide.test.js
+  node --test scripts/stage_mirror_apply.test.js
+  node --test scripts/stage_mirror_fields.test.js
   node --test scripts/db/normalize-schema-dump.test.js
   node scripts/db/check-migration-manifest.js
   node scripts/check_migration_sql_transactions.js

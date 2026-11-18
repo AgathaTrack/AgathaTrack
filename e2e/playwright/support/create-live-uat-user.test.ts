@@ -153,6 +153,20 @@ test('duplicate on the first attempt is a failure: no login for a caller-supplie
   assert.equal(user.accessToken, 'token-ui');
 });
 
+test('duplicate on attempts 1 and 2 never logs in: the email was taken before this call', async () => {
+  const { deps, calls } = harness({
+    signupResults: [DUPLICATE, DUPLICATE, DUPLICATE],
+    loginResult: 'ok',
+  });
+
+  const user = await createLiveUatUser(deps, { email: 'taken@example.com', password: 'Secret1x' });
+
+  assert.equal(calls.signup.length, 3);
+  assert.equal(calls.login.length, 0, 'a pre-existing account must not be adopted');
+  assert.equal(calls.uiFallback.length, 1);
+  assert.equal(user.accessToken, 'token-ui');
+});
+
 test('recovery login failure counts as a failed attempt and signup phase continues', async () => {
   const { deps, calls } = harness({
     signupResults: [new Error('a'), DUPLICATE, 'ok'],

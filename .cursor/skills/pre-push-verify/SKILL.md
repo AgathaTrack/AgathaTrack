@@ -46,7 +46,7 @@ When `./scripts/pre-push-changed.sh` detects edits under `flutter_app/lib/featur
 ## Full script includes
 
 - Gates from `scripts/ci/governance-blocking-steps.mjs` (full-only coverage jobs stay in CI)
-- `npm audit --audit-level=high` + full Jest
+- `node scripts/npm_audit_gate.js --package server` + full Jest
 - `build_runner`, `flutter analyze`, full `flutter test`
 
 ## CI is authoritative

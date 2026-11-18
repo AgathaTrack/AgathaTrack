@@ -19,12 +19,25 @@ const {
   assertBoardColumnsMatchStageOptions,
 } = require('./stage_mirror_fields');
 
+const defaultIo = {
+  updateProjectItemTextField,
+  updateProjectStatus,
+  setIssueStageField,
+  fetchIssue,
+};
+
 function resolveMirrorMode() {
   const mode = String(process.env.STAGE_MIRROR || 'off').trim().toLowerCase();
   if (mode === 'on' || mode === 'dry-run' || mode === 'off') {
     return mode;
   }
   return 'off';
+}
+
+// Repo and number only: never the title or body of an issue (ATSupport issues are private).
+function rowRef(row) {
+  const issue = row.issue || {};
+  return `${issue.repository?.name || 'unknown'}#${issue.number}`;
 }
 
 function logMirrorLine(boardKey, row, P, F, S, plan, dryRun) {
@@ -38,32 +51,22 @@ function logMirrorLine(boardKey, row, P, F, S, plan, dryRun) {
   );
 }
 
-async function applyMirrorPlan({
-  board,
-  row,
-  plan,
-  stageField,
-  projectsPat,
-  issueOwner,
-  issueRepo,
-  issueNum,
-}) {
-  if (plan.newS != null) {
-    await updateProjectItemTextField({
-      projectId: board.projectId,
-      itemId: row.projectItemId,
-      fieldId: board.syncedFieldId,
-      text: plan.newS,
-      projectsPat,
-    });
-  }
-
+/**
+ * Apply one plan. The target write (Stage field or board column) goes first and the synced value S
+ * goes last. If the target write fails, S keeps its old value, so the next pass sees the same change
+ * again and retries it. Writing S first would make a failed write look like a human edit on the next
+ * pass, and that pass would revert the human's change.
+ */
+async function applyMirrorPlan(
+  { board, row, plan, stageField, projectsPat, issueOwner, issueRepo, issueNum },
+  io = defaultIo,
+) {
   if (plan.action === 'field_from_board') {
     const canonicalField = resolveCanonicalOption(plan.newF, stageField.options);
     if (!canonicalField) {
       throw new Error(`Cannot map board status to Stage field: ${plan.newF}`);
     }
-    await setIssueStageField({
+    await io.setIssueStageField({
       owner: issueOwner,
       repo: issueRepo,
       issueNumber: issueNum,
@@ -71,28 +74,46 @@ async function applyMirrorPlan({
       stageFieldId: stageField.id,
       value: canonicalField,
     });
-    return;
-  }
-
-  if (plan.action === 'board_from_field') {
+  } else if (plan.action === 'board_from_field') {
     const canonicalBoard = resolveCanonicalOption(plan.newP, board.columns);
     if (!canonicalBoard) {
       throw new Error(`Cannot map Stage field to board column: ${plan.newP}`);
     }
-    const fullIssue = await fetchIssue(issueOwner, issueRepo, issueNum, projectsPat);
-    await updateProjectStatus({
+    const fullIssue = await io.fetchIssue(issueOwner, issueRepo, issueNum, projectsPat);
+    await io.updateProjectStatus({
       issue: fullIssue,
       projectId: board.projectId,
       statusFieldId: board.statusFieldId,
       statusName: canonicalBoard,
       projectsPat,
     });
-    return;
   }
 
-  if (plan.action === 'sync_s') {
-    return;
+  if (plan.newS != null) {
+    await io.updateProjectItemTextField({
+      projectId: board.projectId,
+      itemId: row.projectItemId,
+      fieldId: board.syncedFieldId,
+      text: plan.newS,
+      projectsPat,
+    });
   }
+}
+
+/**
+ * Run `handle` for every row. A row that throws is recorded and the loop moves on, so one bad item
+ * cannot stop the rest of the board. The caller decides whether the run fails.
+ */
+async function forEachRowIsolated(rows, handle) {
+  const failures = [];
+  for (const row of rows) {
+    try {
+      await handle(row);
+    } catch (err) {
+      failures.push({ ref: rowRef(row), message: err && err.message ? err.message : String(err) });
+    }
+  }
+  return failures;
 }
 
 async function reconcileBoard({
@@ -112,12 +133,12 @@ async function reconcileBoard({
     projectsPat,
   });
 
-  const stats = { scanned: 0, writes: 0, noop: 0 };
+  const stats = { scanned: 0, writes: 0, noop: 0, failures: [] };
 
-  for (const row of rows) {
+  stats.failures = await forEachRowIsolated(rows, async (row) => {
     const issueNum = row.issue.number;
     if (issueFilter != null && Number(issueFilter) !== Number(issueNum)) {
-      continue;
+      return;
     }
     const issueOwner = row.issue.repository?.owner?.login || board.owner;
     const issueRepo = row.issue.repository?.name || board.repo;
@@ -136,7 +157,7 @@ async function reconcileBoard({
       }));
     if (ownedByV2) {
       stats.noop += 1;
-      continue;
+      return;
     }
 
     stats.scanned += 1;
@@ -148,13 +169,13 @@ async function reconcileBoard({
     const plan = decideStageMirror(P, F, S, board.columns);
     if (plan.action === 'none') {
       stats.noop += 1;
-      continue;
+      return;
     }
 
     logMirrorLine(board.key, row, P, F, S, plan, dryRun);
     if (dryRun) {
       stats.writes += 1;
-      continue;
+      return;
     }
 
     await applyMirrorPlan({
@@ -168,7 +189,7 @@ async function reconcileBoard({
       issueNum,
     });
     stats.writes += 1;
-  }
+  });
 
   return stats;
 }
@@ -212,6 +233,7 @@ async function runStageMirror() {
   const projectsPat = process.env.GH_PROJECTS_PAT;
   const stageField = await loadOrgStageField({ org: config.org, token: projectsPat });
 
+  // Config problems stop the run before any write.
   for (const board of config.boards) {
     await assertStageFieldOptions(
       projectsPat,
@@ -223,23 +245,39 @@ async function runStageMirror() {
 
   const issueFilter = process.env.ISSUE_NUMBER ? Number(process.env.ISSUE_NUMBER) : null;
   const totals = { scanned: 0, writes: 0, noop: 0 };
+  const failures = [];
 
   for (const board of config.boards) {
-    const stats = await reconcileBoard({
-      board,
-      stageField,
-      projectsPat,
-      dryRun,
-      issueFilter,
-    });
+    let stats;
+    try {
+      stats = await reconcileBoard({
+        board,
+        stageField,
+        projectsPat,
+        dryRun,
+        issueFilter,
+      });
+    } catch (err) {
+      // A board-level failure must not stop the other board.
+      failures.push({ ref: board.label, message: err.message });
+      continue;
+    }
     totals.scanned += stats.scanned;
     totals.writes += stats.writes;
     totals.noop += stats.noop;
+    failures.push(...stats.failures);
   }
 
+  for (const failure of failures) {
+    console.error(`[error] ${failure.ref}: ${failure.message}`);
+  }
   console.log(
-    `stage-mirror complete mode=${mode} dry_run=${dryRun} scanned=${totals.scanned} writes=${totals.writes} noop=${totals.noop}`,
+    `stage-mirror complete mode=${mode} dry_run=${dryRun} scanned=${totals.scanned} writes=${totals.writes} noop=${totals.noop} failures=${failures.length}`,
   );
+  if (failures.length > 0) {
+    // Fail the run so the problem is visible, after every other item has been mirrored.
+    throw new Error(`stage-mirror: ${failures.length} failure(s); other items were still mirrored`);
+  }
   return { ok: true, dryRun, totals };
 }
 
@@ -254,5 +292,6 @@ module.exports = {
   resolveMirrorMode,
   reconcileBoard,
   applyMirrorPlan,
+  forEachRowIsolated,
   runStageMirror,
 };
