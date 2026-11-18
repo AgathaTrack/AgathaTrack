@@ -155,6 +155,24 @@ Step summary must state explicitly:
 > Prod deployment skipped intentionally (`PROD_DEPLOY_ENABLED` is not `true`).
 > No FTP/SSH steps ran.
 
+**Acceptance guard (#2424).** After `resolve-trigger` validates the dispatch, the step **AAT prod gate** runs
+`scripts/ci/aat-prod-gate.js` against the promoted SHA. It is controlled by repository variable **`AAT_GATE`**:
+
+| `AAT_GATE` | Behaviour |
+|------------|-----------|
+| unset / `off` (default) | No API calls; the step passes. |
+| `dry-run` | Lists engine-owned issues in `In Main` or `In UAT` whose latest merge is contained in the promoted SHA and whose acceptance is not satisfied. Writes the list to the job summary and always passes. |
+| `on` | Fails `resolve-trigger`, so `deploy-prod` does not run, when any such merge is unsatisfied. An API or configuration error also fails closed. |
+
+"Satisfied" uses `scripts/lib/aat_satisfied.js`: the newest actionable verdict for that merge is `pass`, or the human
+`Acceptance` value is `Manual` / `Skipped` with an engine waive bound to that merge. A bare `Passed` value is not enough.
+An unknown `AAT_GATE` value runs as `dry-run`. If the org field `Acceptance` does not exist, the gate is disabled and
+blocks nothing.
+
+The guard reads the board with `AAT_GATE_READ_TOKEN` (read-only) and falls back to `GITHUB_TOKEN`. The write-capable
+engine token is never passed to this workflow. `workflow_dispatch` input **`aat_override_reason`** passes an `on` gate
+and records the reason in the job summary. `deploy-uat` never sets it.
+
 ---
 
 ## Concurrency
