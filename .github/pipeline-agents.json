@@ -34,9 +34,12 @@
   "engine": {
     "logins": ["pawpet-engine"]
   },
-  "launchRunners": ["cursor"],
+  "launchRunners": ["cursor", "claude"],
   "limits": {
     "wip": 2,
+    "runnerWip": {
+      "claude": 1
+    },
     "reviewTimeoutMin": 30,
     "ackWindowMin": 15,
     "launchBackoffMin": [

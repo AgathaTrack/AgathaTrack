@@ -124,7 +124,8 @@ listed agent); the engine never clears the flag.
   the planned work, the `agent-paths` block and the Definition of Done are written into the body during review. After
   convergence the body is frozen except for Definition of Done ticks.
 - **Doorbell run:** when the engine posts, reassigns or wakes a spec, review or intent-review request for an agent whose
-  runner is in `launchRunners` (`cursor`), it also starts a Cursor run with the stage's task (spec pass in To do,
+  runner is in `launchRunners` (`cursor` and/or `claude`), it also starts a run with the stage's task (Cursor via the
+  Agents API; Claude via `pipeline-claude-run.yml` workflow dispatch with `run-name: pipeline-claude-<nonce>`). Spec pass in To do,
   adversarial review in In analysis, intent review in In Main). The run is not a delivery: no `busy` label, no PR, and it
   skips the legacy launch preflight. With too little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
@@ -582,7 +583,7 @@ Jobs that read automation secrets use GitHub Environment **`automation`** (deplo
 
 | Secret / variable | Location |
 |-------------------|----------|
-| `EXECUTE_PLAN_BOT_TOKEN`, `cursor_api_key` / `CURSOR_API_KEY`, `GH_PROJECTS_PAT`, `GH_PROJECT_ID`, `GH_STATUS_FIELD_ID`, `PIPELINE_VOTE_KEY` (engine-only; signs and verifies `v2:verdict`, never passed to runners) | `automation` environment |
+| `EXECUTE_PLAN_BOT_TOKEN`, `cursor_api_key` / `CURSOR_API_KEY`, `GH_PROJECTS_PAT`, `GH_PROJECT_ID`, `GH_STATUS_FIELD_ID`, `PIPELINE_VOTE_KEY` (engine-only; signs and verifies `v2:verdict`, never passed to runners), `PAWPET_CLAUDE_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` (Claude doorbell workflow only) | `automation` environment |
 | `E2E_BYPASS_TOKEN` | `UAT` environment |
 | Deploy SSH keys and prod/UAT deploy secrets | `UAT` / `PROD` environments |
 | `POSTHOG_*`, PR CI build secrets | repository (unchanged) |

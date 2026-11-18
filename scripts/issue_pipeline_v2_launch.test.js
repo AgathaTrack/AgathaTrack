@@ -69,7 +69,7 @@ test('launch facts: newest engine record decides, acked clears, others are ignor
 });
 
 test('only agents whose runner the engine can start are launched', () => {
-  assert.deepEqual(launchableAgents(config, 'PR'), ['cursor-a', 'cursor-b']);
+  assert.deepEqual(launchableAgents(config, 'PR'), ['cursor-a', 'cursor-b', 'claude-a']);
   assert.deepEqual(launchableAgents(config, 'execute-plan'), ['cursor-a']);
   const ready = { mode: 'on', onBoard: true, stage: 'Ready', now: 1e12, wip: 0, deliveryMethod: 'light-plan' };
   assert.equal(decide(ready, config).agent, 'cursor-a');

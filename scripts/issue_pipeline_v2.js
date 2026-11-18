@@ -10,11 +10,10 @@ const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/githu
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
-const { hasDoorbellLaunchSince } = require('./issue_pipeline_v2_launch');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
-const { deliveryMethod, deriveLaunchFacts, launchIssue } = require('./issue_pipeline_v2_launch');
+const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
 const {
   deployContains,
   deriveDeliveryFacts,
@@ -178,14 +177,18 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
     const reactions = probe.commentId ? await reactionsOf(probe.commentId) : [];
     facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins, editors, ...verdictCtx });
     if (facts.spec.assignedTo && runMode === 'on') {
-      facts.spec.ringFailed =
-        !hasDoorbellLaunchSince({
-          comments,
-          engineLogins,
-          agentId: facts.spec.assignedTo,
-          stage: 'To do',
-          sinceMs: facts.spec.requestedAt,
-        });
+      facts.spec.ringFailed = await doorbellRingFailed({
+        comments,
+        engineLogins,
+        config,
+        agentId: facts.spec.assignedTo,
+        stage: 'To do',
+        sinceMs: facts.spec.requestedAt,
+        owner,
+        repo,
+        token,
+        io,
+      });
     }
     return facts;
   }
@@ -213,12 +216,17 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
   });
   const merged = { ...facts, ...derived };
   if (merged.review?.assignedTo && runMode === 'on') {
-    merged.review.ringFailed = !hasDoorbellLaunchSince({
+    merged.review.ringFailed = await doorbellRingFailed({
       comments,
       engineLogins,
+      config,
       agentId: merged.review.assignedTo,
       stage: 'In analysis',
       sinceMs: merged.review.requestedAt,
+      owner,
+      repo,
+      token,
+      io,
     });
   }
   return merged;
@@ -392,7 +400,11 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
                 issue: entry.issue,
                 token: projectsPat,
                 apiKey: process.env.CURSOR_API_KEY || process.env.cursor_api_key,
-                deps: io.launchDeps,
+                deps: {
+                  ...(io.launchDeps || {}),
+                  dispatchToken: projectsPat,
+                  restFn: io.restFn,
+                },
               });
             }),
         },

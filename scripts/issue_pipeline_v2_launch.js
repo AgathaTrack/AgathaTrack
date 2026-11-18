@@ -101,6 +101,39 @@ function hasDoorbellLaunchSince({ comments, engineLogins, agentId, stage, sinceM
   );
 }
 
+/** Missing doorbell record, or adapter `status()` reports failure (#2428 D9). */
+async function doorbellRingFailed({ comments, engineLogins, config, agentId, stage, sinceMs, owner, repo, token, io = {} }) {
+  if (!hasDoorbellLaunchSince({ comments, engineLogins, agentId, stage, sinceMs })) {
+    return true;
+  }
+  const latest = listLaunchRecords({ comments, engineLogins })
+    .filter(
+      (record) =>
+        record.kind === 'launch' &&
+        record.purpose === 'doorbell' &&
+        record.agent === agentId &&
+        (!stage || record.stage === stage) &&
+        record.at >= sinceMs,
+    )
+    .at(-1);
+  if (!latest?.nonce) {
+    return false;
+  }
+  const runnerName = resolveAgent(config, agentId)?.runner;
+  const runners = io.runners || DEFAULT_RUNNERS();
+  const runner = runners[runnerName];
+  if (!runner?.status) {
+    return false;
+  }
+  const state = await runner.status({
+    nonce: latest.nonce,
+    owner,
+    repo,
+    deps: { dispatchToken: token, restFn: io.restFn },
+  });
+  return state === 'failed';
+}
+
 function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
   const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter((record) =>
     ['launch', 'launch-failed', 'launch-acked'].includes(record.kind) &&
@@ -227,6 +260,11 @@ async function launchIssue({
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
   const lib = deps.lib || require('../.github/scripts/github-project-lib');
   const { resolveAgent } = require('./issue_pipeline_v2_config');
+
+const DEFAULT_RUNNERS = () => ({
+  cursor: require('./pipeline_runners/cursor'),
+  claude: require('./pipeline_runners/claude'),
+});
   const entry = resolveAgent(config, agent);
   if (!entry) {
     throw new Error(`unknown agent ${agent}`);
@@ -243,7 +281,7 @@ async function launchIssue({
   const mark = stage ? async () => {} : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
   await mark(['busy'], []);
 
-  const runners = deps.runners || { cursor: require('./pipeline_runners/cursor') };
+  const runners = deps.runners || DEFAULT_RUNNERS();
   const runner = runners[entry.runner];
   if (!runner?.launch) {
     await mark([], ['busy']);
@@ -284,6 +322,7 @@ module.exports = {
   listLaunchRecords,
   newestDeliveryLaunchAgentId,
   hasDoorbellLaunchSince,
+  doorbellRingFailed,
   deriveLaunchFacts,
   deliveryMethod,
   launchIssue,

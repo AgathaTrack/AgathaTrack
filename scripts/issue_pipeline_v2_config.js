@@ -104,6 +104,13 @@ function validateConfig(config) {
   if (!Array.isArray(backoff) || backoff.length === 0 || backoff.some((n) => !(n > 0))) {
     problems.push('limits.launchBackoffMin must be a non-empty list of positive numbers');
   }
+  const launchRunnerSet = new Set(runners || []);
+  const runnerWip = limits.runnerWip;
+  if (launchRunnerSet.has('claude')) {
+    if (!runnerWip || !Number.isFinite(runnerWip.claude) || runnerWip.claude < 1) {
+      problems.push('limits.runnerWip.claude must be a positive number when claude is in launchRunners');
+    }
+  }
   if (problems.length > 0) {
     throw new Error(`Invalid pipeline-agents.json:\n- ${problems.join('\n- ')}`);
   }
