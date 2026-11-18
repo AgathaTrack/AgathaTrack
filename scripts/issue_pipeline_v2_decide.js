@@ -55,11 +55,18 @@ function canonicalStage(raw) {
   return STAGES.find((stage) => stage.toLowerCase() === text) || null;
 }
 
-/** The agent a wake rings: the one holding the stage's request, else the least recently used. */
+/**
+ * The agent a wake rings. The holder is used only when the engine can start them. Otherwise the
+ * least recently used startable agent, or null when none is startable.
+ */
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  return holder || pickAgent(selfStartingLogins(config), facts);
+  const startable = selfStartingLogins(config);
+  if (holder && startable.includes(holder)) {
+    return holder;
+  }
+  return pickAgent(startable, facts);
 }
 
 function none(reason) {
@@ -94,14 +101,30 @@ function timedOutSet(state, now, timeoutMs) {
   return set;
 }
 
-/** Shared timeout step for spec and review pickup. */
+/** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
-  if (!state.assignedTo) {
-    const next = pickAgent(eligible, facts);
-    return next
-      ? { type: 'reassign', stage, agent: next, row: `${rowPrefix}.assign` }
-      : setBlocked('stalled', `${rowPrefix}.stalled`); // nobody the engine can start is left to ask
+  const held = state.assignedTo;
+  const startable = new Set(selfStartingLogins(config));
+  // No assignee yet, or the assignee is not one the engine can start: pick now. Waiting out
+  // reviewTimeoutMin for pawpet-claude is the churn this interim fix exists to stop.
+  // `eligible` is who may be asked next, which is narrower than startable (it drops the editor
+  // and anyone who has already voted), so a startable assignee still waits out the timeout.
+  if (!held || !startable.has(held)) {
+    const skipped = new Set(state.timedOut || []);
+    if (held) skipped.add(held);
+    const remaining = eligible.filter((login) => !skipped.has(login));
+    const next = pickAgent(remaining, facts);
+    if (!next) {
+      return setBlocked('stalled', `${rowPrefix}.stalled`);
+    }
+    return {
+      type: 'reassign',
+      stage,
+      agent: next,
+      ...(held ? { attempts: skipped.size } : {}),
+      row: held ? `${rowPrefix}.reassign` : `${rowPrefix}.assign`,
+    };
   }
   if (facts.now - state.requestedAt < timeoutMs) {
     return none(`${rowPrefix}.waiting`);
@@ -337,15 +360,19 @@ function decide(facts, config) {
   if (facts.blocked) {
     // Only a human comment wakes a blocked issue, once per comment; the engine never clears the flag.
     const answered = (facts.wokenFor || []).includes(facts.humanCommentId);
-    return facts.humanCommentSinceBlock && !answered
+    if (!(facts.humanCommentSinceBlock && !answered)) {
+      return none(answered ? 'blocked.already-woken' : 'blocked');
+    }
+    const agent = wakeAgent(facts, stage, config);
+    return agent
       ? {
           type: 'wake-stage-agent',
           stage,
-          agent: wakeAgent(facts, stage, config),
+          agent,
           commentId: facts.humanCommentId,
           row: 'blocked.wake',
         }
-      : none(answered ? 'blocked.already-woken' : 'blocked');
+      : none('blocked.no-agent');
   }
   if (!String(facts.stage || '').trim() && facts.followUp) {
     return facts.followUp.depth <= config.limits.followUpMaxDepth
