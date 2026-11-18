@@ -13,11 +13,29 @@
  */
 
 const METHODS = ['PR', 'light-plan', 'execute-plan'];
+const { resolveAgent } = require('./issue_pipeline_v2_config');
 
-function buildLaunchRecord({ runId, agent, agentUrl }) {
+const DEFAULT_RUNNERS = () => ({
+  cursor: require('./pipeline_runners/cursor'),
+  claude: require('./pipeline_runners/claude'),
+});
+
+function buildLaunchRecord({ runId, agent, agentUrl, purpose = 'delivery', stage, nonce }) {
+  const attrs = [`run=${runId}`, `agent=${agent}`];
+  if (purpose) {
+    attrs.push(`purpose=${purpose}`);
+  }
+  if (stage) {
+    attrs.push(`stage=${stage}`);
+  }
+  if (nonce) {
+    attrs.push(`nonce=${nonce}`);
+  }
+  const label = purpose === 'doorbell' ? 'Doorbell' : 'Delivery';
   return [
-    `<!-- v2:launch run=${runId} agent=${agent} -->`,
-    `Started a ${agent} run${agentUrl ? `: ${agentUrl}` : ''}. The agent has the acknowledge window to mark the issue \`busy\`.`,
+    `<!-- v2:launch ${attrs.join(' ')} -->`,
+    `Started a ${label.toLowerCase()} run for \`${agent}\`${agentUrl ? `: ${agentUrl}` : ''}` +
+      (purpose === 'delivery' ? '. The agent has the acknowledge window to mark the issue `busy`.' : '.'),
   ].join('\n');
 }
 
@@ -32,30 +50,115 @@ function buildLaunchAcked({ runId }) {
   return `<!-- v2:launch-acked run=${runId} -->\nRun ${runId} is working on this issue.`;
 }
 
-const RECORD = /<!--\s*v2:(launch|launch-failed|launch-acked)(?:\s+run=([\w.:-]+))?(?:\s+agent=([\w-]+))?\s*-->/;
+const RECORD = new RegExp(
+  '<!--\\s*v2:(launch|launch-failed|launch-acked)' +
+    '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell))?' +
+    '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done))?' +
+    '(?:\\s+nonce=([a-f0-9]+))?\\s*-->',
+  'i',
+);
 
 /**
  * Launch facts from the issue's comments. `failures` is the `Attempts` field: it counts runs that
  * never reported busy and calls that failed, and the engine writes it on every launch.
  */
-function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
+function parseLaunchComment(comment) {
+  const match = RECORD.exec(comment.body || '');
+  if (!match) {
+    return null;
+  }
+  const purpose = (match[4] || 'delivery').toLowerCase();
+  return {
+    kind: match[1],
+    runId: match[2] || null,
+    agent: match[3] || null,
+    purpose,
+    stage: match[5] ? match[5].trim() : null,
+    nonce: match[6] || null,
+    at: Date.parse(comment.created_at),
+    comment,
+  };
+}
+
+function listLaunchRecords({ comments, engineLogins }) {
   const engine = new Set(engineLogins || []);
-  const records = (comments || [])
+  return (comments || [])
     .filter((comment) => engine.has(comment.user?.login))
-    .map((comment) => ({ comment, match: RECORD.exec(comment.body || '') }))
-    .filter((entry) => entry.match)
+    .map((comment) => parseLaunchComment(comment))
+    .filter(Boolean)
     .sort((a, b) => a.comment.created_at.localeCompare(b.comment.created_at));
-  const latest = records.at(-1);
+}
+
+function newestDeliveryLaunchAgentId({ comments, engineLogins }) {
+  const delivery = listLaunchRecords({ comments, engineLogins }).filter(
+    (record) => record.kind === 'launch' && record.purpose === 'delivery',
+  );
+  return delivery.at(-1)?.agent || null;
+}
+
+function hasDoorbellLaunchSince({ comments, engineLogins, agentId, stage, sinceMs }) {
+  return listLaunchRecords({ comments, engineLogins }).some(
+    (record) =>
+      record.kind === 'launch' &&
+      record.purpose === 'doorbell' &&
+      record.agent === agentId &&
+      (!stage || record.stage === stage) &&
+      record.at >= sinceMs,
+  );
+}
+
+/** Missing doorbell record, or adapter `status()` reports failure (#2428 D9). */
+async function doorbellRingFailed({ comments, engineLogins, config, agentId, stage, sinceMs, owner, repo, token, io = {} }) {
+  if (!hasDoorbellLaunchSince({ comments, engineLogins, agentId, stage, sinceMs })) {
+    return true;
+  }
+  const latest = listLaunchRecords({ comments, engineLogins })
+    .filter(
+      (record) =>
+        record.kind === 'launch' &&
+        record.purpose === 'doorbell' &&
+        record.agent === agentId &&
+        (!stage || record.stage === stage) &&
+        record.at >= sinceMs,
+    )
+    .at(-1);
+  if (!latest?.nonce) {
+    return false;
+  }
+  const runnerName = resolveAgent(config, agentId)?.runner;
+  const runners = io.runners || DEFAULT_RUNNERS();
+  const runner = runners[runnerName];
+  if (!runner?.status) {
+    return false;
+  }
+  try {
+    const state = await runner.status({
+      nonce: latest.nonce,
+      owner,
+      repo,
+      deps: { dispatchToken: token, restFn: io.restFn },
+    });
+    return state === 'failed';
+  } catch {
+    return false;
+  }
+}
+
+function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
+  const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter((record) =>
+    ['launch', 'launch-failed', 'launch-acked'].includes(record.kind) &&
+    record.purpose === 'delivery',
+  );
+  const latest = deliveryRecords.at(-1);
   const busy = (labels || []).includes('busy');
   const failures = Number.isFinite(attempts) ? attempts : 0;
-  if (!latest || latest.match[1] === 'launch-acked') {
+  if (!latest || latest.kind === 'launch-acked') {
     return { failures, busy };
   }
-  const at = Date.parse(latest.comment.created_at);
-  if (latest.match[1] === 'launch-failed') {
-    return { failures, busy, lastFailureAt: at };
+  if (latest.kind === 'launch-failed') {
+    return { failures, busy, lastFailureAt: latest.at };
   }
-  return { runId: latest.match[2], startedAt: at, failures, busy };
+  return { runId: latest.runId, startedAt: latest.at, failures, busy, deliveryAgentId: latest.agent };
 }
 
 /** `Method:` line of the Delivery plan section; a task with none is delivered by plain PR. */
@@ -132,6 +235,29 @@ function fillPrompt(template, { number, mergeSha } = {}) {
     .replaceAll('{{mergeSha}}', String(mergeSha ?? ''));
 }
 
+const STAGE_PROMPTS_SIGNED = {
+  ...STAGE_PROMPTS,
+  'To do':
+    STAGE_PROMPTS['To do'].replace(
+      "Then react 👍 on the engine's latest `v2:spec-request` comment to mark the spec ready;",
+      'Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, and sign `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. Never print `PIPELINE_RUN_SECRET` or the nonce;',
+    ),
+  'In analysis':
+    STAGE_PROMPTS['In analysis'].replace(
+      'If it is sound, react 👍 on the engine\'s latest `v2:review-request` comment; if not, react 👎 with a comment explaining why.',
+      'If it is sound, run `node scripts/pipeline_verdict.js read`, then `node scripts/pipeline_verdict.js review up|down --hash <hash>`. ' +
+        'If you change the body, use `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` only. Never print `PIPELINE_RUN_SECRET` or the nonce;',
+    ),
+};
+
+function stagePromptsForConfig(config, agent) {
+  const { isSharedActsAs, entryActsAs, sharedActsAs } = require('./issue_pipeline_v2_config');
+  if (agent) {
+    return isSharedActsAs(config, entryActsAs(agent)) ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
+  }
+  return sharedActsAs(config).length > 0 ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
+}
+
 /**
  * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
  * only launched from Ready, after a converged review. The legacy labels are retired, so the
@@ -146,66 +272,80 @@ async function launchIssue({
   issue,
   token,
   apiKey,
+  agent,
   method = 'PR',
   stage,
+  purpose = 'delivery',
+  nonce,
+  runSecret,
+  config,
   mergeSha,
   scopeRelaunchSha,
   deps = {},
 }) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
-  const payloadLib = deps.payload || require('../.github/scripts/agent-payload-lib');
-  const launcher = deps.launcher || require('../.github/scripts/launch-cursor-agent');
   const lib = deps.lib || require('../.github/scripts/github-project-lib');
+  const entry = resolveAgent(config, agent);
+  if (!entry) {
+    throw new Error(`unknown agent ${agent}`);
+  }
 
   const labels = (issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
-  if (!stage) {
+  if (purpose === 'delivery' && !stage) {
     const preflightLabels = [...new Set([...labels, ...V2_APPROVAL_LABELS])];
     const preflight = preflightIssue({ title: issue.title, body: issue.body, labels: preflightLabels.map((name) => ({ name })) });
     if (!preflight.ok) {
       throw new Error(`preflight: ${preflight.reason}`);
     }
   }
-  const repoUrl = `https://github.com/${owner}/${repo}`;
-  const payload = payloadLib.buildAgentPayload(
-    { number: issue.number, url: issue.html_url, title: issue.title, body: issue.body || '', labels },
-    repoUrl,
-  );
-  const extra = stage ? fillPrompt(STAGE_PROMPTS[stage], { number: issue.number, mergeSha }) : METHOD_PROMPTS[method];
-  const scopeNote = scopeRelaunchSha
-    ? `This run continues the existing programme after an acceptance scope fail for merge ${scopeRelaunchSha}. It must not open a second plan or a second integration branch.`
-    : '';
-  const promptText = [payloadLib.buildAgentPrompt(payload), extra || '', scopeNote].filter(Boolean).join('\n\n');
   const mark = stage ? async () => {} : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
-
   await mark(['busy'], []);
-  let launched;
+
+  const runners = deps.runners || DEFAULT_RUNNERS();
+  const runner = runners[entry.runner];
+  if (!runner?.launch) {
+    await mark([], ['busy']);
+    throw new Error(`no runner for ${entry.runner}`);
+  }
   try {
-    launched = await launcher.launchAgent({
+    const launched = await runner.launch({
+      agent: entry,
+      issue,
+      owner,
+      repo,
+      stage,
+      method,
+      nonce,
+      runSecret,
+      purpose,
       apiKey,
-      repoUrl,
-      promptText,
-      model: process.env.CURSOR_AGENT_MODEL || undefined,
+      config,
+      mergeSha,
+      scopeRelaunchSha,
+      deps,
     });
+    return { runId: launched.runId, agentUrl: launched.agentUrl || null };
   } catch (error) {
     await mark([], ['busy']);
     throw error;
   }
-  const runId = launched.run?.id;
-  if (!runId || !launched.agent?.id) {
-    await mark([], ['busy']);
-    throw new Error('Cursor API response missing agent/run id');
-  }
-  return { runId, agentId: launched.agent.id, agentUrl: launched.agent.url };
 }
 
 module.exports = {
   METHODS,
   METHOD_PROMPTS,
   STAGE_PROMPTS,
+  STAGE_PROMPTS_SIGNED,
+  stagePromptsForConfig,
+  fillPrompt,
   V2_APPROVAL_LABELS,
   buildLaunchRecord,
   buildLaunchFailed,
   buildLaunchAcked,
+  listLaunchRecords,
+  newestDeliveryLaunchAgentId,
+  hasDoorbellLaunchSince,
+  doorbellRingFailed,
   deriveLaunchFacts,
   deliveryMethod,
   launchIssue,

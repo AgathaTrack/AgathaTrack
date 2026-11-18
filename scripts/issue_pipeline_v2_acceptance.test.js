@@ -379,7 +379,7 @@ test('scope does not stall on a dropped busy label, an open PR, or a quiet late 
 
 test('prefer an agent who did not author the merged PRs', () => {
   const action = gate({ comments: [], prAuthors: [AGENT] }, both);
-  assert.equal(action.agent, OTHER);
+  assert.equal(action.agent, 'claude-a');
 });
 
 test('a null fail reason is omitted and not copied back; a later block still carries Acceptance', () => {
@@ -448,15 +448,18 @@ test('apply: thrown acceptance launch posts failed=1 and a rewind does not ack',
 });
 
 test('acceptance launch prompt names the skill, the issue and the sha', async () => {
+  const { launch: cursorLaunch } = require('./pipeline_runners/cursor');
   const launches = [];
-  const deps = {
-    safety: { preflightIssue: () => { throw new Error('preflight must not run'); } },
-    payload: { buildAgentPayload: () => ({}), buildAgentPrompt: () => 'base' },
-    lib: { setLabels: async () => { throw new Error('busy must not be set'); } },
-    launcher: { launchAgent: async ({ promptText }) => { launches.push(promptText); return { agent: { id: 'a', url: 'u' }, run: { id: 'r' } }; } },
-  };
   const issue = { number: 2448, title: 't', body: 'b', labels: [{ name: 'blocked' }] };
-  await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', stage: 'acceptance', mergeSha: SHA, deps });
+  const agent = { id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', model: 'composer-2.5' };
+  await cursorLaunch({
+    agent, issue, owner: 'o', repo: 'r', stage: 'acceptance', method: 'PR', nonce: 'ab', runSecret: 'cd',
+    purpose: 'doorbell', apiKey: 'k', config: loaded, mergeSha: SHA,
+    deps: {
+      payload: { buildAgentPayload: () => ({}), buildAgentPrompt: () => 'base' },
+      launcher: async ({ promptText }) => { launches.push(promptText); return { run: { id: 'r' }, agent: { url: 'u' } }; },
+    },
+  });
   assert.match(launches[0], /agent-acceptance\/SKILL\.md/);
   assert.match(launches[0], /#2448/);
   assert.match(launches[0], new RegExp(SHA));
@@ -464,12 +467,24 @@ test('acceptance launch prompt names the skill, the issue and the sha', async ()
   assert.doesNotMatch(launches[0], /INTENT REVIEW/);
   launches.length = 0;
   const labels = [];
-  deps.lib = { setLabels: async (o, r, n, add) => labels.push(add) };
-  deps.safety = { preflightIssue: () => ({ ok: true }) };
-  await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', method: 'light-plan', scopeRelaunchSha: SHA, deps });
+  await launchIssue({
+    owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', agent: 'cursor-a', config: loaded,
+    method: 'light-plan', scopeRelaunchSha: SHA,
+    deps: {
+      safety: { preflightIssue: () => ({ ok: true }) },
+      lib: { setLabels: async (o, r, n, add) => labels.push(add) },
+      runners: {
+        cursor: {
+          launch: async (args) => {
+            launches.push(args.scopeRelaunchSha);
+            return { runId: 'r' };
+          },
+        },
+      },
+    },
+  });
   assert.deepEqual(labels[0], ['busy']);
-  assert.match(launches[0], /must not open a second plan/);
-  assert.match(launches[0], /light-plan/);
+  assert.equal(launches[0], SHA);
 });
 
 test('a missing acceptance field logs once and keeps intent review; an empty value does not', async () => {

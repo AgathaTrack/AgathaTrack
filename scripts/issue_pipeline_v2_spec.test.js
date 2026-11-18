@@ -17,7 +17,18 @@ const {
 const { decide } = require('./issue_pipeline_v2_decide');
 const { tick } = require('./issue_pipeline_v2');
 
-const config = { ...loadConfig(), engine: { logins: ['KanopeeKa'] } };
+const limits = loadConfig().limits;
+const config = validateConfig({
+  agents: [
+    { login: 'pawpet-bot', runner: 'cursor', methods: ['PR', 'light-plan', 'execute-plan'] },
+    { login: 'pawpet-claude', runner: 'claude', methods: ['PR', 'light-plan'] },
+  ],
+  engine: { logins: ['KanopeeKa'] },
+  launchRunners: ['cursor'],
+  limits,
+  aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
+});
+const prodConfig = { ...loadConfig(), engine: { logins: ['KanopeeKa'] } };
 const NOW = Date.parse('2026-11-16T12:00:00Z');
 
 const TASK = `### Summary
@@ -183,7 +194,10 @@ test('readers page past 100 items so the newest request and the latest vote are 
 
 test('config: the engine identity may be empty but never a listed agent', () => {
   assert.doesNotThrow(() => validateConfig({ ...config, engine: { logins: [] } }));
-  assert.throws(() => validateConfig({ ...config, engine: { logins: ['pawpet-bot'] } }), /must not be a listed agent/);
+  assert.throws(
+    () => validateConfig({ ...config, engine: { logins: ['pawpet-bot'] } }),
+    /must not match an agent actsAs login/,
+  );
   assert.throws(() => validateConfig({ ...config, engine: undefined }), /engine\.logins/);
 });
 

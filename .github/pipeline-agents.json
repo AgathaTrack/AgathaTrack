@@ -1,8 +1,10 @@
 {
   "agents": [
     {
-      "login": "pawpet-bot",
+      "id": "cursor-a",
+      "actsAs": "pawpet-bot",
       "runner": "cursor",
+      "model": "composer-2.5",
       "methods": [
         "PR",
         "light-plan",
@@ -10,7 +12,18 @@
       ]
     },
     {
-      "login": "pawpet-claude",
+      "id": "cursor-b",
+      "actsAs": "pawpet-bot",
+      "runner": "cursor",
+      "model": "grok-4.7-medium",
+      "methods": [
+        "PR",
+        "light-plan"
+      ]
+    },
+    {
+      "id": "claude-a",
+      "actsAs": "pawpet-claude",
       "runner": "claude",
       "methods": [
         "PR",
@@ -21,9 +34,12 @@
   "engine": {
     "logins": ["pawpet-engine"]
   },
-  "launchRunners": ["cursor"],
+  "launchRunners": ["cursor", "claude"],
   "limits": {
     "wip": 2,
+    "runnerWip": {
+      "claude": 1
+    },
     "reviewTimeoutMin": 30,
     "ackWindowMin": 15,
     "launchBackoffMin": [
