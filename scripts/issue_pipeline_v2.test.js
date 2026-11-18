@@ -312,6 +312,10 @@ test('In Main: intent review first, from an agent that did not author the PRs, t
   const requested = { stage: 'In Main', ...merged, intentReview: { requested: true } };
   assert.equal(rowOfBoth(requested).reason, 'main.waiting-uat');
   assert.equal(rowOfBoth({ ...requested, uatContainsLatestMerge: true }).to, 'In UAT');
+  const noStartable = { stage: 'In Main', ...merged };
+  const noRings = { ...bothStartable, launchRunners: [] };
+  assert.equal(decide(facts(noStartable), noRings).reason, 'main.waiting-uat');
+  assert.equal(decide(facts({ ...noStartable, uatContainsLatestMerge: true }), noRings).to, 'In UAT');
 });
 
 test('In UAT: Done and close only when prod contains the latest merge', () => {

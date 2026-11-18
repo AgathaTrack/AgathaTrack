@@ -307,7 +307,10 @@ function decideInMain(facts, config) {
     const startable = selfStartingLogins(config);
     const independent = startable.filter((login) => !authors.has(login));
     const pool = independent.length > 0 ? independent : startable;
-    return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };
+    if (pool.length > 0) {
+      return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };
+    }
+    // Intent review is non-gating; still evaluate UAT when nobody is startable for a ring.
   }
   if (facts.uatContainsLatestMerge) {
     return setStage('In UAT', 'main.uat');
