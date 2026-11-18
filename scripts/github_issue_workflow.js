@@ -14,8 +14,10 @@
  *   node scripts/github_issue_workflow.js aat-inconclusive --issue <n> --body-file <path> [--merge <sha>]
  */
 
-// Must run before any GitHub call: Node's fetch needs NODE_USE_ENV_PROXY=1 at start-up in sandboxes.
-require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+// CLI only — before any GitHub fetch: sandbox egress needs NODE_USE_ENV_PROXY at process start.
+if (require.main === module) {
+  require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+}
 
 const {
   postIssueComment,
@@ -167,7 +169,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+  });
+}
