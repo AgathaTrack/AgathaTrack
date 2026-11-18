@@ -53,7 +53,7 @@ direct call from a sandbox gets `401 Bad credentials`. A script that an agent ru
 must call `reexecWithEnvProxy()` from `scripts/lib/env_proxy_reexec.js` **only when** `require.main === module`, and **before**
 any module that calls GitHub with `fetch` is loaded. Covered today: `scripts/github_issue_workflow.js` and
 `scripts/execute_plan_runtime.js`. Other scripts under `scripts/` that reach GitHub via `fetch` in agent sandboxes still
-need an audit (debt: add `reexecWithEnvProxy` or route through `gh`). The `scripts/ci/*` and `.github/scripts/*` callers
+need an audit — tracking issue #2472 (`reexecWithEnvProxy` or route through `gh`). The `scripts/ci/*` and `.github/scripts/*` callers
 run only in GitHub Actions, which has no proxy, so they need no change.
 
 ## Rebuild after a toolchain bump
