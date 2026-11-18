@@ -39,9 +39,38 @@ const rowOfBoth = (over) => decide(facts(over), bothStartable);
 
 test('config: the committed file is valid; bad edits are reported together', () => {
   assert.equal(config.agents.length, 2);
+  assert.equal(config.agents[0].id, config.agents[0].actsAs);
   assert.throws(
     () => validateConfig({ agents: [{ login: 'a', methods: ['nope'] }], limits: {} }),
     /at least two listed agents[\s\S]*unknown method nope[\s\S]*limits\.wip/,
+  );
+});
+
+test('config: explicit id and actsAs; engine token must not match actsAs', () => {
+  const limits = { ...config.limits };
+  assert.doesNotThrow(() =>
+    validateConfig({
+      agents: [
+        { id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'] },
+        { id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'] },
+      ],
+      engine: { logins: ['pawpet-engine'] },
+      launchRunners: ['cursor'],
+      limits,
+    }),
+  );
+  assert.throws(
+    () =>
+      validateConfig({
+        agents: [
+          { id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'] },
+          { id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'] },
+        ],
+        engine: { logins: ['pawpet-bot'] },
+        launchRunners: ['cursor'],
+        limits,
+      }),
+    /actsAs/,
   );
 });
 
@@ -224,7 +253,7 @@ test('In analysis: a new hash gets a new request, excluding the last editor', ()
 });
 
 test('In analysis: nobody else eligible after a thumbs-down, the editor revises', () => {
-  const action = rowOf({
+  const action = rowOfBoth({
     stage: 'In analysis',
     lastBodyEditor: 'pawpet-claude',
     review: { requestedHash: 'h1', requestedAt: NOW, votes: [vote('pawpet-bot', 'down')] },

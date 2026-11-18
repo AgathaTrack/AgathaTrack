@@ -187,7 +187,10 @@ test('identity fails closed', async () => {
   assert.equal((await checkEngineIdentity({ token: 't', config, restFn: async () => { throw new Error('x'); } })).reason, 'identity-lookup-failed');
   assert.equal((await checkEngineIdentity({ token: 't', config, restFn: async () => ({ login: 'someone' }) })).reason, 'token-not-engine-identity');
   const agentEngine = { ...config, engine: { logins: ['pawpet-bot'] } };
-  assert.equal((await checkEngineIdentity({ token: 't', config: agentEngine, restFn: async () => ({ login: 'pawpet-bot' }) })).reason, 'engine-identity-is-a-listed-agent');
+  assert.equal(
+    (await checkEngineIdentity({ token: 't', config: agentEngine, restFn: async () => ({ login: 'pawpet-bot' }) })).reason,
+    'engine-identity-matches-agent-actsAs',
+  );
   const ok = await checkEngineIdentity({ token: 't', config, restFn: async () => ({ login: 'engine' }) });
   assert.equal(ok.ok, true);
   assert.equal(writesAllowed('on', ok), true);

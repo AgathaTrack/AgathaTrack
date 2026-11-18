@@ -1,7 +1,7 @@
 'use strict';
 
 const { rest } = require('../.github/scripts/github-project-lib');
-const { agentLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent } = require('./issue_pipeline_v2_config');
 
 const SPEC_REQUEST = 'v2:spec-request';
 const WRITE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
@@ -10,12 +10,15 @@ const WRITE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
  * The engine's "spec requested" comment. The marker carries the current assignee and the agents
  * already tried, so a reassignment is an edit of the same comment and the history survives.
  */
-function buildSpecRequest({ assigned, history = [] }) {
+function buildSpecRequest({ assigned, history = [], config }) {
+  const entry = config ? resolveAgent(config, assigned) : null;
+  const id = entry?.id || assigned;
+  const mention = entry?.actsAs || assigned;
   return [
-    `<!-- ${SPEC_REQUEST} assigned=${assigned} history=${history.join(',')} -->`,
+    `<!-- ${SPEC_REQUEST} assigned=${id} history=${history.join(',')} -->`,
     '## Spec requested',
     '',
-    `@${assigned}: draft the missing sections, then check the Definition of Ready ` +
+    `@${mention}: draft the missing sections, then check the Definition of Ready ` +
       '(`.cursor/skills/spec-agent/SKILL.md`). React 👍 on this comment when it passes; ' +
       'if you need the owner, post one consolidated question and set `Blocked=question`.',
   ].join('\n');
@@ -76,10 +79,12 @@ function deriveSpecFacts({ comments, reactions, config, engineLogins, editors })
       agents.has(reaction.user?.login) &&
       Date.parse(reaction.created_at) >= since,
   );
+  const assignedTo = resolveAgent(config, request.assigned)?.id || request.assigned;
+  const timedOut = (request.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
   return {
     requestedAt: Date.parse(request.comment.updated_at || request.comment.created_at),
-    assignedTo: request.assigned,
-    timedOut: request.history,
+    assignedTo,
+    timedOut,
     passedBy: passed ? passed.user.login : null,
     commentId: request.comment.id,
   };
@@ -120,10 +125,11 @@ function latestHumanComment(comments, config) {
 const WAKE = 'v2:wake';
 
 /** The engine's "wake" note; the marker records which human comment it answered. */
-function buildWake({ commentId, agent }) {
+function buildWake({ commentId, agent, config }) {
+  const mention = config ? resolveAgent(config, agent)?.actsAs || agent : agent;
   return [
     `<!-- ${WAKE} comment=${commentId} -->`,
-    `@${agent}: the owner or a maintainer replied above. Re-read the issue and continue; you may clear \`Blocked\` once you have what you need.`,
+    `@${mention}: the owner or a maintainer replied above. Re-read the issue and continue; you may clear \`Blocked\` once you have what you need.`,
   ].join('\n');
 }
 

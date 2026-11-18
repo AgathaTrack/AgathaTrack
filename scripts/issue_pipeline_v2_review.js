@@ -1,7 +1,7 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
-const { agentLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent } = require('./issue_pipeline_v2_config');
 
 const REVIEW_REQUEST = 'v2:review-request';
 
@@ -9,13 +9,16 @@ const REVIEW_REQUEST = 'v2:review-request';
  * The engine's "review requested for <hash>" comment (#2385 §In Analysis). One per body hash; a
  * reassignment edits the same comment, and the marker keeps the agents already tried.
  */
-function buildReviewRequest({ hash, assigned, history = [] }) {
+function buildReviewRequest({ hash, assigned, history = [], config }) {
+  const entry = assigned && config ? resolveAgent(config, assigned) : null;
+  const id = entry?.id || assigned || '';
+  const mention = entry?.actsAs || assigned;
   return [
-    `<!-- ${REVIEW_REQUEST} hash=${hash} assigned=${assigned || ''} history=${history.join(',')} -->`,
+    `<!-- ${REVIEW_REQUEST} hash=${hash} assigned=${id} history=${history.join(',')} -->`,
     `## Review requested for \`${hash}\``,
     '',
     assigned
-      ? `@${assigned}: review this version of the issue (\`.cursor/skills/review-agent/SKILL.md\`).`
+      ? `@${mention}: review this version of the issue (\`.cursor/skills/review-agent/SKILL.md\`).`
       : 'Waiting for a reviewer.',
     '',
     'Listed agents vote with 👍 / 👎 **on this comment** and write their reasoning as a separate comment.',
@@ -93,12 +96,14 @@ function deriveReviewFacts({ comments, reactionsByComment, edits, bodyAuthor, co
   const agentEdits = (edits || []).filter(
     (edit) => agents.has(edit.editor) && Date.parse(edit.editedAt) >= enteredAt,
   ).length;
+  const assignedTo = resolveAgent(config, newest.parsed.assigned)?.id || newest.parsed.assigned;
+  const timedOut = (newest.parsed.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
   return {
     review: {
       requestedHash: newest.parsed.hash,
       requestedAt: Date.parse(newest.comment.updated_at || newest.comment.created_at),
-      assignedTo: newest.parsed.assigned,
-      timedOut: newest.parsed.history,
+      assignedTo,
+      timedOut,
       votes,
       commentId: newest.comment.id,
     },

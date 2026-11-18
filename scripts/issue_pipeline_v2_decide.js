@@ -18,7 +18,7 @@
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
  *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
- *   agentLastUsed   { login: epoch ms } for least-recently-used pickup
+ *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (in-tick)
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
  *   review          { requestedHash, requestedAt, assignedTo, timedOut[], votes[{login,vote,hash}] }
  *   wip             issues currently In progress (manual-only excluded)
@@ -30,7 +30,7 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
-const { agentLogins, launchableAgents, selfStartingLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, agentActsAs, launchableAgents, resolveAgent, startableIds } = require('./issue_pipeline_v2_config');
 
 const STAGES = [
   'Backlog',
@@ -62,7 +62,7 @@ function canonicalStage(raw) {
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  const startable = selfStartingLogins(config);
+  const startable = startableIds(config);
   if (holder && startable.includes(holder)) {
     return holder;
   }
@@ -105,7 +105,7 @@ function timedOutSet(state, now, timeoutMs) {
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
   const held = state.assignedTo;
-  const startable = new Set(selfStartingLogins(config));
+  const startable = new Set(startableIds(config));
   // No assignee yet, or the assignee is not one the engine can start: pick now. Waiting out
   // reviewTimeoutMin for pawpet-claude is the churn this interim fix exists to stop.
   // `eligible` is who may be asked next, which is narrower than startable (it drops the editor
@@ -148,7 +148,7 @@ function decideToDo(facts, config) {
   if (spec.passedBy) {
     return setStage('In analysis', 'todo.dor-pass', { evidence: { passedBy: spec.passedBy } });
   }
-  const logins = selfStartingLogins(config);
+  const logins = startableIds(config);
   if (!spec.requestedAt) {
     return {
       type: 'request-spec',
@@ -198,10 +198,13 @@ function decideInAnalysis(facts, config) {
     return setBlocked('no-convergence', 'analysis.no-convergence');
   }
 
-  const logins = selfStartingLogins(config);
-  let eligible = logins.filter((login) => login !== editor && !voted.has(login));
+  const ids = startableIds(config);
+  let eligible = ids.filter((id) => agentActsAs(config, id) !== editor && !voted.has(agentActsAs(config, id)));
   if (eligible.length === 0 && editorIsAgent) {
-    eligible = [editor]; // nobody else left: the last editor revises
+    const editorId = resolveAgent(config, editor)?.id;
+    if (editorId && ids.includes(editorId)) {
+      eligible = [editorId];
+    }
   }
   if (review.requestedHash !== facts.bodyHash) {
     return {
@@ -304,8 +307,8 @@ function decideInMain(facts, config) {
   }
   if (!facts.intentReview?.requested) {
     const authors = new Set(facts.prAuthors || []);
-    const startable = selfStartingLogins(config);
-    const independent = startable.filter((login) => !authors.has(login));
+    const startable = startableIds(config);
+    const independent = startable.filter((id) => !authors.has(agentActsAs(config, id)));
     const pool = independent.length > 0 ? independent : startable;
     if (pool.length > 0) {
       return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };

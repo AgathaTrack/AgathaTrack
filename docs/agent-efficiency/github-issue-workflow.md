@@ -43,7 +43,7 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 | `ISSUE_PIPELINE_V2` | repo variable | `off` (default; the job does not run), `dry-run` (decides and logs, sends nothing), `on` (writes). Separate from the legacy `ISSUE_PIPELINE`. |
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT`). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
-| `agents`, `limits`, `launchRunners` | `.github/pipeline-agents.json` | Listed agents and the delivery methods each can run, WIP limit (2), review timeout (30 min), acknowledge window (15 min), launch backoff (5 / 30 / 120 min), stalled inactivity (24 h), no-convergence votes (6), follow-up depth (2), and the runners the engine can start itself (`cursor`). A bad edit fails in CI. |
+| `agents`, `limits`, `launchRunners` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. A bad edit fails in CI. |
 
 The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch.
 Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the tick line reports `errors`.
@@ -113,8 +113,8 @@ listed agent); the engine never clears the flag.
 ### Review: votes and the markers
 
 - **Spec and review requests** are engine comments with a hidden marker: `v2:spec-request` and `v2:review-request hash=<hash>`
-  carry the assigned agent and who timed out; a reassignment edits the comment in place. A review request is posted on
-  entering In analysis and on each new body hash.
+  store the assigned agent **id** and who timed out; the visible line `@mentions` the agent's **`actsAs`** login. A reassignment edits the comment in place. A review request is posted on
+  entering In analysis and on each new body hash. Intent review markers store `agent=<id>` the same way.
 - **Votes** are 👍/👎 reactions by listed agents on the request comment for the current hash; the owner's reactions do not
   count. The last body editor's edit counts as its approval.
 - **Delivery plan:** the method (`PR`, `light-plan` or `execute-plan`, read from the body's `Method:` line, default `PR`),

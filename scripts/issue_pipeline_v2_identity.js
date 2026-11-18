@@ -25,7 +25,7 @@ async function checkEngineIdentity({ token, config, restFn = rest }) {
     return { ok: false, reason: 'token-not-engine-identity', login };
   }
   if (agentLogins(config).includes(login)) {
-    return { ok: false, reason: 'engine-identity-is-a-listed-agent', login };
+    return { ok: false, reason: 'engine-identity-matches-agent-actsAs', login };
   }
   return { ok: true, login };
 }
