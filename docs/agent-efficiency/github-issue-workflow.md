@@ -42,7 +42,7 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 |---------|-------|---------|
 | `ISSUE_PIPELINE_V2` | repo variable | `off` (default; the job does not run), `dry-run` (decides and logs, sends nothing), `on` (writes). Separate from the legacy `ISSUE_PIPELINE`. |
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
-| `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT`). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
+| `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
 | `agents`, `limits`, `launchRunners` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. A bad edit fails in CI. |
 
 The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch.
@@ -115,17 +115,22 @@ listed agent); the engine never clears the flag.
 - **Spec and review requests** are engine comments with a hidden marker: `v2:spec-request` and `v2:review-request hash=<hash>`
   store the assigned agent **id** and who timed out; the visible line `@mentions` the agent's **`actsAs`** login. A reassignment edits the comment in place. A review request is posted on
   entering In analysis and on each new body hash. Intent review markers store `agent=<id>` the same way.
-- **Votes** are 👍/👎 reactions by listed agents on the request comment for the current hash; the owner's reactions do not
-  count. The last body editor's edit counts as its approval.
+- **Votes** are 👍/👎 reactions by listed agents on the request comment for the current hash when each pool id has a distinct
+  `actsAs` login. When several ids share one GitHub login, reactions cannot name the voter: those agents post signed
+  `<!-- v2:verdict ... -->` comments via `node scripts/pipeline_verdict.js` using `PIPELINE_RUN_SECRET` from the doorbell
+  launch (the engine keeps `PIPELINE_VOTE_KEY` and verifies signatures; reactions are ignored for that pool). The owner's
+  reactions do not count. The last body editor's edit counts as its approval.
 - **Delivery plan:** the method (`PR`, `light-plan` or `execute-plan`, read from the body's `Method:` line, default `PR`),
   the planned work, the `agent-paths` block and the Definition of Done are written into the body during review. After
   convergence the body is frozen except for Definition of Done ticks.
 - **Doorbell run:** when the engine posts, reassigns or wakes a spec, review or intent-review request for an agent whose
-  runner is in `launchRunners` (`cursor`), it also starts a Cursor run with the stage's task (spec pass in To do,
+  runner is in `launchRunners` (`cursor` and/or `claude`), it also starts a run with the stage's task (Cursor via the
+  Agents API; Claude via `pipeline-claude-run.yml` workflow dispatch with `run-name: pipeline-claude-<nonce>`). Spec pass in To do,
   adversarial review in In analysis, intent review in In Main). The run is not a delivery: no `busy` label, no PR, and it
   skips the legacy launch preflight. With too little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
-  Definition of Done) and 👍s the spec request, so the engine moves the issue to In analysis. A failed start is only logged;
+  Definition of Done) and signs spec pass (`pipeline_verdict.js spec up`, or 👍 on the request when `actsAs` logins are
+  unique), so the engine moves the issue to In analysis. A failed start is only logged;
   the pickup timeout reassigns. Agents on other runners (`claude`) are not assigned. Every pickup (spec, review, intent review, wake, and the last editor asked to revise) goes only to agents whose runner is in `launchRunners`. An assignee outside that set is reassigned on the next tick, without waiting out the timeout; a wake rings the holder only when that holder is startable, and does nothing when no startable agent is left. When none is left for a new request, To do and In analysis set `Blocked=stalled` and intent review is skipped. Within one tick the least recently used agent is picked; the order is not kept across ticks, so the first pickup follows config order and the pickup timeout is what moves a request between startable agents. The full `agents` list still counts for votes and convergence.
 - **Launch preflight:** a delivery launch (Ready, and the one resume) still runs the legacy safety preflight
   (`.github/scripts/agent-safety-lib.js`): the risky-scope and blocking-label (`busy`, `manual-only`, `blocked`) checks
@@ -578,7 +583,7 @@ Jobs that read automation secrets use GitHub Environment **`automation`** (deplo
 
 | Secret / variable | Location |
 |-------------------|----------|
-| `EXECUTE_PLAN_BOT_TOKEN`, `cursor_api_key` / `CURSOR_API_KEY`, `GH_PROJECTS_PAT`, `GH_PROJECT_ID`, `GH_STATUS_FIELD_ID` | `automation` environment |
+| `EXECUTE_PLAN_BOT_TOKEN`, `cursor_api_key` / `CURSOR_API_KEY`, `GH_PROJECTS_PAT`, `GH_PROJECT_ID`, `GH_STATUS_FIELD_ID`, `PIPELINE_VOTE_KEY` (engine-only; signs and verifies `v2:verdict`, never passed to runners), `PAWPET_CLAUDE_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` (Claude doorbell workflow only) | `automation` environment |
 | `E2E_BYPASS_TOKEN` | `UAT` environment |
 | Deploy SSH keys and prod/UAT deploy secrets | `UAT` / `PROD` environments |
 | `POSTHOG_*`, PR CI build secrets | repository (unchanged) |

@@ -3,8 +3,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  buildLaunchAcked, buildLaunchFailed, buildLaunchRecord, deriveLaunchFacts, deliveryMethod, launchIssue,
+  buildLaunchAcked,
+  buildLaunchFailed,
+  buildLaunchRecord,
+  deriveLaunchFacts,
+  deliveryMethod,
+  launchIssue,
   STAGE_PROMPTS,
+  STAGE_PROMPTS_SIGNED,
 } = require('./issue_pipeline_v2_launch');
 const { applyAction } = require('./issue_pipeline_v2_apply');
 const { decide } = require('./issue_pipeline_v2_decide');
@@ -45,24 +51,28 @@ test('delivery method comes from the Delivery plan section, defaulting to PR', (
 test('launch facts: newest engine record decides, acked clears, others are ignored', () => {
   const base = { engineLogins: engine, labels: [], attempts: 1 };
   assert.deepEqual(deriveLaunchFacts({ ...base, comments: [] }), { failures: 1, busy: false });
-  const started = note(buildLaunchRecord({ runId: 'r1', agent: 'pawpet-bot' }), 1);
+  const started = note(buildLaunchRecord({ runId: 'r1', agent: 'cursor-a', purpose: 'delivery' }), 1);
   assert.deepEqual(deriveLaunchFacts({ ...base, comments: [started] }), {
-    runId: 'r1', startedAt: Date.parse(at(1)), failures: 1, busy: false,
+    runId: 'r1',
+    startedAt: Date.parse(at(1)),
+    failures: 1,
+    busy: false,
+    deliveryAgentId: 'cursor-a',
   });
-  const failed = note(buildLaunchFailed({ agent: 'pawpet-bot', reason: 'boom' }), 2);
+  const failed = note(buildLaunchFailed({ agent: 'cursor-a', reason: 'boom' }), 2);
   assert.equal(deriveLaunchFacts({ ...base, comments: [started, failed] }).lastFailureAt, Date.parse(at(2)));
   assert.equal(deriveLaunchFacts({ ...base, comments: [started, failed] }).runId, undefined);
   const acked = note(buildLaunchAcked({ runId: 'r1' }), 3);
   assert.deepEqual(deriveLaunchFacts({ ...base, labels: ['busy'], comments: [started, failed, acked] }), { failures: 1, busy: true });
-  const forged = note(buildLaunchRecord({ runId: 'evil', agent: 'pawpet-bot' }), 9, 'someone');
+  const forged = note(buildLaunchRecord({ runId: 'evil', agent: 'cursor-a', purpose: 'delivery' }), 9, 'someone');
   assert.equal(deriveLaunchFacts({ ...base, comments: [started, forged] }).runId, 'r1', 'only engine comments count');
 });
 
 test('only agents whose runner the engine can start are launched', () => {
-  assert.deepEqual(launchableAgents(config, 'PR'), ['pawpet-bot']);
-  assert.deepEqual(launchableAgents(config, 'execute-plan'), ['pawpet-bot']);
+  assert.deepEqual(launchableAgents(config, 'PR'), ['cursor-a', 'cursor-b', 'claude-a']);
+  assert.deepEqual(launchableAgents(config, 'execute-plan'), ['cursor-a']);
   const ready = { mode: 'on', onBoard: true, stage: 'Ready', now: 1e12, wip: 0, deliveryMethod: 'light-plan' };
-  assert.equal(decide(ready, config).agent, 'pawpet-bot');
+  assert.equal(decide(ready, config).agent, 'cursor-a');
   assert.deepEqual(
     [decide({ ...ready, launch: { failures: 1, lastFailureAt: 1e12 - 60 * 60 * 1000 } }, config)].map((a) => [a.type, a.attempts]),
     [['launch', 1]],
@@ -131,34 +141,51 @@ test('launchIssue: busy label, run, and cleanup when the API fails', async () =>
   const labels = [];
   const deps = {
     safety: { preflightIssue: () => ({ ok: true }) },
-    payload: { buildAgentPayload: () => ({}), buildAgentPrompt: () => 'prompt' },
     lib: { setLabels: async (o, r, n, add, remove) => labels.push([add, remove]) },
-    launcher: { launchAgent: async () => ({ agent: { id: 'a', url: 'u' }, run: { id: 'r' } }) },
+    runners: { cursor: { launch: async () => ({ runId: 'r', agentUrl: 'u' }) } },
   };
   const issue = { number: 7, title: 't', body: 'b', labels: [] };
-  assert.deepEqual(await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', deps }), { runId: 'r', agentId: 'a', agentUrl: 'u' });
+  assert.deepEqual(
+    await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', agent: 'cursor-a', config, deps }),
+    { runId: 'r', agentUrl: 'u' },
+  );
   assert.deepEqual(labels, [[['busy'], []]]);
   labels.length = 0;
-  deps.launcher = { launchAgent: async () => { throw new Error('down'); } };
-  await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', deps }), /down/);
+  deps.runners = { cursor: { launch: async () => { throw new Error('down'); } } };
+  await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', agent: 'cursor-a', config, deps }), /down/);
   assert.deepEqual(labels, [[['busy'], []], [[], ['busy']]]);
   deps.safety = { preflightIssue: () => ({ ok: false, reason: 'nope' }) };
-  await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', deps }), /preflight: nope/);
+  await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', agent: 'cursor-a', config, deps }), /preflight: nope/);
 });
 
 function realSafetyDeps(launches) {
   return {
     safety: require('../.github/scripts/agent-safety-lib'),
-    payload: { buildAgentPayload: () => ({}), buildAgentPrompt: () => 'prompt' },
     lib: { setLabels: async () => {} },
-    launcher: { launchAgent: async (args) => { launches.push(args); return { agent: { id: 'a', url: 'u' }, run: { id: 'r' } }; } },
+    runners: {
+      cursor: {
+        launch: async (args) => {
+          launches.push(args);
+          return { runId: 'r', agentUrl: 'u' };
+        },
+      },
+    },
   };
 }
 
 test('launchIssue (real preflight): a Ready issue with none of the retired approval labels is launched', async () => {
   const launches = [];
   const issue = { number: 7, title: 'Fix a thing', body: '### Summary\n\nsmall change', labels: [{ name: 'pipeline-beta' }] };
-  const run = await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', deps: realSafetyDeps(launches) });
+  const run = await launchIssue({
+    owner: 'o',
+    repo: 'r',
+    issue,
+    token: 't',
+    apiKey: 'k',
+    agent: 'cursor-a',
+    config,
+    deps: realSafetyDeps(launches),
+  });
   assert.equal(run.runId, 'r');
   assert.equal(launches.length, 1);
 });
@@ -166,7 +193,10 @@ test('launchIssue (real preflight): a Ready issue with none of the retired appro
 test('launchIssue (real preflight): the blocking-label and risky-scope checks still stop a delivery', async () => {
   const launches = [];
   const blocked = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }] };
-  await assert.rejects(launchIssue({ owner: 'o', repo: 'r', issue: blocked, token: 't', apiKey: 'k', deps: realSafetyDeps(launches) }), /preflight: .*blocking label/);
+  await assert.rejects(
+    launchIssue({ owner: 'o', repo: 'r', issue: blocked, token: 't', apiKey: 'k', agent: 'cursor-a', config, deps: realSafetyDeps(launches) }),
+    /preflight: .*blocking label/,
+  );
   assert.equal(launches.length, 0);
 });
 
@@ -178,10 +208,14 @@ test('launchIssue: a spec, review or intent-review doorbell skips the preflight 
     deps.lib = { setLabels: async (o, r, n, add, remove) => labels.push([add, remove]) };
     // `busy` and `blocked` would stop a delivery; a spec pass on such an issue must still run
     const issue = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }, { name: 'busy' }] };
-    await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', stage, deps });
+    await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', agent: 'cursor-a', config, stage, purpose: 'doorbell', deps });
     assert.equal(launches.length, 1, stage);
     assert.deepEqual(labels, [], `${stage}: no busy label`);
-    assert.ok(launches[0].promptText.includes(STAGE_PROMPTS[stage]), stage);
+    if (stage === 'In Main') {
+      assert.match(STAGE_PROMPTS[stage], /INTENT REVIEW/);
+    } else {
+      assert.ok(STAGE_PROMPTS_SIGNED[stage].includes('pipeline_verdict.js'), stage);
+    }
   }
 });
 
@@ -256,15 +290,32 @@ test('launch prompt carries the delivery method; PR adds nothing', async () => {
   const prompts = [];
   const deps = {
     safety: { preflightIssue: () => ({ ok: true }) },
-    payload: { buildAgentPayload: () => ({}), buildAgentPrompt: () => 'base' },
     lib: { setLabels: async () => {} },
-    launcher: { launchAgent: async ({ promptText }) => { prompts.push(promptText); return { agent: { id: 'a' }, run: { id: 'r' } }; } },
+    runners: {
+      cursor: {
+        launch: async ({ method }) => {
+          const { METHOD_PROMPTS } = require('./issue_pipeline_v2_launch');
+          prompts.push(METHOD_PROMPTS[method] || '');
+          return { runId: 'r', agentUrl: '' };
+        },
+      },
+    },
   };
   const issue = { number: 7, title: 't', body: 'b', labels: [] };
   for (const method of ['PR', 'light-plan', 'execute-plan']) {
-    await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', method, deps });
+    await launchIssue({
+      owner: 'o',
+      repo: 'r',
+      issue,
+      token: 't',
+      apiKey: 'k',
+      agent: 'cursor-a',
+      config,
+      method,
+      deps,
+    });
   }
-  assert.equal(prompts[0], 'base');
+  assert.equal(prompts[0], '');
   assert.match(prompts[1], /light-plan\/SKILL\.md/);
   assert.match(prompts[2], /execute-plan\/SKILL\.md/);
 });

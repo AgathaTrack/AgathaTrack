@@ -15,6 +15,7 @@ const { buildReviewRequest } = require('./issue_pipeline_v2_review');
 const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
 const { buildReopened, buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
+const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 
 /**
  * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
@@ -94,11 +95,33 @@ async function applyAction({ action: decided, ctx }) {
       if (!entry || !(ctx.config.launchRunners || []).includes(entry.runner) || !['To do', 'In analysis', 'In Main'].includes(stage)) {
         return;
       }
+      const nonce = randomNonceHex();
+      const voteKey = process.env.PIPELINE_VOTE_KEY || '';
+      const runSecret = voteKey ? deriveRunSecret(voteKey, ctx.issueNumber, agent, stage, nonce) : '';
       try {
+        let runId = 'dry-run';
         if (!ctx.dryRun) {
-          await ctx.launchFn({ agent, stage });
+          const run = await ctx.launchFn({
+            agent,
+            stage,
+            purpose: 'doorbell',
+            nonce,
+            runSecret,
+            config: ctx.config,
+          });
+          runId = run?.runId || runId;
         }
-        calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent, stage } });
+        calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent, stage, nonce } });
+        await comment(
+          buildLaunchRecord({
+            runId,
+            agent,
+            purpose: 'doorbell',
+            stage,
+            nonce,
+          }),
+          'comment:doorbell-launch',
+        );
         applied.push(`doorbell:${agent}`);
       } catch (error) {
         applied.push(`doorbell-failed:${agent}:${String(error?.message ?? error).slice(0, 120)}`);
@@ -151,7 +174,9 @@ async function applyAction({ action: decided, ctx }) {
         try {
           // The launcher marks the issue `busy` before the handoff; the plan shows that request too.
           calls.push({ method: 'POST', path: `${base}/labels`, body: { labels: ['busy'] } });
-          run = ctx.dryRun ? { runId: 'dry-run', agentUrl: '' } : await ctx.launchFn({ agent: action.agent, method: action.method });
+          run = ctx.dryRun
+            ? { runId: 'dry-run', agentUrl: '' }
+            : await ctx.launchFn({ agent: action.agent, method: action.method, purpose: 'delivery', config: ctx.config });
           calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
         } catch (error) {
           failure = error;
@@ -162,7 +187,15 @@ async function applyAction({ action: decided, ctx }) {
           await comment(buildLaunchFailed({ agent: action.agent, reason: failure.message }), 'comment:launch-failed');
           applied.unshift(`launch-failed:${action.agent}`);
         } else {
-          await comment(buildLaunchRecord({ runId: run.runId, agent: action.agent, agentUrl: run.agentUrl }), 'comment:launch');
+          await comment(
+            buildLaunchRecord({
+              runId: run.runId,
+              agent: action.agent,
+              agentUrl: run.agentUrl,
+              purpose: 'delivery',
+            }),
+            'comment:launch',
+          );
           applied.unshift(`launch:${action.agent}`);
         }
         // The launch is one of the failed runs until the agent reports busy, so record the count now.

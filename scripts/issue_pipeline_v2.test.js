@@ -17,6 +17,16 @@ const config = loadConfig();
 const MIN = 60 * 1000;
 const NOW = Date.parse('2026-11-16T12:00:00Z');
 
+const legacyConfig = validateConfig({
+  agents: [
+    { login: 'pawpet-bot', runner: 'cursor', methods: ['PR', 'light-plan', 'execute-plan'] },
+    { login: 'pawpet-claude', runner: 'claude', methods: ['PR', 'light-plan'] },
+  ],
+  engine: { logins: ['pawpet-engine'] },
+  launchRunners: ['cursor'],
+  limits: config.limits,
+});
+
 function facts(over = {}) {
   return {
     mode: 'dry-run',
@@ -32,14 +42,16 @@ function facts(over = {}) {
   };
 }
 
-const rowOf = (over) => decide(facts(over), config);
+const rowOf = (over) => decide(facts(over), legacyConfig);
 // Both runners startable: exercises LRU rotation across every listed agent.
-const bothStartable = { ...config, launchRunners: ['cursor', 'claude'] };
+const bothStartable = { ...legacyConfig, launchRunners: ['cursor', 'claude'] };
 const rowOfBoth = (over) => decide(facts(over), bothStartable);
 
 test('config: the committed file is valid; bad edits are reported together', () => {
-  assert.equal(config.agents.length, 2);
-  assert.equal(config.agents[0].id, config.agents[0].actsAs);
+  assert.equal(config.agents.length, 3);
+  assert.equal(config.agents[0].id, 'cursor-a');
+  assert.equal(config.agents[0].actsAs, 'pawpet-bot');
+  assert.equal(config.agents[1].model, 'grok-4.7-medium');
   assert.throws(
     () => validateConfig({ agents: [{ login: 'a', methods: ['nope'] }], limits: {} }),
     /at least two listed agents[\s\S]*unknown method nope[\s\S]*limits\.wip/,
@@ -334,10 +346,10 @@ test('In Main without a merge into main waits instead of repeating an unsatisfia
 
 test('In Main: intent review first, from an agent that did not author the PRs, then UAT', () => {
   const merged = { delivery: { lastMergeSha: 'm1' } };
-  const request = rowOfBoth({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot'] });
-  assert.deepEqual([request.type, request.agent], ['request-intent-review', 'pawpet-claude']);
-  const everyone = rowOfBoth({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot', 'pawpet-claude'] });
-  assert.equal(everyone.type, 'request-intent-review');
+  const request = decide(facts({ stage: 'In Main', ...merged, deliveryLaunchAgentId: 'cursor-a' }), config);
+  assert.deepEqual([request.type, request.agent], ['request-intent-review', 'cursor-b']);
+  const onlyDeliverer = decide(facts({ stage: 'In Main', ...merged, deliveryLaunchAgentId: 'cursor-b' }), config);
+  assert.equal(onlyDeliverer.type, 'request-intent-review');
   const requested = { stage: 'In Main', ...merged, intentReview: { requested: true } };
   assert.equal(rowOfBoth(requested).reason, 'main.waiting-uat');
   assert.equal(rowOfBoth({ ...requested, uatContainsLatestMerge: true }).to, 'In UAT');
