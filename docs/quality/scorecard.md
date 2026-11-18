@@ -95,7 +95,7 @@ See `docs/archived/quality-review-2026-07-08.md` and `docs/debt/refactoring-log.
 
 ## npm audit (server)
 
-Run `cd server && npm audit` locally. CI blocks **high** and **critical** (clean as of 2026-07-07 after bcrypt 6 / uuid 11 upgrade).
+Run `cd server && node ../scripts/npm_audit_gate.js --package server` locally (dual prod + allowlisted dev gate). Production dependencies must stay clean; dev-only highs may use `scripts/npm-audit-allowlist.json` until they expire. See `docs/pipelines/ci-cd-gates.md` §npm audit gate.
 
 ---
 

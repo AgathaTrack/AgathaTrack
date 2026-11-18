@@ -3,7 +3,7 @@ title: CI/CD gates
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-11
+last_updated: 2026-11-18
 tags: [ci, gates, pipeline]
 ---
 # CI/CD gate contract
@@ -168,7 +168,22 @@ every shard keeps the domain coverage gate and cross-domain widget tests on ever
 skipped on narrow PRs, and CI does not run on push to `main`). `pre-push-changed.sh` still narrows locally
 by running `flutter test` under `test/features/<domain>/`.
 
-**Drift backstop:** non-blocking **`CI full audit (main)`** (`ci-full-audit.yml`) runs the **full** suite on `main` every **12 merges** (counter in Actions cache `.ci-full-audit-state`) or when the last audit is older than **7 days**. Failures open an `agent-approved` issue for `agent-dispatch.yml`. Weekly `audit-advisory.yml` runs non-blocking `npm audit` on `main`.
+**Drift backstop:** non-blocking **`CI full audit (main)`** (`ci-full-audit.yml`) runs the **full** suite on `main` every **12 merges** (counter in Actions cache `.ci-full-audit-state`) or when the last audit is older than **7 days**. Failures open an `agent-approved` issue for `agent-dispatch.yml`. Weekly `audit-advisory.yml` runs raw `npm audit --audit-level=high` on `main` (unfiltered; opens debt issues).
+
+#### npm audit gate (blocking PR / pre-push)
+
+Blocking checks use `node scripts/npm_audit_gate.js --package server|e2e` (not bare `npm audit`):
+
+1. **Production tree** — `npm audit --audit-level=high --omit=dev` must report zero high/critical findings (no allowlist).
+2. **Full tree** — any remaining high/critical must match an active row in `scripts/npm-audit-allowlist.json` scoped to that package. Expired rows fail the gate until removed or renewed with owner approval.
+
+| Decision | Date | Rationale |
+|----------|------|-----------|
+| Dual prod-then-allowlist gate | 2026-11-18 | **GHSA-fc5q-39xc-vjpf** (picomatch, Jest dev-deps only) has no patched npm release; prod tree is clean; owner approved a 30-day exception ([#2436](https://github.com/AgathaTrack/AgathaTrack/issues/2436)). Rejects hiding production vulnerabilities. |
+| Keep `audit-advisory.yml` unfiltered | 2026-11-18 | Weekly job remains belt-and-suspenders visibility; blocking PR gate is the only place allowlist applies. |
+| Allowlist warns when advisory disappears | 2026-11-18 | Stale rows are logged so agents remove them after upstream fix ships. |
+
+Refs: [#2436](https://github.com/AgathaTrack/AgathaTrack/issues/2436) · owner approval 2026-11-18.
 
 #### Accepted trade-off: no CI re-run on merge to `main`
 
@@ -288,10 +303,10 @@ display strings exactly.
 | `flutter-coverage / Flutter domain coverage` | `_reusable-flutter-coverage.yml` | merge shard lcov, domain coverage ≥ 70% |
 | `flutter-integration / Flutter integration` | `_reusable-flutter-integration.yml` | pet profile integration tests |
 | `flutter-build-web / Build Flutter web` | `_reusable-build-web.yml` | web release build + `web-build-<sha>` artifact |
-| `test-suite / Backend (Node.js Jest)` | `_reusable-test.yml` | Database-free unit coverage (`server npm run test:unit -- --forceExit --coverage`, excludes `test/db`), npm audit high+ |
+| `test-suite / Backend (Node.js Jest)` | `_reusable-test.yml` | Database-free unit coverage (`server npm run test:unit -- --forceExit --coverage`, excludes `test/db`), `npm_audit_gate.js` (server) |
 | `test-suite / Backend integration (PostgreSQL)` | `_reusable-test.yml` | `server/test/db` suite on ephemeral PostgreSQL 16 (bootstrap-db + canonical schema), F-17 |
 | `test-suite / ESLint (Pet Care policy ratchet)` | `_reusable-test.yml` | `validate_eslint.js` ratchet on policy modules, F-20 |
-| `test-suite / E2E package audit` | `_reusable-test.yml` | e2e `npm audit` high+ and blocking helper unit tests (`e2e npm run test:unit`) |
+| `test-suite / E2E package audit` | `_reusable-test.yml` | e2e `npm_audit_gate.js` and blocking helper unit tests (`e2e npm run test:unit`) |
 | `Analyze JavaScript` | `codeql.yml` | CodeQL static analysis |
 
 Required database tests remain strict: the PostgreSQL integration job runs

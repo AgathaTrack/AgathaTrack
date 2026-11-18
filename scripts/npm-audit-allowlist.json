@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "ghsa": "GHSA-fc5q-39xc-vjpf",
+      "packages": ["server"],
+      "reason": "picomatch ReDoS (CVE-2026-112366) via Jest devDependencies only; no patched release on npm (latest picomatch 4.0.7); production tree is clean.",
+      "expires": "2026-12-18",
+      "approved_at": "2026-11-18",
+      "refs": [
+        "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+        "https://github.com/AgathaTrack/AgathaTrack/issues/2436"
+      ]
+    }
+  ]
+}
