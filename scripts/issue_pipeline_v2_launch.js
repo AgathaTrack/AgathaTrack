@@ -235,7 +235,18 @@ const STAGE_PROMPTS = {
     '`.cursor/skills/intent-review-agent/SKILL.md`: review what shipped (the merged PRs named in the engine\'s latest ' +
     '`v2:intent-review` comment) against the issue\'s original intent, file each real finding as a follow-up issue that ' +
     'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last.',
+  acceptance:
+    'Stage task: AGENT ACCEPTANCE (non-interactive; do not ask questions and do not implement). Follow ' +
+    '`.cursor/skills/agent-acceptance/SKILL.md` for issue #{{number}} and merge {{mergeSha}}. Record the verdict with ' +
+    '`node scripts/github_issue_workflow.js` (`aat-pass`, `aat-fail --reason scope|implementation|quality`, or `aat-inconclusive`). ' +
+    'Do not set the `busy` label.',
 };
+
+function fillPrompt(template, { number, mergeSha } = {}) {
+  return String(template || '')
+    .replaceAll('{{number}}', String(number ?? ''))
+    .replaceAll('{{mergeSha}}', String(mergeSha ?? ''));
+}
 
 const STAGE_PROMPTS_SIGNED = {
   ...STAGE_PROMPTS,
@@ -281,6 +292,8 @@ async function launchIssue({
   nonce,
   runSecret,
   config,
+  mergeSha,
+  scopeRelaunchSha,
   deps = {},
 }) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
@@ -320,6 +333,8 @@ async function launchIssue({
       purpose,
       apiKey,
       config,
+      mergeSha,
+      scopeRelaunchSha,
       deps,
     });
     return { runId: launched.runId, agentUrl: launched.agentUrl || null };
@@ -335,6 +350,7 @@ module.exports = {
   STAGE_PROMPTS,
   STAGE_PROMPTS_SIGNED,
   stagePromptsForConfig,
+  fillPrompt,
   V2_APPROVAL_LABELS,
   buildLaunchRecord,
   buildLaunchFailed,

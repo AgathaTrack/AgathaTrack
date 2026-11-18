@@ -101,7 +101,6 @@ function deriveSpecFacts({
       bodyHash,
       voteKey,
       limits,
-      now,
       kinds: ['spec'],
       sinceMs: since,
     }).filter((verdict) => verdict.value === 'up');

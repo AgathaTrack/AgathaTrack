@@ -27,10 +27,25 @@ function pipelineRunEnvVars({ issueNumber, agentId, stage, nonce, runSecret, bot
 /**
  * @returns {Promise<{ runId: string, agentUrl: string|null }>}
  */
-async function launch({ agent, issue, owner, repo, stage, method, nonce, runSecret, purpose, apiKey, config, deps = {} }) {
+async function launch({
+  agent,
+  issue,
+  owner,
+  repo,
+  stage,
+  method,
+  nonce,
+  runSecret,
+  purpose,
+  apiKey,
+  config,
+  mergeSha,
+  scopeRelaunchSha,
+  deps = {},
+}) {
   const launcher = deps.launcher || require('../../.github/scripts/launch-cursor-agent').launchAgent;
   const payloadLib = deps.payload || require('../../.github/scripts/agent-payload-lib');
-  const { METHOD_PROMPTS, stagePromptsForConfig } = require('../issue_pipeline_v2_launch');
+  const { METHOD_PROMPTS, stagePromptsForConfig, fillPrompt } = require('../issue_pipeline_v2_launch');
 
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const labels = (issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
@@ -39,8 +54,12 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, runSecr
     repoUrl,
   );
   const prompts = stagePromptsForConfig(config, agent);
-  const extra = stage ? prompts[stage] : METHOD_PROMPTS[method];
-  const promptText = [payloadLib.buildAgentPrompt(payload), extra || ''].filter(Boolean).join('\n\n');
+  const template = stage ? prompts[stage] : METHOD_PROMPTS[method];
+  const extra = fillPrompt(template, { number: issue.number, mergeSha });
+  const scopeNote = scopeRelaunchSha
+    ? `This run continues the existing programme after an acceptance scope fail for merge ${scopeRelaunchSha}. It must not open a second plan or a second integration branch.`
+    : '';
+  const promptText = [payloadLib.buildAgentPrompt(payload), extra || '', scopeNote].filter(Boolean).join('\n\n');
 
   const launched = await launcher({
     apiKey,

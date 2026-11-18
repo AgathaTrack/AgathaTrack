@@ -26,6 +26,7 @@ const config = validateConfig({
   engine: { logins: ['engine'] },
   launchRunners: ['cursor'],
   limits,
+  aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
 });
 const prodConfig = { ...loadConfig(), engine: { logins: ['engine'] } };
 const NOW = Date.parse('2026-11-16T12:00:00Z');

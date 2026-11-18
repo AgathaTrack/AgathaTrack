@@ -14,6 +14,7 @@ const config = validateConfig({
   engine: { logins: ['engine'] },
   launchRunners: ['cursor'],
   limits: loadConfig().limits,
+  aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
 });
 const prodConfig = loadConfig();
 const fields = {

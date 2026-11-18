@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 You were asked to review **what shipped** for one issue against **what the issue set out to do**. The request comment names the merged PRs. Spec: issue #2385 §Intent review.
 
+When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exist, a non-follow-up does not get this doorbell. That check lives in [agent acceptance](../agent-acceptance/SKILL.md) (`scope` / `implementation` / `quality`). Follow this skill when the flag is off, or when the issue is a follow-up.
+
 ## Procedure
 
 1. Read the issue: its summary, problem, Definition of Done and delivery plan. That text is the intent. Do not take the PR description as the intent.

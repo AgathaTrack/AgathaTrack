@@ -104,6 +104,16 @@ function validateConfig(config) {
   if (!Array.isArray(backoff) || backoff.length === 0 || backoff.some((n) => !(n > 0))) {
     problems.push('limits.launchBackoffMin must be a non-empty list of positive numbers');
   }
+  const aat = config?.aat;
+  if (!aat || typeof aat !== 'object' || typeof aat.enabled !== 'boolean') {
+    problems.push('aat.enabled must be a boolean');
+  }
+  if (!aat || !Number.isFinite(aat.timeoutMin) || aat.timeoutMin <= 0) {
+    problems.push('aat.timeoutMin must be a positive number');
+  }
+  if (!aat || !Number.isFinite(aat.maxInconclusive) || aat.maxInconclusive <= 0) {
+    problems.push('aat.maxInconclusive must be a positive number');
+  }
   const launchRunnerSet = new Set(runners || []);
   const runnerWip = limits.runnerWip;
   if (launchRunnerSet.has('claude')) {

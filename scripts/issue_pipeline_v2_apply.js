@@ -15,6 +15,7 @@ const { buildReviewRequest } = require('./issue_pipeline_v2_review');
 const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
 const { buildReopened, buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchPending, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
+const { buildAatLaunch, buildAatRelaunch, buildAatReset, buildAatWaive } = require('./issue_pipeline_v2_acceptance');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 
 /**
@@ -34,6 +35,10 @@ function buildWrites({ action, parsed }) {
     action.attempts !== parsed.attempts
   ) {
     writes.attempts = action.attempts;
+  }
+  if (Object.prototype.hasOwnProperty.call(action, 'acceptance')) writes.acceptance = action.acceptance;
+  if (Object.prototype.hasOwnProperty.call(action, 'acceptanceFailReason')) {
+    writes.acceptanceFailReason = action.acceptanceFailReason;
   }
   return writes;
 }
@@ -207,6 +212,59 @@ async function applyAction({ action: decided, ctx }) {
         action = { ...action, attempts };
         break;
       }
+      case 'launch-aat': {
+        let run = null;
+        let failure = null;
+        try {
+          run = ctx.dryRun
+            ? { runId: 'dry-run' }
+            : await ctx.launchFn({
+                agent: action.agent,
+                stage: 'acceptance',
+                mergeSha: action.mergeSha,
+                purpose: 'doorbell',
+              });
+          calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, stage: 'acceptance' } });
+        } catch (error) {
+          failure = error;
+        }
+        if (failure) {
+          await comment(buildAatLaunch({ mergeSha: action.mergeSha, failed: true }), 'comment:aat-launch-failed');
+          applied.unshift(`aat-launch-failed:${action.agent}`);
+          const { acceptance, acceptanceFailReason, ...rest } = action;
+          action = rest;
+        } else {
+          await comment(buildAatLaunch({ mergeSha: action.mergeSha, runId: run.runId }), 'comment:aat-launch');
+          applied.unshift(`aat-launch:${action.agent}`);
+        }
+        break;
+      }
+      case 'aat-relaunch': {
+        let failure = null;
+        try {
+          if (!ctx.dryRun) {
+            await ctx.launchFn({ agent: action.agent, method: action.method, scopeRelaunchSha: action.mergeSha });
+          }
+          calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
+        } catch (error) {
+          failure = error;
+        }
+        await comment(
+          buildAatRelaunch({ mergeSha: action.mergeSha, failed: Boolean(failure) }),
+          failure ? 'comment:aat-relaunch-failed' : 'comment:aat-relaunch',
+        );
+        applied.unshift(`${failure ? 'aat-relaunch-failed' : 'aat-relaunch'}:${action.agent}`);
+        break;
+      }
+      case 'aat-waive':
+        await comment(
+          buildAatWaive({ mergeSha: action.mergeSha, acceptance: action.acceptance }),
+          'comment:aat-waive',
+        );
+        break;
+      case 'aat-reset':
+        await comment(buildAatReset({ mergeSha: action.mergeSha }), 'comment:aat-reset');
+        break;
       case 'request-intent-review':
         await comment(
           buildIntentReviewRequest({
@@ -247,7 +305,7 @@ async function applyAction({ action: decided, ctx }) {
           await request('DELETE', `${base}/labels/busy`).catch(() => {}); // already gone is fine
           applied.push('labels:in-prod');
         }
-        if (action.to === 'In progress' && ctx.facts.launch?.runId) {
+        if (action.to === 'In progress' && action.row === 'ready.launched' && ctx.facts.launch?.runId) {
           await comment(buildLaunchAcked({ runId: ctx.facts.launch.runId }), 'comment:launch-acked');
         }
         break;

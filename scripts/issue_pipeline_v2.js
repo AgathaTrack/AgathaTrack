@@ -10,7 +10,7 @@ const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/githu
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
-const { applyWipOverride, loadConfig } = require('./issue_pipeline_v2_config');
+const { agentLogins, applyWipOverride, loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
@@ -22,6 +22,7 @@ const {
   reopenedByEngine,
 } = require('./issue_pipeline_v2_release');
 const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
+const { deriveAatState, implementationFailActive, loadImplementationFollowUps } = require('./issue_pipeline_v2_acceptance');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 const {
@@ -46,7 +47,7 @@ function mode() {
 
 /** Facts available from the issue itself; later phases add comments, reactions and PRs. */
 function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
-  return {
+  const facts = {
     mode: runMode,
     now,
     onBoard,
@@ -56,6 +57,9 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
     bodyHash: bodySha(issue.body),
     wip,
   };
+  if (parsed.acceptance !== undefined) facts.acceptance = parsed.acceptance;
+  if (parsed.acceptanceFailReason !== undefined) facts.acceptanceFailReason = parsed.acceptanceFailReason;
+  return facts;
 }
 
 /** Last editors of edited engine-authored comments (GraphQL), keyed by comment node id. */
@@ -99,6 +103,22 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
       token,
     });
     facts[environment === 'UAT' ? 'uatContainsLatestMerge' : 'prodContainsLatestMerge'] = contains;
+  }
+  facts.aat = deriveAatState({
+    comments,
+    engineLogins: config.engine?.logins,
+    agentLogins: agentLogins(config),
+  });
+  const gate = Boolean(
+    config.aat?.enabled &&
+    Object.prototype.hasOwnProperty.call(entry.parsed, 'acceptance') &&
+    Object.prototype.hasOwnProperty.call(entry.parsed, 'acceptanceFailReason') &&
+    !parseFollowUp(entry.issue.body),
+  );
+  if (gate && canonical === 'In progress' && implementationFailActive(facts)) {
+    Object.assign(facts, await loadImplementationFollowUps({
+      owner, repo, issueNumber: entry.number, token, restFn: io.restFn || rest, log: console.log,
+    }));
   }
   return facts;
 }
@@ -257,6 +277,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     : { ok: false, reason: 'not-in-on-mode' };
   const live = writesAllowed(runMode, identity);
   const fields = io.fields || (await loadOrgFields({ org: owner, token: projectsPat }));
+  const aatFieldsPresent = Boolean(fields.acceptance && fields.acceptanceFailReason);
+  if (config.aat?.enabled && !aatFieldsPresent) {
+    console.log(JSON.stringify({ event: 'acceptance.field-missing' }));
+  }
 
   const rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true });
   const numbers = rows
@@ -339,6 +363,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           runMode,
         }),
         agentLastUsed: { ...lastUsed },
+        aatFieldsPresent,
+        isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io, runMode, now })),
       };
       if (entry.closed) {
@@ -382,7 +408,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           restFn: io.restFn,
           launchFn:
             io.launchFn ||
-            (({ agent, method, stage, purpose = 'delivery', nonce, runSecret }) => {
+            (({ agent, method, stage, purpose = 'delivery', nonce, runSecret, mergeSha, scopeRelaunchSha }) => {
               const launchNonce = nonce || (purpose === 'delivery' ? randomNonceHex() : undefined);
               const voteKey = process.env.PIPELINE_VOTE_KEY || '';
               const secret =
@@ -396,6 +422,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
                 nonce: launchNonce,
                 runSecret: secret,
                 config,
+                mergeSha,
+                scopeRelaunchSha,
                 owner,
                 repo,
                 issue: entry.issue,

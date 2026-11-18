@@ -72,6 +72,89 @@ test('applyStuckNeedsOwner dry-run reports stuck limit', async () => {
   assert.equal(result.nextState.owner_reason, 'stuck');
 });
 
+function liveIo(overrides = {}) {
+  const calls = { launched: 0, labels: [], assigned: [], markers: [] };
+  const io = {
+    fetchIssue: async () => ({ ...busyLightPlanIssue, number: 9, title: 'light-plan: demo', url: 'u', body: pathsBlock }),
+    fetchAllIssueComments: async () => [],
+    listTrackedFiles: () => ['scripts/a.js'],
+    launchAgent: async () => {
+      calls.launched += 1;
+      return { agent: { id: 'a1', url: 'au' }, run: { id: 'r1' } };
+    },
+    setLabels: async (_o, _r, _n, add, remove) => calls.labels.push({ add, remove }),
+    assignIssue: async (_o, _r, _n, login) => calls.assigned.push(login),
+    upsertMarkerComment: async (args) => calls.markers.push(args.marker),
+    ...overrides,
+  };
+  return { io, calls };
+}
+
+const liveArgs = { owner: 'o', repo: 'r', issueNumber: 9, token: 't', assignToken: 'bot', dryRun: false };
+
+test('live relaunch launches, counts stuck and keeps busy', async () => {
+  const { io, calls } = liveIo();
+  const result = await applyLightPlanRelaunch({ ...liveArgs, io });
+  assert.equal(result.relaunched, true);
+  assert.equal(result.stuck, 1);
+  assert.equal(calls.launched, 1);
+  assert.deepEqual(calls.assigned, ['pawpet-bot']);
+  assert.ok(calls.labels.some((l) => l.add.includes('busy')));
+});
+
+test('live relaunch at the stuck limit hands to the owner without launching', async () => {
+  const prev = process.env.PIPELINE_STUCK_MAX;
+  process.env.PIPELINE_STUCK_MAX = '1';
+  try {
+    const { io, calls } = liveIo();
+    const result = await applyLightPlanRelaunch({ ...liveArgs, io });
+    assert.equal(result.ownerReason, 'stuck');
+    assert.equal(calls.launched, 0);
+    assert.ok(calls.labels.some((l) => l.add.includes('needs-owner') && l.remove.includes('busy')));
+  } finally {
+    if (prev === undefined) delete process.env.PIPELINE_STUCK_MAX;
+    else process.env.PIPELINE_STUCK_MAX = prev;
+  }
+});
+
+test('live relaunch fails closed when the launch throws', async () => {
+  const { io, calls } = liveIo({
+    launchAgent: async () => {
+      throw new Error('boom');
+    },
+  });
+  const result = await applyLightPlanRelaunch({ ...liveArgs, io });
+  assert.equal(result.reason, 'launch-failed');
+  assert.ok(calls.labels.some((l) => l.add.includes('needs-owner')));
+});
+
+test('live relaunch stops at the path gate', async () => {
+  const { io, calls } = liveIo({ fetchIssue: async () => ({ ...busyLightPlanIssue, body: '' }) });
+  const result = await applyLightPlanRelaunch({ ...liveArgs, io });
+  assert.equal(result.reason, 'path-gate');
+  assert.equal(calls.launched, 0);
+});
+
+test('a failing run-marker write after launch fails closed to the owner', async () => {
+  const { io, calls } = liveIo({
+    upsertMarkerComment: async () => {
+      throw new Error('write failed');
+    },
+  });
+  const result = await applyLightPlanRelaunch({ ...liveArgs, io });
+  assert.equal(result.relaunched, true);
+  assert.equal(result.handoffIncomplete, true);
+  assert.equal(result.failedClosed, true);
+  assert.ok(calls.labels.some((l) => l.add.includes('needs-owner') && l.remove.includes('busy')));
+  assert.deepEqual(calls.assigned, ['KanopeeKa']);
+});
+
+test('detectBlockedResult treats an owner-decision stop as blocked', () => {
+  const { detectBlockedResult } = require('../.github/scripts/monitor-cursor-agent');
+  assert.equal(detectBlockedResult({ result: { text: 'Need owner decision: CI budget spent' } }), true);
+  assert.equal(detectBlockedResult({ result: { text: 'session cut off' } }), false);
+});
+
 function graphqlIssueResponse() {
   return {
     ok: true,

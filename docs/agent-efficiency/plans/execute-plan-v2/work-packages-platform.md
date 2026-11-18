@@ -111,7 +111,7 @@ lives in `scripts/lib/execute_plan_*.js` (protected, tested) with a small wrappe
 - Modify: `.github/workflows/_reusable-test.yml` (governance job, after the
   `domain_coverage.fixture.mjs` step at line ~96), `scripts/execute_plan_runtime.js` (register `check-diff`).
 
-**Do not touch:** `.github/workflows/agent-pr-safety-gate.yml` (stays until WP10), other workflows.
+**Do not touch:** other workflows (`agent-pr-safety-gate.yml` was removed by WP10 / #1980).
 
 **Exports**
 ```js

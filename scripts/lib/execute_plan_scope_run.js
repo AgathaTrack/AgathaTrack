@@ -187,25 +187,44 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
   if (headRepo !== repo) return result('success', 'ok', 'not an execute-plan PR (fork)');
 
   const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
+  // The control issue is looked up before any PR read, as before #1980. A PR with no active plan
+  // issue (and not a support head) is non-plan: outside `main` it returns before any config or PR read.
+  // A plan-id PR outside `main` still looks up its control issue, as it did before #1980.
+  const issue = planId ? await findControlIssue(client, planId) : null;
+  const nonPlan = !supportHead && !(planId && issue);
+  if (nonPlan && baseRef !== 'main') return result('success', 'ok', 'not an execute-plan PR');
 
   let config;
   try {
     config = await loadConfig(client);
   } catch (e) {
-    if (!planId) return nonPlanInfrastructureOutcome('config', e, mode);
+    if (nonPlan) return nonPlanInfrastructureOutcome('config', e, mode);
     return result('failure', 'error', e.message, planId);
   }
 
   let files;
   let prAuthor = null;
   let pullBody = '';
-  let scopeAckReview = null;
   try {
     const pull = await client.getPull(prNumber);
     prAuthor = pull.user && pull.user.login;
     pullBody = pull.body || '';
     const pullFiles = await client.listPullFiles(prNumber);
     files = [...new Set(pullFiles.flatMap((f) => [f.filename, f.previous_filename].filter(Boolean)))];
+  } catch (e) {
+    if (nonPlan) {
+      if (e instanceof PullFilesOverflow) return nonPlanInfrastructureOutcome('file list', e, mode);
+      return nonPlanInfrastructureOutcome('PR load', e, mode);
+    }
+    if (e instanceof PullFilesOverflow) return result('failure', 'too-many-files', e.message, planId);
+    if (supportHead) return result('failure', 'error', e.message, planId || supportHead.planId);
+    throw e;
+  }
+
+  // Owner ack is best-effort on plan PRs (an unreadable list means no ack, as before #1980).
+  // Non-plan PRs fail closed through the infra outcome instead.
+  let scopeAckReview = null;
+  try {
     const reviews = await client.listPullReviews(prNumber);
     scopeAckReview = findOwnerScopeAckReview(reviews, {
       headSha,
@@ -213,15 +232,9 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
       botLogin: config.bot_login,
     });
   } catch (e) {
-    if (!planId) {
-      if (e instanceof PullFilesOverflow) return nonPlanInfrastructureOutcome('file list', e, mode);
-      return nonPlanInfrastructureOutcome('PR load', e, mode);
-    }
-    if (e instanceof PullFilesOverflow) return result('failure', 'too-many-files', e.message, planId);
-    throw e;
+    if (nonPlan) return nonPlanInfrastructureOutcome('reviews', e, mode);
   }
 
-  const issue = planId ? await findControlIssue(client, planId) : null;
   if (supportHead) {
     if (!planId || !issue) {
       return result(
@@ -231,10 +244,7 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
         planId || supportHead.planId,
       );
     }
-  } else if (!planId || !issue) {
-    if (baseRef !== 'main') {
-      return result('success', 'ok', 'not an execute-plan PR');
-    }
+  } else if (nonPlan) {
     const evaluation = evaluateNonPlanForbidden({
       files,
       scopeAckReview,

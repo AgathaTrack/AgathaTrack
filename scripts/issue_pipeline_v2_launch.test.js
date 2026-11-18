@@ -136,7 +136,7 @@ test('apply launch: a dry run never starts a run', async () => {
 
 test('apply set-stage In progress leaves the acked record', async () => {
   const { sent, ctx: c } = ctx({ facts: { launch: { runId: 'r9' } } });
-  await applyAction({ action: { type: 'set-stage', to: 'In progress' }, ctx: c });
+  await applyAction({ action: { type: 'set-stage', to: 'In progress', row: 'ready.launched' }, ctx: c });
   assert.match(sent[0].body.body, /v2:launch-acked run=r9/);
 });
 
