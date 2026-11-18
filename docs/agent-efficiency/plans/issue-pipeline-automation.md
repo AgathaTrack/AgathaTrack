@@ -161,7 +161,7 @@ Do not use title counters — they break `isPlanControlIssue` and human edits.
 | Field | Meaning |
 |-------|---------|
 | `round` | Completed peer-review rounds; **stop when `round >= 6`** (default cap; configurable). Owner-driven reopen resets `round` to 0 |
-| `stuck` | Monitor relaunches while In progress |
+| `stuck` | Monitor light-plan relaunches while In progress. A lifetime cap (`PIPELINE_STUCK_MAX`, default 3): never reset on progress. A run whose final message holds `owner decision` is a stop, not a cut-off, and is not relaunched |
 | `last_assignee` | Previous ball-holder; dispatcher enforces handoff ≠ same agent on review |
 | `body_sha` | Hash at last verdict; convergence when Green and unchanged |
 | `verdicts` | Last **per-agent** verdict (`green` / `red`) for the current `body_sha`; **cleared on reopen** so stale Greens cannot satisfy convergence |
