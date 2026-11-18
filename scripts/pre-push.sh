@@ -19,6 +19,7 @@ node --test scripts/check_feature_imports.test.js
 node scripts/validate_execute_plan_snapshot.js .agents/plans/_example.v2.snapshot.json
 node scripts/validate_execute_plan_snapshot.js --drift-test
 node --test scripts/execute_plan_runtime.test.js
+node --test scripts/lib/env_proxy_reexec.test.js
 node --test scripts/uat_queue_runtime.test.js
 node --test scripts/babysit_merge_preflight.test.js
 node --test scripts/uat_coordinator_payload.test.js

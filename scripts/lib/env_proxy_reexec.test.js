@@ -3,7 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { proxyReexecNeeded, reexecArgs, reexecWithEnvProxy } = require('./env_proxy_reexec');
+const { proxyReexecNeeded, childEnv, reexecArgs, reexecWithEnvProxy } = require('./env_proxy_reexec');
 
 test('proxyReexecNeeded is false without a proxy variable', () => {
   assert.equal(proxyReexecNeeded({}), false);
@@ -12,6 +12,45 @@ test('proxyReexecNeeded is false without a proxy variable', () => {
 test('proxyReexecNeeded is true for HTTPS_PROXY or https_proxy without the flag', () => {
   assert.equal(proxyReexecNeeded({ HTTPS_PROXY: 'http://proxy:3128' }), true);
   assert.equal(proxyReexecNeeded({ https_proxy: 'http://proxy:3128' }), true);
+});
+
+test('proxyReexecNeeded is true for ALL_PROXY-only environments', () => {
+  assert.equal(proxyReexecNeeded({ ALL_PROXY: 'http://proxy:3128' }), true);
+  assert.equal(proxyReexecNeeded({ all_proxy: 'http://proxy:3128' }), true);
+});
+
+test('childEnv copies ALL_PROXY to HTTPS_PROXY when no HTTPS proxy is set', () => {
+  const env = childEnv({ ALL_PROXY: 'http://proxy:3128', PATH: '/bin' });
+  assert.equal(env.HTTPS_PROXY, 'http://proxy:3128');
+  assert.equal(env.NODE_USE_ENV_PROXY, '1');
+  assert.equal(env.ALL_PROXY, 'http://proxy:3128');
+  assert.equal(env.PATH, '/bin');
+});
+
+test('childEnv keeps an existing HTTPS_PROXY and does not overwrite it with ALL_PROXY', () => {
+  const env = childEnv({ HTTPS_PROXY: 'http://https-proxy:3128', ALL_PROXY: 'http://all:3128' });
+  assert.equal(env.HTTPS_PROXY, 'http://https-proxy:3128');
+});
+
+test('childEnv passes NO_PROXY through unchanged', () => {
+  const env = childEnv({ HTTPS_PROXY: 'http://proxy:3128', NO_PROXY: 'localhost' });
+  assert.equal(env.NO_PROXY, 'localhost');
+});
+
+test('reexecWithEnvProxy maps ALL_PROXY into the child environment', () => {
+  let childEnvSeen = null;
+  reexecWithEnvProxy({
+    argv: ['node', 'x.js'],
+    execArgv: [],
+    env: { ALL_PROXY: 'http://proxy:3128' },
+    spawn: (cmd, args, options) => {
+      childEnvSeen = options.env;
+      return { status: 0 };
+    },
+    exit: () => {},
+  });
+  assert.equal(childEnvSeen.HTTPS_PROXY, 'http://proxy:3128');
+  assert.equal(childEnvSeen.NODE_USE_ENV_PROXY, '1');
 });
 
 test('proxyReexecNeeded is false once NODE_USE_ENV_PROXY=1 is set (no loop)', () => {
