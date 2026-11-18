@@ -86,11 +86,11 @@ Do not end the turn while the release PR is open or Pre-UAT is unfinished, excep
 
 ## Recovery
 
-If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When the engine launched the run (a `v2:launch` comment on the issue), it restarts a quiet run once and then sets `Blocked: stalled` (`github-issue-workflow.md` §Pipeline v2, In progress row).
+If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When the engine launched the run (a `v2:launch` comment on the issue), it restarts a quiet run once and then sets `Blocked: stalled` (`github-issue-workflow.md` §Pipeline v2, In progress row). The issue pipeline monitor also relaunches a terminal run that still has `light-plan` and `busy` (the monitor code checks only these labels; the dispatcher gates on `ISSUE_PIPELINE`), up to `PIPELINE_STUCK_MAX` (default 3) times over the issue's lifetime, then sets `needs-owner` (`stuck`).
 
 ## Stop and ask
 
-[`AGENTS.md`](../../../AGENTS.md) §When to ask, plus: CI retry budget exhausted per `autonomous-pr-policy.md` §CI retry budget; a change to the goal; unresolvable main/integration conflict. One question + recommendation on the tracking issue. Pending CI, an open release PR, Pre-UAT still running, and an open tracking issue are not stops.
+[`AGENTS.md`](../../../AGENTS.md) §When to ask, plus: CI retry budget exhausted per `autonomous-pr-policy.md` §CI retry budget; a change to the goal; unresolvable main/integration conflict. One question + recommendation on the tracking issue; start the final message with `Need owner decision:` so the monitor does not relaunch the run (`busy` stays set). Pending CI, an open release PR, Pre-UAT still running, and an open tracking issue are not stops.
 
 ## Not included
 

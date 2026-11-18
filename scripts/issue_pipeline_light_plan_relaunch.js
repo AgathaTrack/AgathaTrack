@@ -309,15 +309,35 @@ Reason: **${pathCheck.reason || 'sensitive-paths'}** (path gate).`,
     relaunchStuck: nextStuck,
   };
 
-  // Record the new run before handoff writes so a failed write is resumed, not double-launched.
-  await (io.upsertMarkerComment || upsertMarkerComment)({
-    owner,
-    repo,
-    issueNumber,
-    marker: RUN_MARKER_PREFIX,
-    body: buildDispatchComment(marker),
-    token: assignToken || token,
-  });
+  // Record the new run before any other handoff write. If it cannot be recorded, the monitor would
+  // still see the old terminal run with `busy` set and launch again, so fail closed to the owner.
+  try {
+    await (io.upsertMarkerComment || upsertMarkerComment)({
+      owner,
+      repo,
+      issueNumber,
+      marker: RUN_MARKER_PREFIX,
+      body: buildDispatchComment(marker),
+      token: assignToken || token,
+    });
+  } catch (markerError) {
+    const detail = String(markerError.message || markerError).slice(0, 300);
+    try {
+      await (io.setLabels || setLabels)(owner, repo, issueNumber, ['needs-owner'], ['busy'], token);
+      await (io.assignIssue || assignIssue)(owner, repo, issueNumber, OWNER_LOGIN, assignToken || token);
+    } catch {
+      // Best effort: the result below still reports the unrecorded launch to the monitor log.
+    }
+    return {
+      relaunched: true,
+      runId,
+      stuck: nextStuck,
+      handoffIncomplete: true,
+      failedClosed: true,
+      reason: 'run-marker-write-failed',
+      detail,
+    };
+  }
 
   try {
     const nextState = {
