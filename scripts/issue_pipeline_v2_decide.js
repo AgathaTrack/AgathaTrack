@@ -39,6 +39,7 @@ const {
   entryId,
   entryActsAs,
 } = require('./issue_pipeline_v2_config');
+const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
 
 const STAGES = [
   'Backlog',
@@ -318,6 +319,8 @@ function decideReady(facts, config) {
 }
 
 function decideInProgress(facts, config) {
+  const held = acceptanceInProgress(facts, config);
+  if (held) return held;
   const delivery = facts.delivery || {};
   const finished =
     delivery.dodComplete &&
@@ -325,7 +328,11 @@ function decideInProgress(facts, config) {
     (delivery.mergedIntoMain || 0) >= 1 &&
     !delivery.busy;
   if (finished) {
-    return setStage('In Main', 'progress.finished', { then: ['request-intent-review'] });
+    return setStage(
+      'In Main',
+      'progress.finished',
+      aatGateOn(facts, config) ? {} : { then: ['request-intent-review'] },
+    );
   }
   const inactive =
     delivery.lastActivityAt != null &&
@@ -347,6 +354,7 @@ function decideInProgress(facts, config) {
 }
 
 function decideInMain(facts, config) {
+  if (aatGateOn(facts, config)) return acceptanceInMain(facts, config);
   // An issue moved to In Main by hand may have no linked PR merged into `main`. There is then no
   // merge to review or to find in a deploy, and a request could never be satisfied: it would repeat
   // on every tick. Wait until a merge exists.

@@ -3,6 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -11,6 +12,7 @@ const {
   aatLabelPlan,
   buildAatMarker,
   appendAatMarker,
+  normalizeAatFailReason,
   validateMergeSha,
   lastMainMergeShaFromLinkedPrs,
 } = require('./lib/github_issue_workflow_aat');
@@ -56,8 +58,23 @@ test('aatLabelPlan clears opposing labels on pass and fail', () => {
 test('buildAatMarker and appendAatMarker', () => {
   const marker = buildAatMarker('pass', SAMPLE_SHA);
   assert.match(marker, /^<!-- v2:aat verdict=pass merge=a{40} -->$/);
-  const body = appendAatMarker('Review body', 'fail', SAMPLE_SHA);
-  assert.match(body, /Review body\n\n<!-- v2:aat verdict=fail merge=a{40} -->\n$/);
+  assert.equal(buildAatMarker('inconclusive', SAMPLE_SHA).includes('reason='), false);
+  const body = appendAatMarker('Review body', 'fail', SAMPLE_SHA, 'quality');
+  assert.match(body, /Review body\n\n<!-- v2:aat verdict=fail reason=quality merge=a{40} -->\n$/);
+  assert.match(buildAatMarker('fail', SAMPLE_SHA, 'SCOPE'), /reason=scope /);
+  assert.throws(() => buildAatMarker('fail', SAMPLE_SHA), /--reason=scope\|implementation\|quality/);
+  assert.throws(() => normalizeAatFailReason('inconclusive'), /--reason/);
+  assert.throws(() => normalizeAatFailReason(''), /--reason/);
+});
+
+test('aat-fail exits non-zero without a known --reason', () => {
+  const script = path.join(__dirname, 'github_issue_workflow.js');
+  const missing = spawnSync(process.execPath, [script, 'aat-fail', '--issue', '1', '--body', 'nope'], { encoding: 'utf8' });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /--reason/);
+  const bad = spawnSync(process.execPath, [script, 'aat-fail', '--issue', '1', '--body', 'nope', '--reason', 'inconclusive'], { encoding: 'utf8' });
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /--reason/);
 });
 
 test('validateMergeSha rejects bad input', () => {

@@ -23,14 +23,33 @@ function aatLabelPlan(outcome) {
   return { add, remove };
 }
 
-/** @param {'pass'|'fail'|'inconclusive'} verdict */
-function buildAatMarker(verdict, mergeSha) {
+const AAT_FAIL_REASONS = ['scope', 'implementation', 'quality'];
+
+/** @param {string} reason @returns {'scope'|'implementation'|'quality'} */
+function normalizeAatFailReason(reason) {
+  const value = String(reason || '').trim().toLowerCase();
+  if (!AAT_FAIL_REASONS.includes(value)) {
+    throw new Error('aat-fail requires --reason=scope|implementation|quality');
+  }
+  return value;
+}
+
+/**
+ * Verdict marker. Attribute order is fixed here; readers accept any order.
+ * `reason` is required for `fail` and omitted for pass and inconclusive.
+ * @param {'pass'|'fail'|'inconclusive'} verdict
+ */
+function buildAatMarker(verdict, mergeSha, reason) {
   const sha = validateMergeSha(mergeSha);
+  if (verdict === 'fail') {
+    const known = normalizeAatFailReason(reason);
+    return `<!-- ${AAT_MARKER} verdict=fail reason=${known} merge=${sha} -->`;
+  }
   return `<!-- ${AAT_MARKER} verdict=${verdict} merge=${sha} -->`;
 }
 
-function appendAatMarker(body, verdict, mergeSha) {
-  const marker = buildAatMarker(verdict, mergeSha);
+function appendAatMarker(body, verdict, mergeSha, reason) {
+  const marker = buildAatMarker(verdict, mergeSha, reason);
   const trimmed = String(body || '').trimEnd();
   return trimmed ? `${trimmed}\n\n${marker}\n` : `${marker}\n`;
 }
@@ -56,7 +75,9 @@ function lastMainMergeShaFromLinkedPrs(prs) {
 module.exports = {
   AAT_LABELS,
   AAT_MARKER,
+  AAT_FAIL_REASONS,
   aatLabelPlan,
+  normalizeAatFailReason,
   buildAatMarker,
   appendAatMarker,
   validateMergeSha,

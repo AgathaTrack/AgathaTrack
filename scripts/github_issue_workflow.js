@@ -9,7 +9,7 @@
  *   node scripts/github_issue_workflow.js start-work --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js aat-start --issue <n>
  *   node scripts/github_issue_workflow.js aat-pass --issue <n> --body-file <path> [--merge <sha>]
- *   node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> [--merge <sha>]
+ *   node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> --reason scope|implementation|quality [--merge <sha>]
  *   node scripts/github_issue_workflow.js aat-inconclusive --issue <n> --body-file <path> [--merge <sha>]
  */
 
@@ -23,7 +23,7 @@ const {
 } = require('./lib/execute_plan_project');
 const { createGitHubClient, resolveToken, MissingToken } = require('./lib/execute_plan_github');
 const { parseFlags, readBody } = require('./lib/github_issue_workflow_lib');
-const { aatLabelPlan, appendAatMarker } = require('./lib/github_issue_workflow_aat');
+const { aatLabelPlan, appendAatMarker, normalizeAatFailReason } = require('./lib/github_issue_workflow_aat');
 const { resolveAatMergeSha } = require('./lib/github_issue_workflow_aat_merge');
 const { editIssueLabels, ensureRepoLabels } = require('./lib/github_issue_workflow_labels');
 
@@ -40,7 +40,8 @@ function usage() {
   node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
   aat-start --issue <n>
-  aat-pass | aat-fail | aat-inconclusive --issue <n> (--body | --body-file) [--merge <40-char-sha>]
+  aat-pass | aat-inconclusive --issue <n> (--body | --body-file) [--merge <40-char-sha>]
+  aat-fail --issue <n> (--body | --body-file) --reason scope|implementation|quality [--merge <40-char-sha>]
 
 Agents do not write the Project Status field — use comments + the \`busy\` label. See .cursor/skills/agent-acceptance/SKILL.md
 See docs/agent-efficiency/github-labels.md`);
@@ -72,7 +73,7 @@ async function aatLabelTransition(client, issueNumber, outcome) {
 }
 
 /** Comment first (with marker), then labels. Marker is authoritative for the engine. */
-async function aatVerdict({ client, issueNumber, outcome, verdict, flags }) {
+async function aatVerdict({ client, issueNumber, outcome, verdict, flags, reason }) {
   const body = readBody(flags);
   if (!body) {
     throw new Error('aat verdict requires --body or --body-file');
@@ -84,7 +85,7 @@ async function aatVerdict({ client, issueNumber, outcome, verdict, flags }) {
     repo,
     merge: flags.merge,
   });
-  const commentBody = appendAatMarker(body, verdict, mergeSha);
+  const commentBody = appendAatMarker(body, verdict, mergeSha, reason);
   const commentResult = await postIssueComment(issueNumber, commentBody);
   const labelResult =
     outcome === 'inconclusive'
@@ -138,8 +139,9 @@ async function main() {
     }
 
     case 'aat-fail': {
+      const reason = normalizeAatFailReason(flags.reason);
       const client = makeWorkflowClient();
-      printJson(await aatVerdict({ client, issueNumber, outcome: 'fail', verdict: 'fail', flags }));
+      printJson(await aatVerdict({ client, issueNumber, outcome: 'fail', verdict: 'fail', flags, reason }));
       break;
     }
 
