@@ -8,6 +8,22 @@ const FIELD_NAMES = {
   attempts: 'Attempts',
 };
 
+/** Optional. A missing name must not throw and must not be added to FIELD_NAMES. */
+const OPTIONAL_FIELD_NAMES = {
+  acceptance: 'Acceptance',
+  acceptanceFailReason: 'Acceptance fail reason',
+};
+
+const CARRIED_KEYS = ['stage', 'blocked', 'attempts', 'acceptance', 'acceptanceFailReason'];
+
+function fieldDef(def) {
+  return {
+    id: Number(def.id),
+    name: def.name,
+    options: (def.options || []).map((option) => option.name).filter(Boolean),
+  };
+}
+
 function findOrgField(fields, name) {
   const key = name.toLowerCase();
   return (fields || []).find((field) => field?.name?.toLowerCase() === key) || null;
@@ -26,11 +42,11 @@ async function loadOrgFields({ org, token, restFn = rest }) {
     if (!def?.id) {
       throw new Error(`Org issue field "${name}" not found for ${org}`);
     }
-    loaded[key] = {
-      id: Number(def.id),
-      name: def.name,
-      options: (def.options || []).map((option) => option.name).filter(Boolean),
-    };
+    loaded[key] = fieldDef(def);
+  }
+  for (const [key, name] of Object.entries(OPTIONAL_FIELD_NAMES)) {
+    const def = findOrgField(defs, name);
+    if (def?.id) loaded[key] = fieldDef(def);
   }
   return loaded;
 }
@@ -56,11 +72,16 @@ function entryNumber(entry) {
 function parseIssueFields(issue, fields) {
   const values = issue?.issue_field_values || [];
   const byId = new Map(values.map((entry) => [entryFieldId(entry), entry]));
-  return {
+  const parsed = {
     stage: entryText(byId.get(fields.stage.id)),
     blocked: entryText(byId.get(fields.blocked.id)),
     attempts: entryNumber(byId.get(fields.attempts.id)),
   };
+  if (fields.acceptance) parsed.acceptance = entryText(byId.get(fields.acceptance.id)) || '';
+  if (fields.acceptanceFailReason) {
+    parsed.acceptanceFailReason = entryText(byId.get(fields.acceptanceFailReason.id)) || '';
+  }
+  return parsed;
 }
 
 function canonicalOption(field, value) {
@@ -97,8 +118,12 @@ function buildFieldWrites(fields, writes) {
  */
 function withCurrentValues(parsed, writes) {
   const merged = { ...writes };
-  for (const key of Object.keys(FIELD_NAMES)) {
-    if (!(key in merged) && parsed?.[key]) {
+  for (const key of Object.keys(merged)) {
+    if (merged[key] === null) delete merged[key];
+  }
+  for (const key of CARRIED_KEYS) {
+    // A null write is a clear: the key was present, so the previous value is not copied back.
+    if (!Object.prototype.hasOwnProperty.call(writes, key) && parsed?.[key]) {
       merged[key] = parsed[key];
     }
   }

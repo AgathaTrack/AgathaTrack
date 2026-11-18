@@ -21,6 +21,7 @@ const {
   reopenedByEngine,
 } = require('./issue_pipeline_v2_release');
 const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
+const { countOpenFollowUps, deriveAatState, implementationFailActive } = require('./issue_pipeline_v2_acceptance');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 const {
@@ -45,7 +46,7 @@ function mode() {
 
 /** Facts available from the issue itself; later phases add comments, reactions and PRs. */
 function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
-  return {
+  const facts = {
     mode: runMode,
     now,
     onBoard,
@@ -55,6 +56,9 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
     bodyHash: bodySha(issue.body),
     wip,
   };
+  if (parsed.acceptance !== undefined) facts.acceptance = parsed.acceptance;
+  if (parsed.acceptanceFailReason !== undefined) facts.acceptanceFailReason = parsed.acceptanceFailReason;
+  return facts;
 }
 
 /** Last editors of edited engine-authored comments (GraphQL), keyed by comment node id. */
@@ -94,6 +98,35 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
       token,
     });
     facts[environment === 'UAT' ? 'uatContainsLatestMerge' : 'prodContainsLatestMerge'] = contains;
+  }
+  facts.aat = deriveAatState({
+    comments,
+    engineLogins: config.engine?.logins,
+    agentLogins: (config.agents || []).map((agent) => agent.login),
+  });
+  const gate = Boolean(
+    config.aat?.enabled &&
+    Object.prototype.hasOwnProperty.call(entry.parsed, 'acceptance') &&
+    Object.prototype.hasOwnProperty.call(entry.parsed, 'acceptanceFailReason') &&
+    !parseFollowUp(entry.issue.body),
+  );
+  if (gate && canonical === 'In progress' && implementationFailActive(facts)) {
+    try {
+      facts.openFollowUps = await countOpenFollowUps({
+        owner,
+        repo,
+        issueNumber: entry.number,
+        token,
+        restFn: io.restFn || rest,
+      });
+    } catch (error) {
+      facts.implementationSearchError = true;
+      console.log(JSON.stringify({
+        event: 'aat.implementation-search-error',
+        issue: entry.number,
+        message: error?.message ?? String(error),
+      }));
+    }
   }
   return facts;
 }
@@ -213,6 +246,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     : { ok: false, reason: 'not-in-on-mode' };
   const live = writesAllowed(runMode, identity);
   const fields = io.fields || (await loadOrgFields({ org: owner, token: projectsPat }));
+  const aatFieldsPresent = Boolean(fields.acceptance && fields.acceptanceFailReason);
+  if (config.aat?.enabled && !aatFieldsPresent) {
+    console.log(JSON.stringify({ event: 'acceptance.field-missing' }));
+  }
 
   const rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true });
   const numbers = rows
@@ -295,6 +332,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           runMode,
         }),
         agentLastUsed: { ...lastUsed },
+        aatFieldsPresent,
+        isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io })),
       };
       if (entry.closed) {
@@ -338,10 +377,12 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           restFn: io.restFn,
           launchFn:
             io.launchFn ||
-            (({ method, stage }) =>
+            (({ method, stage, mergeSha, scopeRelaunchSha }) =>
               launchIssue({
                 method,
                 stage,
+                mergeSha,
+                scopeRelaunchSha,
                 owner,
                 repo,
                 issue: entry.issue,

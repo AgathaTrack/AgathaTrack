@@ -119,7 +119,18 @@ const STAGE_PROMPTS = {
     '`.cursor/skills/intent-review-agent/SKILL.md`: review what shipped (the merged PRs named in the engine\'s latest ' +
     '`v2:intent-review` comment) against the issue\'s original intent, file each real finding as a follow-up issue that ' +
     'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last.',
+  acceptance:
+    'Stage task: AGENT ACCEPTANCE (non-interactive; do not ask questions and do not implement). Follow ' +
+    '`.cursor/skills/agent-acceptance/SKILL.md` for issue #{{number}} and merge {{mergeSha}}. Record the verdict with ' +
+    '`node scripts/github_issue_workflow.js` (`aat-pass`, `aat-fail --reason scope|implementation|quality`, or `aat-inconclusive`). ' +
+    'Do not set the `busy` label.',
 };
+
+function fillPrompt(template, { number, mergeSha } = {}) {
+  return String(template || '')
+    .replaceAll('{{number}}', String(number ?? ''))
+    .replaceAll('{{mergeSha}}', String(mergeSha ?? ''));
+}
 
 /**
  * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
@@ -129,7 +140,18 @@ const STAGE_PROMPTS = {
  */
 const V2_APPROVAL_LABELS = ['agent-approved', 'human-reviewed'];
 
-async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', stage, deps = {} }) {
+async function launchIssue({
+  owner,
+  repo,
+  issue,
+  token,
+  apiKey,
+  method = 'PR',
+  stage,
+  mergeSha,
+  scopeRelaunchSha,
+  deps = {},
+}) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
   const payloadLib = deps.payload || require('../.github/scripts/agent-payload-lib');
   const launcher = deps.launcher || require('../.github/scripts/launch-cursor-agent');
@@ -148,8 +170,11 @@ async function launchIssue({ owner, repo, issue, token, apiKey, method = 'PR', s
     { number: issue.number, url: issue.html_url, title: issue.title, body: issue.body || '', labels },
     repoUrl,
   );
-  const extra = stage ? STAGE_PROMPTS[stage] : METHOD_PROMPTS[method];
-  const promptText = [payloadLib.buildAgentPrompt(payload), extra || ''].filter(Boolean).join('\n\n');
+  const extra = stage ? fillPrompt(STAGE_PROMPTS[stage], { number: issue.number, mergeSha }) : METHOD_PROMPTS[method];
+  const scopeNote = scopeRelaunchSha
+    ? `This run continues the existing programme after an acceptance scope fail for merge ${scopeRelaunchSha}. It must not open a second plan or a second integration branch.`
+    : '';
+  const promptText = [payloadLib.buildAgentPrompt(payload), extra || '', scopeNote].filter(Boolean).join('\n\n');
   const mark = stage ? async () => {} : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
 
   await mark(['busy'], []);
