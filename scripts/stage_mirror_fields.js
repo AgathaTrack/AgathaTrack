@@ -40,23 +40,40 @@ function loadOrgStageFieldFromEnv() {
   return { id, options, name: STAGE_FIELD_NAME };
 }
 
-async function loadOrgStageField({ org, token }) {
-  const fromEnv = loadOrgStageFieldFromEnv();
-  if (fromEnv) {
-    return fromEnv;
+/**
+ * Read the org Stage field. The real option list is read first, so a missing or renamed option fails
+ * at start-up. Only when that read is refused (the projects PAT has no org issue-field read, see
+ * #2375) does it fall back to the id in STAGE_ISSUE_FIELD_ID with the static option list, and that
+ * fallback logs a warning every run: the options are then unverified.
+ */
+async function loadOrgStageField({ org, token, warn = console.warn }) {
+  const envId = loadOrgStageFieldFromEnv()?.id ?? null;
+  let fields;
+  try {
+    fields = await rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token);
+  } catch (err) {
+    if (!envId) {
+      throw err;
+    }
+    warn(
+      `[warn] org Stage options not verified (${err.message}); using STAGE_ISSUE_FIELD_ID and the static option list`,
+    );
+    return { id: envId, options: stageOrgFieldOptions(), name: STAGE_FIELD_NAME, optionsVerified: false };
   }
-  const fields = await rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token);
   const stage = (fields || []).find(
     (field) => field?.name?.toLowerCase() === STAGE_FIELD_NAME.toLowerCase(),
   );
   if (!stage?.id) {
     throw new Error(`Org issue field "${STAGE_FIELD_NAME}" not found for ${org}`);
   }
+  if (envId && Number(stage.id) !== envId) {
+    throw new Error(`STAGE_ISSUE_FIELD_ID=${envId} does not match org Stage field id ${stage.id}`);
+  }
   const options = (stage.options || []).map((option) => option.name).filter(Boolean);
   if (options.length === 0) {
     throw new Error(`Org issue field "${STAGE_FIELD_NAME}" has no options`);
   }
-  return { id: Number(stage.id), options, name: stage.name };
+  return { id: Number(stage.id), options, name: stage.name, optionsVerified: true };
 }
 
 async function fetchIssueStage(owner, repo, issueNumber, token, stageFieldId) {

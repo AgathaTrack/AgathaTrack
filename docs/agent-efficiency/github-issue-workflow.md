@@ -386,6 +386,10 @@ Reconcile uses project **Synced stage** (hidden text field) as the last-applied 
 
 A cleared `Stage` is restored from the board column (board wins). A card with no `Status` takes its column from a valid `Stage`; with neither, or an invalid `Stage`, the item is skipped, so one empty item never ends the run.
 
+**Write order and failures.** Each item writes its target first (the org `Stage` field, or the board column) and the synced value **last**. If the target write fails, the synced value is unchanged and the next pass retries the same change; a failure never reverts a human edit. Each item runs on its own: a failing item is logged as `[error] <repo>#<number>` (no title), the rest of the board is still mirrored, and the run then exits non-zero so the failure is visible in Actions.
+
+**Option check.** The mirror reads the real option list of the org `Stage` field at start-up and fails loud on a mismatch with the board columns. If the projects PAT cannot read org issue fields, it falls back to `STAGE_ISSUE_FIELD_ID` and the static list in `stage_mirror_config.js` and logs `[warn] org Stage options not verified` on every run. Treat that warning as open until the option list is confirmed on the org field.
+
 **Agents:** use the REST/GraphQL issue payload `issue_field_values` / set the org **`Stage`** field when you must move stage without Projects access. Invalid values for that board are reverted on the next mirror pass (board wins). Spec and DoD: issue #2345.
 
 | Secret / variable | Purpose |
