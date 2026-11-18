@@ -126,3 +126,17 @@ test('transitive high chain that reaches a GHSA is not reported as unmapped', ()
   assert.deepEqual([...ghsas], ['GHSA-FC5Q-39XC-VJPF']);
   assert.equal(unmapped.size, 0);
 });
+
+test('zero metadata with an unmapped high in the vulnerabilities map is still reported', () => {
+  const auditJson = {
+    metadata: { vulnerabilities: { high: 0, critical: 0 } },
+    vulnerabilities: {
+      'mystery-pkg': {
+        via: [{ severity: 'high', url: '' }],
+      },
+    },
+  };
+  const { ghsas, unmapped } = walkHighCritical(auditJson);
+  assert.equal(ghsas.size, 0);
+  assert.deepEqual([...unmapped], ['mystery-pkg']);
+});
