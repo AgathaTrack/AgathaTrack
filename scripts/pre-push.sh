@@ -48,7 +48,7 @@ bash scripts/ci/assert-prod-deploy-db-commands.sh
 echo "==> Server (audit + Jest)"
 (
   cd server
-  npm audit --audit-level=high
+  node ../scripts/npm_audit_gate.js --package server
   npm test -- --forceExit
 )
 
