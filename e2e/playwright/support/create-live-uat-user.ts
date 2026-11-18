@@ -6,11 +6,20 @@
  *  1. Signup phase: the email is chosen once and reused on every attempt. `signup` is retried
  *     (up to {@link MAX_ATTEMPTS}) only while it throws. A later attempt that is told the email
  *     already exists means an earlier attempt committed (its response was lost), so we log in
- *     with the same credentials instead of signing up again.
+ *     with the same credentials instead of signing up again. If the very first attempt is told
+ *     the email already exists, it was taken before this call: no attempt of ours can commit it,
+ *     so we never log in to an account this call did not create.
  *  2. Verify phase: once an account exists, only `verify` is retried. The user is returned even
  *     when verification never succeeds (WAF / cold start on `/auth/me`).
  *  3. UI fallback only when every signup attempt failed.
  */
+
+import {
+  DEFAULT_TEST_FIRST_NAME,
+  DEFAULT_TEST_LAST_NAME,
+  DEFAULT_TEST_PASSWORD,
+  generateTestEmail,
+} from './test-user-defaults';
 
 /** Structurally the same as `TestUser` in `./api`; duplicated to avoid importing it. */
 export interface LiveUatUser {
@@ -59,24 +68,25 @@ function errorMessage(err: unknown): string {
 
 /** Same defaults as `signupUser`, resolved once so every attempt uses the same account. */
 function resolveCredentials(overrides: LiveUatOverrides): LiveUatCredentials {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
-    email: overrides.email ?? `e2e-${suffix}@example.com`,
-    password: overrides.password ?? 'E2eTestPass1',
-    firstName: overrides.firstName ?? 'E2E',
-    lastName: overrides.lastName ?? 'User',
+    email: overrides.email ?? generateTestEmail(),
+    password: overrides.password ?? DEFAULT_TEST_PASSWORD,
+    firstName: overrides.firstName ?? DEFAULT_TEST_FIRST_NAME,
+    lastName: overrides.lastName ?? DEFAULT_TEST_LAST_NAME,
   };
 }
 
 async function signupPhase(creds: LiveUatCredentials, deps: LiveUatDeps): Promise<LiveUatUser | null> {
   const warn = deps.warn ?? (() => {});
+  // Set when attempt 1 is told the email already exists: the account predates this call.
+  let takenBeforeCall = false;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       return await deps.signup(creds);
     } catch (err) {
       warn(`[createTestUser] signup attempt ${attempt}/${MAX_ATTEMPTS} failed: ${errorMessage(err)}`);
-      // On attempt 1 a duplicate means the (caller-supplied) email was already taken: a failure.
-      if (attempt > 1 && isDuplicateEmailError(err)) {
+      if (attempt === 1 && isDuplicateEmailError(err)) takenBeforeCall = true;
+      if (attempt > 1 && !takenBeforeCall && isDuplicateEmailError(err)) {
         try {
           return await deps.login(creds);
         } catch (loginErr) {

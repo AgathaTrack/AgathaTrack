@@ -12,6 +12,12 @@ import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { apiFetch } from './api-fetch';
 import { defaultCareFamilyForLegacyType } from './careTaxonomy';
+import {
+  DEFAULT_TEST_FIRST_NAME,
+  DEFAULT_TEST_LAST_NAME,
+  DEFAULT_TEST_PASSWORD,
+  generateTestEmail,
+} from './test-user-defaults';
 
 const API_PREFIX = process.env.E2E_API_PREFIX ?? '/backend/api';
 
@@ -104,11 +110,10 @@ export async function signupUser(
     lastName: string;
   }> = {},
 ): Promise<TestUser> {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const email = overrides.email ?? `e2e-${suffix}@example.com`;
-  const password = overrides.password ?? 'E2eTestPass1';
-  const firstName = overrides.firstName ?? 'E2E';
-  const lastName = overrides.lastName ?? 'User';
+  const email = overrides.email ?? generateTestEmail();
+  const password = overrides.password ?? DEFAULT_TEST_PASSWORD;
+  const firstName = overrides.firstName ?? DEFAULT_TEST_FIRST_NAME;
+  const lastName = overrides.lastName ?? DEFAULT_TEST_LAST_NAME;
 
   const res = await apiFetch(apiUrl('/auth/signup', baseURL), {
     method: 'POST',

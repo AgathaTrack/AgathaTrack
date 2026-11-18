@@ -224,15 +224,17 @@ function parsePrNumber(ref) {
 }
 
 /**
- * Owner/repo/number embedded in a pull or issue URL. Null for a bare number
- * or a branch name, which stay scoped to this checkout.
+ * Owner/repo/number embedded in a pull or issue URL. The scheme is optional:
+ * `github.com/o/r/pull/1` must parse like `https://github.com/o/r/pull/1`, or
+ * a foreign ref without a scheme would reach the label API as a bare number.
+ * Null for a bare number or a branch name, which stay scoped to this checkout.
  * @param {string|number|null|undefined} ref
  * @returns {{ owner: string, repo: string, number: string }|null}
  */
 function parsePrUrlRepo(ref) {
   const text = String(ref ?? '').trim();
   const match = text.match(
-    /^[a-z][a-z0-9+.-]*:\/\/[^/\s]+\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/(?:pull|issues)\/(\d+)(?:[/?#]|$)/i,
+    /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:[^/\s]+\/)?([^/\s]+)\/([^/\s]+?)(?:\.git)?\/(?:pull|issues)\/(\d+)(?:[/?#]|$)/i,
   );
   if (!match) {
     return null;
