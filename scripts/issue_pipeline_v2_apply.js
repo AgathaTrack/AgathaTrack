@@ -8,7 +8,7 @@
  */
 
 const { rest } = require('../.github/scripts/github-project-lib');
-const { agentLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent } = require('./issue_pipeline_v2_config');
 const { buildIssueFieldPatch, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
 const { buildReviewRequest } = require('./issue_pipeline_v2_review');
@@ -41,10 +41,14 @@ function buildWrites({ action, parsed }) {
  * The doorbell: ring one agent by assigning it. Humans on the issue stay assigned, other agents
  * do not, so exactly one agent holds the turn. The assignee is a notification; no decision reads it.
  */
-function doorbellAssignees(current, agent, config) {
-  const agents = new Set(agentLogins(config));
-  const humans = (current || []).filter((login) => !agents.has(login));
-  return [...humans, agent];
+function doorbellAssignees(current, agentId, config) {
+  const poolActsAs = new Set(agentLogins(config));
+  const poolIds = new Set((config.agents || []).map((entry) => entry.id || entry.login).filter(Boolean));
+  const humans = (current || []).filter(
+    (login) => !poolActsAs.has(login) && !poolIds.has(login),
+  );
+  const actsAs = resolveAgent(config, agentId)?.actsAs || agentId;
+  return [...humans, actsAs];
 }
 
 function issuePath({ owner, repo, issueNumber }) {
@@ -86,7 +90,7 @@ async function applyAction({ action: decided, ctx }) {
     // Doorbell: an agent the engine can start is also launched for the spec or review it was asked to do.
     // A failed ring never fails the tick; the pickup timeout reassigns if nobody answers.
     const ring = async (agent, stage) => {
-      const entry = (ctx.config.agents || []).find((candidate) => candidate.login === agent);
+      const entry = resolveAgent(ctx.config, agent);
       if (!entry || !(ctx.config.launchRunners || []).includes(entry.runner) || !['To do', 'In analysis', 'In Main'].includes(stage)) {
         return;
       }
@@ -103,13 +107,13 @@ async function applyAction({ action: decided, ctx }) {
 
     switch (action.type) {
       case 'request-spec':
-        await comment(buildSpecRequest({ assigned: action.agent }), 'comment:spec-request');
+        await comment(buildSpecRequest({ assigned: action.agent, config: ctx.config }), 'comment:spec-request');
         await assign(action.agent);
         await ring(action.agent, 'To do');
         break;
       case 'request-review':
         await comment(
-          buildReviewRequest({ hash: action.hash, assigned: action.agent }),
+          buildReviewRequest({ hash: action.hash, assigned: action.agent, config: ctx.config }),
           'comment:review-request',
         );
         await assign(action.agent);
@@ -120,15 +124,23 @@ async function applyAction({ action: decided, ctx }) {
         const held = inReview ? ctx.facts.review : ctx.facts.spec;
         const history = [...new Set([...(held?.timedOut || []), ...(held?.assignedTo ? [held.assignedTo] : [])])];
         const body = inReview
-          ? buildReviewRequest({ hash: ctx.facts.review.requestedHash, assigned: action.agent, history })
-          : buildSpecRequest({ assigned: action.agent, history });
+          ? buildReviewRequest({
+              hash: ctx.facts.review.requestedHash,
+              assigned: action.agent,
+              history,
+              config: ctx.config,
+            })
+          : buildSpecRequest({ assigned: action.agent, history, config: ctx.config });
         await editComment(held.commentId, body, `edit:${inReview ? 'review' : 'spec'}-request`);
         await assign(action.agent);
         await ring(action.agent, action.stage);
         break;
       }
       case 'wake-stage-agent':
-        await comment(buildWake({ commentId: action.commentId, agent: action.agent }), 'comment:wake');
+        await comment(
+          buildWake({ commentId: action.commentId, agent: action.agent, config: ctx.config }),
+          'comment:wake',
+        );
         await assign(action.agent);
         await ring(action.agent, ctx.facts.stage);
         break;
@@ -164,6 +176,7 @@ async function applyAction({ action: decided, ctx }) {
             issueNumber: ctx.issueNumber,
             prNumbers: ctx.facts.delivery?.mergedPrNumbers,
             mergeSha: ctx.facts.delivery?.lastMergeSha,
+            config: ctx.config,
           }),
           'comment:intent-review',
         );
