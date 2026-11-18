@@ -9,7 +9,7 @@
  * `v2:aat-launch` for that sha, and a fail names reason=scope|implementation|quality.
  */
 
-const { launchableAgents, selfStartingLogins } = require('./issue_pipeline_v2_config');
+const { agentActsAs, launchableAgents, startableIds } = require('./issue_pipeline_v2_config');
 
 const FAIL_REASONS = new Set(['scope', 'implementation', 'quality']);
 const MIN = 60 * 1000;
@@ -147,8 +147,8 @@ function pickAgent(candidates, facts) {
 
 function acceptancePool(facts, config) {
   const authors = new Set(facts.prAuthors || []);
-  const startable = selfStartingLogins(config);
-  const independent = startable.filter((login) => !authors.has(login));
+  const startable = startableIds(config);
+  const independent = startable.filter((id) => !authors.has(agentActsAs(config, id)));
   return independent.length > 0 ? independent : startable;
 }
 
@@ -377,6 +377,19 @@ function buildAatRelaunch({ mergeSha, failed }) {
  * Open issues whose trimmed body starts with this issue's follow-up marker.
  * Search text is the marker words, not the comment wrapper. Pages are followed.
  */
+async function loadImplementationFollowUps({ owner, repo, issueNumber, token, restFn, log = console.log }) {
+  try {
+    return { openFollowUps: await countOpenFollowUps({ owner, repo, issueNumber, token, restFn }) };
+  } catch (error) {
+    log(JSON.stringify({
+      event: 'aat.implementation-search-error',
+      issue: issueNumber,
+      message: error?.message ?? String(error),
+    }));
+    return { implementationSearchError: true };
+  }
+}
+
 async function countOpenFollowUps({ owner, repo, issueNumber, token, restFn }) {
   const marker = `<!-- v2:follow-up of=#${issueNumber} -->`;
   const q = `repo:${owner}/${repo} is:issue is:open in:body "v2:follow-up of=#${issueNumber}"`;
@@ -408,6 +421,7 @@ module.exports = {
   acceptanceInProgress,
   implementationFailActive,
   countOpenFollowUps,
+  loadImplementationFollowUps,
   buildAatLaunch,
   buildAatReset,
   buildAatWaive,

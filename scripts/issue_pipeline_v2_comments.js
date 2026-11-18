@@ -1,7 +1,8 @@
 'use strict';
 
 const { rest } = require('../.github/scripts/github-project-lib');
-const { agentLogins } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent, isSharedActsAs, entryActsAs } = require('./issue_pipeline_v2_config');
+const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const SPEC_REQUEST = 'v2:spec-request';
 const WRITE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
@@ -10,12 +11,15 @@ const WRITE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
  * The engine's "spec requested" comment. The marker carries the current assignee and the agents
  * already tried, so a reassignment is an edit of the same comment and the history survives.
  */
-function buildSpecRequest({ assigned, history = [] }) {
+function buildSpecRequest({ assigned, history = [], config }) {
+  const entry = config ? resolveAgent(config, assigned) : null;
+  const id = entry?.id || assigned;
+  const mention = entry?.actsAs || assigned;
   return [
-    `<!-- ${SPEC_REQUEST} assigned=${assigned} history=${history.join(',')} -->`,
+    `<!-- ${SPEC_REQUEST} assigned=${id} history=${history.join(',')} -->`,
     '## Spec requested',
     '',
-    `@${assigned}: draft the missing sections, then check the Definition of Ready ` +
+    `@${mention}: draft the missing sections, then check the Definition of Ready ` +
       '(`.cursor/skills/spec-agent/SKILL.md`). React 👍 on this comment when it passes; ' +
       'if you need the owner, post one consolidated question and set `Blocked=question`.',
   ].join('\n');
@@ -63,24 +67,63 @@ function findSpecRequest(comments, engineLogins, editors = {}) {
  * Spec facts for `decide()`. `reactions` are the reactions on the request comment; only a 👍
  * from a listed agent created after the request counts as the DoR pass.
  */
-function deriveSpecFacts({ comments, reactions, config, engineLogins, editors }) {
+function deriveSpecFacts({
+  comments,
+  reactions,
+  config,
+  engineLogins,
+  editors,
+  issueNumber,
+  bodyHash,
+  voteKey,
+  limits,
+  now,
+}) {
   const request = findSpecRequest(comments, engineLogins, editors);
   if (!request) {
     return {};
   }
-  const agents = new Set(agentLogins(config));
   const since = Date.parse(request.comment.created_at);
-  const passed = (reactions || []).find(
-    (reaction) =>
-      reaction.content === '+1' &&
-      agents.has(reaction.user?.login) &&
-      Date.parse(reaction.created_at) >= since,
-  );
+  const assignedTo = resolveAgent(config, request.assigned)?.id || request.assigned;
+  const timedOut = (request.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
+  let passedBy = null;
+  const assignedEntry = resolveAgent(config, request.assigned);
+  const assignedActsAs = assignedEntry ? entryActsAs(assignedEntry) : request.assigned;
+  const assigneeNeedsSigned = isSharedActsAs(config, assignedActsAs);
+  if (assigneeNeedsSigned && !voteKey) {
+    passedBy = null;
+  } else if (assigneeNeedsSigned && voteKey && bodyHash && issueNumber) {
+    const specUp = findVerifiedVerdicts({
+      comments,
+      config,
+      engineLogins,
+      issueNumber,
+      bodyHash,
+      voteKey,
+      limits,
+      now,
+      kinds: ['spec'],
+      sinceMs: since,
+    }).filter((verdict) => verdict.value === 'up');
+    if (specUp.length > 0) {
+      passedBy = specUp.at(-1).actsAs;
+    }
+  } else {
+    const agents = new Set(agentLogins(config));
+    const passed = (reactions || []).find(
+      (reaction) =>
+        reaction.content === '+1' &&
+        agents.has(reaction.user?.login) &&
+        !isSharedActsAs(config, reaction.user?.login) &&
+        Date.parse(reaction.created_at) >= since,
+    );
+    passedBy = passed ? passed.user.login : null;
+  }
   return {
     requestedAt: Date.parse(request.comment.updated_at || request.comment.created_at),
-    assignedTo: request.assigned,
-    timedOut: request.history,
-    passedBy: passed ? passed.user.login : null,
+    assignedTo,
+    timedOut,
+    passedBy,
     commentId: request.comment.id,
   };
 }
@@ -120,10 +163,11 @@ function latestHumanComment(comments, config) {
 const WAKE = 'v2:wake';
 
 /** The engine's "wake" note; the marker records which human comment it answered. */
-function buildWake({ commentId, agent }) {
+function buildWake({ commentId, agent, config }) {
+  const mention = config ? resolveAgent(config, agent)?.actsAs || agent : agent;
   return [
     `<!-- ${WAKE} comment=${commentId} -->`,
-    `@${agent}: the owner or a maintainer replied above. Re-read the issue and continue; you may clear \`Blocked\` once you have what you need.`,
+    `@${mention}: the owner or a maintainer replied above. Re-read the issue and continue; you may clear \`Blocked\` once you have what you need.`,
   ].join('\n');
 }
 

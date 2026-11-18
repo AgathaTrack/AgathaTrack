@@ -99,7 +99,7 @@ test('deploy lookup: the newest successful run of the deploy workflow, never env
 test('resume: one agent restart is recorded even when it fails; no launchable agent stalls', async () => {
   const facts = { mode: 'on', onBoard: true, stage: 'In progress', now: 1e12, deliveryMethod: 'PR', delivery: { busy: false, engineLaunched: true } };
   const action = decide(facts, config);
-  assert.deepEqual([action.type, action.agent], ['resume', 'pawpet-bot']);
+  assert.deepEqual([action.type, action.agent], ['resume', 'cursor-a']);
   assert.equal(decide({ ...facts, deliveryMethod: 'carrier' }, config).type, 'set-blocked');
   const sent = [];
   const ctx = (launchFn) => ({
@@ -107,7 +107,7 @@ test('resume: one agent restart is recorded even when it fails; no launchable ag
     launchFn, restFn: async (method, path, token, body) => { sent.push(body); return {}; },
   });
   await applyAction({ action, ctx: ctx(async () => ({})) });
-  assert.match(sent[0].body, /v2:resume agent=pawpet-bot ok=1/);
+  assert.match(sent[0].body, /v2:resume agent=cursor-a ok=1/);
   await applyAction({ action, ctx: ctx(async () => { throw new Error('down'); }) });
   assert.match(sent[1].body, /ok=0/);
   assert.match(buildResume({ agent: 'a', ok: true }), /ok=1/);
@@ -145,8 +145,8 @@ const { buildIntentReviewRequest, parseFollowUp, followUpDepth } = require('./is
 const merged = (mergeSha, mergedAt) => ({ number: 1, state: 'closed', merged: true, mergedAt, mergeSha, base: 'main', author: 'a', updatedAt: mergedAt });
 
 test('intent review: the request carries the marker the delivery facts read back', () => {
-  const body = buildIntentReviewRequest({ agent: 'pawpet-claude', issueNumber: 5, prNumbers: [11, 12], mergeSha: 'abc' });
-  assert.match(body, /v2:intent-review agent=pawpet-claude merge=abc/);
+  const body = buildIntentReviewRequest({ agent: 'claude-a', issueNumber: 5, prNumbers: [11, 12], mergeSha: 'abc' });
+  assert.match(body, /v2:intent-review agent=claude-a merge=abc/);
   assert.match(body, /#11, #12/);
   assert.match(body, /v2:follow-up of=#5/);
   const facts = deriveDeliveryFacts({
@@ -164,14 +164,15 @@ test('intent review: the request carries the marker the delivery facts read back
 test('intent review: apply posts the request and rings the agent', async () => {
   const sent = [];
   await applyAction({
-    action: { type: 'request-intent-review', agent: 'pawpet-claude' },
+    action: { type: 'request-intent-review', agent: 'claude-a' },
     ctx: {
       owner: 'o', repo: 'r', issueNumber: 5, token: 'p', config, fields: {}, parsed: {}, assignees: ['human'], counters: {},
-      facts: { delivery: { mergedPrNumbers: [11] } }, dryRun: false,
+      facts: { delivery: { mergedPrNumbers: [11] }, stage: 'In Main' }, dryRun: false,
+      launchFn: async () => ({ runId: 'r' }),
       restFn: async (method, path, token, body) => { sent.push({ path, body }); return {}; },
     },
   });
-  assert.match(sent[0].body.body, /v2:intent-review agent=pawpet-claude/);
+  assert.match(sent[0].body.body, /v2:intent-review agent=claude-a/);
   assert.deepEqual(sent[1].body.assignees, ['human', 'pawpet-claude']);
 });
 
@@ -232,7 +233,11 @@ test('runner: startable agents alternate within a tick, and a scope label limits
       },
     });
     await run('');
-    assert.deepEqual(seen.map((s) => s[1]), ['pawpet-bot', 'pawpet-claude', 'pawpet-bot'], 'least recently used alternates');
+    assert.deepEqual(
+      seen.map((s) => s[1]),
+      ['cursor-a', 'cursor-b', 'claude-a'],
+      'least recently used alternates across startable ids',
+    );
     assert.deepEqual(seen.map((s) => s[2]), [false, false, false]);
     seen.length = 0;
     await run('pipeline-beta');
