@@ -89,6 +89,42 @@ describe('findTopLevelSqlTransactionViolations: string, comment and identifier f
   });
 });
 
+describe('findTopLevelSqlTransactionViolations: block comments', () => {
+  // Quotes and `$` inside `/* … */` are comment text. Before the block-comment state, an apostrophe
+  // opened a string that hid the following COMMIT from lint (regression found in AAT for #2116).
+  const blockCases = [
+    ["an apostrophe in a block comment", "/* don't */\nCOMMIT;\n", [{ line: 2, kind: 'COMMIT' }]],
+    ["`$$` in a block comment", "/* $$ */\nCOMMIT;\n", [{ line: 2, kind: 'COMMIT' }]],
+    ["a double quote in a block comment", '/* "x */\nCOMMIT;\n', [{ line: 2, kind: 'COMMIT' }]],
+    ["a multi-line block comment with an apostrophe", "/* a\n  don't\n*/\nCOMMIT;\n", [{ line: 4, kind: 'COMMIT' }]],
+    ["a nested block comment", "/* a /* b */ 'c */\nCOMMIT;\n", [{ line: 2, kind: 'COMMIT' }]],
+    ["`/*` inside a single-quoted string", "SELECT '/*';\nCOMMIT;\n", [{ line: 2, kind: 'COMMIT' }]],
+    ["`/*` after a line comment", '-- /*\nCOMMIT;\n', [{ line: 2, kind: 'COMMIT' }]],
+    ["a block comment mid statement", 'SELECT 1 /* c */;\nCOMMIT;\n', [{ line: 2, kind: 'COMMIT' }]],
+    ["a wrapper that follows a block comment on its line", '/* x */ COMMIT;\n', [{ line: 1, kind: 'COMMIT' }]],
+  ];
+
+  it.each(blockCases)('%s', (_name, sql, expected) => {
+    expect(findTopLevelSqlTransactionViolations(sql)).toEqual(expected);
+  });
+
+  it('does not close a nested block comment at the first `*/`', () => {
+    expect(
+      findTopLevelSqlTransactionViolations('/* outer /* inner */ still open\nCOMMIT;\n*/\nSELECT 1;\n'),
+    ).toEqual([]);
+  });
+
+  it('strips a whole-line wrapper that follows a block comment line', () => {
+    expect(
+      stripTopLevelSqlTransactionWrappers("/* don't */\nCREATE TABLE t (id int);\nCOMMIT;\n"),
+    ).toBe("/* don't */\nCREATE TABLE t (id int);");
+  });
+
+  it('reports but never strips a wrapper that shares a line with a block comment', () => {
+    expect(stripTopLevelSqlTransactionWrappers('/* x */ COMMIT;\n')).toBe('/* x */ COMMIT;');
+  });
+});
+
 describe('findTopLevelSqlTransactionViolations: dollar quotes', () => {
   it('allows BEGIN/COMMIT inside a DO block', () => {
     const sql = 'DO $$\nBEGIN\n  PERFORM 1;\n  COMMIT;\nEND $$;\n';

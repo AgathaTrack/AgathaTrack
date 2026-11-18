@@ -23,15 +23,23 @@ const DOLLAR_QUOTE_OPEN = /\$(?:[\p{L}_][\p{L}\p{N}_]*)?\$/uy;
 
 /**
  * Lexer state carried across lines. `mode` is one of
- * `normal`, `single` (string literal), `double` (quoted identifier) or `dollar`;
- * line comments end with their line so they need no carried state.
+ * `normal`, `single` (string literal), `double` (quoted identifier), `dollar` or `block`
+ * (`/* … *\/`, nested as PostgreSQL nests them); line comments end with their line so they
+ * need no carried state. `blockResumesStart` records whether a block that opened at a statement
+ * start (`/* … *\/ COMMIT;`) must hand the statement start back when it closes.
  *
- * @typedef {{ mode: 'normal'|'single'|'double'|'dollar', dollarTag: string|null, backslashEscapes: boolean }} MigrationSqlLexState
+ * @typedef {{ mode: 'normal'|'single'|'double'|'dollar'|'block', dollarTag: string|null, backslashEscapes: boolean, blockDepth: number, blockResumesStart: boolean }} MigrationSqlLexState
  */
 
 /** @returns {MigrationSqlLexState} */
 function initialLexState() {
-  return { mode: 'normal', dollarTag: null, backslashEscapes: false };
+  return {
+    mode: 'normal',
+    dollarTag: null,
+    backslashEscapes: false,
+    blockDepth: 0,
+    blockResumesStart: false,
+  };
 }
 
 /**
@@ -45,8 +53,8 @@ function opensEscapeString(line, index) {
 }
 
 /**
- * Scan one line with the five-state tokenizer (normal, single-quoted, double-quoted identifier,
- * line comment, dollar quote). A statement starts at the beginning of a line that opens in the
+ * Scan one line with the six-state tokenizer (normal, single-quoted, double-quoted identifier,
+ * line comment, dollar quote, block comment). A statement starts at the beginning of a line that opens in the
  * normal state and after every `;` in the normal state; a statement that is a
  * `BEGIN`/`COMMIT`/… wrapper is a violation.
  *
@@ -59,7 +67,7 @@ function opensEscapeString(line, index) {
  * @returns {{ state: MigrationSqlLexState, omitLine: boolean, violations: MigrationSqlTransactionViolation[] }}
  */
 function classifyMigrationSqlLine(line, state) {
-  let { mode, dollarTag, backslashEscapes } = state;
+  let { mode, dollarTag, backslashEscapes, blockDepth, blockResumesStart } = state;
   let omitLine = false;
   const violations = [];
   let atStatementStart = mode === 'normal';
@@ -72,6 +80,23 @@ function classifyMigrationSqlLine(line, state) {
       i = closeIdx + dollarTag.length;
       mode = 'normal';
       dollarTag = null;
+      continue;
+    }
+
+    if (mode === 'block') {
+      if (line[i] === '/' && line[i + 1] === '*') {
+        blockDepth += 1;
+        i += 2;
+      } else if (line[i] === '*' && line[i + 1] === '/') {
+        blockDepth -= 1;
+        i += 2;
+        if (blockDepth === 0) {
+          mode = 'normal';
+          atStatementStart = blockResumesStart;
+        }
+      } else {
+        i += 1;
+      }
       continue;
     }
 
@@ -108,8 +133,16 @@ function classifyMigrationSqlLine(line, state) {
 
     // normal state
     if (atStatementStart) {
-      atStatementStart = false;
       while (i < line.length && /\s/.test(line[i])) i += 1;
+      if (line.startsWith('/*', i)) {
+        // A leading block comment does not start the statement: keep the statement start pending.
+        mode = 'block';
+        blockDepth = 1;
+        blockResumesStart = true;
+        i += 2;
+        continue;
+      }
+      atStatementStart = false;
       const match = TX_STATEMENT.exec(line.slice(i));
       if (match) {
         violations.push({ line: 0, kind: match[1].split(/\s/)[0].toUpperCase() });
@@ -126,6 +159,13 @@ function classifyMigrationSqlLine(line, state) {
 
     const ch = line[i];
     if (ch === '-' && line[i + 1] === '-') break;
+    if (ch === '/' && line[i + 1] === '*') {
+      mode = 'block';
+      blockDepth = 1;
+      blockResumesStart = false;
+      i += 2;
+      continue;
+    }
     if (ch === "'") {
       backslashEscapes = opensEscapeString(line, i);
       mode = 'single';
@@ -146,7 +186,11 @@ function classifyMigrationSqlLine(line, state) {
     i += 1;
   }
 
-  return { state: { mode, dollarTag, backslashEscapes }, omitLine, violations };
+  return {
+    state: { mode, dollarTag, backslashEscapes, blockDepth, blockResumesStart },
+    omitLine,
+    violations,
+  };
 }
 
 /**

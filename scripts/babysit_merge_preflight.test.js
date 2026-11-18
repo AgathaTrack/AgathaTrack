@@ -14,6 +14,7 @@ const {
   leaseLabelApiArgs,
   MERGE_LEASE_LABEL,
   parsePrNumber,
+  parsePrUrlRepo,
   prRefCheckoutMismatch,
 } = require('./lib/babysit_merge_preflight_lib.js');
 
@@ -232,5 +233,85 @@ assert.equal(
 );
 assert.throws(() => leaseLabelApiArgs('https://github.com/x/y/pull/1', 'add'));
 assert.throws(() => leaseLabelApiArgs(1, 'rename'));
+
+// Scheme-less foreign refs must be refused too (#2188 follow-up).
+for (const ref of [
+  'github.com/other/repo/pull/123',
+  'www.github.com/other/repo/pull/123',
+  'other/repo/pull/123',
+  'https://github.com/other/repo/pull/123/',
+]) {
+  assert.notEqual(
+    prRefCheckoutMismatch(ref, CHECKOUT),
+    null,
+    `foreign ref must be refused: ${ref}`,
+  );
+}
+assert.equal(
+  prRefCheckoutMismatch('github.com/AgathaTrack/AgathaTrack/pull/2303', CHECKOUT),
+  null,
+);
+assert.deepEqual(parsePrUrlRepo('github.com/o/r/issues/7'), {
+  owner: 'o',
+  repo: 'r',
+  number: '7',
+});
+assert.equal(parsePrUrlRepo('cursor/some-head'), null);
+assert.equal(parsePrUrlRepo('2303'), null);
+
+// main() with a fake gh on PATH: a foreign ref must exit 3 before any `gh api`
+// call (no label mutation), and a same-repo ref must reach the labels API.
+{
+  const { spawnSync } = require('node:child_process');
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'babysit-fake-gh-'));
+  const log = path.join(dir, 'gh.log');
+  fs.writeFileSync(
+    path.join(dir, 'gh'),
+    [
+      '#!/bin/sh',
+      `echo "$@" >> "${log}"`,
+      'if [ "$1" = repo ]; then echo \'{"nameWithOwner":"AgathaTrack/AgathaTrack"}\'; fi',
+      'exit 0',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  const script = path.join(__dirname, 'babysit_merge_preflight.mjs');
+  const run = (ref) =>
+    spawnSync(process.execPath, [script, '--release', '--pr', ref], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}` },
+    });
+  const calls = () =>
+    fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) : [];
+
+  for (const ref of [
+    'github.com/other/repo/pull/123',
+    'https://github.com/other/repo/pull/123',
+  ]) {
+    fs.rmSync(log, { force: true });
+    const result = run(ref);
+    assert.equal(result.status, 3, `foreign ref must exit 3: ${ref}\n${result.stderr}`);
+    assert.equal(
+      calls().some((line) => line.startsWith('api ')),
+      false,
+      `foreign ref must not reach the labels API: ${ref}`,
+    );
+  }
+
+  fs.rmSync(log, { force: true });
+  const same = run('github.com/AgathaTrack/AgathaTrack/pull/5');
+  assert.equal(same.status, 0, `same-repo ref must release: ${same.stderr}`);
+  assert.ok(
+    calls().includes(
+      'api --method DELETE repos/{owner}/{repo}/issues/5/labels/merge-lease',
+    ),
+    `same-repo ref must DELETE the lease label on #5; calls=${calls()}`,
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+}
 
 console.log('babysit_merge_preflight.test.js: ok');
