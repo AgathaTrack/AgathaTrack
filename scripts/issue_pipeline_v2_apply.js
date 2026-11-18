@@ -9,7 +9,7 @@
 
 const { rest } = require('../.github/scripts/github-project-lib');
 const { agentLogins } = require('./issue_pipeline_v2_config');
-const { buildIssueFieldPatch } = require('./issue_pipeline_v2_fields');
+const { buildIssueFieldPatch, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
 const { buildReviewRequest } = require('./issue_pipeline_v2_review');
 const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
@@ -210,7 +210,12 @@ async function applyAction({ action: decided, ctx }) {
     const writes = buildWrites({ action, parsed: ctx.parsed });
     const patch = {};
     if (Object.keys(writes).length > 0) {
-      patch.issue_field_values = buildIssueFieldPatch(ctx.fields, writes, ctx.parsed);
+      let parsedForPatch = ctx.parsed;
+      if (!ctx.dryRun) {
+        const issue = await request('GET', base);
+        parsedForPatch = parseIssueFields(issue, ctx.fields);
+      }
+      patch.issue_field_values = buildIssueFieldPatch(ctx.fields, writes, parsedForPatch);
     }
     if (action.type === 'set-stage' && action.close) {
       patch.state = 'closed';

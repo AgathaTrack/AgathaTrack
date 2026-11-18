@@ -26,9 +26,34 @@ function ctx(extra = {}) {
   };
 }
 
-function recorder() {
+function issueFromParsed(parsed = {}) {
+  const issue_field_values = [];
+  if (parsed.stage) {
+    issue_field_values.push({ field_id: fields.stage.id, single_select_option: { name: parsed.stage } });
+  }
+  if (parsed.blocked) {
+    issue_field_values.push({ field_id: fields.blocked.id, single_select_option: { name: parsed.blocked } });
+  }
+  if (parsed.attempts) {
+    issue_field_values.push({ field_id: fields.attempts.id, value: parsed.attempts });
+  }
+  return { number: 7, issue_field_values };
+}
+
+function recorder(getIssueSnapshot) {
   const sent = [];
-  return { sent, restFn: async (method, path, token, body) => { sent.push({ method, path, token, body }); return { id: 1 }; } };
+  const issuePath = '/repos/o/r/issues/7';
+  return {
+    sent,
+    restFn: async (method, path, token, body) => {
+      sent.push({ method, path, token, body });
+      if (method === 'GET' && path === issuePath) {
+        const snap = typeof getIssueSnapshot === 'function' ? getIssueSnapshot() : getIssueSnapshot;
+        return issueFromParsed(snap);
+      }
+      return { id: 1 };
+    },
+  };
 }
 
 test('doorbell keeps humans and replaces agents', () => {
@@ -139,8 +164,8 @@ test('set-stage Done writes the field and closes as completed', async () => {
   assert.equal(sent[0].path, '/repos/o/r/issues/7/labels');
   assert.deepEqual(sent[0].body, { labels: ['in-prod'] });
   assert.equal(sent[1].method, 'DELETE');
-  assert.equal(sent[2].body.state, 'closed');
-  assert.equal(sent[2].body.state_reason, 'completed');
+  const patch = sent.find((c) => c.method === 'PATCH' && c.body?.state === 'closed');
+  assert.equal(patch.body.state_reason, 'completed');
 });
 
 test('dry run records the same calls but sends none', async () => {
@@ -176,11 +201,12 @@ test('a launch or reassign write keeps the Stage and Blocked the issue already h
     { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 1 },
     { type: 'reassign', stage: 'Ready', agent: 'pawpet-claude', attempts: 1 },
   ]) {
-    const { sent, restFn } = recorder();
+    const snapshot = { stage: 'Ready', blocked: 'stalled', attempts: 0 };
+    const { sent, restFn } = recorder(snapshot);
     const facts = { spec: { commentId: 55, assignedTo: 'pawpet-bot', timedOut: [] } };
     await applyAction({
       action,
-      ctx: ctx({ restFn, facts, parsed: { stage: 'Ready', blocked: 'stalled', attempts: 0 } }),
+      ctx: ctx({ restFn, facts, parsed: { ...snapshot } }),
     });
     const patch = sent.filter((c) => c.path === '/repos/o/r/issues/7' && c.body?.issue_field_values).at(-1);
     const values = patch.body.issue_field_values;
@@ -197,8 +223,8 @@ test('withCurrentValues: writes win, empty and zero current values are left out'
 });
 
 test('set-stage and set-blocked field patches keep the other values the issue holds', async () => {
-  const { sent, restFn } = recorder();
   const parsed = { stage: 'Ready', blocked: 'stalled', attempts: 3 };
+  const { sent, restFn } = recorder(parsed);
   await applyAction({
     action: { type: 'set-stage', to: 'Done', close: false },
     ctx: ctx({ restFn, parsed: { ...parsed } }),
@@ -211,9 +237,10 @@ test('set-stage and set-blocked field patches keep the other values the issue ho
   assert.equal(values.find((v) => v.field_id === 3).value, 0);
 
   sent.length = 0;
+  const clearedBlocked = { ...parsed, blocked: '' };
   await applyAction({
     action: { type: 'set-blocked', reason: 'stalled' },
-    ctx: ctx({ restFn, parsed: { ...parsed, blocked: '' } }),
+    ctx: ctx({ restFn, parsed: clearedBlocked }),
   });
   patch = sent.filter((c) => c.body?.issue_field_values).at(-1);
   values = patch.body.issue_field_values;
@@ -221,4 +248,22 @@ test('set-stage and set-blocked field patches keep the other values the issue ho
   assert.equal(values.find((v) => v.field_id === 1).value, 'Ready');
   assert.equal(values.find((v) => v.field_id === 2).value, 'stalled');
   assert.equal(values.find((v) => v.field_id === 3).value, 3);
+});
+
+test('field PATCH after launch re-reads the issue instead of the tick-start snapshot', async () => {
+  const tickParsed = { stage: 'Ready', blocked: '', attempts: 0 };
+  const freshParsed = { stage: 'Ready', blocked: 'stalled', attempts: 0 };
+  const { sent, restFn } = recorder(() => freshParsed);
+  await applyAction({
+    action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 1 },
+    ctx: ctx({
+      restFn,
+      parsed: tickParsed,
+      launchFn: async () => ({ runId: 'r1', agentUrl: '' }),
+    }),
+  });
+  const get = sent.find((c) => c.method === 'GET' && c.path === '/repos/o/r/issues/7');
+  assert.ok(get, 're-reads issue before field PATCH');
+  const patch = sent.filter((c) => c.body?.issue_field_values).at(-1);
+  assert.equal(patch.body.issue_field_values.find((v) => v.field_id === 2).value, 'stalled');
 });

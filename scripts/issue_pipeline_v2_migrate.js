@@ -85,8 +85,10 @@ async function run({ owner, repo, projectsPat, projectId, statusFieldId, apply, 
     });
     const entry = { issue: ref.number, from: { stage: parsed.stage, status: row.status, blocked: parsed.blocked }, writes, notes };
     if (Object.keys(writes).length > 0 && apply) {
+      const freshIssue = await getIssue(ref.number);
+      const parsedForWrite = parseIssueFields(freshIssue, fields);
       await (io.writeIssueFields || writeIssueFields)({
-        owner, repo, issueNumber: ref.number, token: projectsPat, fields, writes, parsed, dryRun: false,
+        owner, repo, issueNumber: ref.number, token: projectsPat, fields, writes, parsed: parsedForWrite, dryRun: false,
       });
       entry.applied = true;
     }
