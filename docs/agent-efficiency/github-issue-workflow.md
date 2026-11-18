@@ -329,11 +329,11 @@ Triage already blocks risky issues with `manual-only` before dispatch.
 
 When an agent PR merges to `main`:
 
-1. **[merge handler](../.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets Project status **In Main**, and posts the expected UAT tag (`uat-YYMMDD-PR#`).
+1. **[merge handler](../.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets the org `Stage` field to **In Main** (the board column follows through the stage mirror), and posts the expected UAT tag (`uat-YYMMDD-PR#`).
 2. **[promote-uat.yml](../.github/workflows/promote-uat.yml)** runs on the `main` push, resolves the merged PR, and creates the `uat-YYMMDD-PR#` tag on the merge commit.
 3. Tag push triggers **[deploy-uat.yml](../.github/workflows/deploy-uat.yml)** automatically.
 
-When UAT deploy finishes, the **Notify linked agent issue** job in `deploy-uat.yml` sets **In UAT** (or adds `question` on failure).
+When UAT deploy finishes, the **Notify linked agent issue** job in `deploy-uat.yml` sets the org `Stage` field to **In UAT** (or adds `question` on failure). Prod notify sets `Stage` to **Done**.
 
 An **execute-plan control issue** is not a UAT ticket (title starts with `execute-plan`, including `[execute-plan]`). The merge handler reopens it after an accidental `Closes` at release merge but does **not** set **In Main** or post the UAT-tracking comment; UAT notify skips it. **Light-plan** tracking issues (`light-plan:` title) are UAT-tracked like product issues: release PR `Refs #n`, session ends at Pre-UAT green without closing; merge handler sets **In Main**; UAT notify sets **In UAT**; prod notify sets **Done** and closes (ISSUE-PIPELINE-D-002).
 
