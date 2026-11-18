@@ -178,11 +178,19 @@ void main() {
     );
     expect(download.onPressed, isNull);
     expect(
-      tester.getSemantics(
-        find.bySemanticsIdentifier('away_plan_download_handover'),
-      ),
+      tester.getSemantics(find.byTooltip('Download Report')),
       isSemantics(hasEnabledState: true, isEnabled: false),
     );
+    expect(
+      tester
+          .getSemantics(
+            find.bySemanticsIdentifier('away_plan_download_handover'),
+          )
+          .flagsCollection
+          .isButton,
+      isFalse,
+    );
+    expect(find.byTooltip('Download Report'), findsOneWidget);
     handle.dispose();
   });
 
@@ -272,6 +280,7 @@ void main() {
   testWidgets('active future absence exposes absence_add_pet semantics', (
     tester,
   ) async {
+    final handle = tester.ensureSemantics();
     const futureAbsence = PlannedAbsence(
       id: 'abs-future',
       userId: 'user-1',
@@ -335,5 +344,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.bySemanticsIdentifier('absence_add_pet'), findsOneWidget);
+    expect(
+      tester
+          .getSemantics(find.bySemanticsIdentifier('absence_add_pet'))
+          .flagsCollection
+          .isButton,
+      isFalse,
+    );
+    expect(find.bySemanticsLabel('Add a pet'), findsOneWidget);
+    handle.dispose();
   });
 }

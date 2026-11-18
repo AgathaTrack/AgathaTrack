@@ -203,7 +203,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 Optional **human- or agent-invoked** holistic acceptance on a **parent** issue (or the issue linked from a delivery PR). It does not replace pipeline v2 **intent review** (In Main, non-gating) or the engine path to **Done** after UAT/prod.
 
 1. **Eligibility:** Parent issues only — not bodies with `<!-- v2:follow-up of=#n -->`.
-2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment. **Verdict record:** `<!-- v2:aat verdict=… merge=… -->` on the issue (engine #2424).
+2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment (REST via `github_issue_workflow.js`, not `gh issue edit`). **Token:** `GH_TOKEN` or `PAWPET_CLAUDE_TOKEN` in agent sessions. **Verdict record:** `<!-- v2:aat verdict=… merge=… -->` on the issue (engine #2424).
 3. **INCONCLUSIVE:** `aat-inconclusive` posts the marker and clears progress/pass/fail labels when live verification cannot run (not a product fail).
 4. **Checks:** Original intent and NFRs, code at the merge SHA under test, built Flutter web + single-origin stack, final code review.
 5. **Fail:** Remediation after the verdict — small PR (`Refs #parent`) or P0 follow-up (`v2:follow-up`, Priority field `P0`); engine re-launches AAT when ready. Agents do not close pipeline issues on PASS.
@@ -334,11 +334,11 @@ Triage already blocks risky issues with `manual-only` before dispatch.
 
 When an agent PR merges to `main`:
 
-1. **[merge handler](../.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets Project status **In Main**, and posts the expected UAT tag (`uat-YYMMDD-PR#`).
+1. **[merge handler](../.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets the org `Stage` field to **In Main** (the board column follows through the stage mirror), and posts the expected UAT tag (`uat-YYMMDD-PR#`).
 2. **[promote-uat.yml](../.github/workflows/promote-uat.yml)** runs on the `main` push, resolves the merged PR, and creates the `uat-YYMMDD-PR#` tag on the merge commit.
 3. Tag push triggers **[deploy-uat.yml](../.github/workflows/deploy-uat.yml)** automatically.
 
-When UAT deploy finishes, the **Notify linked agent issue** job in `deploy-uat.yml` sets **In UAT** (or adds `question` on failure).
+When UAT deploy finishes, the **Notify linked agent issue** job in `deploy-uat.yml` sets the org `Stage` field to **In UAT** (or adds `question` on failure). Prod notify walks the Pawpet board but **selects candidates by org `Stage` = In UAT** (not the project `Status` column), then sets `Stage` to **Done** and closes the issue.
 
 An **execute-plan control issue** is not a UAT ticket (title starts with `execute-plan`, including `[execute-plan]`). The merge handler reopens it after an accidental `Closes` at release merge but does **not** set **In Main** or post the UAT-tracking comment; UAT notify skips it. **Light-plan** tracking issues (`light-plan:` title) are UAT-tracked like product issues: release PR `Refs #n`, session ends at Pre-UAT green without closing; merge handler sets **In Main**; UAT notify sets **In UAT**; prod notify sets **Done** and closes (ISSUE-PIPELINE-D-002).
 
@@ -388,6 +388,12 @@ Board columns stay on built-in Project **Status** (humans drag cards; the pipeli
 | `on` | Applies writes |
 
 Reconcile uses project **Synced stage** (hidden text field) as the last-applied value. Triggers: **10-minute** schedule, `issues: edited` on this repo (field changes), and `workflow_dispatch` (`dry_run` input). **ATSupport** (`AgathaTrackPrivate`) is poll-only.
+
+A cleared `Stage` is restored from the board column (board wins). A card with no `Status` takes its column from a valid `Stage`; with neither, or an invalid `Stage`, the item is skipped, so one empty item never ends the run.
+
+**Write order and failures.** Each item writes its target first (the org `Stage` field, or the board column) and the synced value **last**. If the target write fails, the synced value is unchanged and the next pass retries the same change; a failure never reverts a human edit. Each item runs on its own: a failing item is logged as `[error] <repo>#<number>` (no title), the rest of the board is still mirrored, and the run then exits non-zero so the failure is visible in Actions.
+
+**Option check.** The mirror reads the real option list of the org `Stage` field at start-up and fails loud on a mismatch with the board columns. If the projects PAT is refused read access to org issue fields (HTTP 403), it falls back to `STAGE_ISSUE_FIELD_ID` and the static list in `stage_mirror_config.js` and logs `[warn] org Stage options not verified` on every run; other API failures (auth, wrong org, 5xx) fail the run instead of using the static list. Treat the warning as open until the option list is confirmed on the org field.
 
 **Agents:** use the REST/GraphQL issue payload `issue_field_values` / set the org **`Stage`** field when you must move stage without Projects access. Invalid values for that board are reverted on the next mirror pass (board wins). Spec and DoD: issue #2345.
 

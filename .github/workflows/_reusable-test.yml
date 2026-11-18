@@ -192,6 +192,9 @@ jobs:
       - name: Server architecture governance fixtures
         run: node --test scripts/test/architecture-checkers.fixture.test.mjs
 
+      - name: npm audit gate fixtures
+        run: node --test scripts/test/npm_audit_gate.fixture.test.mjs
+
       - name: Backend coverage ratchet (J.1-4)
         working-directory: server
         run: node scripts/check_coverage_ratchet.js

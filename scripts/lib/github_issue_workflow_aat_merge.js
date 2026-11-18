@@ -2,9 +2,10 @@
 
 const { listLinkedPrs } = require('../issue_pipeline_v2_release');
 const { lastMainMergeShaFromLinkedPrs, validateMergeSha } = require('./github_issue_workflow_aat');
+const { resolveToken } = require('./execute_plan_github');
 
 function resolveGhToken(env = process.env) {
-  return env.EXECUTE_PLAN_TOKEN || env.GH_TOKEN || env.GITHUB_TOKEN || null;
+  return resolveToken(null, env);
 }
 
 /**
@@ -18,7 +19,9 @@ async function resolveAatMergeSha(opts) {
     ? opts.token
     : resolveGhToken();
   if (!token) {
-    throw new Error('merge SHA required (--merge) or set GH_TOKEN to resolve from linked PRs');
+    throw new Error(
+      'merge SHA required (--merge) or set GH_TOKEN / PAWPET_CLAUDE_TOKEN to resolve from linked PRs',
+    );
   }
   const listFn = opts.listLinkedPrs || listLinkedPrs;
   const prs = await listFn({

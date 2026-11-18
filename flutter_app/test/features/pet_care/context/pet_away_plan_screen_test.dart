@@ -119,6 +119,7 @@ void main() {
   testWidgets('pet away plan shows carer, notes, and planned care', (
     tester,
   ) async {
+    final handle = tester.ensureSemantics();
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
@@ -136,5 +137,21 @@ void main() {
       find.bySemanticsIdentifier('away_plan_pet_notes_save_pet-1'),
       findsOneWidget,
     );
+    for (final id in [
+      'away_plan_see_absence',
+      'away_plan_pet_notes_save_pet-1',
+    ]) {
+      expect(
+        tester
+            .getSemantics(find.bySemanticsIdentifier(id))
+            .flagsCollection
+            .isButton,
+        isFalse,
+        reason: '$id must not add a second button wrapper',
+      );
+    }
+    expect(find.bySemanticsLabel('See absence'), findsOneWidget);
+    expect(find.bySemanticsLabel('Save'), findsOneWidget);
+    handle.dispose();
   });
 }

@@ -15,7 +15,9 @@ const REVIEW_THREAD_PAGE_CAP = 20;
 const FILE_SHA_CONCURRENCY = 8;
 
 class MissingToken extends Error {
-  constructor(message = 'No GitHub token: set EXECUTE_PLAN_TOKEN, GH_TOKEN or GITHUB_TOKEN') {
+  constructor(
+    message = 'No GitHub token: set EXECUTE_PLAN_TOKEN, GH_TOKEN, PAWPET_CLAUDE_TOKEN, or GITHUB_TOKEN',
+  ) {
     super(message);
     this.name = 'MissingToken';
   }
@@ -47,7 +49,14 @@ class GitHubError extends Error {
 }
 
 function resolveToken(explicit, env = process.env) {
-  return explicit || env.EXECUTE_PLAN_TOKEN || env.GH_TOKEN || env.GITHUB_TOKEN || null;
+  return (
+    explicit ||
+    env.EXECUTE_PLAN_TOKEN ||
+    env.GH_TOKEN ||
+    env.PAWPET_CLAUDE_TOKEN ||
+    env.GITHUB_TOKEN ||
+    null
+  );
 }
 
 function parseNextLink(header) {

@@ -3,7 +3,7 @@ title: Cursor Cloud environment
 owner: Documentation Team
 audience: agent
 status: active
-last_updated: 2026-11-14
+last_updated: 2026-11-18
 tags: [agent, engineering, cursor, environment]
 ---
 
@@ -45,6 +45,14 @@ Full policy: `.cursor/skills/cloud-github-identity/SKILL.md`.
 
 If a Cloud Agent pod reports missing `flutter` or `pg_ctlcluster`, confirm the repo uses Dockerfile mode (no `snapshot`
 field in `.cursor/environment.json`) and rebuild — see below.
+
+## Node scripts that call GitHub (sandbox egress proxy)
+
+Node's built-in `fetch` ignores `HTTPS_PROXY` / `ALL_PROXY` unless `NODE_USE_ENV_PROXY=1` is set at process start, so a
+direct call from a sandbox gets `401 Bad credentials`. A script that an agent runs and that calls GitHub with `fetch`
+must start with `require('./lib/env_proxy_reexec').reexecWithEnvProxy();` (see `scripts/lib/env_proxy_reexec.js`). Covered
+today: `scripts/github_issue_workflow.js` and `scripts/execute_plan_runtime.js`. The `scripts/ci/*` and `.github/scripts/*`
+callers run only in GitHub Actions, which has no proxy, so they need no change.
 
 ## Rebuild after a toolchain bump
 

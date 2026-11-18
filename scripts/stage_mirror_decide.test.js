@@ -72,6 +72,34 @@ const cases = [
     S: 'In Analysis',
     want: { action: 'none', reason: 'in_sync' },
   },
+  {
+    name: 'Stage cleared, card unchanged — board restores the field (was: throw on an empty column)',
+    P: 'In Main',
+    F: '',
+    S: 'In Main',
+    want: { action: 'field_from_board', newF: 'In Main', newS: 'In Main', reason: 'field_cleared_board_wins' },
+  },
+  {
+    name: 'no Status and no Stage — nothing to mirror (was: throw)',
+    P: '',
+    F: '',
+    S: 'In Main',
+    want: { action: 'none', reason: 'both_empty' },
+  },
+  {
+    name: 'Stage set on a card with no Status — the column follows the field (was: throw)',
+    P: '',
+    F: 'Ready',
+    S: '',
+    want: { action: 'board_from_field', newP: 'Ready', newS: 'Ready', reason: 'no_status_field_wins' },
+  },
+  {
+    name: 'invalid Stage on a card with no Status — nothing to mirror (was: throw)',
+    P: '',
+    F: 'Nonsense',
+    S: '',
+    want: { action: 'none', reason: 'no_status_invalid_field' },
+  },
 ];
 
 for (const row of cases) {

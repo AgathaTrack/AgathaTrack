@@ -54,6 +54,23 @@ export function countHighCriticalMeta(auditJson) {
   return (m.high ?? 0) + (m.critical ?? 0);
 }
 
+export function assertValidAuditJson(auditJson, label) {
+  if (!auditJson || typeof auditJson !== 'object') {
+    return `npm audit (${label}): empty or non-JSON response`;
+  }
+  if (auditJson.error) {
+    const detail =
+      typeof auditJson.error === 'string'
+        ? auditJson.error
+        : auditJson.error.summary || JSON.stringify(auditJson.error);
+    return `npm audit (${label}): ${detail}`;
+  }
+  if (!auditJson.metadata?.vulnerabilities) {
+    return `npm audit (${label}): unexpected payload (missing metadata.vulnerabilities)`;
+  }
+  return null;
+}
+
 export function loadAllowlist(allowlistPath, pkgName, now = new Date()) {
   const raw = JSON.parse(readFileSync(allowlistPath, 'utf8'));
   const entries = raw.entries ?? [];
@@ -106,12 +123,33 @@ function runNpmAuditJson(packageDir, { omitDev }) {
       // fall through
     }
   }
+  if (!auditJson && result.status !== 0) {
+    const detail = result.stderr?.trim() || result.stdout?.trim() || `exit ${result.status}`;
+    auditJson = { error: detail };
+  }
   return { result, auditJson };
 }
 
 function usage() {
   console.error('Usage: node scripts/npm_audit_gate.js --package server|e2e [--allowlist <path>]');
   process.exit(2);
+}
+
+function failAllowlistExpired(expired) {
+  for (const entry of expired) {
+    console.error(
+      `npm audit gate: allowlist entry ${entry.ghsa} expired ${entry.expires}; remove after fix lands or renew with owner approval.`,
+    );
+  }
+  process.exit(1);
+}
+
+function warnStaleAllowlist(active) {
+  for (const entry of active) {
+    console.warn(
+      `npm audit gate: allowlist ${entry.ghsa} no longer appears in audit output; remove entry when confirmed fixed.`,
+    );
+  }
 }
 
 function main() {
@@ -132,9 +170,22 @@ function main() {
   const packageDir = path.join(REPO_ROOT, pkg);
   const now = new Date();
 
+  let allowlistState;
+  try {
+    allowlistState = loadAllowlist(allowlistPath, pkg, now);
+  } catch (err) {
+    console.error('npm audit gate: allowlist error:', err.message);
+    process.exit(1);
+  }
+  if (allowlistState.expired.length) {
+    failAllowlistExpired(allowlistState.expired);
+  }
+
   const prod = runNpmAuditJson(packageDir, { omitDev: true });
-  if (!prod.auditJson) {
-    console.error(`npm audit (production) failed to run in ${pkg}:`, prod.result.stderr || prod.result.stdout);
+  const prodErr = assertValidAuditJson(prod.auditJson, 'production');
+  if (prodErr) {
+    console.error(prodErr);
+    if (prod.result.stderr) console.error(prod.result.stderr);
     process.exit(1);
   }
   const prodHigh = countHighCriticalMeta(prod.auditJson);
@@ -146,37 +197,28 @@ function main() {
   }
 
   const full = runNpmAuditJson(packageDir, { omitDev: false });
-  if (!full.auditJson) {
-    console.error(`npm audit (full) failed to run in ${pkg}:`, full.result.stderr || full.result.stdout);
+  const fullErr = assertValidAuditJson(full.auditJson, 'full');
+  if (fullErr) {
+    console.error(fullErr);
+    if (full.result.stderr) console.error(full.result.stderr);
     process.exit(1);
   }
+
+  const fullHigh = countHighCriticalMeta(full.auditJson);
   const ghsas = collectHighCriticalGhsas(full.auditJson);
-  const fullHighMeta = countHighCriticalMeta(full.auditJson);
-  if (ghsas.size === 0) {
-    if (fullHighMeta > 0) {
-      console.error(
-        `npm audit gate: ${pkg} reports ${fullHighMeta} high/critical finding(s) but no parseable GHSA ids; fail closed.`,
-      );
-      process.exit(1);
+
+  if (fullHigh === 0) {
+    if (allowlistState.active.length) {
+      warnStaleAllowlist(allowlistState.active);
     }
     console.log(`npm audit gate: ${pkg} ok (production clean; no high/critical in full tree).`);
     process.exit(0);
   }
 
-  let allowlistState;
-  try {
-    allowlistState = loadAllowlist(allowlistPath, pkg, now);
-  } catch (err) {
-    console.error('npm audit gate: allowlist error:', err.message);
-    process.exit(1);
-  }
-
-  if (allowlistState.expired.length) {
-    for (const entry of allowlistState.expired) {
-      console.error(
-        `npm audit gate: allowlist entry ${entry.ghsa} expired ${entry.expires}; remove after fix lands or renew with owner approval.`,
-      );
-    }
+  if (ghsas.size === 0) {
+    console.error(
+      `npm audit gate: ${pkg} reports ${fullHigh} high/critical finding(s) without a GHSA id in the audit payload; fail closed.`,
+    );
     process.exit(1);
   }
 

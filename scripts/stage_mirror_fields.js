@@ -5,6 +5,15 @@ const { stageOrgFieldOptions } = require('./stage_mirror_config');
 
 const STAGE_FIELD_NAME = 'Stage';
 
+function githubRestErrorStatus(err) {
+  const match = /failed \((\d{3})\):/.exec(String(err?.message || ''));
+  return match ? Number(match[1]) : null;
+}
+
+function isOrgIssueFieldsReadRefused(err) {
+  return githubRestErrorStatus(err) === 403;
+}
+
 function readIssueFieldStageName(entry) {
   if (!entry) {
     return null;
@@ -40,23 +49,44 @@ function loadOrgStageFieldFromEnv() {
   return { id, options, name: STAGE_FIELD_NAME };
 }
 
-async function loadOrgStageField({ org, token }) {
-  const fromEnv = loadOrgStageFieldFromEnv();
-  if (fromEnv) {
-    return fromEnv;
+/**
+ * Read the org Stage field. The real option list is read first, so a missing or renamed option fails
+ * at start-up. Only when that read is refused (the projects PAT has no org issue-field read, see
+ * #2375) does it fall back to the id in STAGE_ISSUE_FIELD_ID with the static option list, and that
+ * fallback logs a warning every run: the options are then unverified. Auth, configuration, and
+ * transient API errors are not eligible for that fallback (HTTP 403 only).
+ */
+async function loadOrgStageField({ org, token, warn = console.warn, getIssueFields = null }) {
+  const envId = loadOrgStageFieldFromEnv()?.id ?? null;
+  const fetchFields =
+    getIssueFields ||
+    (() => rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token));
+  let fields;
+  try {
+    fields = await fetchFields();
+  } catch (err) {
+    if (!envId || !isOrgIssueFieldsReadRefused(err)) {
+      throw err;
+    }
+    warn(
+      `[warn] org Stage options not verified (${err.message}); using STAGE_ISSUE_FIELD_ID and the static option list`,
+    );
+    return { id: envId, options: stageOrgFieldOptions(), name: STAGE_FIELD_NAME, optionsVerified: false };
   }
-  const fields = await rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token);
   const stage = (fields || []).find(
     (field) => field?.name?.toLowerCase() === STAGE_FIELD_NAME.toLowerCase(),
   );
   if (!stage?.id) {
     throw new Error(`Org issue field "${STAGE_FIELD_NAME}" not found for ${org}`);
   }
+  if (envId && Number(stage.id) !== envId) {
+    throw new Error(`STAGE_ISSUE_FIELD_ID=${envId} does not match org Stage field id ${stage.id}`);
+  }
   const options = (stage.options || []).map((option) => option.name).filter(Boolean);
   if (options.length === 0) {
     throw new Error(`Org issue field "${STAGE_FIELD_NAME}" has no options`);
   }
-  return { id: Number(stage.id), options, name: stage.name };
+  return { id: Number(stage.id), options, name: stage.name, optionsVerified: true };
 }
 
 async function fetchIssueStage(owner, repo, issueNumber, token, stageFieldId) {
@@ -98,6 +128,8 @@ function assertBoardColumnsMatchStageOptions(boardColumns, stageOptions, boardLa
 
 module.exports = {
   STAGE_FIELD_NAME,
+  githubRestErrorStatus,
+  isOrgIssueFieldsReadRefused,
   loadOrgStageFieldFromEnv,
   loadOrgStageField,
   fetchIssueStage,

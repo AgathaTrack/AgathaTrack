@@ -19,6 +19,9 @@
 
 'use strict';
 
+// Must run before any GitHub call: Node's fetch needs NODE_USE_ENV_PROXY=1 at start-up in sandboxes.
+require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+
 const {
   computeHash,
   loadSnapshot,
