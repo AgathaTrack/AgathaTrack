@@ -75,6 +75,9 @@ async function cmdEdit({ flags, repo, number, token }) {
   });
   const newBody = await fetchIssueBody({ owner, repo: name, number, token });
   const newHash = bodySha(newBody);
+  if (newHash !== bodySha(next)) {
+    throw new Error('body changed after write; no edit claim posted');
+  }
   const agentId = requireEnv('PIPELINE_AGENT_ID');
   const nonce = requireEnv('PIPELINE_RUN_NONCE');
   const runSecret = requireEnv('PIPELINE_RUN_SECRET');
