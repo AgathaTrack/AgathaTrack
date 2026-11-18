@@ -285,3 +285,40 @@ test('field PATCH after launch re-reads the issue instead of the tick-start snap
   const patch = sent.filter((c) => c.body?.issue_field_values).at(-1);
   assert.equal(patch.body.issue_field_values.find((v) => v.field_id === 2).value, 'stalled');
 });
+
+test('launch: the pending record is posted before the handoff, and the run record after it', async () => {
+  const { sent, restFn } = recorder(() => ({ stage: 'Ready', blocked: '', attempts: 0 }));
+  const seenAtHandoff = [];
+  await applyAction({
+    action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 },
+    ctx: ctx({
+      restFn,
+      launchFn: async () => {
+        seenAtHandoff.push(...sent.map((c) => c.body?.body || ''));
+        return { runId: 'r9', agentUrl: '' };
+      },
+    }),
+  });
+  assert.ok(seenAtHandoff.some((b) => b.includes('v2:launch-pending agent=pawpet-bot')), 'pending record before launchFn');
+  const runRecord = sent.map((c) => c.body?.body || '').find((b) => b.includes('v2:launch run=r9'));
+  assert.ok(runRecord, 'run record posted after the handoff');
+});
+
+test('launch: a failed record POST after a started run is never retried as a second launch', async () => {
+  const { sent, restFn: base } = recorder(() => ({ stage: 'Ready', blocked: '', attempts: 0 }));
+  let launches = 0;
+  const restFn = async (method, path, token, body) => {
+    if (method === 'POST' && path.endsWith('/comments') && String(body?.body).includes('v2:launch run=')) {
+      throw new Error('comment POST failed');
+    }
+    return base(method, path, token, body);
+  };
+  await assert.rejects(
+    applyAction({
+      action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 },
+      ctx: ctx({ restFn, launchFn: async () => { launches += 1; return { runId: 'r8', agentUrl: '' }; } }),
+    }),
+  );
+  assert.equal(launches, 1, 'the run is started once; the pending record and busy label remain');
+  assert.ok(sent.some((c) => String(c.body?.body).includes('v2:launch-pending')), 'pending record was written first');
+});

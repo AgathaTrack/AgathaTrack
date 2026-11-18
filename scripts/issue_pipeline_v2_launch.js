@@ -46,12 +46,20 @@ function buildLaunchFailed({ agent, reason }) {
   ].join('\n');
 }
 
+/**
+ * Written before the handoff. A launch that starts but never gets its `launch` record leaves this
+ * as the newest delivery record, so `deriveLaunchFacts` counts it as one failed start.
+ */
+function buildLaunchPending({ agent, purpose = 'delivery' }) {
+  return `<!-- v2:launch-pending agent=${agent} purpose=${purpose} -->\nLaunching ${agent} (run recorded when the agent starts).`;
+}
+
 function buildLaunchAcked({ runId }) {
   return `<!-- v2:launch-acked run=${runId} -->\nRun ${runId} is working on this issue.`;
 }
 
 const RECORD = new RegExp(
-  '<!--\\s*v2:(launch|launch-failed|launch-acked)' +
+  '<!--\\s*v2:(launch|launch-pending|launch-failed|launch-acked)' +
     '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell))?' +
     '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done))?' +
     '(?:\\s+nonce=([a-f0-9]+))?\\s*-->',
@@ -146,7 +154,7 @@ async function doorbellRingFailed({ comments, engineLogins, config, agentId, sta
 
 function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
   const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter((record) =>
-    ['launch', 'launch-failed', 'launch-acked'].includes(record.kind) &&
+    ['launch', 'launch-pending', 'launch-failed', 'launch-acked'].includes(record.kind) &&
     record.purpose === 'delivery',
   );
   const latest = deliveryRecords.at(-1);
@@ -154,6 +162,11 @@ function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
   const failures = Number.isFinite(attempts) ? attempts : 0;
   if (!latest || latest.kind === 'launch-acked') {
     return { failures, busy };
+  }
+  if (latest.kind === 'launch-pending') {
+    // `busy` is set right after the pending record. Without it the handoff never happened, so the
+    // attempt is one failed start; with it, the run is in flight and `busy` holds the issue.
+    return busy ? { failures, busy } : { failures: failures + 1, busy, lastFailureAt: latest.at };
   }
   if (latest.kind === 'launch-failed') {
     return { failures, busy, lastFailureAt: latest.at };
@@ -326,6 +339,7 @@ module.exports = {
   buildLaunchRecord,
   buildLaunchFailed,
   buildLaunchAcked,
+  buildLaunchPending,
   listLaunchRecords,
   newestDeliveryLaunchAgentId,
   hasDoorbellLaunchSince,

@@ -14,7 +14,7 @@ const { buildSpecRequest, buildWake } = require('./issue_pipeline_v2_comments');
 const { buildReviewRequest } = require('./issue_pipeline_v2_review');
 const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
 const { buildReopened, buildResume } = require('./issue_pipeline_v2_release');
-const { buildLaunchAcked, buildLaunchFailed, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
+const { buildLaunchAcked, buildLaunchFailed, buildLaunchPending, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 
 /**
@@ -174,6 +174,8 @@ async function applyAction({ action: decided, ctx }) {
         let attempts = action.attempts;
         let run = null;
         let failure = null;
+        // Recorded before the handoff (a failure here throws before anything starts, so the next tick retries).
+        await comment(buildLaunchPending({ agent: action.agent }), 'comment:launch-pending');
         try {
           // The launcher marks the issue `busy` before the handoff; the plan shows that request too.
           calls.push({ method: 'POST', path: `${base}/labels`, body: { labels: ['busy'] } });
