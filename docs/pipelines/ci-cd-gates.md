@@ -183,6 +183,7 @@ Blocking checks use `node scripts/npm_audit_gate.js --package server|e2e` (not b
 | Dual prod-then-allowlist gate | 2026-11-18 | **GHSA-fc5q-39xc-vjpf** (picomatch, Jest dev-deps only) has no patched npm release; prod tree is clean; owner approved a 30-day exception ([#2436](https://github.com/AgathaTrack/AgathaTrack/issues/2436)). Rejects hiding production vulnerabilities. |
 | Keep `audit-advisory.yml` unfiltered | 2026-11-18 | Weekly job remains belt-and-suspenders visibility; blocking PR gate is the only place allowlist applies. |
 | Allowlist warns when advisory disappears | 2026-11-18 | Stale rows are logged so agents remove them after upstream fix ships. |
+| Remove GHSA-fc5q-39xc-vjpf allowlist row | 2026-11-18 | Registry reports no high/critical for picomatch; the row was stale. Owner asked for removal now rather than waiting for the 2026-12-18 expiry. The gate fails again if the advisory returns. |
 
 Refs: [#2436](https://github.com/AgathaTrack/AgathaTrack/issues/2436) · owner approval 2026-11-18.
 
