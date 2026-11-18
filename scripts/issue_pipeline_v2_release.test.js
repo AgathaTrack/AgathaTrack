@@ -291,3 +291,38 @@ test('runner: a simulated out-of-scope launch does not take a WIP slot from an i
     else process.env.ISSUE_PIPELINE_V2 = prior;
   }
 });
+
+// #2394 AAT: the In progress → In Main table. In Main needs the DoD ticked, no open linked PR, at
+// least one merge into `main`, and no `busy`. A second PR still open or an integration-branch merge
+// must keep the issue In progress.
+test('two-PR table: In Main only after the last linked PR merges into main, with the DoD ticked', () => {
+  const now = Date.parse('2026-11-18T00:00:00Z');
+  const TICKED = '## Definition of Done\n- [x] one\n- [x] two\n';
+  const UNTICKED = '## Definition of Done\n- [x] one\n- [ ] two\n';
+  const pr = (number, extra = {}) => ({
+    number, state: 'closed', merged: true, mergedAt: `2026-11-1${number}T00:00:00Z`, mergeSha: `sha${number}`,
+    base: 'main', author: 'pawpet-bot', updatedAt: `2026-11-1${number}T00:00:00Z`, ...extra,
+  });
+  const openPr = (number) => ({
+    number, state: 'open', merged: false, mergedAt: null, mergeSha: null, base: 'main', author: 'pawpet-bot', updatedAt: '2026-11-17T00:00:00Z',
+  });
+  const decideFor = ({ body = TICKED, labels = [], prs }) => {
+    const { delivery } = deriveDeliveryFacts({ issue: { body, labels: labels.map((name) => ({ name })) }, prs, comments: [], engineLogins: engine });
+    return decide({ mode: 'on', onBoard: true, stage: 'In progress', now, wip: 0, deliveryMethod: 'PR', delivery: { ...delivery, engineLaunched: true } }, config);
+  };
+  const reachesInMain = (d) => d.type === 'set-stage' && d.to === 'In Main';
+
+  assert.equal(reachesInMain(decideFor({ prs: [pr(1)] })), true, 'one merge, DoD ticked, nothing open');
+  assert.equal(reachesInMain(decideFor({ prs: [pr(1), openPr(2)] })), false, 'a second linked PR is still open');
+  assert.equal(reachesInMain(decideFor({ prs: [pr(1), pr(2)] })), true, 'two merges into main, DoD ticked');
+  assert.equal(reachesInMain(decideFor({ body: UNTICKED, prs: [pr(1), pr(2)] })), false, 'DoD not ticked');
+  assert.equal(reachesInMain(decideFor({ prs: [pr(1, { base: 'cursor/x-integration-1' })] })), false, 'an integration-branch merge is not a merge into main');
+  assert.equal(reachesInMain(decideFor({ labels: ['busy'], prs: [pr(1)] })), false, 'busy is still set');
+  assert.equal(reachesInMain(decideFor({ prs: [] })), false, 'no linked PR merged');
+});
+
+test('Refs-only mentions link a PR to the issue; a bare number mention does not', () => {
+  assert.equal(linksIssue('Refs #2394 · Refs #2385', 2394), true);
+  assert.equal(linksIssue('Mentions #2394 in passing', 2394), false);
+  assert.equal(linksIssue('Refs #23940', 2394), false, 'exact number only');
+});

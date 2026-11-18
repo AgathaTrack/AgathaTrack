@@ -14,7 +14,7 @@ When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exis
 
 1. Read the issue: its summary, problem, Definition of Done and delivery plan. That text is the intent. Do not take the PR description as the intent.
 2. Read the merged PRs and the code they left on `main`. Ask whether each part of the intent is met, and whether the change left something the intent implied but the plan missed (a caller, a doc, a migration step, a test of the failure path).
-3. For each real finding, **open a new issue** (use the task, feature or bug template). Its body must start with:
+3. For each real finding, **open a new issue** (use the task, feature or bug template) **and attach it as a sub-issue of this issue** (the GitHub sub-issue relation: the create call's `parent_issue_number`, or `sub_issue_write`), so the parent shows the follow-up chain. Its body must start with:
 
    ```
    <!-- v2:follow-up of=#<this issue number> -->

@@ -25,7 +25,7 @@ function buildIntentReviewRequest({ agent, issueNumber, prNumbers = [], mergeSha
     `<!-- ${INTENT_REVIEW} agent=${id} merge=${mergeSha} -->`,
     `@${mention}: intent review of #${issueNumber}. Review what shipped in ${merged} against the issue's original intent (its summary, problem and Definition of Done), not against the diff alone.`,
     '',
-    `File each real finding as a new issue that starts with \`<!-- v2:follow-up of=#${issueNumber} -->\`, and say here which ones you filed. Leave their \`Stage\` empty; the engine puts them in To do. Nothing to file is a valid result: say so once.`,
+    `File each real finding as a new issue, attached as a sub-issue of #${issueNumber}, that starts with \`<!-- v2:follow-up of=#${issueNumber} -->\`, and say here which ones you filed. Leave their \`Stage\` empty; the engine puts them in To do. Nothing to file is a valid result: say so once.`,
   ].join('\n');
 }
 

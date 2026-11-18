@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: read # #2467 review: the merge handler reads linked PRs for the In Main gate
 
 jobs:
   on-merge:
