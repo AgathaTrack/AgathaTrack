@@ -151,7 +151,8 @@ function launchableAgents(config, method) {
       (agent) =>
         (agent.methods || []).includes(method) &&
         agent.runner &&
-        (config.launchRunners || []).includes(agent.runner),
+        (config.launchRunners || []).includes(agent.runner) &&
+        agent.runner !== 'claude',
     )
     .map((agent) => entryId(agent));
 }
@@ -195,6 +196,20 @@ function sharedActsAs(config) {
   return [...counts.entries()].filter(([, n]) => n > 1).map(([login]) => login);
 }
 
+/** True when more than one pool id posts as this GitHub login (D4). */
+function isSharedActsAs(config, actsAs) {
+  if (!actsAs) {
+    return false;
+  }
+  let count = 0;
+  for (const agent of config.agents || []) {
+    if (entryActsAs(agent) === actsAs) {
+      count += 1;
+    }
+  }
+  return count > 1;
+}
+
 function loadConfig(file = DEFAULT_CONFIG_PATH) {
   return validateConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
 }
@@ -228,4 +243,5 @@ module.exports = {
   startableIds,
   selfStartingLogins,
   sharedActsAs,
+  isSharedActsAs,
 };

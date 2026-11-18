@@ -11,9 +11,12 @@ function enc(owner, repo, path) {
 /**
  * @returns {Promise<{ runId: string, agentUrl: null }>}
  */
-async function launch({ agent, issue, owner, repo, stage, method, nonce, config, deps = {} }) {
+async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose, config, deps = {} }) {
   if (!nonce) {
     throw new Error('claude launch requires nonce');
+  }
+  if (purpose === 'delivery') {
+    throw new Error('claude runner supports doorbell stages only until delivery workflow ships');
   }
   const token = deps.dispatchToken || process.env.GH_PROJECTS_PAT;
   const restFn = deps.restFn || rest;

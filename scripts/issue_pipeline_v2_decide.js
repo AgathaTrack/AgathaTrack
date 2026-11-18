@@ -208,8 +208,14 @@ function approvalsOnCurrentHash(facts, config) {
     }
     const key = voterKey(vote, config);
     voted.add(key);
-    if (vote.vote === 'up' && vote.login !== editor) {
-      voters.add(key);
+    if (vote.vote === 'up') {
+      if (vote.agentId) {
+        if (!facts.editorAgentId || vote.agentId !== facts.editorAgentId) {
+          voters.add(key);
+        }
+      } else if (vote.login !== editor) {
+        voters.add(key);
+      }
     }
   }
   return { editor, editorIsAgent: logins.has(editor), up: voters, voted };
