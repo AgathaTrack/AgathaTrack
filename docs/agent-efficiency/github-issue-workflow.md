@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-17
+last_updated: 2026-11-18
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -44,7 +44,7 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
 | `WIP_LIMIT` | repo variable | Temporary. `off` lifts the Ready queue cap (`limits.wip`) for every tick, so Ready issues launch without waiting for a free slot. Any other value, or unset, keeps the committed limit. Remove the variable to restore it. |
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
-| `agents`, `limits`, `launchRunners` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. A bad edit fails in CI. |
+| `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (default false), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
 
 The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch.
 Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the tick line reports `errors`.
@@ -56,7 +56,7 @@ Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the 
 | `Stage` | org issue field, **is the board column** | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
 | `Blocked` | org issue field | empty, or `question` · `no-convergence` · `launch-failed` · `decision` · `stalled` · `paused` |
 | `Attempts` | number | engine retry counter (reassignments, failed launches); reset on every `Stage` change |
-| `busy` | label | a delivery agent is actively working |
+| `busy` | label | an agent is actively working (delivery or a doorbell stage task) |
 | `manual-only` | label | hand-driven: the engine never touches the issue (it takes no WIP slot) |
 | body | issue body | the spec, then the agreed Delivery plan and Definition of Done |
 
@@ -98,10 +98,12 @@ One action per issue per tick; every transition is a field write.
 | Ready | a WIP slot is free: the engine starts a run for the agreed method | → In progress once the issue is `busy` |
 | Ready | WIP at the limit | stays (Ready is the queue) |
 | Ready | start failed after 3 retries on the backoff, or a run without `busy` after the acknowledge window counts as a failed start | stays, `Blocked=launch-failed` |
-| In progress | Definition of Done ticked, no open linked PR, at least one linked PR merged into `main`, `busy` released | → In Main, and an intent review is requested |
-| In progress | `busy` gone early or 24 h without activity | one resume (relaunch), then `Blocked=stalled`; issues the engine did not launch are never resumed |
-| In Main | an agent that did not author the PRs reviews what shipped against the issue's intent (does not gate) | stays |
-| In Main | the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
+| In progress | Definition of Done ticked, no open linked PR, at least one linked PR merged into `main`, `busy` released | → In Main. Intent review is requested unless `aat.enabled` is on, both acceptance fields exist, and the issue is not a follow-up |
+| In progress | the newest actionable acceptance verdict for the latest merge into `main` is `fail` with `reason=scope` or `reason=implementation` (`aat.enabled`, both fields, not a follow-up) | stays. `scope` relaunches delivery once; `implementation` waits for a follow-up whose body starts with this issue's marker, or for a linked PR. Neither sets `Blocked` while that work is still open. A newer merge into `main` ends the hold |
+| In progress | `busy` gone early or 24 h without activity | one resume (relaunch), then `Blocked=stalled`; issues the engine did not launch are never resumed. Not taken while a scope or implementation acceptance fail still holds |
+| In Main | `aat.enabled` is off, or an acceptance field is missing, or the issue is a follow-up: an agent that did not author the PRs reviews what shipped against the issue's intent (does not gate) | stays |
+| In Main | that same flag-off path, and the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
+| In Main | `aat.enabled` is on, both fields exist, and the issue is not a follow-up | acceptance must pass for the latest merge into `main` (`aatSatisfied`) and that merge must be in the newest successful UAT deploy. No intent-review doorbell |
 | In UAT | the newest successful `deploy-prod.yml` run's commit contains it | → Done, issue closed, `in-prod` added |
 | none | a follow-up (see below) of depth 1 or 2 | → To do; deeper → Backlog |
 | In progress / In Main / In UAT | the issue was closed (as completed) before Done, for example by a merge | reopened once (`v2:reopened` comment); a second close, a `not_planned` close and a `manual-only` issue are left alone |
@@ -133,8 +135,11 @@ listed agent); the engine never clears the flag.
 - **Doorbell run:** when the engine posts, reassigns or wakes a spec, review or intent-review request for an agent whose
   runner is in `launchRunners` (`cursor` and/or `claude`), it also starts a run with the stage's task (Cursor via the
   Agents API; Claude via `pipeline-claude-run.yml` workflow dispatch with `run-name: pipeline-claude-<nonce>`). Spec pass in To do,
-  adversarial review in In analysis, intent review in In Main). The run is not a delivery: no `busy` label, no PR, and it
-  skips the legacy launch preflight. With too little information it writes a best-effort spec,
+  adversarial review in In analysis, intent review in In Main). The run is not a delivery (no PR) and skips the legacy
+  launch preflight; the launcher sets `busy` like a delivery handoff (except the non-interactive **acceptance** doorbell).
+  The engine removes `busy` when the stage advances (spec → In analysis, review → Ready) or when it sets `Blocked`;
+  intent-review agents remove it with `node scripts/github_issue_workflow.js finish-work --issue <n>` when done. With too
+  little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
   Definition of Done) and signs spec pass (`pipeline_verdict.js spec up`, or 👍 on the request when `actsAs` logins are
   unique), so the engine moves the issue to In analysis. A failed start is only logged;
@@ -163,12 +168,17 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 ### Launch and intent review
 
 - **Launch:** the engine starts a Cursor run through `launch-cursor-agent.js` for agents whose runner is in `launchRunners`,
-  with the method's skill procedure appended to the prompt. It records `v2:launch`, `v2:launch-failed` and `v2:launch-acked`
-  comments; `Attempts` holds the failed-run count. An issue that is already `busy` is never launched again.
+  with the method's skill procedure appended to the prompt. It records `v2:launch-pending` before the handoff, then `v2:launch`
+  (run id) after it, or `v2:launch-failed`; `v2:launch-acked` follows the agent's busy report. `Attempts` holds the failed-run
+  count. A pending record with no `busy` label is one failed start (the handoff never happened). An issue that is already
+  `busy` is never launched again.
 - **Intent review:** `v2:intent-review agent=<login> merge=<sha>` asks an agent that did not author the linked PRs to review
   the merged change against the issue's original intent (skill: `.cursor/skills/intent-review-agent`). Each finding becomes a
   new issue starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'
   bodies and puts depth 1–2 in To do, deeper in Backlog. A review counts for one merge; a later merge needs its own.
+  When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exist, a non-follow-up does not get this
+  doorbell: that check is part of agent acceptance. Follow-ups still get it. If either field is missing, the tick logs
+  `acceptance.field-missing` once and keeps this doorbell. `aat.enabled` defaults to false.
 
 ### Blocked reasons
 
@@ -210,15 +220,31 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 
 ### Agent acceptance (`/AgentAcceptance`)
 
-Optional **human- or agent-invoked** holistic acceptance on a **parent** issue (or the issue linked from a delivery PR). It does not replace pipeline v2 **intent review** (In Main, non-gating) or the engine path to **Done** after UAT/prod.
+Holistic acceptance on a **parent** issue. With `aat.enabled` false (the default) it stays human- or agent-invoked and does not gate In UAT. With `aat.enabled` true and both org fields present, it is the engine's blocking gate from **In Main** to **In UAT** for issues that are not follow-ups: `aatSatisfied` for `delivery.lastMergeSha` and `uatContainsLatestMerge` are both required. Follow-ups keep intent review. The production-deploy guard stays on #2424.
 
 1. **Eligibility:** Parent issues only — not bodies with `<!-- v2:follow-up of=#n -->`.
-2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment (REST via `github_issue_workflow.js`, not `gh issue edit`). **Token:** `GH_TOKEN` or `PAWPET_CLAUDE_TOKEN` in agent sessions. **Verdict record:** `<!-- v2:aat verdict=… merge=… -->` on the issue (engine #2424).
-3. **INCONCLUSIVE:** `aat-inconclusive` posts the marker and clears progress/pass/fail labels when live verification cannot run (not a product fail).
-4. **Checks:** Original intent and NFRs, code at the merge SHA under test, built Flutter web + single-origin stack, final code review.
-5. **Fail:** Remediation after the verdict — small PR (`Refs #parent`) or P0 follow-up (`v2:follow-up`, Priority field `P0`); engine re-launches AAT when ready. Agents do not close pipeline issues on PASS.
+2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment (REST via `github_issue_workflow.js`, not `gh issue edit`). The engine does not read the labels. **Token:** `GH_TOKEN` or `PAWPET_CLAUDE_TOKEN` in agent sessions. Agents never write `Stage`, `Acceptance`, or `Acceptance fail reason`.
+3. **Verdict record:** last line of the verdict comment, `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->`. A fail includes `reason=scope|implementation|quality`. Pass and inconclusive omit `reason`. `inconclusive` is a verdict, not a reason. A fail without a known reason is ignored. Only a listed agent's comment newer than the engine's latest `v2:aat-launch` for that merge counts.
+4. **INCONCLUSIVE and timeout** share `aat.maxInconclusive` per merge, then `Blocked=stalled` while the issue stays In Main. A launch still inside `aat.timeoutMin` is not relaunched. A timeout is not a fail.
+5. **Fail paths:** `quality` stays In Main until a newer linked merge into `main`. `scope` and `implementation` return to In progress and stay there until a newer linked merge into `main`. `scope` relaunches delivery once on the existing programme. `implementation` is a `bug` follow-up (`<!-- v2:follow-up of=#parent -->`, `Priority=Urgent` when that field exists) whose PRs also `Refs` the parent. Neither sets `Blocked` while a linked PR is open or, for implementation, while such a follow-up is open.
+6. **Waiver:** a human `Manual` or `Skipped` is bound with `v2:aat-waive` for one merge. `Manual` is cleared when the latest merge changes. `Skipped` stays, and the new merge gets its own waive. A bound waiver is not overwritten by a pass or a newer fail.
+7. **Checks:** Original intent (summary, acceptance criteria, Definition of Done) and behaviour on `main` at the merge SHA. `scope` means a stated criterion or planned phase has no merged implementation. `implementation` means the work was attempted and the behaviour on `main` is wrong. `quality` means the behaviour matches and only small fixes remain; those still block In UAT. A pass means nothing has to merge before In UAT.
 
 Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md).
+
+### Decision log
+
+| ID | Decision | Status |
+|---|---|---|
+| PIPE-AAT-D-001 | Acceptance gates **In Main → In UAT**. This supersedes #2424 owner decision 1's placement. #2424's In UAT acceptance rows are withdrawn. The production-deploy guard stays on #2424 | Accepted for this issue |
+| PIPE-AAT-D-002 | Fail reasons are `scope`, `implementation`, `quality`. `inconclusive` is a verdict | Accepted |
+| PIPE-AAT-D-003 | `scope` and `implementation` go to In progress and stay there until a newer merge into `main`. `quality` stays In Main. Neither sets `Blocked` while a linked PR is open or, for implementation, while an open follow-up still exists, because the engine never clears `Blocked`. A scope rewind that has not relaunched yet does not stall just because activity is already quiet | Accepted |
+| PIPE-AAT-D-004 | In UAT needs `aatSatisfied` for the latest merge and `uatContainsLatestMerge` | Accepted |
+| PIPE-AAT-D-005 | When `aat.enabled` and both fields exist, a non-follow-up does not get the intent-review doorbell. Follow-ups still do | Accepted (flag default false, so today's path remains until soak) |
+| PIPE-AAT-D-006 | `implementation` remediation is `bug` follow-up issues whose PRs also `Refs` the parent, with `Priority=Urgent` when that field exists. `scope` relaunches delivery. `quality` is small PRs on the parent | Accepted |
+| PIPE-AAT-D-007 | `Manual` is bound to one merge and cleared on a newer merge. `Skipped` persists: a new sha gets its own skipped waive even when an older sha already has one. A bound `Manual` or `Skipped` is not overwritten by a pass write or a newer fail | Accepted |
+| PIPE-AAT-D-008 | The production-deploy guard is not part of this issue | Accepted |
+| PIPE-AAT-D-009 | Inconclusive and timeout share `maxInconclusive`, then `Blocked=stalled`. Product fails are not a two-strike `Blocked=decision` cap. This supersedes #2424 owner decision 3 for the In Main gate | Accepted for this issue |
 
 ## Live workflow (legacy, until `ISSUE_PIPELINE=on`)
 

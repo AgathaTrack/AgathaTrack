@@ -46,12 +46,20 @@ function buildLaunchFailed({ agent, reason }) {
   ].join('\n');
 }
 
+/**
+ * Written before the handoff. A launch that starts but never gets its `launch` record leaves this
+ * as the newest delivery record, so `deriveLaunchFacts` counts it as one failed start.
+ */
+function buildLaunchPending({ agent, purpose = 'delivery' }) {
+  return `<!-- v2:launch-pending agent=${agent} purpose=${purpose} -->\nLaunching ${agent} (run recorded when the agent starts).`;
+}
+
 function buildLaunchAcked({ runId }) {
   return `<!-- v2:launch-acked run=${runId} -->\nRun ${runId} is working on this issue.`;
 }
 
 const RECORD = new RegExp(
-  '<!--\\s*v2:(launch|launch-failed|launch-acked)' +
+  '<!--\\s*v2:(launch|launch-pending|launch-failed|launch-acked)' +
     '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell))?' +
     '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done))?' +
     '(?:\\s+nonce=([a-f0-9]+))?\\s*-->',
@@ -91,7 +99,8 @@ function listLaunchRecords({ comments, engineLogins }) {
 
 function newestDeliveryLaunchAgentId({ comments, engineLogins }) {
   const delivery = listLaunchRecords({ comments, engineLogins }).filter(
-    (record) => record.kind === 'launch' && record.purpose === 'delivery',
+    // A pending record counts too: the run may have started before its run record was written.
+    (record) => ['launch', 'launch-pending'].includes(record.kind) && record.purpose === 'delivery',
   );
   return delivery.at(-1)?.agent || null;
 }
@@ -146,7 +155,7 @@ async function doorbellRingFailed({ comments, engineLogins, config, agentId, sta
 
 function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
   const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter((record) =>
-    ['launch', 'launch-failed', 'launch-acked'].includes(record.kind) &&
+    ['launch', 'launch-pending', 'launch-failed', 'launch-acked'].includes(record.kind) &&
     record.purpose === 'delivery',
   );
   const latest = deliveryRecords.at(-1);
@@ -154,6 +163,11 @@ function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
   const failures = Number.isFinite(attempts) ? attempts : 0;
   if (!latest || latest.kind === 'launch-acked') {
     return { failures, busy };
+  }
+  if (latest.kind === 'launch-pending') {
+    // `busy` is set right after the pending record. Without it the handoff never happened, so the
+    // attempt is one failed start; with it, the run is in flight and `busy` holds the issue.
+    return busy ? { failures, busy } : { failures: failures + 1, busy, lastFailureAt: latest.at };
   }
   if (latest.kind === 'launch-failed') {
     return { failures, busy, lastFailureAt: latest.at };
@@ -200,8 +214,9 @@ const METHOD_PROMPTS = {
 };
 
 /**
- * Doorbell prompts: a run started because the engine asked an agent to work on the issue's spec or
- * review. They are not deliveries, so the issue is not marked `busy` and no PR is expected.
+ * Doorbell prompts: a run started because the engine asked an agent to work on the issue's spec,
+ * review, or intent review. They are not deliveries and no PR is expected; the launcher still marks
+ * `busy` so humans can see the agent working (the engine clears it when the stage task completes).
  */
 const STAGE_PROMPTS = {
   'To do':
@@ -221,8 +236,20 @@ const STAGE_PROMPTS = {
     'Stage task: INTENT REVIEW (the engine assigned you this issue; do not implement or edit it). Follow ' +
     '`.cursor/skills/intent-review-agent/SKILL.md`: review what shipped (the merged PRs named in the engine\'s latest ' +
     '`v2:intent-review` comment) against the issue\'s original intent, file each real finding as a follow-up issue that ' +
-    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last.',
+    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last. ' +
+    'When finished, remove the `busy` label (`node scripts/github_issue_workflow.js finish-work --issue <n>`).',
+  acceptance:
+    'Stage task: AGENT ACCEPTANCE (non-interactive; do not ask questions and do not implement). Follow ' +
+    '`.cursor/skills/agent-acceptance/SKILL.md` for issue #{{number}} and merge {{mergeSha}}. Record the verdict with ' +
+    '`node scripts/github_issue_workflow.js` (`aat-pass`, `aat-fail --reason scope|implementation|quality`, or `aat-inconclusive`). ' +
+    'Do not set the `busy` label.',
 };
+
+function fillPrompt(template, { number, mergeSha } = {}) {
+  return String(template || '')
+    .replaceAll('{{number}}', String(number ?? ''))
+    .replaceAll('{{mergeSha}}', String(mergeSha ?? ''));
+}
 
 const STAGE_PROMPTS_SIGNED = {
   ...STAGE_PROMPTS,
@@ -251,7 +278,7 @@ function stagePromptsForConfig(config, agent) {
  * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
  * only launched from Ready, after a converged review. The legacy labels are retired, so the
  * engine supplies them for a delivery launch. The risky-scope and blocking-label checks stay.
- * Spec, review and intent-review doorbells start no delivery and skip the preflight.
+ * Spec, review and intent-review doorbells start no delivery and skip the preflight; they still set `busy`.
  */
 const V2_APPROVAL_LABELS = ['agent-approved', 'human-reviewed'];
 
@@ -268,6 +295,8 @@ async function launchIssue({
   nonce,
   runSecret,
   config,
+  mergeSha,
+  scopeRelaunchSha,
   deps = {},
 }) {
   const { preflightIssue } = deps.safety || require('../.github/scripts/agent-safety-lib');
@@ -285,7 +314,10 @@ async function launchIssue({
       throw new Error(`preflight: ${preflight.reason}`);
     }
   }
-  const mark = stage ? async () => {} : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
+  const mark =
+    stage === 'acceptance'
+      ? async () => {}
+      : (add, remove) => lib.setLabels(owner, repo, issue.number, add, remove, token);
   await mark(['busy'], []);
 
   const runners = deps.runners || DEFAULT_RUNNERS();
@@ -307,6 +339,8 @@ async function launchIssue({
       purpose,
       apiKey,
       config,
+      mergeSha,
+      scopeRelaunchSha,
       deps,
     });
     return { runId: launched.runId, agentUrl: launched.agentUrl || null };
@@ -322,10 +356,12 @@ module.exports = {
   STAGE_PROMPTS,
   STAGE_PROMPTS_SIGNED,
   stagePromptsForConfig,
+  fillPrompt,
   V2_APPROVAL_LABELS,
   buildLaunchRecord,
   buildLaunchFailed,
   buildLaunchAcked,
+  buildLaunchPending,
   listLaunchRecords,
   newestDeliveryLaunchAgentId,
   hasDoorbellLaunchSince,

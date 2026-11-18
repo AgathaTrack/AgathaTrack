@@ -68,7 +68,7 @@ Triggered by `.github/workflows/ci.yml` → `_reusable-pr-startup-smoke.yml`,
 | `ci-gate / CI passed` | `ci.yml` → `_reusable-ci-gate.yml` (aggregator — see maintenance note below) |
 | `Analyze JavaScript` | `codeql.yml` (separate workflow; weekly schedule preserved) |
 
-**Forbidden paths:** every in-repo PR → `main` is scanned by required `execute-plan-scope` (trusted code on `main`). Owner approving review on the PR head clears forbidden hits; owner-authored PRs skip the scan ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)).
+**Forbidden paths:** every in-repo PR → `main` is scanned by required `execute-plan-scope` (trusted code on `main`). Owner approving review on the PR head clears forbidden hits; owner-authored PRs skip the scan ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)). PRs with no plan ID to other bases (for example integration branches) are not scanned and make no GitHub reads; plan-ID PRs to other bases only look up their control issue.
 
 #### `ci-gate` maintenance (dependency list drift)
 
@@ -375,7 +375,7 @@ wait for one green **CI** run — GitHub only lists checks that have reported at
 | Check / action | Workflow | Behavior |
 |----------------|----------|----------|
 | `Governance hints (advisory)` | `pr-governance-hints.yml` | PR comment only; does not block merge |
-| `execute-plan-scope` | `execute-plan-scope.yml` (`pull_request_target` + `pull_request_review` submitted; **commit status** posted with `GITHUB_TOKEN`) | **All** in-repo PRs to `main`: `agent-safety-lib` forbidden-path scan (`scripts/lib/execute_plan_scope_nonplan.js`); owner **APPROVING** review on the head clears forbidden hits; owner-authored PRs skip the scan. Execute-plan branches still run the snapshot scope matcher (phase/release/sync rules). Infra errors use reason `error` / `error-advisory` (report-only mode if configured). Trusted `main` code only. Spec: [execute-plan-schema §v2 scope](../agent-efficiency/execute-plan-schema.md) · shipped [#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980) |
+| `execute-plan-scope` | `execute-plan-scope.yml` (`pull_request_target` + `pull_request_review` submitted; **commit status** posted with `GITHUB_TOKEN`) | **All** in-repo PRs to `main`: `agent-safety-lib` forbidden-path scan (`scripts/lib/execute_plan_scope_nonplan.js`); owner **APPROVING** review on the head clears forbidden hits; owner-authored PRs skip the scan. Execute-plan branches still run the snapshot scope matcher (phase/release/sync rules). Non-plan PRs: config, PR-load, file-list and reviews-read errors use reason `error` (enforce) or `error-advisory` (report-only). Plan PRs: an unreadable review list means no owner ack, and other read errors are not converted to a status. Trusted `main` code only. Spec: [execute-plan-schema §v2 scope](../agent-efficiency/execute-plan-schema.md) · shipped [#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980) |
 
 ---
 

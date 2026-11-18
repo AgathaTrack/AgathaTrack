@@ -14,6 +14,7 @@ const config = validateConfig({
   engine: { logins: ['engine'] },
   launchRunners: ['cursor'],
   limits: loadConfig().limits,
+  aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
 });
 const prodConfig = loadConfig();
 const fields = {
@@ -94,6 +95,10 @@ test('request-spec also starts a Cursor run for an agent whose runner the engine
   const dry = await applyAction({ action: { type: 'request-review', agent: 'pawpet-bot', hash: 'h' }, ctx: ctx({ restFn, launchFn, config: withRunners, dryRun: true }) });
   assert.equal(launches.length, 1, 'a dry run sends nothing');
   assert.ok(dry.calls.some((call) => call.path === 'cursor:/v1/agents' && call.body.stage === 'In analysis'));
+  assert.ok(
+    dry.calls.some((call) => call.method === 'POST' && call.path.endsWith('/labels') && call.body?.labels?.includes('busy')),
+    'dry-run plan includes the busy label handoff',
+  );
 });
 
 test('request-intent-review also rings a launchable agent, for the In Main stage', async () => {
@@ -181,6 +186,40 @@ test('set-stage Done writes the field and closes as completed', async () => {
   assert.equal(sent[1].method, 'DELETE');
   const patch = sent.find((c) => c.method === 'PATCH' && c.body?.state === 'closed');
   assert.equal(patch.body.state_reason, 'completed');
+});
+
+const pipelineFields = {
+  stage: { id: 1, name: 'Stage', options: ['To do', 'In analysis', 'Ready', 'In progress', 'Done'] },
+  blocked: { id: 2, name: 'Blocked', options: ['stalled', 'question'] },
+  attempts: { id: 3, name: 'Attempts', options: [] },
+};
+
+test('set-stage to In analysis removes busy after a doorbell spec pass', async () => {
+  const { sent, restFn } = recorder();
+  await applyAction({
+    action: { type: 'set-stage', to: 'In analysis' },
+    ctx: ctx({ restFn, fields: pipelineFields }),
+  });
+  const removed = sent.find((c) => c.method === 'DELETE' && c.path.endsWith('/labels/busy'));
+  assert.ok(removed, 'busy cleared when the stage advances');
+});
+
+test('set-stage to In progress keeps busy for delivery ack', async () => {
+  const { sent, restFn } = recorder();
+  await applyAction({
+    action: { type: 'set-stage', to: 'In progress' },
+    ctx: ctx({ restFn, fields: pipelineFields, facts: { launch: { runId: 'r1' } } }),
+  });
+  assert.ok(!sent.some((c) => c.method === 'DELETE' && c.path.endsWith('/labels/busy')));
+});
+
+test('set-blocked removes busy when the agent escalates or asks a question', async () => {
+  const { sent, restFn } = recorder();
+  await applyAction({
+    action: { type: 'set-blocked', reason: 'question' },
+    ctx: ctx({ restFn, fields: pipelineFields }),
+  });
+  assert.ok(sent.some((c) => c.method === 'DELETE' && c.path.endsWith('/labels/busy')));
 });
 
 test('dry run records the same calls but sends none', async () => {
@@ -284,4 +323,41 @@ test('field PATCH after launch re-reads the issue instead of the tick-start snap
   assert.ok(get, 're-reads issue before field PATCH');
   const patch = sent.filter((c) => c.body?.issue_field_values).at(-1);
   assert.equal(patch.body.issue_field_values.find((v) => v.field_id === 2).value, 'stalled');
+});
+
+test('launch: the pending record is posted before the handoff, and the run record after it', async () => {
+  const { sent, restFn } = recorder(() => ({ stage: 'Ready', blocked: '', attempts: 0 }));
+  const seenAtHandoff = [];
+  await applyAction({
+    action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 },
+    ctx: ctx({
+      restFn,
+      launchFn: async () => {
+        seenAtHandoff.push(...sent.map((c) => c.body?.body || ''));
+        return { runId: 'r9', agentUrl: '' };
+      },
+    }),
+  });
+  assert.ok(seenAtHandoff.some((b) => b.includes('v2:launch-pending agent=pawpet-bot')), 'pending record before launchFn');
+  const runRecord = sent.map((c) => c.body?.body || '').find((b) => b.includes('v2:launch run=r9'));
+  assert.ok(runRecord, 'run record posted after the handoff');
+});
+
+test('launch: a failed record POST after a started run is never retried as a second launch', async () => {
+  const { sent, restFn: base } = recorder(() => ({ stage: 'Ready', blocked: '', attempts: 0 }));
+  let launches = 0;
+  const restFn = async (method, path, token, body) => {
+    if (method === 'POST' && path.endsWith('/comments') && String(body?.body).includes('v2:launch run=')) {
+      throw new Error('comment POST failed');
+    }
+    return base(method, path, token, body);
+  };
+  await assert.rejects(
+    applyAction({
+      action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 },
+      ctx: ctx({ restFn, launchFn: async () => { launches += 1; return { runId: 'r8', agentUrl: '' }; } }),
+    }),
+  );
+  assert.equal(launches, 1, 'the run is started once; the pending record and busy label remain');
+  assert.ok(sent.some((c) => String(c.body?.body).includes('v2:launch-pending')), 'pending record was written first');
 });

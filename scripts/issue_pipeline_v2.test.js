@@ -25,6 +25,7 @@ const legacyConfig = validateConfig({
   engine: { logins: ['pawpet-engine'] },
   launchRunners: ['cursor'],
   limits: config.limits,
+  aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
 });
 
 function facts(over = {}) {
@@ -69,6 +70,7 @@ test('config: explicit id and actsAs; engine token must not match actsAs', () =>
       engine: { logins: ['pawpet-engine'] },
       launchRunners: ['cursor'],
       limits,
+      aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
     }),
   );
   assert.throws(
@@ -81,6 +83,7 @@ test('config: explicit id and actsAs; engine token must not match actsAs', () =>
         engine: { logins: ['pawpet-bot'] },
         launchRunners: ['cursor'],
         limits,
+        aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
       }),
     /actsAs/,
   );
@@ -174,6 +177,11 @@ test('To do: request, wait, reassign, stall, pass', () => {
     [rowOfBoth(late).type, rowOfBoth(late).agent],
     ['reassign', 'pawpet-claude'],
   );
+  const lateBusy = {
+    labels: ['busy'],
+    spec: { requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-bot', timedOut: [] },
+  };
+  assert.equal(rowOfBoth(lateBusy).reason, 'todo.waiting-busy');
   const allLate = {
     spec: { requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-claude', timedOut: ['pawpet-bot'] },
   };

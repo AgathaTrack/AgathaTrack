@@ -97,11 +97,14 @@ function markerNote(comment, engine, marker) {
   );
 }
 
-/** A run the engine started: `v2:launch` or `v2:launch-acked`, never `v2:launch-failed` (nothing started). */
+/**
+ * A run the engine started: `v2:launch-pending` (written before the handoff, and only in progress
+ * once `busy` was seen), `v2:launch` or `v2:launch-acked`; never `v2:launch-failed` (nothing started).
+ */
 function engineStartedRun(comment, engine) {
   return (
     engine.has(comment.user?.login) &&
-    /<!--\s*v2:launch(?:-acked)?(?![\w-])/.test(comment.body || '')
+    /<!--\s*v2:launch(?:-pending|-acked)?(?![\w-])/.test(comment.body || '')
   );
 }
 
@@ -201,6 +204,7 @@ async function deployContains({ owner, repo, mergeSha, deploySha, token, restFn 
 
 module.exports = {
   RESUME,
+  engineStartedRun,
   INTENT_REVIEW,
   linksIssue,
   listLinkedPrs,

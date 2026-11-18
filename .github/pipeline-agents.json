@@ -50,5 +50,10 @@
     "stalledInactivityHours": 24,
     "noConvergenceVotes": 6,
     "followUpMaxDepth": 2
+  },
+  "aat": {
+    "enabled": false,
+    "timeoutMin": 120,
+    "maxInconclusive": 2
   }
 }

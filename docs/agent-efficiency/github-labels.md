@@ -3,7 +3,7 @@ title: Github Labels
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-08-22
+last_updated: 2026-11-18
 tags: [agent-efficiency, policy]
 ---
 # GitHub labels — autonomous workflows
@@ -105,9 +105,9 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 | `AAT-passed` | Holistic acceptance passed — issue may close when policy allows |
 | `AAT-failed` | Acceptance failed — remediation PR or P0 sub-issue required |
 
-**Marker (authoritative for automation):** last line of the verdict comment — `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->` (appended by the CLI).
+**Marker (authoritative for automation):** last line of the verdict comment — `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->` (appended by the CLI). A fail includes the reason: `<!-- v2:aat verdict=fail reason=scope|implementation|quality merge=<sha> -->`. Pass and inconclusive omit `reason`. Attribute order does not matter.
 
-**CLI:** `node scripts/github_issue_workflow.js aat-start|aat-pass|aat-fail|aat-inconclusive --issue <n> [--merge <sha>]`  
+**CLI:** `node scripts/github_issue_workflow.js aat-start|aat-pass|aat-fail|aat-inconclusive --issue <n> [--merge <sha>]`. `aat-fail` requires `--reason scope|implementation|quality` and exits non-zero without it.  
 Labels and comments use the GitHub REST API (`createGitHubClient`); `aat-start` ensures repo labels via REST when missing. Set `GH_TOKEN` (Cursor / pawpet-bot) or `PAWPET_CLAUDE_TOKEN` (Claude Code) before running — not a stale workflow `GITHUB_TOKEN` alone.  
 **Procedure:** [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md)
 
@@ -173,6 +173,7 @@ Per `docs/agent-efficiency/github-issue-workflow.md`. **Cloud Agents do not writ
 
 ```bash
 node scripts/github_issue_workflow.js start-work --issue <n> --body "…"
+node scripts/github_issue_workflow.js finish-work --issue <n>   # remove `busy` (e.g. intent review done)
 node scripts/github_issue_workflow.js comment --issue <n> --body "…"
 ```
 

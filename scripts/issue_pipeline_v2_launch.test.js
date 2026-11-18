@@ -110,16 +110,18 @@ function ctx(extra = {}) {
 test('apply launch: starts the run, records it, writes the failed-run count', async () => {
   const { sent, ctx: c } = ctx({ launchFn: async () => ({ runId: 'r9', agentUrl: 'https://cursor/x' }) });
   const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 1 }, ctx: c });
-  assert.match(sent[0].body.body, /v2:launch run=r9 agent=pawpet-bot/);
+  assert.match(sent[0].body.body, /v2:launch-pending agent=pawpet-bot/, 'pending record is written before the handoff');
+  assert.match(sent.find((c) => /v2:launch run=r9 agent=pawpet-bot/.test(c.body?.body || '')).body.body, /v2:launch run=r9/);
   const patch = sent.find((c) => c.body?.issue_field_values);
   assert.equal(patch.body.issue_field_values.find((v) => v.field_id === 3).value, 1);
-  assert.deepEqual(result.applied.slice(0, 2), ['launch:pawpet-bot', 'comment:launch']);
+  assert.equal(result.applied[0], 'launch:pawpet-bot');
+  assert.ok(result.applied.includes('comment:launch'));
 });
 
 test('apply launch: a failed API call is recorded and counted, not thrown', async () => {
   const { sent, ctx: c } = ctx({ launchFn: async () => { throw new Error('503'); } });
   const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 }, ctx: c });
-  assert.match(sent[0].body.body, /v2:launch-failed agent=pawpet-bot/);
+  assert.match(sent.find((c) => /v2:launch-failed/.test(c.body?.body || '')).body.body, /v2:launch-failed agent=pawpet-bot/);
   const patch = sent.find((c) => c.body?.issue_field_values);
   assert.equal(patch.body.issue_field_values.find((v) => v.field_id === 3).value, 1);
   assert.equal(result.applied[0], 'launch-failed:pawpet-bot');
@@ -134,7 +136,7 @@ test('apply launch: a dry run never starts a run', async () => {
 
 test('apply set-stage In progress leaves the acked record', async () => {
   const { sent, ctx: c } = ctx({ facts: { launch: { runId: 'r9' } } });
-  await applyAction({ action: { type: 'set-stage', to: 'In progress' }, ctx: c });
+  await applyAction({ action: { type: 'set-stage', to: 'In progress', row: 'ready.launched' }, ctx: c });
   assert.match(sent[0].body.body, /v2:launch-acked run=r9/);
 });
 
@@ -232,7 +234,7 @@ test('doorbellRingFailed: uses module-scope runners without ReferenceError', asy
   assert.equal(failed, true);
 });
 
-test('launchIssue: a spec, review or intent-review doorbell skips the preflight and the busy label', async () => {
+test('launchIssue: a spec, review or intent-review doorbell skips the preflight but sets busy', async () => {
   for (const stage of ['To do', 'In analysis', 'In Main']) {
     const launches = [];
     const labels = [];
@@ -242,7 +244,7 @@ test('launchIssue: a spec, review or intent-review doorbell skips the preflight 
     const issue = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }, { name: 'busy' }] };
     await launchIssue({ owner: 'o', repo: 'r', issue, token: 't', apiKey: 'k', agent: 'cursor-a', config, stage, purpose: 'doorbell', deps });
     assert.equal(launches.length, 1, stage);
-    assert.deepEqual(labels, [], `${stage}: no busy label`);
+    assert.deepEqual(labels[0], [['busy'], []], `${stage}: busy at handoff`);
     if (stage === 'In Main') {
       assert.match(STAGE_PROMPTS[stage], /INTENT REVIEW/);
     } else {
@@ -258,7 +260,7 @@ test('apply launch: a started run is never recorded as a failure when the record
     launchFn: async () => { launches += 1; return { runId: 'r1' }; },
     restFn: async (method, path, token, body) => {
       bodies.push(body);
-      if (bodies.length === 1) throw new Error('comment API down');
+      if (String(body?.body).includes('v2:launch run=')) throw new Error('comment API down');
       return {};
     },
   });
@@ -267,7 +269,7 @@ test('apply launch: a started run is never recorded as a failure when the record
     /comment API down/,
   );
   assert.equal(launches, 1);
-  assert.equal(bodies.length, 1, 'no launch-failed comment follows a run that started');
+  assert.ok(!bodies.some((b) => String(b?.body).includes('v2:launch-failed')), 'no launch-failed comment follows a run that started');
 });
 
 test('runner: one failing issue does not stop the board, and two Ready issues respect the WIP limit', async () => {
@@ -357,10 +359,50 @@ test('Ready with a busy issue and no launch record moves on; the dry-run plan sh
   assert.deepEqual([decide(ready, config).type, decide(ready, config).to], ['set-stage', 'In progress']);
   const { ctx: c } = ctx({ dryRun: true });
   const result = await applyAction({ action: { type: 'launch', agent: 'pawpet-bot', method: 'PR', attempts: 0 }, ctx: c });
-  assert.deepEqual(result.calls[0], { method: 'POST', path: '/repos/o/r/issues/7/labels', body: { labels: ['busy'] } });
+  assert.deepEqual(
+    result.calls.find((call) => call.path === '/repos/o/r/issues/7/labels'),
+    { method: 'POST', path: '/repos/o/r/issues/7/labels', body: { labels: ['busy'] } },
+  );
 });
 
 test('stage prompts exist for the spec and review doorbells', () => {
   assert.match(STAGE_PROMPTS['To do'], /SPEC PASS[\s\S]*Blocked[\s\S]*question/);
   assert.match(STAGE_PROMPTS['In analysis'], /ADVERSARIAL REVIEW/);
+});
+
+test('deriveLaunchFacts: a pending record with no busy label is one failed start; with busy it is in flight', () => {
+  const engineLogins = ['pawpet-bot'];
+  const pending = {
+    body: '<!-- v2:launch-pending agent=pawpet-bot purpose=delivery -->\nLaunching',
+    user: { login: 'pawpet-bot' },
+    created_at: '2026-11-18T10:00:00Z',
+  };
+  const notBusy = deriveLaunchFacts({ comments: [pending], engineLogins, labels: [], attempts: 1 });
+  assert.equal(notBusy.runId, undefined);
+  assert.equal(notBusy.failures, 2);
+  assert.ok(notBusy.lastFailureAt > 0);
+  const busy = deriveLaunchFacts({ comments: [pending], engineLogins, labels: ['busy'], attempts: 1 });
+  assert.equal(busy.runId, undefined);
+  assert.equal(busy.failures, 1);
+  assert.equal(busy.busy, true);
+});
+
+test('a pending delivery record is the agent lookup and counts as an engine-started run', () => {
+  const { newestDeliveryLaunchAgentId } = require('./issue_pipeline_v2_launch');
+  const { engineStartedRun } = require('./issue_pipeline_v2_release');
+  const engine = new Set(['pawpet-bot']);
+  const pending = {
+    body: '<!-- v2:launch-pending agent=pawpet-bot purpose=delivery -->\nLaunching',
+    user: { login: 'pawpet-bot' },
+    created_at: '2026-11-18T10:00:00Z',
+  };
+  const failed = {
+    body: '<!-- v2:launch-failed agent=pawpet-claude -->\nLaunching failed',
+    user: { login: 'pawpet-bot' },
+    created_at: '2026-11-18T10:05:00Z',
+  };
+  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending], engineLogins: ['pawpet-bot'] }), 'pawpet-bot');
+  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending, failed], engineLogins: ['pawpet-bot'] }), 'pawpet-bot');
+  assert.equal(engineStartedRun(pending, engine), true);
+  assert.equal(engineStartedRun(failed, engine), false, 'a failed start never counts as a run');
 });
