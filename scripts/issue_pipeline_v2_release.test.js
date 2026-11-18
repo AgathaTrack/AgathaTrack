@@ -210,7 +210,7 @@ test('runner: an empty-stage follow-up goes to To do within depth 2, to Backlog 
   }
 });
 
-test('runner: agents alternate within a tick, and a scope label limits where `on` writes', async () => {
+test('runner: startable agents alternate within a tick, and a scope label limits where `on` writes', async () => {
   const prior = process.env.ISSUE_PIPELINE_V2;
   process.env.ISSUE_PIPELINE_V2 = 'on';
   try {
@@ -221,7 +221,7 @@ test('runner: agents alternate within a tick, and a scope label limits where `on
     const run = (scopeLabel) => tick({
       owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
       io: {
-        config,
+        config: { ...config, launchRunners: ['cursor', 'claude'] },
         scopeLabel,
         checkEngineIdentity: async () => ({ ok: true, login: 'pawpet-engine' }),
         fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] } },

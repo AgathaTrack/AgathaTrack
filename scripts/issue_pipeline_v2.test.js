@@ -33,6 +33,9 @@ function facts(over = {}) {
 }
 
 const rowOf = (over) => decide(facts(over), config);
+// Both runners startable: exercises LRU rotation across every listed agent.
+const bothStartable = { ...config, launchRunners: ['cursor', 'claude'] };
+const rowOfBoth = (over) => decide(facts(over), bothStartable);
 
 test('config: the committed file is valid; bad edits are reported together', () => {
   assert.equal(config.agents.length, 2);
@@ -65,8 +68,17 @@ test('guards: a Blocked issue only wakes on a human comment and is never cleared
   assert.equal(wake.agent, 'pawpet-bot', 'with no request holder the least recently used agent is rung');
   assert.equal(
     rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, spec: { assignedTo: 'pawpet-claude' } }).agent,
+    'pawpet-bot',
+    'a holder the engine cannot start is not woken; a startable agent is',
+  );
+  assert.equal(
+    rowOfBoth({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, spec: { assignedTo: 'pawpet-claude' } }).agent,
     'pawpet-claude',
-    'the agent holding the stage request is rung',
+    'a startable holder is the one woken',
+  );
+  assert.equal(
+    decide(facts({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7 }), { ...config, launchRunners: ['nobody'] }).reason,
+    'blocked.no-agent',
   );
   // a human comment is answered once
   const again = rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, wokenFor: [7] });
@@ -93,24 +105,43 @@ test('any stage: an escalation sets Blocked=decision', () => {
   }
 });
 
+test('pickup rotation only draws from agents the engine can start (launchRunners)', () => {
+  const claude = 'pawpet-claude';
+  const picks = [
+    rowOf({ agentLastUsed: { 'pawpet-bot': NOW - MIN, [claude]: NOW - 99 * MIN } }),
+    rowOf({ stage: 'In analysis', lastBodyEditor: null, review: {}, agentLastUsed: { 'pawpet-bot': NOW - MIN } }),
+    rowOf({ stage: 'In Main', delivery: { lastMergeSha: 'm1' }, prAuthors: ['pawpet-bot'] }),
+  ];
+  for (const action of picks) {
+    assert.equal(action.agent, 'pawpet-bot', action.row);
+  }
+  const held = rowOf({ spec: { requestedAt: NOW - 5 * MIN, assignedTo: 'pawpet-claude' } });
+  assert.deepEqual([held.type, held.agent, held.row], ['reassign', 'pawpet-bot', 'todo.reassign'], 'a non-startable assignee does not sit out the timeout');
+  for (const stage of ['To do', 'In analysis']) {
+    const key = stage === 'To do' ? 'spec' : 'review';
+    const late = rowOf({ stage, lastBodyEditor: null, [key]: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-bot' } });
+    assert.deepEqual([late.type, late.reason], ['set-blocked', 'stalled'], stage);
+  }
+});
+
 test('To do: request, wait, reassign, stall, pass', () => {
-  assert.equal(rowOf({}).type, 'request-spec');
+  assert.equal(rowOfBoth({}).type, 'request-spec');
   const base = { spec: { requestedAt: NOW - 5 * MIN, assignedTo: 'pawpet-bot' } };
-  assert.equal(rowOf(base).reason, 'todo.waiting');
+  assert.equal(rowOfBoth(base).reason, 'todo.waiting');
   const late = { spec: { requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-bot', timedOut: [] } };
   assert.deepEqual(
-    [rowOf(late).type, rowOf(late).agent],
+    [rowOfBoth(late).type, rowOfBoth(late).agent],
     ['reassign', 'pawpet-claude'],
   );
   const allLate = {
     spec: { requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-claude', timedOut: ['pawpet-bot'] },
   };
-  assert.equal(rowOf(allLate).reason, 'stalled');
-  assert.equal(rowOf({ spec: { passedBy: 'pawpet-bot' } }).to, 'In analysis');
+  assert.equal(rowOfBoth(allLate).reason, 'stalled');
+  assert.equal(rowOfBoth({ spec: { passedBy: 'pawpet-bot' } }).to, 'In analysis');
 });
 
 test('To do: the least recently used agent is picked', () => {
-  const action = rowOf({ agentLastUsed: { 'pawpet-bot': NOW - MIN, 'pawpet-claude': NOW - 99 * MIN } });
+  const action = rowOfBoth({ agentLastUsed: { 'pawpet-bot': NOW - MIN, 'pawpet-claude': NOW - 99 * MIN } });
   assert.equal(action.agent, 'pawpet-claude');
 });
 
@@ -131,7 +162,7 @@ test('In analysis: after a human edit two agents are needed; the editor cannot a
     lastBodyEditor: 'KanopeeKa',
     review: { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'pawpet-claude', votes: [vote('pawpet-bot', 'up')] },
   });
-  assert.equal(one.type, 'none');
+  assert.deepEqual([one.type, one.reason], ['set-blocked', 'stalled'], 'the only startable agent has already voted');
   const two = rowOf({
     stage: 'In analysis',
     lastBodyEditor: 'KanopeeKa',
@@ -147,7 +178,7 @@ test('In analysis: after a human edit two agents are needed; the editor cannot a
     lastBodyEditor: 'pawpet-bot',
     review: { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'pawpet-claude', votes: [vote('pawpet-bot', 'up')] },
   });
-  assert.equal(self.type, 'none');
+  assert.deepEqual([self.type, self.agent], ['reassign', 'pawpet-bot'], 'the startable editor is asked at once');
 });
 
 test('In analysis: votes on an older hash and thumbs-down do not approve', () => {
@@ -202,13 +233,13 @@ test('In analysis: nobody else eligible after a thumbs-down, the editor revises'
 });
 
 test('In analysis: timeout reassigns, then stalls once every eligible agent timed out', () => {
-  const late = rowOf({
+  const late = rowOfBoth({
     stage: 'In analysis',
     lastBodyEditor: null,
     review: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-bot' },
   });
   assert.deepEqual([late.type, late.agent], ['reassign', 'pawpet-claude']);
-  const stalled = rowOf({
+  const stalled = rowOfBoth({
     stage: 'In analysis',
     lastBodyEditor: null,
     review: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-claude', timedOut: ['pawpet-bot'] },
@@ -274,13 +305,17 @@ test('In Main without a merge into main waits instead of repeating an unsatisfia
 
 test('In Main: intent review first, from an agent that did not author the PRs, then UAT', () => {
   const merged = { delivery: { lastMergeSha: 'm1' } };
-  const request = rowOf({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot'] });
+  const request = rowOfBoth({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot'] });
   assert.deepEqual([request.type, request.agent], ['request-intent-review', 'pawpet-claude']);
-  const everyone = rowOf({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot', 'pawpet-claude'] });
+  const everyone = rowOfBoth({ stage: 'In Main', ...merged, prAuthors: ['pawpet-bot', 'pawpet-claude'] });
   assert.equal(everyone.type, 'request-intent-review');
   const requested = { stage: 'In Main', ...merged, intentReview: { requested: true } };
-  assert.equal(rowOf(requested).reason, 'main.waiting-uat');
-  assert.equal(rowOf({ ...requested, uatContainsLatestMerge: true }).to, 'In UAT');
+  assert.equal(rowOfBoth(requested).reason, 'main.waiting-uat');
+  assert.equal(rowOfBoth({ ...requested, uatContainsLatestMerge: true }).to, 'In UAT');
+  const noStartable = { stage: 'In Main', ...merged };
+  const noRings = { ...bothStartable, launchRunners: [] };
+  assert.equal(decide(facts(noStartable), noRings).reason, 'main.waiting-uat');
+  assert.equal(decide(facts({ ...noStartable, uatContainsLatestMerge: true }), noRings).to, 'In UAT');
 });
 
 test('In UAT: Done and close only when prod contains the latest merge', () => {

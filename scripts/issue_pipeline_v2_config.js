@@ -88,8 +88,17 @@ function agentLogins(config) {
   return config.agents.map((agent) => agent.login);
 }
 
+/**
+ * Logins whose runner the engine can start (the doorbell set). Pickup rotation (spec, review, intent
+ * review) draws only from these: an agent the engine cannot ring would sit on the request until the
+ * timeout, then be reassigned, and finally stall the issue.
+ */
+function selfStartingLogins(config) {
+  return config.agents.filter((agent) => config.launchRunners.includes(agent.runner)).map((agent) => agent.login);
+}
+
 function loadConfig(file = DEFAULT_CONFIG_PATH) {
   return validateConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
 }
 
-module.exports = { DEFAULT_CONFIG_PATH, KNOWN_METHODS, validateConfig, loadConfig, agentLogins, launchableAgents };
+module.exports = { DEFAULT_CONFIG_PATH, KNOWN_METHODS, validateConfig, loadConfig, agentLogins, launchableAgents, selfStartingLogins };

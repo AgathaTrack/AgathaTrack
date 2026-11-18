@@ -111,25 +111,26 @@ test('spec facts: a 👍 from a listed agent after the request is the DoR pass',
 });
 
 test('spec facts feed decide(): request, wait, reassign, stall and pass', () => {
+  const both = { ...config, launchRunners: ['cursor', 'claude'] };
   const base = { mode: 'dry-run', now: NOW, onBoard: true, stage: 'To do', labels: [] };
   const spec = (comments, reactions = []) =>
     deriveSpecFacts({ comments, reactions, config, engineLogins: config.engine.logins });
-  assert.equal(decide({ ...base, spec: spec([]) }, config).type, 'request-spec');
+  assert.equal(decide({ ...base, spec: spec([]) }, both).type, 'request-spec');
   const fresh = requestComment({ created_at: '2026-11-16T11:50:00Z', updated_at: '2026-11-16T11:50:00Z' });
-  assert.equal(decide({ ...base, spec: spec([fresh]) }, config).reason, 'todo.waiting');
+  assert.equal(decide({ ...base, spec: spec([fresh]) }, both).reason, 'todo.waiting');
   // exactly the 30 minute timeout counts as timed out
-  assert.equal(decide({ ...base, spec: spec([requestComment()]) }, config).type, 'reassign');
+  assert.equal(decide({ ...base, spec: spec([requestComment()]) }, both).type, 'reassign');
   const late = requestComment({ updated_at: '2026-11-16T11:00:00Z', created_at: '2026-11-16T11:00:00Z' });
-  const reassign = decide({ ...base, spec: spec([late]) }, config);
+  const reassign = decide({ ...base, spec: spec([late]) }, both);
   assert.deepEqual([reassign.type, reassign.agent], ['reassign', 'pawpet-claude']);
-  const both = requestComment({
+  const exhausted = requestComment({
     body: buildSpecRequest({ assigned: 'pawpet-claude', history: ['pawpet-bot'] }),
     updated_at: '2026-11-16T11:00:00Z',
     created_at: '2026-11-16T11:00:00Z',
   });
-  assert.equal(decide({ ...base, spec: spec([both]) }, config).reason, 'stalled');
+  assert.equal(decide({ ...base, spec: spec([exhausted]) }, both).reason, 'stalled');
   const passed = spec([requestComment()], [{ user: { login: 'pawpet-bot' }, content: '+1', created_at: '2026-11-16T11:45:00Z' }]);
-  assert.equal(decide({ ...base, spec: passed }, config).to, 'In analysis');
+  assert.equal(decide({ ...base, spec: passed }, both).to, 'In analysis');
 });
 
 test('blocked: any write-access human comment after the last agent or engine comment wakes the agent', () => {
