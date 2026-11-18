@@ -106,6 +106,30 @@ test('isPlanControlIssue matches execute-plan titles only', () => {
   assert.equal(isPlanControlIssue({ title: 'Bell stays wrong after mark-all-read' }), false);
 });
 
+const MOCK_ORG_FIELDS = {
+  stage: {
+    id: 1,
+    name: 'Stage',
+    options: ['Backlog', 'Ready', 'In Main', 'In UAT', 'Done'],
+  },
+  blocked: { id: 2, name: 'Blocked', options: ['question'] },
+  attempts: { id: 3, name: 'Attempts', options: [] },
+};
+
+function prodProjectIo(extra = {}) {
+  const stageByIssue =
+    extra.stageByIssue ||
+    ((issueNumber) => (issueNumber === 50 || issueNumber === 2363 || issueNumber === 2335 ? 'In UAT' : 'Ready'));
+  return {
+    loadOrgFields: async () => MOCK_ORG_FIELDS,
+    readIssueOrgStage: async ({ issueNumber }) => ({
+      stage: stageByIssue(issueNumber),
+      fields: MOCK_ORG_FIELDS,
+    }),
+    ...extra,
+  };
+}
+
 function recordingIo(issue, prBody) {
   const calls = [];
   const io = {
@@ -117,8 +141,8 @@ function recordingIo(issue, prBody) {
     reopenIssue: async () => {
       calls.push('reopen');
     },
-    updateProjectStatus: async () => {
-      calls.push('status');
+    setIssueStage: async () => {
+      calls.push('stage');
     },
     upsertMarkerComment: async () => {
       calls.push('comment');
@@ -159,7 +183,7 @@ test('handleMergedPr sets In Main for light-plan tracking issues', async (t) => 
     io,
   });
 
-  assert.deepEqual(calls, ['labels', 'reopen', 'status', 'comment']);
+  assert.deepEqual(calls, ['labels', 'reopen', 'stage', 'comment']);
   assert.equal(result.results[0].status, 'In Main');
   assert.equal(result.results[0].issueNumber, 2258);
 });
@@ -209,9 +233,44 @@ test('handleUatWorkflowResult sets In UAT for light-plan tracking issues', async
     io,
   });
 
-  assert.deepEqual(calls, ['reopen', 'status', 'comment']);
+  assert.deepEqual(calls, ['reopen', 'stage', 'comment']);
   assert.equal(result.results[0].status, 'In UAT');
   assert.equal(result.results[0].issueNumber, 2258);
+});
+
+test('handleUatWorkflowResult writes the org Stage field to In UAT, not the board Status', async (t) => {
+  stubQueue(t, 'syncDeployResult');
+  const { io } = recordingIo(
+    { title: 'light-plan: truthful-outcomes release debt (Plan B)', state: 'CLOSED' },
+    'Refs #2258',
+  );
+  const stageWrites = [];
+  io.setIssueStage = async (args) => {
+    stageWrites.push(args);
+  };
+
+  await handleUatWorkflowResult({
+    owner: 'AgathaTrack',
+    repo: 'AgathaTrack',
+    deployRef: 'uat-261118-2437',
+    conclusion: 'success',
+    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/44305057834',
+    token: 'test-token',
+    projectsPat: 'projects-pat',
+    projectId: 'project',
+    statusFieldId: 'status-field',
+    io,
+  });
+
+  assert.deepEqual(stageWrites, [
+    {
+      owner: 'AgathaTrack',
+      repo: 'AgathaTrack',
+      issueNumber: 2258,
+      stageName: 'In UAT',
+      projectsPat: 'projects-pat',
+    },
+  ]);
 });
 
 test('handleUatWorkflowResult still reopens a closed product issue', async (t) => {
@@ -268,9 +327,10 @@ test('handleProdDeployResult closes In UAT issues when merge is in deploy', asyn
   const deploySha = 'c'.repeat(40);
   const calls = [];
   const io = {
+    ...prodProjectIo(),
     listProjectIssues: async () => [
-      { status: 'In UAT', issue: { number: 50 } },
-      { status: 'Ready', issue: { number: 99 } },
+      { status: 'Ready', issue: { number: 50 } },
+      { status: 'In UAT', issue: { number: 99 } },
     ],
     fetchAllIssueComments: async () => [
       {
@@ -286,7 +346,7 @@ test('handleProdDeployResult closes In UAT issues when merge is in deploy', asyn
       labels: { nodes: [{ name: 'busy' }] },
     }),
     compareCommits: async () => ({ status: 'ahead' }),
-    updateProjectStatus: async () => calls.push('status'),
+    setIssueStage: async () => calls.push('stage'),
     setLabels: async () => calls.push('labels'),
     closeIssue: async () => calls.push('close'),
     upsertMarkerComment: async () => calls.push('comment'),
@@ -306,13 +366,61 @@ test('handleProdDeployResult closes In UAT issues when merge is in deploy', asyn
   });
 
   assert.equal(result.results[0].status, 'closed');
-  assert.deepEqual(calls, ['status', 'labels', 'close', 'comment']);
+  assert.deepEqual(calls, ['stage', 'labels', 'close', 'comment']);
+});
+
+test('handleProdDeployResult matches org Stage, not the board Status column', async () => {
+  const mergeSha = 'e'.repeat(40);
+  const deploySha = 'f'.repeat(40);
+  const calls = [];
+  const io = {
+    ...prodProjectIo({ stageByIssue: () => 'In UAT' }),
+    listProjectIssues: async () => [{ status: 'In Main', issue: { number: 77 } }],
+    fetchAllIssueComments: async () => [
+      {
+        user: { login: 'pawpet-bot' },
+        body: `<!-- agent-uat-branch -->\nMerge commit: \`${mergeSha}\``,
+        updated_at: '2026-11-16T12:00:00Z',
+      },
+    ],
+    fetchIssue: async () => ({
+      number: 77,
+      title: 'Bug fix',
+      body: 'Done',
+      labels: { nodes: [{ name: 'busy' }] },
+    }),
+    compareCommits: async () => ({ status: 'ahead' }),
+    setIssueStage: async () => calls.push('stage'),
+    setLabels: async () => calls.push('labels'),
+    closeIssue: async () => calls.push('close'),
+    upsertMarkerComment: async (args) => {
+      calls.push('comment');
+      assert.match(args.body, /Stage: \*\*Done\*\*/);
+    },
+  };
+
+  const result = await handleProdDeployResult({
+    owner: 'AgathaTrack',
+    repo: 'AgathaTrack',
+    commitSha: deploySha,
+    prodTag: 'v1.2.3',
+    workflowUrl: 'https://example.com/runs/1',
+    token: 'test',
+    projectsPat: 'pat',
+    projectId: 'pid',
+    statusFieldId: 'sid',
+    io,
+  });
+
+  assert.equal(result.results[0].status, 'closed');
+  assert.deepEqual(calls, ['stage', 'labels', 'close', 'comment']);
 });
 
 test('handleProdDeployResult skips light-plan with open checklist', async () => {
   const mergeSha = 'd'.repeat(40);
   const io = {
-    listProjectIssues: async () => [{ status: 'In UAT', issue: { number: 2363 } }],
+    ...prodProjectIo(),
+    listProjectIssues: async () => [{ status: 'Ready', issue: { number: 2363 } }],
     fetchAllIssueComments: async () => [
       {
         user: { login: 'pawpet-claude' },
@@ -387,7 +495,7 @@ test('v2 dry-run or off: the merge handler works as before', async (t) => {
     withV2Env(t, { ISSUE_PIPELINE_V2: mode });
     const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
     const result = await handleMergedPr({ ...mergedArgs, io });
-    assert.deepEqual(calls, ['labels', 'reopen', 'status', 'comment'], mode);
+    assert.deepEqual(calls, ['labels', 'reopen', 'stage', 'comment'], mode);
     assert.equal(result.results[0].status, 'In Main');
   }
 });
@@ -397,7 +505,7 @@ test('with a soak label only labelled issues are skipped by the merge handler', 
   withV2Env(t, { ISSUE_PIPELINE_V2: 'on', ISSUE_PIPELINE_V2_LABEL: 'pipeline-beta' });
   const unlabelled = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED', labels: { nodes: [{ name: 'task' }] } }, 'Refs #2335');
   const a = await handleMergedPr({ ...mergedArgs, io: unlabelled.io });
-  assert.deepEqual(unlabelled.calls, ['labels', 'reopen', 'status', 'comment']);
+  assert.deepEqual(unlabelled.calls, ['labels', 'reopen', 'stage', 'comment']);
   assert.equal(a.results[0].status, 'In Main');
   const labelled = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN', labels: { nodes: [{ name: 'pipeline-beta' }] } }, 'Refs #2335');
   const b = await handleMergedPr({ ...mergedArgs, io: labelled.io });
@@ -428,8 +536,10 @@ test('v2 engine owns the issue: the UAT handler leaves it alone', async (t) => {
 test('v2 engine owns the issue: the prod handler does not close it', async (t) => {
   withV2Env(t, { ISSUE_PIPELINE_V2: 'on' });
   const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Refs #2335');
-  io.listProjectIssues = async () => [{ status: 'In UAT', issue: { number: 2335 } }];
-  io.fetchAllIssueComments = async () => [];
+  Object.assign(io, prodProjectIo(), {
+    listProjectIssues: async () => [{ status: 'In UAT', issue: { number: 2335 } }],
+    fetchAllIssueComments: async () => [],
+  });
   io.closeIssue = async () => {
     calls.push('close');
   };
