@@ -164,10 +164,20 @@ Step summary must state explicitly:
 | `dry-run` | Lists engine-owned issues in `In Main` or `In UAT` whose latest merge is contained in the promoted SHA and whose acceptance is not satisfied. Writes the list to the job summary and always passes. |
 | `on` | Fails `resolve-trigger`, so `deploy-prod` does not run, when any such merge is unsatisfied. An API or configuration error also fails closed. |
 
-"Satisfied" uses `scripts/lib/aat_satisfied.js`: the newest actionable verdict for that merge is `pass`, or the human
-`Acceptance` value is `Manual` / `Skipped` with an engine waive bound to that merge. A bare `Passed` value is not enough.
-An unknown `AAT_GATE` value runs as `dry-run`. If the org field `Acceptance` does not exist, the gate is disabled and
-blocks nothing.
+The rules are the engine's (#2448), not a copy: `aatGateOn`, `deriveAatState`, `aatSatisfied` and `newestActionable`
+in `scripts/issue_pipeline_v2_acceptance.js`. "Satisfied" means the newest actionable verdict for that merge is `pass`,
+or the human `Acceptance` value is `Manual` / `Skipped` with an engine waive bound to that merge. A bare `Passed` value is not enough.
+
+Which merges are gated:
+
+- The issue is `In Main` or `In UAT`, or it is `In progress` and its newest actionable verdict for that merge is a
+  `scope` or `implementation` fail (the rewind rows of #2448).
+- The gate is active only when `aat.enabled` is `true` in `.github/pipeline-agents.json` and both org fields
+  `Acceptance` and `Acceptance fail reason` exist. Otherwise nothing is read beyond the field definitions and nothing blocks.
+  With `aat.enabled` `false` the guard makes no API calls, even in `on`.
+- Follow-up issues (`v2:follow-up` body marker) and `manual-only` issues are exempt, as the engine exempts them.
+
+An unknown `AAT_GATE` value runs as `dry-run`.
 
 The guard reads the board with `AAT_GATE_READ_TOKEN` (read-only) and falls back to `GITHUB_TOKEN`. The write-capable
 engine token is never passed to this workflow. `workflow_dispatch` input **`aat_override_reason`** passes an `on` gate

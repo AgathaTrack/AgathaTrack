@@ -4,13 +4,14 @@
  * Pure decision for the prod deploy guard (#2424). No network and no process exit here.
  *
  * AAT_GATE: off (default, no API calls) | dry-run (report only, never fails) | on (fails when a
- * candidate is not satisfied). An unknown value is treated as dry-run with a warning, so a typo
- * never blocks a deploy and still shows up in the summary.
+ * gated candidate is not satisfied). An unknown value is treated as dry-run with a warning, so a
+ * typo never blocks a deploy and still shows up in the summary.
+ *
+ * Which merges are candidates, and whether the gate is enabled at all, is decided by
+ * scripts/lib/aat_prod_gate_collect.js from the engine's own rules (#2448).
  */
 
 const MODES = new Set(['off', 'dry-run', 'on']);
-// Stages whose latest merge must be accepted before prod: a merge is in scope once it is in UAT.
-const GATED_STAGES = new Set(['In Main', 'In UAT']);
 
 function resolveMode(raw) {
   const value = String(raw || '').trim().toLowerCase();
@@ -29,12 +30,13 @@ function resolveMode(raw) {
 /**
  * @param {object} input
  * @param {string} input.mode resolved mode (not off)
- * @param {Array<{number:number, stage:string, mergeSha:string|null, inScope:boolean, satisfied:boolean, acceptance:string}>} input.candidates
+ * @param {Array<{number:number, stage:string, mergeSha:string, satisfied:boolean, acceptance:string}>} input.candidates
+ *   gated merges already contained in the promoted SHA
  * @param {string} [input.overrideReason] workflow_dispatch override; passes the gate when set
  */
 function evaluateProdGate({ mode, candidates, overrideReason = '' }) {
   const wouldBlock = (candidates || [])
-    .filter((c) => GATED_STAGES.has(c.stage) && c.mergeSha && c.inScope && !c.satisfied)
+    .filter((c) => c.mergeSha && !c.satisfied)
     .map(({ number, stage, mergeSha, acceptance }) => ({ number, stage, mergeSha, acceptance: acceptance || '' }));
   const override = String(overrideReason || '').trim();
 
@@ -61,7 +63,7 @@ function renderSummary({ mode, promotedSha, result, notes = [] }) {
   }
   const list = result.wouldBlock;
   if (list.length === 0) {
-    lines.push('- No engine-owned merge in scope is waiting on acceptance.');
+    lines.push('- No gated merge in the promoted SHA is waiting on acceptance.');
   } else {
     lines.push('| Issue | Stage | Merge | Acceptance |', '|---|---|---|---|');
     for (const item of list) {
@@ -75,4 +77,4 @@ function renderSummary({ mode, promotedSha, result, notes = [] }) {
   return lines.join('\n');
 }
 
-module.exports = { MODES, GATED_STAGES, resolveMode, evaluateProdGate, renderSummary };
+module.exports = { MODES, resolveMode, evaluateProdGate, renderSummary };
