@@ -75,6 +75,8 @@ This is a rule, not a permission: agent tokens can write org issue fields. **Boo
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
 From `on`, only the engine writes `Stage`. `Blocked` set means a human is needed; the engine never clears it.
 
+**Merge, UAT and prod handlers (#2394 AAT).** While the engine is not `on` for an issue, the legacy handlers write `Stage` under the same table conditions: `In Main` only when the Definition of Done is ticked, no linked PR is still open, and a linked PR merged into `main` (`mayEnterInMain`); `In UAT` only when the issue's Stage is already `In Main` (an empty Stage keeps the legacy behaviour); `Done` with the prod close. A merge that does not complete the table leaves the issue `In progress`, so a two-PR issue reaches In Main after its last merge.
+
 The issue-fields `PATCH` replaces an issue's whole value set, so every engine write sends the values the issue already holds
 (`buildIssueFieldPatch` / `withCurrentValues`); a write of `Attempts` alone would remove `Stage` and `Blocked`. Agents patching fields by hand do the same.
 Before a live field write, `applyAction` and migration re-read the issue so values changed during doorbell or launch are not overwritten by the tick-start snapshot.

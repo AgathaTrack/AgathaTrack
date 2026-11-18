@@ -18,6 +18,7 @@ const { loadOrgFields, parseIssueFields, writeIssueFields } = require('../../scr
 
 const ASSIGNEE = process.env.AGENT_ASSIGNEE || 'KanopeeKa';
 const { labelNames, v2Owns } = require('./pipeline-v2-owner');
+const { listLinkedPrs, dodComplete } = require('../../scripts/issue_pipeline_v2_release');
 
 const TRUSTED_UAT_BRANCH_AUTHORS = new Set(['pawpet-bot', 'pawpet-claude']);
 const UAT_BRANCH_MARKER = '<!-- agent-uat-branch -->';
@@ -146,8 +147,19 @@ async function readIssueOrgStage({ owner, repo, issueNumber, projectsPat, fields
   return { stage: parseIssueFields(issue, orgFields).stage, fields: orgFields };
 }
 
+/**
+ * In progress → In Main (#2394 AAT): DoD ticked, no linked PR still open, ≥1 merge into `main`.
+ */
+async function mayEnterInMain({ owner, repo, issueNumber, issue, token }) {
+  const prs = await listLinkedPrs({ owner, repo, issueNumber, token });
+  const someMergedToMain = prs.some((pr) => pr.merged && pr.base === 'main');
+  const someOpen = prs.some((pr) => pr.state === 'open');
+  return someMergedToMain && !someOpen && dodComplete(issue?.body);
+}
+
 function ioOr(io) {
   return {
+    mayEnterInMain: io?.mayEnterInMain || mayEnterInMain,
     fetchIssue: io?.fetchIssue || fetchIssue,
     fetchAllIssueComments: io?.fetchAllIssueComments || fetchAllIssueComments,
     listProjectIssues: io?.listProjectIssues || listProjectIssues,
@@ -269,9 +281,18 @@ async function handleMergedPr({
       continue;
     }
 
-    if (projectsPat && projectId && statusFieldId) {
+    const refreshedIssue = await api.fetchIssue(owner, repo, issueNumber, token);
+    const readyForMain = await api.mayEnterInMain({
+      owner,
+      repo,
+      issueNumber,
+      issue: refreshedIssue,
+      token,
+    });
+    if (readyForMain && projectsPat) {
       await api.setIssueStage({ owner, repo, issueNumber, stageName: 'In Main', projectsPat });
     }
+    const boardStatus = readyForMain ? 'In Main' : 'In progress';
 
     // Prod notify reads the merge SHA only from a bot-authored comment (#2363 §5.1), so the
     // In Main record is written, and later edited, with the bot token.
@@ -294,7 +315,7 @@ PR #${prNumber} merged for this issue.
 
 - Merge commit: \`${mergeSha}\`
 - Expected UAT tag: \`${expectedTag}\` (created by **Promote UAT** on push to \`main\`)
-- Project status: **In Main**
+- Stage: **${boardStatus}**${readyForMain ? '' : ' (another linked PR is still open or the DoD is not ticked; In Main follows the last merge)'}
 - Issue reopened for UAT tracking (use **Done** after validation; do not rely on auto-close).
 
 UAT deploy runs automatically when the tag is pushed.`,
@@ -303,10 +324,10 @@ UAT deploy runs automatically when the tag is pushed.`,
     results.push({
       issueNumber,
       expectedTag,
-      status: 'In Main',
+      status: boardStatus,
     });
     console.log(
-      `Issue #${issueNumber}: reopened, status In Main, expected UAT tag ${expectedTag}`,
+      `Issue #${issueNumber}: reopened, status ${boardStatus}, expected UAT tag ${expectedTag}`,
     );
   }
 
@@ -496,7 +517,16 @@ async function handleUatWorkflowResult({
     await api.reopenIssue(owner, repo, issueNumber, token);
 
     if (conclusion === 'success') {
-      if (projectsPat && projectId && statusFieldId) {
+      // In Main → In UAT only when the issue already reached In Main (#2394 AAT).
+      const { stage: stageNow } = projectsPat
+        ? await api.readIssueOrgStage({ owner, repo, issueNumber, projectsPat })
+        : { stage: '' };
+      if (stageNow && !stageIs(stageNow, 'In Main') && !stageIs(stageNow, 'In UAT')) {
+        results.push({ issueNumber, status: 'skipped-not-in-main' });
+        console.log(`Issue #${issueNumber}: Stage is ${stageNow}, not In Main; UAT notify leaves it alone`);
+        continue;
+      }
+      if (projectsPat) {
         await api.setIssueStage({ owner, repo, issueNumber, stageName: 'In UAT', projectsPat });
       }
 

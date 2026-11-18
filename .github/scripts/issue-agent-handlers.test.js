@@ -150,6 +150,8 @@ function recordingIo(issue, prBody) {
     assignIssue: async () => {
       calls.push('assign');
     },
+    mayEnterInMain: async () => true,
+    readIssueOrgStage: async () => ({ stage: 'In Main', fields: MOCK_ORG_FIELDS }),
   };
   return { calls, io };
 }
@@ -580,4 +582,35 @@ test('v2 engine owns the issue: the prod fallback without project config does no
   });
   assert.deepEqual(calls, []);
   assert.equal(result.results[0].status, 'skipped-v2-owned');
+});
+
+test('#2394 AAT: a merge that does not complete the table does not write Stage', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'off' });
+  const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
+  io.mayEnterInMain = async () => false;
+  const result = await handleMergedPr({ ...mergedArgs, io });
+  assert.deepEqual(calls.filter((c) => c === 'stage'), []);
+  assert.equal(result.results[0].status, 'In progress');
+});
+
+test('#2394 AAT: UAT notify leaves an issue whose Stage is still before In Main alone', async (t) => {
+  stubQueue(t, 'syncDeployResult');
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'off' });
+  const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Refs #2335');
+  Object.assign(io, prodProjectIo({ stageByIssue: () => 'In progress' }));
+  const result = await handleUatWorkflowResult({
+    owner: 'KanopeeKa',
+    repo: 'AgathaTrack',
+    deployRef: 'uat-261117-2417',
+    conclusion: 'success',
+    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/1',
+    token: 'test-token',
+    projectsPat: 'projects-pat',
+    projectId: 'project',
+    statusFieldId: 'status-field',
+    io,
+  });
+  assert.deepEqual(calls.filter((c) => c === 'stage' || c === 'comment'), []);
+  assert.equal(result.results[0].status, 'skipped-not-in-main');
 });
