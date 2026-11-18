@@ -268,17 +268,77 @@ test('runGate: on blocks with exit 1; dry-run reports the same list and exits 0'
   assert.match(dry.summary, /#7/);
 });
 
-test('runGate: on fails closed on an API error, and an override lets it through', async () => {
+test('runGate: on fails closed on an API error, and an authorised override lets it through', async () => {
   const closed = await runGate({ env: { ...GATE_ENV, AAT_GATE: 'on' }, collect: brokenCollect, loadConfigFn: () => CONFIG, log: quiet });
   assert.equal(closed.exitCode, 1);
   assert.match(closed.summary, /GitHub API 502/);
   const overridden = await runGate({
-    env: { ...GATE_ENV, AAT_GATE: 'on', AAT_OVERRIDE_REASON: 'owner waiver' },
+    env: { ...GATE_ENV, AAT_GATE: 'on', AAT_OVERRIDE_REASON: 'owner waiver', GITHUB_ACTOR: 'owner-login', AAT_OVERRIDE_ACTORS: 'other, owner-login' },
     collect: brokenCollect,
     loadConfigFn: () => CONFIG,
     log: quiet,
   });
   assert.equal(overridden.exitCode, 0);
+  assert.match(overridden.summary, /authorised actor/);
+});
+
+test('runGate: an override from an actor not in AAT_OVERRIDE_ACTORS is ignored, and an empty list allows none', async () => {
+  const notListed = await runGate({
+    env: { ...GATE_ENV, AAT_GATE: 'on', AAT_OVERRIDE_REASON: 'ship it', GITHUB_ACTOR: 'someone', AAT_OVERRIDE_ACTORS: 'owner-login' },
+    collect: blockingCollect,
+    loadConfigFn: () => CONFIG,
+    log: quiet,
+  });
+  assert.equal(notListed.exitCode, 1);
+  assert.match(notListed.summary, /Override ignored: someone is not in AAT_OVERRIDE_ACTORS/);
+  const emptyList = await runGate({
+    env: { ...GATE_ENV, AAT_GATE: 'on', AAT_OVERRIDE_REASON: 'ship it', GITHUB_ACTOR: 'someone' },
+    collect: blockingCollect,
+    loadConfigFn: () => CONFIG,
+    log: quiet,
+  });
+  assert.equal(emptyList.exitCode, 1);
+});
+
+test('runGate: the read token is required; GITHUB_TOKEN is not used as a fallback', async () => {
+  const env = { ...GATE_ENV, AAT_GATE: 'on' };
+  delete env.AAT_GATE_READ_TOKEN;
+  const out = await runGate({ env: { ...env, GITHUB_TOKEN: 'ghs_workflow' }, collect: blockingCollect, loadConfigFn: () => CONFIG, log: quiet });
+  assert.equal(out.exitCode, 1);
+  assert.match(out.summary, /AAT_GATE_READ_TOKEN are required/);
+});
+
+test('runGate: with aat.enabled false nothing is required, even in on mode with no token or project IDs', async () => {
+  let called = false;
+  const out = await runGate({
+    env: { AAT_GATE: 'on', PROMOTED_SHA: 'main' },
+    collect: async () => { called = true; },
+    loadConfigFn: () => CONFIG_OFF,
+    log: quiet,
+  });
+  assert.equal(out.exitCode, 0);
+  assert.equal(called, false);
+});
+
+test('runGate: summary and log text is plain (no newlines, no workflow commands from user-supplied text)', async () => {
+  const out = await runGate({
+    env: {
+      ...GATE_ENV,
+      AAT_GATE: 'dry-run',
+      AAT_OVERRIDE_REASON: 'x\n::set-output name=evil::1 | <b>',
+      GITHUB_ACTOR: 'owner-login',
+      AAT_OVERRIDE_ACTORS: 'owner-login',
+    },
+    collect: blockingCollect,
+    loadConfigFn: () => CONFIG,
+    log: quiet,
+  });
+  // The summary is a markdown file, not stdout, so workflow commands only matter on log lines. The
+  // override note must be one line with the user text reduced to safe characters.
+  const overrideLine = out.summary.split('\n').find((line) => line.includes('Override recorded'));
+  assert.ok(overrideLine);
+  assert.doesNotMatch(overrideLine, /[<>|]/);
+  assert.match(overrideLine, /set-output name=evil/);
 });
 
 test('runGate: dry-run never fails on an error, and a bad SHA fails only in on', async () => {

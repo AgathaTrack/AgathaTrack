@@ -13,6 +13,14 @@
 
 const MODES = new Set(['off', 'dry-run', 'on']);
 
+/**
+ * Plain text for the job summary and workflow-command lines. Values come from GitHub issue fields,
+ * API errors and the dispatch input, so anything outside a small safe set (and every newline) is dropped.
+ */
+function plainText(value, max = 200) {
+  return String(value ?? '').replace(/[^A-Za-z0-9 ._,:/#()=+@-]/g, '').slice(0, max);
+}
+
 function resolveMode(raw) {
   const value = String(raw || '').trim().toLowerCase();
   if (!value) {
@@ -57,9 +65,9 @@ function evaluateProdGate({ mode, candidates, overrideReason = '' }) {
 }
 
 function renderSummary({ mode, promotedSha, result, notes = [] }) {
-  const lines = [`## Deploy PROD — AAT gate (\`AAT_GATE=${mode}\`)`, '', `Promoted SHA: \`${promotedSha}\``, ''];
+  const lines = [`## Deploy PROD — AAT gate (\`AAT_GATE=${plainText(mode, 20)}\`)`, '', `Promoted SHA: \`${plainText(promotedSha, 40)}\``, ''];
   for (const note of notes) {
-    lines.push(`- ${note}`);
+    lines.push(`- ${plainText(note, 300)}`);
   }
   const list = result.wouldBlock;
   if (list.length === 0) {
@@ -67,14 +75,14 @@ function renderSummary({ mode, promotedSha, result, notes = [] }) {
   } else {
     lines.push('| Issue | Stage | Merge | Acceptance |', '|---|---|---|---|');
     for (const item of list) {
-      lines.push(`| #${item.number} | ${item.stage} | \`${item.mergeSha}\` | ${item.acceptance || 'unset'} |`);
+      lines.push(`| #${Number(item.number)} | ${plainText(item.stage, 40)} | \`${plainText(item.mergeSha, 40)}\` | ${plainText(item.acceptance, 40) || 'unset'} |`);
     }
   }
   if (result.override) {
-    lines.push('', `Override: ${result.override}`);
+    lines.push('', `Override: ${plainText(result.override, 300)}`);
   }
   lines.push('', result.pass ? 'Result: pass' : 'Result: **blocked**', '');
   return lines.join('\n');
 }
 
-module.exports = { MODES, resolveMode, evaluateProdGate, renderSummary };
+module.exports = { MODES, plainText, resolveMode, evaluateProdGate, renderSummary };

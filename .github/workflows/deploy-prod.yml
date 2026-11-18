@@ -15,7 +15,7 @@ on:
         type: boolean
         default: false
       aat_override_reason:
-        description: Owner waiver for the acceptance guard (#2424); passes AAT_GATE=on and is recorded in the job summary. Leave empty otherwise.
+        description: Waiver for the acceptance guard (#2424). Honoured only when the dispatching user is listed in the AAT_OVERRIDE_ACTORS variable; recorded in the job summary. Leave empty otherwise.
         required: false
         default: ''
 env:
@@ -95,14 +95,17 @@ jobs:
         run: bash scripts/ci/resolve-prod-trigger.sh
 
       # Prod acceptance guard (#2424). AAT_GATE unset = off (no API calls). dry-run only reports.
-      # on fails this job, so deploy-prod does not run; the override reason passes it and is recorded.
+      # on fails this job, so deploy-prod does not run. An override counts only when the dispatching
+      # actor is listed in the AAT_OVERRIDE_ACTORS repository variable; it is recorded in the summary.
+      # The read token is required: there is no fallback to GITHUB_TOKEN.
       - name: AAT prod gate
         if: steps.resolve.outputs.proceed == 'true'
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
           AAT_GATE: ${{ vars.AAT_GATE }}
           AAT_GATE_READ_TOKEN: ${{ secrets.AAT_GATE_READ_TOKEN }}
+          AAT_OVERRIDE_ACTORS: ${{ vars.AAT_OVERRIDE_ACTORS }}
           GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
           ISSUE_PIPELINE_V2_LABEL: ${{ vars.ISSUE_PIPELINE_V2_LABEL }}
