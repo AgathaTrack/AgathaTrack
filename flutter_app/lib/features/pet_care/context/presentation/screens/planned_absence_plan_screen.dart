@@ -108,7 +108,6 @@ class PlannedAbsencePlanScreen extends ConsumerWidget {
               actions: [
                 Semantics(
                   identifier: 'away_plan_download_handover',
-                  enabled: !absence.isCancelled,
                   child: IconButton(
                     key: const Key('away_plan_download_handover'),
                     tooltip: l.downloadReport,
