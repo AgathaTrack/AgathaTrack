@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 import {
   assertValidAuditJson,
   collectHighCriticalGhsas,
@@ -40,7 +42,26 @@ test('collectHighCriticalGhsas dedupes transitive highs', () => {
   assert.deepEqual([...ghsas], ['GHSA-FC5Q-39XC-VJPF']);
 });
 
-const ALLOWLIST_PATH = fileURLToPath(new URL('../npm-audit-allowlist.json', import.meta.url));
+// Fixture allowlist: the test must not depend on the live scripts/npm-audit-allowlist.json,
+// whose entries are removed or expire over time.
+const ALLOWLIST_DIR = mkdtempSync(path.join(tmpdir(), 'npm-audit-allowlist-'));
+const ALLOWLIST_PATH = path.join(ALLOWLIST_DIR, 'allowlist.json');
+writeFileSync(
+  ALLOWLIST_PATH,
+  JSON.stringify({
+    version: 1,
+    entries: [
+      {
+        ghsa: 'GHSA-fc5q-39xc-vjpf',
+        packages: ['server'],
+        reason: 'fixture',
+        expires: '2026-12-18',
+        approved_at: '2026-11-18',
+        refs: [],
+      },
+    ],
+  }),
+);
 
 test('loadAllowlist splits active and expired by package', () => {
   const state = loadAllowlist(ALLOWLIST_PATH, 'server', new Date('2026-11-18T12:00:00Z'));
