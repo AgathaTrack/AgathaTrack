@@ -237,6 +237,7 @@ run_governance() {
   node --test .github/scripts/github-project-lib.test.js
   node --test scripts/stage_mirror_decide.test.js
   node --test scripts/stage_mirror_apply.test.js
+  node --test scripts/stage_mirror_fields.test.js
   node --test scripts/db/normalize-schema-dump.test.js
   node scripts/db/check-migration-manifest.js
   node scripts/check_migration_sql_transactions.js

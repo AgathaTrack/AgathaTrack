@@ -5,6 +5,15 @@ const { stageOrgFieldOptions } = require('./stage_mirror_config');
 
 const STAGE_FIELD_NAME = 'Stage';
 
+function githubRestErrorStatus(err) {
+  const match = /failed \((\d{3})\):/.exec(String(err?.message || ''));
+  return match ? Number(match[1]) : null;
+}
+
+function isOrgIssueFieldsReadRefused(err) {
+  return githubRestErrorStatus(err) === 403;
+}
+
 function readIssueFieldStageName(entry) {
   if (!entry) {
     return null;
@@ -44,15 +53,19 @@ function loadOrgStageFieldFromEnv() {
  * Read the org Stage field. The real option list is read first, so a missing or renamed option fails
  * at start-up. Only when that read is refused (the projects PAT has no org issue-field read, see
  * #2375) does it fall back to the id in STAGE_ISSUE_FIELD_ID with the static option list, and that
- * fallback logs a warning every run: the options are then unverified.
+ * fallback logs a warning every run: the options are then unverified. Auth, configuration, and
+ * transient API errors are not eligible for that fallback (HTTP 403 only).
  */
-async function loadOrgStageField({ org, token, warn = console.warn }) {
+async function loadOrgStageField({ org, token, warn = console.warn, getIssueFields = null }) {
   const envId = loadOrgStageFieldFromEnv()?.id ?? null;
+  const fetchFields =
+    getIssueFields ||
+    (() => rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token));
   let fields;
   try {
-    fields = await rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token);
+    fields = await fetchFields();
   } catch (err) {
-    if (!envId) {
+    if (!envId || !isOrgIssueFieldsReadRefused(err)) {
       throw err;
     }
     warn(
@@ -115,6 +128,8 @@ function assertBoardColumnsMatchStageOptions(boardColumns, stageOptions, boardLa
 
 module.exports = {
   STAGE_FIELD_NAME,
+  githubRestErrorStatus,
+  isOrgIssueFieldsReadRefused,
   loadOrgStageFieldFromEnv,
   loadOrgStageField,
   fetchIssueStage,
