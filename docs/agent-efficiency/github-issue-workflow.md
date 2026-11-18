@@ -42,6 +42,7 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 |---------|-------|---------|
 | `ISSUE_PIPELINE_V2` | repo variable | `off` (default; the job does not run), `dry-run` (decides and logs, sends nothing), `on` (writes). Separate from the legacy `ISSUE_PIPELINE`. |
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
+| `WIP_LIMIT` | repo variable | Temporary. `off` lifts the Ready queue cap (`limits.wip`) for every tick, so Ready issues launch without waiting for a free slot. Any other value, or unset, keeps the committed limit. Remove the variable to restore it. |
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
 | `agents`, `limits`, `launchRunners` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. A bad edit fails in CI. |
 
@@ -176,6 +177,9 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 
 ### Operating it
 
+- **Lifting the WIP cap:** `WIP_LIMIT=off` (see the switches table) only changes the Ready gate. In `on` mode it still
+  writes only to issues matching `ISSUE_PIPELINE_V2_LABEL`, but with the cap off every matching Ready issue launches on
+  the next tick. Set it back or remove it when the soak is done.
 - **Dry run:** set `ISSUE_PIPELINE_V2=dry-run` (or dispatch the workflow) and read the `pipeline_v2_action` lines and the
   tick summary. Check that nothing acts on hand-driven issues (label them `manual-only`).
 - **Migration (once):** dispatch [`issue-pipeline-v2-migrate.yml`](../../.github/workflows/issue-pipeline-v2-migrate.yml)
