@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
+  assertValidAuditJson,
   collectHighCriticalGhsas,
   countHighCriticalMeta,
   evaluateFullTree,
@@ -68,4 +69,27 @@ test('countHighCriticalMeta sums high and critical', () => {
     }),
     4,
   );
+});
+
+test('assertValidAuditJson rejects error payloads', () => {
+  assert.match(assertValidAuditJson({ error: 'lockfile corrupt' }, 'full'), /lockfile corrupt/);
+  assert.match(assertValidAuditJson(null, 'full'), /empty/);
+  assert.match(
+    assertValidAuditJson({ metadata: {} }, 'full'),
+    /missing metadata\.vulnerabilities/,
+  );
+  assert.equal(assertValidAuditJson({ metadata: { vulnerabilities: {} } }, 'full'), null);
+});
+
+test('metadata high without GHSA url implies unmapped findings', () => {
+  const auditJson = {
+    metadata: { vulnerabilities: { high: 2, critical: 0 } },
+    vulnerabilities: {
+      foo: {
+        via: [{ severity: 'high', url: 'https://example.com/CVE-123', name: 'foo' }],
+      },
+    },
+  };
+  assert.equal(countHighCriticalMeta(auditJson), 2);
+  assert.equal(collectHighCriticalGhsas(auditJson).size, 0);
 });

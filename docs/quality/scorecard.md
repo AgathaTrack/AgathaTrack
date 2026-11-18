@@ -52,7 +52,7 @@ Living metrics for Agatha Track quality. Update when CI or test counts change ma
 
 | Check | Where | Blocks `main`? |
 |---|---|---|
-| `npm audit --audit-level=high` | server, e2e | Yes |
+| `node scripts/npm_audit_gate.js --package server\|e2e` | server, e2e | Yes |
 | CodeQL (JavaScript) | `.github/workflows/codeql.yml` | Yes (default query suite) |
 | Dependabot | weekly PRs | Via review |
 | axe (critical + serious) | `uat-live-e2e.yml` (advisory) | No — not prod-ready deploy gate |
