@@ -10,7 +10,7 @@ const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/githu
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
-const { loadConfig } = require('./issue_pipeline_v2_config');
+const { applyWipOverride, loadConfig } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
@@ -246,7 +246,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [] };
   }
   deploys.reset();
-  const config = io.config || loadConfig();
+  // WIP_LIMIT=off (repo variable) lifts the Ready queue cap for this run; see applyWipOverride.
+  const config = applyWipOverride(io.config || loadConfig(), process.env.WIP_LIMIT);
   const list = io.listProjectIssues || listProjectIssues;
   const getIssue =
     io.getIssue ||
