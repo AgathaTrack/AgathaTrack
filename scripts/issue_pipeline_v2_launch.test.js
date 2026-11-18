@@ -386,3 +386,23 @@ test('deriveLaunchFacts: a pending record with no busy label is one failed start
   assert.equal(busy.failures, 1);
   assert.equal(busy.busy, true);
 });
+
+test('a pending delivery record is the agent lookup and counts as an engine-started run', () => {
+  const { newestDeliveryLaunchAgentId } = require('./issue_pipeline_v2_launch');
+  const { engineStartedRun } = require('./issue_pipeline_v2_release');
+  const engine = new Set(['pawpet-bot']);
+  const pending = {
+    body: '<!-- v2:launch-pending agent=pawpet-bot purpose=delivery -->\nLaunching',
+    user: { login: 'pawpet-bot' },
+    created_at: '2026-11-18T10:00:00Z',
+  };
+  const failed = {
+    body: '<!-- v2:launch-failed agent=pawpet-claude -->\nLaunching failed',
+    user: { login: 'pawpet-bot' },
+    created_at: '2026-11-18T10:05:00Z',
+  };
+  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending], engineLogins: ['pawpet-bot'] }), 'pawpet-bot');
+  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending, failed], engineLogins: ['pawpet-bot'] }), 'pawpet-bot');
+  assert.equal(engineStartedRun(pending, engine), true);
+  assert.equal(engineStartedRun(failed, engine), false, 'a failed start never counts as a run');
+});

@@ -99,7 +99,8 @@ function listLaunchRecords({ comments, engineLogins }) {
 
 function newestDeliveryLaunchAgentId({ comments, engineLogins }) {
   const delivery = listLaunchRecords({ comments, engineLogins }).filter(
-    (record) => record.kind === 'launch' && record.purpose === 'delivery',
+    // A pending record counts too: the run may have started before its run record was written.
+    (record) => ['launch', 'launch-pending'].includes(record.kind) && record.purpose === 'delivery',
   );
   return delivery.at(-1)?.agent || null;
 }
