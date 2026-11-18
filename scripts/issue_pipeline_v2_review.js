@@ -1,7 +1,8 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
-const { agentLogins, resolveAgent } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent, entryId, entryActsAs } = require('./issue_pipeline_v2_config');
+const { findVerifiedVerdicts, useSignedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const REVIEW_REQUEST = 'v2:review-request';
 
@@ -77,7 +78,20 @@ function votesOnRequest({ request, reactions, config }) {
  *   totalVotes      votes cast since the issue entered In analysis (the first trusted request):
  *                   one per listed agent per request hash, plus agent body edits after it
  */
-function deriveReviewFacts({ comments, reactionsByComment, edits, bodyAuthor, config, engineLogins, editors }) {
+function deriveReviewFacts({
+  comments,
+  reactionsByComment,
+  edits,
+  bodyAuthor,
+  config,
+  engineLogins,
+  editors,
+  issueNumber,
+  bodyHash,
+  voteKey,
+  limits,
+  now,
+}) {
   const requests = findReviewRequests(comments, engineLogins, editors);
   const agents = new Set(agentLogins(config));
   const lastEdit = (edits || [])[edits.length - 1];
@@ -86,13 +100,44 @@ function deriveReviewFacts({ comments, reactionsByComment, edits, bodyAuthor, co
     return { review: {}, lastBodyEditor, totalVotes: 0 };
   }
   const votes = [];
-  for (const request of requests) {
-    votes.push(
-      ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }),
-    );
+  const signed = useSignedVerdicts(config) && voteKey && bodyHash && issueNumber;
+  const enteredAt = Date.parse(requests[0].comment.created_at);
+  if (signed) {
+    for (const verdict of findVerifiedVerdicts({
+      comments,
+      config,
+      engineLogins,
+      issueNumber,
+      bodyHash,
+      voteKey,
+      limits,
+      now,
+      kinds: ['review'],
+      sinceMs: enteredAt,
+    })) {
+      if (verdict.kind !== 'review') {
+        continue;
+      }
+      const vote = verdict.value === 'up' ? 'up' : verdict.value === 'down' ? 'down' : null;
+      if (!vote) {
+        continue;
+      }
+      votes.push({
+        login: verdict.actsAs,
+        agentId: verdict.agentId,
+        vote,
+        hash: verdict.hash,
+        at: verdict.at,
+      });
+    }
+  } else {
+    for (const request of requests) {
+      votes.push(
+        ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }),
+      );
+    }
   }
   const newest = requests[requests.length - 1];
-  const enteredAt = Date.parse(requests[0].comment.created_at);
   const agentEdits = (edits || []).filter(
     (edit) => agents.has(edit.editor) && Date.parse(edit.editedAt) >= enteredAt,
   ).length;

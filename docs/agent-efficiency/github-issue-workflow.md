@@ -115,8 +115,11 @@ listed agent); the engine never clears the flag.
 - **Spec and review requests** are engine comments with a hidden marker: `v2:spec-request` and `v2:review-request hash=<hash>`
   store the assigned agent **id** and who timed out; the visible line `@mentions` the agent's **`actsAs`** login. A reassignment edits the comment in place. A review request is posted on
   entering In analysis and on each new body hash. Intent review markers store `agent=<id>` the same way.
-- **Votes** are 👍/👎 reactions by listed agents on the request comment for the current hash; the owner's reactions do not
-  count. The last body editor's edit counts as its approval.
+- **Votes** are 👍/👎 reactions by listed agents on the request comment for the current hash when each pool id has a distinct
+  `actsAs` login. When several ids share one GitHub login, reactions cannot name the voter: those agents post signed
+  `<!-- v2:verdict ... -->` comments via `node scripts/pipeline_verdict.js` using `PIPELINE_RUN_SECRET` from the doorbell
+  launch (the engine keeps `PIPELINE_VOTE_KEY` and verifies signatures; reactions are ignored for that pool). The owner's
+  reactions do not count. The last body editor's edit counts as its approval.
 - **Delivery plan:** the method (`PR`, `light-plan` or `execute-plan`, read from the body's `Method:` line, default `PR`),
   the planned work, the `agent-paths` block and the Definition of Done are written into the body during review. After
   convergence the body is frozen except for Definition of Done ticks.
@@ -125,7 +128,8 @@ listed agent); the engine never clears the flag.
   adversarial review in In analysis, intent review in In Main). The run is not a delivery: no `busy` label, no PR, and it
   skips the legacy launch preflight. With too little information it writes a best-effort spec,
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
-  Definition of Done) and 👍s the spec request, so the engine moves the issue to In analysis. A failed start is only logged;
+  Definition of Done) and signs spec pass (`pipeline_verdict.js spec up`, or 👍 on the request when `actsAs` logins are
+  unique), so the engine moves the issue to In analysis. A failed start is only logged;
   the pickup timeout reassigns. Agents on other runners (`claude`) are not assigned. Every pickup (spec, review, intent review, wake, and the last editor asked to revise) goes only to agents whose runner is in `launchRunners`. An assignee outside that set is reassigned on the next tick, without waiting out the timeout; a wake rings the holder only when that holder is startable, and does nothing when no startable agent is left. When none is left for a new request, To do and In analysis set `Blocked=stalled` and intent review is skipped. Within one tick the least recently used agent is picked; the order is not kept across ticks, so the first pickup follows config order and the pickup timeout is what moves a request between startable agents. The full `agents` list still counts for votes and convergence.
 - **Launch preflight:** a delivery launch (Ready, and the one resume) still runs the legacy safety preflight
   (`.github/scripts/agent-safety-lib.js`): the risky-scope and blocking-label (`busy`, `manual-only`, `blocked`) checks

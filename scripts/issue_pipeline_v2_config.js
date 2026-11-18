@@ -176,6 +176,18 @@ function selfStartingLogins(config) {
   return startableIds(config);
 }
 
+/** GitHub logins shared by more than one pool id (signed verdicts required). */
+function sharedActsAs(config) {
+  const counts = new Map();
+  for (const agent of config.agents || []) {
+    const login = entryActsAs(agent);
+    if (login) {
+      counts.set(login, (counts.get(login) || 0) + 1);
+    }
+  }
+  return [...counts.entries()].filter(([, n]) => n > 1).map(([login]) => login);
+}
+
 function loadConfig(file = DEFAULT_CONFIG_PATH) {
   return validateConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
 }
@@ -187,6 +199,8 @@ module.exports = {
   normalizeAgentEntry,
   validateConfig,
   loadConfig,
+  entryId,
+  entryActsAs,
   resolveAgent,
   agentActsAs,
   agentIds,
@@ -194,4 +208,5 @@ module.exports = {
   launchableAgents,
   startableIds,
   selfStartingLogins,
+  sharedActsAs,
 };

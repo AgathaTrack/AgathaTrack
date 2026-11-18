@@ -2,6 +2,7 @@
 
 const { rest } = require('../.github/scripts/github-project-lib');
 const { agentLogins, resolveAgent } = require('./issue_pipeline_v2_config');
+const { findVerifiedVerdicts, useSignedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const SPEC_REQUEST = 'v2:spec-request';
 const WRITE_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
@@ -66,26 +67,57 @@ function findSpecRequest(comments, engineLogins, editors = {}) {
  * Spec facts for `decide()`. `reactions` are the reactions on the request comment; only a 👍
  * from a listed agent created after the request counts as the DoR pass.
  */
-function deriveSpecFacts({ comments, reactions, config, engineLogins, editors }) {
+function deriveSpecFacts({
+  comments,
+  reactions,
+  config,
+  engineLogins,
+  editors,
+  issueNumber,
+  bodyHash,
+  voteKey,
+  limits,
+  now,
+}) {
   const request = findSpecRequest(comments, engineLogins, editors);
   if (!request) {
     return {};
   }
-  const agents = new Set(agentLogins(config));
   const since = Date.parse(request.comment.created_at);
-  const passed = (reactions || []).find(
-    (reaction) =>
-      reaction.content === '+1' &&
-      agents.has(reaction.user?.login) &&
-      Date.parse(reaction.created_at) >= since,
-  );
   const assignedTo = resolveAgent(config, request.assigned)?.id || request.assigned;
   const timedOut = (request.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
+  let passedBy = null;
+  if (useSignedVerdicts(config) && voteKey && bodyHash && issueNumber) {
+    const specUp = findVerifiedVerdicts({
+      comments,
+      config,
+      engineLogins,
+      issueNumber,
+      bodyHash,
+      voteKey,
+      limits,
+      now,
+      kinds: ['spec'],
+      sinceMs: since,
+    }).filter((verdict) => verdict.value === 'up');
+    if (specUp.length > 0) {
+      passedBy = specUp.at(-1).actsAs;
+    }
+  } else {
+    const agents = new Set(agentLogins(config));
+    const passed = (reactions || []).find(
+      (reaction) =>
+        reaction.content === '+1' &&
+        agents.has(reaction.user?.login) &&
+        Date.parse(reaction.created_at) >= since,
+    );
+    passedBy = passed ? passed.user.login : null;
+  }
   return {
     requestedAt: Date.parse(request.comment.updated_at || request.comment.created_at),
     assignedTo,
     timedOut,
-    passedBy: passed ? passed.user.login : null,
+    passedBy,
     commentId: request.comment.id,
   };
 }

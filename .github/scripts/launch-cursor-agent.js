@@ -53,11 +53,11 @@ function botLaunchEnvVars(env = process.env) {
   return workerLaunchEnvVars(env.EXECUTE_PLAN_BOT_TOKEN);
 }
 
-async function launchAgent({ apiKey, repoUrl, promptText, model, envVars }) {
+async function launchAgent({ apiKey, repoUrl, promptText, model, envVars, autoCreatePR = true }) {
   const body = {
     prompt: { text: promptText },
     repos: [{ url: repoUrl, startingRef: 'main' }],
-    autoCreatePR: true,
+    autoCreatePR,
     workOnCurrentBranch: false,
   };
 
