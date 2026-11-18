@@ -6,6 +6,12 @@ import { isLiveUatTarget } from './hosting';
 import { createLiveUatUser } from './create-live-uat-user';
 import { refreshFlutterAccessibility } from './flutter';
 import { normalizeStoredToken } from './normalize-stored-token';
+import {
+  DEFAULT_TEST_FIRST_NAME,
+  DEFAULT_TEST_LAST_NAME,
+  DEFAULT_TEST_PASSWORD,
+  generateTestEmail,
+} from './test-user-defaults';
 
 export async function readAccessTokenFromPage(page: Page): Promise<string> {
   const raw = await page.evaluate(() => {
@@ -36,11 +42,10 @@ export async function signupUserViaUi(
     lastName: string;
   }> = {},
 ): Promise<TestUser> {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const email = overrides.email ?? `e2e-${suffix}@example.com`;
-  const password = overrides.password ?? 'E2eTestPass1';
-  const firstName = overrides.firstName ?? 'E2E';
-  const lastName = overrides.lastName ?? 'User';
+  const email = overrides.email ?? generateTestEmail();
+  const password = overrides.password ?? DEFAULT_TEST_PASSWORD;
+  const firstName = overrides.firstName ?? DEFAULT_TEST_FIRST_NAME;
+  const lastName = overrides.lastName ?? DEFAULT_TEST_LAST_NAME;
 
   const landing = new LandingPage(page);
   await landing.goto();
