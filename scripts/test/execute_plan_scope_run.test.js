@@ -264,6 +264,25 @@ test('support PR without control issue → failure unblocks (fail closed)', asyn
   assert.deepEqual([res.conclusion, res.title, res.planId], ['failure', 'unblocks', PLAN]);
 });
 
+test('support PR with unreadable PR data stays a failure in report-only mode', async () => {
+  const prev = process.env.FORBIDDEN_GATE_MODE;
+  process.env.FORBIDDEN_GATE_MODE = 'report-only';
+  try {
+    const { client } = setup({
+      extra: { [`GET ${R}/pulls/5/files?per_page=100`]: { status: 502, body: { message: 'Bad Gateway' } } },
+    });
+    const res = await runScopeCheck(client, {
+      ...phasePr,
+      headRef: `cursor/${PLAN}-support-1-1`,
+      baseRef: INTEGRATION,
+    });
+    assert.deepEqual([res.conclusion, res.title, res.planId], ['failure', 'error', PLAN]);
+  } finally {
+    if (prev === undefined) delete process.env.FORBIDDEN_GATE_MODE;
+    else process.env.FORBIDDEN_GATE_MODE = prev;
+  }
+});
+
 test('support PR missing Unblocks → failure unblocks', async () => {
   const { client } = setup({ files: ['server/bin/server.js'] });
   const res = await runScopeCheck(client, {

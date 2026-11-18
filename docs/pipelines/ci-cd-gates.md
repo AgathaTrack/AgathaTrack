@@ -68,7 +68,7 @@ Triggered by `.github/workflows/ci.yml` → `_reusable-pr-startup-smoke.yml`,
 | `ci-gate / CI passed` | `ci.yml` → `_reusable-ci-gate.yml` (aggregator — see maintenance note below) |
 | `Analyze JavaScript` | `codeql.yml` (separate workflow; weekly schedule preserved) |
 
-**Forbidden paths:** every in-repo PR → `main` is scanned by required `execute-plan-scope` (trusted code on `main`). Owner approving review on the PR head clears forbidden hits; owner-authored PRs skip the scan ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)). Non-plan PRs to other bases (for example integration branches) are not scanned and make no GitHub reads.
+**Forbidden paths:** every in-repo PR → `main` is scanned by required `execute-plan-scope` (trusted code on `main`). Owner approving review on the PR head clears forbidden hits; owner-authored PRs skip the scan ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)). PRs with no plan ID to other bases (for example integration branches) are not scanned and make no GitHub reads; plan-ID PRs to other bases only look up their control issue.
 
 #### `ci-gate` maintenance (dependency list drift)
 

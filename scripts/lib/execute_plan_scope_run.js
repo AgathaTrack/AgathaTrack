@@ -188,10 +188,11 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
 
   const planId = planIdFromRefs({ head_ref: headRef, base_ref: baseRef });
   // The control issue is looked up before any PR read, as before #1980. A PR with no active plan
-  // issue is a non-plan PR: outside `main` it returns here with no GitHub or config read.
+  // issue (and not a support head) is non-plan: outside `main` it returns before any config or PR read.
+  // A plan-id PR outside `main` still looks up its control issue, as it did before #1980.
   const issue = planId ? await findControlIssue(client, planId) : null;
-  const nonPlan = !(planId && issue);
-  if (!supportHead && nonPlan && baseRef !== 'main') return result('success', 'ok', 'not an execute-plan PR');
+  const nonPlan = !supportHead && !(planId && issue);
+  if (nonPlan && baseRef !== 'main') return result('success', 'ok', 'not an execute-plan PR');
 
   let config;
   try {
@@ -216,6 +217,7 @@ async function runScopeCheck(client, { prNumber, headSha, headRef, baseRef, head
       return nonPlanInfrastructureOutcome('PR load', e, mode);
     }
     if (e instanceof PullFilesOverflow) return result('failure', 'too-many-files', e.message, planId);
+    if (supportHead) return result('failure', 'error', e.message, planId || supportHead.planId);
     throw e;
   }
 
