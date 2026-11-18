@@ -65,6 +65,11 @@ test('kind must fit the launch stage', () => {
   assert.equal(find([verdict({ kind: 'spec', stage: 'To do' })], { stage: 'To do' }).length, 1);
 });
 
+test('no kind counts under a launch stage outside To do / In analysis', () => {
+  assert.equal(find([verdict({ stage: 'In Main' })], { stage: 'In Main' }).length, 0);
+  assert.equal(find([verdict({ kind: 'edit', stage: 'In Main' })], { stage: 'In Main' }).length, 0);
+});
+
 test('only the first verdict of a kind on a hash counts', () => {
   assert.equal(find([verdict({ id: 2, at: 10 }), verdict({ id: 3, at: 11 })]).length, 1);
 });

@@ -7,6 +7,9 @@ const { listLaunchRecords } = require('./issue_pipeline_v2_launch');
 const VERDICT =
   /<!--\s*v2:verdict\s+agent=(\S+)\s+nonce=([a-f0-9]+)\s+kind=(spec|review|edit)\s+hash=(\S+)\s+value=(\S+)\s+sig=([a-f0-9]+)\s*-->/i;
 
+/** Launch stage each signed kind is allowed under (§3.6). Any other stage's doorbell cannot sign. */
+const VERDICT_STAGE = { spec: 'To do', review: 'In analysis', edit: 'In analysis' };
+
 function parseVerdict(body) {
   const match = VERDICT.exec(String(body || ''));
   if (!match) {
@@ -54,7 +57,7 @@ function verifyVerdictParsed({
     return { ok: false, reason: 'wrong-author' };
   }
   const stage = launch.stage || 'To do';
-  if ((parsed.kind === 'spec') !== (stage === 'To do')) {
+  if (VERDICT_STAGE[parsed.kind] !== stage) {
     return { ok: false, reason: 'kind-stage-mismatch' };
   }
   if (parsed.hash !== bodyHash) {
