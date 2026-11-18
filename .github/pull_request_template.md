@@ -20,6 +20,7 @@
 ## Checklist
 
 - [ ] **One outcome** — no unrelated "and also…" changes ([policy](docs/agent-efficiency/atomic-pr-policy.md))
+- [ ] **Issue link** — `Refs #n` for issue-linked work; never `Closes #n` (issue lifecycle is owned by the pipeline and UAT validation)
 - [ ] **Snags** — trivial fixes applied or tracked (issue / micro-PR); no silent deferrals
 - [ ] Synced with `main` (`git fetch origin main && git rebase origin/main`) — no unresolved conflicts
 - [ ] `cd server && npx jest --env=node --forceExit` passes
