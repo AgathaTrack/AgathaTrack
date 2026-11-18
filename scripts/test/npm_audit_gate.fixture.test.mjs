@@ -8,6 +8,7 @@ import {
   evaluateFullTree,
   ghsaFromAdvisoryUrl,
   loadAllowlist,
+  walkHighCritical,
 } from '../npm_audit_gate.js';
 
 test('ghsaFromAdvisoryUrl extracts advisory id', () => {
@@ -92,4 +93,36 @@ test('metadata high without GHSA url implies unmapped findings', () => {
   };
   assert.equal(countHighCriticalMeta(auditJson), 2);
   assert.equal(collectHighCriticalGhsas(auditJson).size, 0);
+});
+
+test('unmapped high alongside an allowlisted GHSA is reported (fail closed)', () => {
+  const auditJson = {
+    metadata: { vulnerabilities: { high: 2, critical: 0 } },
+    vulnerabilities: {
+      picomatch: {
+        via: [{ severity: 'high', url: 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf' }],
+      },
+      'mystery-pkg': {
+        via: [{ severity: 'high', url: '' }],
+      },
+    },
+  };
+  const { ghsas, unmapped } = walkHighCritical(auditJson);
+  assert.deepEqual([...ghsas], ['GHSA-FC5Q-39XC-VJPF']);
+  assert.deepEqual([...unmapped], ['mystery-pkg']);
+});
+
+test('transitive high chain that reaches a GHSA is not reported as unmapped', () => {
+  const auditJson = {
+    metadata: { vulnerabilities: { high: 2, critical: 0 } },
+    vulnerabilities: {
+      jest: { via: ['jest-core'] },
+      'jest-core': {
+        via: [{ severity: 'high', url: 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf' }],
+      },
+    },
+  };
+  const { ghsas, unmapped } = walkHighCritical(auditJson);
+  assert.deepEqual([...ghsas], ['GHSA-FC5Q-39XC-VJPF']);
+  assert.equal(unmapped.size, 0);
 });

@@ -176,6 +176,7 @@ Blocking checks use `node scripts/npm_audit_gate.js --package server|e2e` (not b
 
 1. **Production tree** — `npm audit --audit-level=high --omit=dev` must report zero high/critical findings (no allowlist).
 2. **Full tree** — any remaining high/critical must match an active row in `scripts/npm-audit-allowlist.json` scoped to that package. Expired rows fail the gate until removed or renewed with owner approval.
+3. **Fail closed on unmapped findings** — any high/critical advisory in the full tree without a parseable GHSA id fails the gate, even when other findings are allowlisted (the allowlist is keyed by GHSA id only).
 
 | Decision | Date | Rationale |
 |----------|------|-----------|

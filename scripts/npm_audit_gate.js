@@ -22,31 +22,42 @@ export function ghsaFromAdvisoryUrl(url) {
   return m ? m[0].toUpperCase() : null;
 }
 
-export function collectHighCriticalGhsas(auditJson) {
+/**
+ * Walks every high/critical advisory reachable from the audit payload.
+ * Returns the GHSA ids found and the top-level package names that have a
+ * high/critical advisory without a parseable GHSA id (fail-closed input).
+ */
+export function walkHighCritical(auditJson) {
   const ghsas = new Set();
+  const unmapped = new Set();
   const vulns = auditJson.vulnerabilities ?? {};
 
-  function walkVia(name, seen = new Set()) {
+  function walkVia(name, origin, seen = new Set()) {
     if (seen.has(name)) return;
     seen.add(name);
     const entry = vulns[name];
     if (!entry) return;
     for (const via of entry.via ?? []) {
       if (typeof via === 'string') {
-        walkVia(via, seen);
+        walkVia(via, origin, seen);
       } else if (via && typeof via === 'object') {
         if (SEVERITIES.has(via.severity)) {
           const id = ghsaFromAdvisoryUrl(via.url);
           if (id) ghsas.add(id);
+          else unmapped.add(origin);
         }
       }
     }
   }
 
   for (const name of Object.keys(vulns)) {
-    walkVia(name);
+    walkVia(name, name);
   }
-  return ghsas;
+  return { ghsas, unmapped };
+}
+
+export function collectHighCriticalGhsas(auditJson) {
+  return walkHighCritical(auditJson).ghsas;
 }
 
 export function countHighCriticalMeta(auditJson) {
@@ -205,7 +216,7 @@ function main() {
   }
 
   const fullHigh = countHighCriticalMeta(full.auditJson);
-  const ghsas = collectHighCriticalGhsas(full.auditJson);
+  const { ghsas, unmapped } = walkHighCritical(full.auditJson);
 
   if (fullHigh === 0) {
     if (allowlistState.active.length) {
@@ -213,6 +224,13 @@ function main() {
     }
     console.log(`npm audit gate: ${pkg} ok (production clean; no high/critical in full tree).`);
     process.exit(0);
+  }
+
+  if (unmapped.size > 0) {
+    console.error(
+      `npm audit gate: ${pkg} has high/critical advisories without a GHSA id (${[...unmapped].sort().join(', ')}); allowlist cannot cover them; fail closed.`,
+    );
+    process.exit(1);
   }
 
   if (ghsas.size === 0) {
