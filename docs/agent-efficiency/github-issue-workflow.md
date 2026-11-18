@@ -384,6 +384,8 @@ Board columns stay on built-in Project **Status** (humans drag cards; the pipeli
 
 Reconcile uses project **Synced stage** (hidden text field) as the last-applied value. Triggers: **10-minute** schedule, `issues: edited` on this repo (field changes), and `workflow_dispatch` (`dry_run` input). **ATSupport** (`AgathaTrackPrivate`) is poll-only.
 
+A cleared `Stage` is restored from the board column (board wins). A card with no `Status` takes its column from a valid `Stage`; with neither, or an invalid `Stage`, the item is skipped, so one empty item never ends the run.
+
 **Agents:** use the REST/GraphQL issue payload `issue_field_values` / set the org **`Stage`** field when you must move stage without Projects access. Invalid values for that board are reverted on the next mirror pass (board wins). Spec and DoD: issue #2345.
 
 | Secret / variable | Purpose |
