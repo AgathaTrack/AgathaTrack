@@ -95,6 +95,10 @@ test('request-spec also starts a Cursor run for an agent whose runner the engine
   const dry = await applyAction({ action: { type: 'request-review', agent: 'pawpet-bot', hash: 'h' }, ctx: ctx({ restFn, launchFn, config: withRunners, dryRun: true }) });
   assert.equal(launches.length, 1, 'a dry run sends nothing');
   assert.ok(dry.calls.some((call) => call.path === 'cursor:/v1/agents' && call.body.stage === 'In analysis'));
+  assert.ok(
+    dry.calls.some((call) => call.method === 'POST' && call.path.endsWith('/labels') && call.body?.labels?.includes('busy')),
+    'dry-run plan includes the busy label handoff',
+  );
 });
 
 test('request-intent-review also rings a launchable agent, for the In Main stage', async () => {

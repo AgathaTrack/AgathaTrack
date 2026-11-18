@@ -153,6 +153,10 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   if (facts.now - state.requestedAt < timeoutMs) {
     return none(`${rowPrefix}.waiting`);
   }
+  // Doorbell runs mark the issue `busy`; do not ring a second agent until that work finishes.
+  if ((facts.labels || []).includes('busy')) {
+    return none(`${rowPrefix}.waiting-busy`);
+  }
   const timedOut = timedOutSet(state, facts.now, timeoutMs);
   const remaining = eligible.filter((login) => !timedOut.has(login));
   if (remaining.length === 0) {
