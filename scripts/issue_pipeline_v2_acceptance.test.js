@@ -73,9 +73,8 @@ const done = {
   lastActivityAt: NOW,
 };
 
-test('flag off is the default and In Main still requests intent review then UAT', () => {
-  assert.equal(loaded.aat.enabled, false);
-  const off = { ...loaded };
+test('flag off: In Main still requests intent review then UAT', () => {
+  const off = { ...loaded, aat: { ...loaded.aat, enabled: false } };
   const request = decide({
     mode: 'dry-run', now: NOW, onBoard: true, labels: [], stage: 'In Main', blocked: '',
     delivery: { lastMergeSha: SHA }, prAuthors: [AGENT],
