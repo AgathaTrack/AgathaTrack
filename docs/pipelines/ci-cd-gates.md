@@ -183,6 +183,7 @@ Blocking checks use `node scripts/npm_audit_gate.js --package server|e2e` (not b
 | Dual prod-then-allowlist gate | 2026-11-18 | **GHSA-fc5q-39xc-vjpf** (picomatch, Jest dev-deps only) has no patched npm release; prod tree is clean; owner approved a 30-day exception ([#2436](https://github.com/AgathaTrack/AgathaTrack/issues/2436)). Rejects hiding production vulnerabilities. |
 | Keep `audit-advisory.yml` unfiltered | 2026-11-18 | Weekly job remains belt-and-suspenders visibility; blocking PR gate is the only place allowlist applies. |
 | Allowlist warns when advisory disappears | 2026-11-18 | Stale rows are logged so agents remove them after upstream fix ships. |
+| Remove GHSA-fc5q-39xc-vjpf allowlist row | 2026-11-18 | Registry reports no high/critical for picomatch; the row was stale. Owner asked for removal now rather than waiting for the 2026-12-18 expiry. The gate fails again if the advisory returns. |
 
 Refs: [#2436](https://github.com/AgathaTrack/AgathaTrack/issues/2436) · owner approval 2026-11-18.
 
@@ -376,7 +377,7 @@ wait for one green **CI** run — GitHub only lists checks that have reported at
 | Check / action | Workflow | Behavior |
 |----------------|----------|----------|
 | `Governance hints (advisory)` | `pr-governance-hints.yml` | PR comment only; does not block merge |
-| `execute-plan-scope` | `execute-plan-scope.yml` (`pull_request_target` + `pull_request_review` submitted; **commit status** posted with `GITHUB_TOKEN`) | **All** in-repo PRs to `main`: `agent-safety-lib` forbidden-path scan (`scripts/lib/execute_plan_scope_nonplan.js`); owner **APPROVING** review on the head clears forbidden hits; owner-authored PRs skip the scan. Execute-plan branches still run the snapshot scope matcher (phase/release/sync rules). Non-plan PRs: config, PR-load, file-list and reviews-read errors use reason `error` (enforce) or `error-advisory` (report-only). Plan PRs: an unreadable review list means no owner ack, and other read errors are not converted to a status. Trusted `main` code only. Spec: [execute-plan-schema §v2 scope](../agent-efficiency/execute-plan-schema.md) · shipped [#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980) |
+| `execute-plan-scope` | `execute-plan-scope.yml` (`pull_request_target` + `pull_request_review` submitted; **commit status** posted with `GITHUB_TOKEN`) | **All** in-repo PRs to `main`: `agent-safety-lib` forbidden-path scan (`scripts/lib/execute_plan_scope_nonplan.js`); owner **APPROVING** review on the head clears forbidden hits; owner-authored PRs skip the scan. Execute-plan branches still run the snapshot scope matcher (phase/release/sync rules). Non-plan PRs: config, PR-load, file-list and reviews-read errors use reason `error` (enforce) or `error-advisory` (report-only). Plan PRs: an unreadable review list means no owner ack; ordinary (non-support) plan PR read/list errors throw and publish no status (pending); `PullFilesOverflow` publishes `too-many-files`; support-head read/list failures publish `error` (see execute-plan-v2 decision log, 2026-11-18). A GitHub outage therefore fails non-plan PRs to `main` in enforce mode until the check is re-run. Trusted `main` code only. Spec: [execute-plan-schema §v2 scope](../agent-efficiency/execute-plan-schema.md) · shipped [#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980) |
 
 ---
 

@@ -150,9 +150,8 @@ function recordingIo(issue, prBody) {
     assignIssue: async () => {
       calls.push('assign');
     },
-    // #2394 AAT: the In Main gate and the UAT gate. Defaults: the gate passes and Stage is legacy-empty.
     mayEnterInMain: async () => true,
-    readIssueOrgStage: async () => ({ stage: '' }),
+    readIssueOrgStage: async () => ({ stage: 'In Main', fields: MOCK_ORG_FIELDS }),
   };
   return { calls, io };
 }
@@ -585,25 +584,21 @@ test('v2 engine owns the issue: the prod fallback without project config does no
   assert.equal(result.results[0].status, 'skipped-v2-owned');
 });
 
-// #2394 AAT: the In Main gate. A merge that leaves another linked PR open, or an unticked DoD, must
-// not move the issue to In Main, so it stays In progress until its last merge.
-test('#2394 AAT: a merge that does not complete the table does not set Stage In Main', async (t) => {
+test('#2394 AAT: a merge that does not complete the table does not write Stage', async (t) => {
   stubQueue(t, 'syncEnqueueAfterMerge');
   withV2Env(t, { ISSUE_PIPELINE_V2: 'off' });
   const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
   io.mayEnterInMain = async () => false;
   const result = await handleMergedPr({ ...mergedArgs, io });
-  assert.equal(calls.includes('stage'), false);
+  assert.deepEqual(calls.filter((c) => c === 'stage'), []);
   assert.equal(result.results[0].status, 'In progress');
 });
 
-// #2394 AAT: the In UAT gate. A deploy moves an issue only from In Main; a Stage still before that
-// (for example a second PR not yet merged) is left alone.
 test('#2394 AAT: UAT notify leaves an issue whose Stage is still before In Main alone', async (t) => {
   stubQueue(t, 'syncDeployResult');
   withV2Env(t, { ISSUE_PIPELINE_V2: 'off' });
   const { calls, io } = recordingIo({ title: 'Remove orphaned helpers', state: 'OPEN' }, 'Refs #2335');
-  io.readIssueOrgStage = async () => ({ stage: 'In progress' });
+  Object.assign(io, prodProjectIo({ stageByIssue: () => 'In progress' }));
   const result = await handleUatWorkflowResult({
     owner: 'KanopeeKa',
     repo: 'AgathaTrack',
@@ -616,6 +611,20 @@ test('#2394 AAT: UAT notify leaves an issue whose Stage is still before In Main 
     statusFieldId: 'status-field',
     io,
   });
-  assert.equal(calls.filter((c) => c === 'stage' || c === 'comment').length, 0);
+  assert.deepEqual(calls.filter((c) => c === 'stage' || c === 'comment'), []);
   assert.equal(result.results[0].status, 'skipped-not-in-main');
+});
+
+// #2394 AAT (#2467 review): the In Main Stage write needs the project configuration, as the #2444
+// Stage writes do. Without it the merge handler must leave Stage alone.
+test('the In Main Stage write needs the project configuration', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'off' });
+  const unconfigured = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
+  await handleMergedPr({ ...mergedArgs, projectId: undefined, io: unconfigured.io });
+  assert.equal(unconfigured.calls.includes('stage'), false);
+
+  const configured = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
+  await handleMergedPr({ ...mergedArgs, io: configured.io });
+  assert.equal(configured.calls.includes('stage'), true);
 });

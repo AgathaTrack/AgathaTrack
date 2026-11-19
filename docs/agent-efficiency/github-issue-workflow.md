@@ -75,7 +75,7 @@ This is a rule, not a permission: agent tokens can write org issue fields. **Boo
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
 From `on`, only the engine writes `Stage`. `Blocked` set means a human is needed; the engine never clears it.
 
-**Merge, UAT and prod handlers (#2394 AAT).** While the engine is not `on` for an issue, the legacy handlers write `Stage` next to the board Status, under the same table conditions: `In Main` only when the DoD is ticked, no linked PR is still open and a linked PR merged into `main` (`mayEnterInMain`); `In UAT` only when the issue's Stage is already `In Main` (an empty Stage is a legacy issue and keeps the old behaviour); `Done` with the prod close. A merge that does not complete the table leaves the issue `In progress` and the Status unchanged, so a two-PR issue reaches In Main after its last merge.
+**Merge, UAT and prod handlers (#2394 AAT).** While the engine is not `on` for an issue, the legacy handlers write `Stage` under the same table conditions: `In Main` only when the Definition of Done is ticked, no linked PR is still open, and a linked PR merged into `main` (`mayEnterInMain`); `In UAT` only when the issue's Stage is already `In Main` (an empty Stage keeps the legacy behaviour); `Done` with the prod close. A merge that does not complete the table leaves the issue `In progress`, so a two-PR issue reaches In Main after its last merge.
 
 The issue-fields `PATCH` replaces an issue's whole value set, so every engine write sends the values the issue already holds
 (`buildIssueFieldPatch` / `withCurrentValues`); a write of `Attempts` alone would remove `Stage` and `Blocked`. Agents patching fields by hand do the same.
@@ -176,7 +176,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   `busy` is never launched again.
 - **Intent review:** `v2:intent-review agent=<login> merge=<sha>` asks an agent that did not author the linked PRs to review
   the merged change against the issue's original intent (skill: `.cursor/skills/intent-review-agent`). Each finding becomes a
-  new issue attached as a sub-issue of #n and starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'
+  new issue starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'
   bodies and puts depth 1–2 in To do, deeper in Backlog. A review counts for one merge; a later merge needs its own.
   When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exist, a non-follow-up does not get this
   doorbell: that check is part of agent acceptance. Follow-ups still get it. If either field is missing, the tick logs
