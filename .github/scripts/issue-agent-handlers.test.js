@@ -614,3 +614,17 @@ test('#2394 AAT: UAT notify leaves an issue whose Stage is still before In Main 
   assert.deepEqual(calls.filter((c) => c === 'stage' || c === 'comment'), []);
   assert.equal(result.results[0].status, 'skipped-not-in-main');
 });
+
+// #2394 AAT (#2467 review): the In Main Stage write needs the project configuration, as the #2444
+// Stage writes do. Without it the merge handler must leave Stage alone.
+test('the In Main Stage write needs the project configuration', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  withV2Env(t, { ISSUE_PIPELINE_V2: 'off' });
+  const unconfigured = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
+  await handleMergedPr({ ...mergedArgs, projectId: undefined, io: unconfigured.io });
+  assert.equal(unconfigured.calls.includes('stage'), false);
+
+  const configured = recordingIo({ title: 'Remove orphaned helpers', state: 'CLOSED' }, 'Refs #2335');
+  await handleMergedPr({ ...mergedArgs, io: configured.io });
+  assert.equal(configured.calls.includes('stage'), true);
+});

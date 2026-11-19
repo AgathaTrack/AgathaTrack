@@ -289,7 +289,9 @@ async function handleMergedPr({
       issue: refreshedIssue,
       token,
     });
-    if (readyForMain && projectsPat) {
+    // Same project-configuration guard as the Stage writes below (#2444): without it the In Main Stage
+    // write would run where the legacy handler never wrote Stage.
+    if (readyForMain && projectsPat && projectId && statusFieldId) {
       await api.setIssueStage({ owner, repo, issueNumber, stageName: 'In Main', projectsPat });
     }
     const boardStatus = readyForMain ? 'In Main' : 'In progress';

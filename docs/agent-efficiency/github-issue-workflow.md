@@ -176,7 +176,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   `busy` is never launched again.
 - **Intent review:** `v2:intent-review agent=<login> merge=<sha>` asks an agent that did not author the linked PRs to review
   the merged change against the issue's original intent (skill: `.cursor/skills/intent-review-agent`). Each finding becomes a
-  new issue starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'
+  new issue attached as a GitHub sub-issue of #n and starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'
   bodies and puts depth 1–2 in To do, deeper in Backlog. A review counts for one merge; a later merge needs its own.
   When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exist, a non-follow-up does not get this
   doorbell: that check is part of agent acceptance. Follow-ups still get it. If either field is missing, the tick logs
