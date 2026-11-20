@@ -42,7 +42,7 @@ There is **one** checked-in schema artifact (`db/schema/canonical.sql`). UAT doe
 | uat-demo (full wipe) | `scripts/db/uat-reset.sh` (non-prod; drop DB + clean + all scenarios) |
 | uat-demo (data only) | `scripts/db/uat-refresh-demo.sh` (truncate app tables, re-seed; keeps schema) |
 
-**Production and long-lived databases:** only `node scripts/migrate.js up` (forward SQL + registered JS hooks). Do not apply `canonical.sql` to replace data on a database that has served real users without a separate save/migrate workflow (that workflow is documented later).
+**Production and long-lived databases:** only `node scripts/migrate.js up` (forward SQL + registered JS hooks). Do not apply `canonical.sql` to replace data on a database that has served real users without an approved backup and migration plan (a dedicated runbook is **out of scope** here; one-off manual prod emptying is in `docs/ops/care-tick.md`).
 
 ### Data categories
 
@@ -66,7 +66,7 @@ Operational workflows for prod export/restore before any destructive reset are t
 | ID | Rule | Enforced by |
 |----|------|-------------|
 | P1 | Clean bootstrap (`canonical.sql`, migration ledger seed) is **non-production only**. | `scripts/db/lib/require-non-prod.sh` at start of `e2e/scripts/bootstrap-db.sh`; tests in `scripts/test/require-non-prod-wrappers.test.sh` |
-| P2 | Production deploy paths may invoke **only** `migrate.js up`. | `scripts/ci/assert-prod-deploy-db-commands.sh` (deploy workflow audit) |
+| P2 | Production deploy paths may invoke **only** `migrate.js up`. | `scripts/ci/assert-prod-deploy-db-commands.sh` (fails if listed deploy scripts reference bootstrap/seed/reset commands; warns when `migrate.js up` is absent) |
 | P3 | Destructive reset / truncate refuses when env is missing or `production` (including `server/.env`). | `require-non-prod.sh` on `uat-reset.sh`, `uat-refresh-demo.sh`, and DB-drop equivalence scripts; Node `assertNonProduction` in `seed.js` / `truncate-data.js` |
 | P4 | Regenerating `canonical.sql` is dev/CI tooling — not prod deploy. | `require-non-prod.sh` on `regenerate-canonical.sh`, `bootstrap-legacy-db.sh`; prod deploy audit (same as P2) |
 | P5 | Synthetic seeds never run in production. | Shell guard before `seed.js`; `assertNonProduction` in `seed.js` and `truncate-data.js` |
