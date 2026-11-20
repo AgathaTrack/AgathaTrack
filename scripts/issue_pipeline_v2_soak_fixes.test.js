@@ -122,6 +122,16 @@ test('#2484: last-used is seeded from launch records across the board, newest pe
   assert.deepEqual([pick.type, pick.agent], ['request-spec', 'claude-a'], 'the id never started goes first');
 });
 
+test('a failed comment read in the board pass does not stop the tick', async () => {
+  const commentsOf = async (e) => {
+    if (e.number === 2) throw new Error('rate limited');
+    return [launchRecord('cursor-a', NOW - MIN, e.number)];
+  };
+  const entries = [entry(1, 'In progress'), entry(2, 'In progress')];
+  assert.equal(await countEngineWip({ entries, commentsOf, engineLogins: ['pawpet-engine'] }), 1);
+  assert.deepEqual(await seedLastUsed({ entries, commentsOf, config }), { 'cursor-a': NOW - MIN });
+});
+
 test('comments are read once per issue per tick', async () => {
   let calls = 0;
   const memo = memoComments(async () => {

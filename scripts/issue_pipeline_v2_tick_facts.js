@@ -32,6 +32,18 @@ function memoComments(listFn) {
   };
 }
 
+/**
+ * A failed read here must not stop the tick: the issue's own facts read the same (memoised)
+ * comments inside the per-issue error handler, which reports it and moves on.
+ */
+async function safeComments(commentsOf, entry) {
+  try {
+    return (await commentsOf(entry)) || [];
+  } catch {
+    return [];
+  }
+}
+
 function readsComments(entry) {
   if (entry.closed || entry.labels.includes('manual-only')) {
     return false;
@@ -46,8 +58,8 @@ async function countEngineWip({ entries, commentsOf, engineLogins }) {
     if (entry.closed || entry.labels.includes('manual-only') || canonicalStage(entry.stage) !== 'In progress') {
       continue;
     }
-    const comments = await commentsOf(entry);
-    if ((comments || []).some((comment) => engineStartedRun(comment, engine))) {
+    const comments = await safeComments(commentsOf, entry);
+    if (comments.some((comment) => engineStartedRun(comment, engine))) {
       wip += 1;
     }
   }
@@ -60,7 +72,7 @@ async function seedLastUsed({ entries, commentsOf, config }) {
     if (!readsComments(entry)) {
       continue;
     }
-    const comments = await commentsOf(entry);
+    const comments = await safeComments(commentsOf, entry);
     for (const record of listLaunchRecords({ comments, engineLogins: config.engine.logins })) {
       if (record.kind !== 'launch' || !Number.isFinite(record.at)) {
         continue;
