@@ -34,13 +34,9 @@ const {
 } = require('./issue_pipeline_v2_comments');
 const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
-const { memoComments, countEngineWip, seedLastUsed } = require('./issue_pipeline_v2_tick_facts');
+const { memoComments, countEngineWip, lastUsedOnIssue } = require('./issue_pipeline_v2_tick_facts');
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
-
-function now0() {
-  return Date.now();
-}
 
 function mode() {
   return resolvePipelineMode(process.env.ISSUE_PIPELINE_V2);
@@ -333,10 +329,6 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
   // WIP counts only In progress issues the engine started: hand-driven work takes no pipeline slot.
   let wip = await countEngineWip({ entries, commentsOf, engineLogins: config.engine.logins });
-  // Least recently used across ticks: seeded from the engine's launch records on the board, then
-  // each in-scope pick in this tick is remembered so the next pick moves on.
-  const lastUsed = await seedLastUsed({ entries, commentsOf, config });
-  let clock = now0();
   const scopeLabel = io.scopeLabel !== undefined ? io.scopeLabel : process.env.ISSUE_PIPELINE_V2_LABEL || '';
   const now = Date.now();
   const actions = [];
@@ -361,7 +353,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           now,
           runMode,
         }),
-        agentLastUsed: { ...lastUsed },
+        // Least recently used on this issue (its own launch records), across ticks.
+        agentLastUsed: await lastUsedOnIssue({ entry, commentsOf, config }),
         aatFieldsPresent,
         isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io: tickIo, runMode, now })),
@@ -377,11 +370,6 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       }
       const action = decide(facts, config);
       const inScope = !scopeLabel || entry.labels.includes(scopeLabel);
-      // An out-of-scope pick is only simulated: it must not move the rotation for scoped issues.
-      if (action.agent && inScope) {
-        clock = Math.max(clock + 1, now0());
-        lastUsed[action.agent] = clock;
-      }
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
       console.log(
         JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action }),

@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide } = require('./issue_pipeline_v2_decide');
 const { tick } = require('./issue_pipeline_v2');
-const { memoComments, countEngineWip, seedLastUsed } = require('./issue_pipeline_v2_tick_facts');
+const { memoComments, countEngineWip, lastUsedOnIssue } = require('./issue_pipeline_v2_tick_facts');
 const { findRequestComment, reactionHint, runEvidence } = require('./pipeline_claude_run_lib');
 const { verify } = require('./pipeline_claude_verify');
 
@@ -106,20 +106,17 @@ test('#2480: WIP counts only In progress issues the engine started', async () =>
 
 // --- soak-5 / soak-6 (#2484, #2485): rotation restarted at config order every tick ---------------
 
-test('#2484: last-used is seeded from launch records across the board, newest per id', async () => {
+test('#2484: last-used is read from this issue\'s own launch records, newest per id', async () => {
   const comments = {
-    1: [launchRecord('cursor-a', NOW - 10 * MIN), launchRecord('cursor-b', NOW - 5 * MIN)],
-    2: [launchRecord('cursor-a', NOW - 2 * MIN)],
-    3: [launchRecord('claude-a', NOW - 1 * MIN)], // Backlog: comments are not read
+    1: [launchRecord('cursor-a', NOW - 10 * MIN), launchRecord('cursor-b', NOW - 5 * MIN), launchRecord('cursor-a', NOW - 2 * MIN)],
+    3: [launchRecord('claude-a', NOW - 1 * MIN)],
   };
-  const seeded = await seedLastUsed({
-    entries: [entry(1, 'In analysis'), entry(2, 'To do'), entry(3, 'Backlog')],
-    commentsOf: async (e) => comments[e.number] || [],
-    config,
-  });
-  assert.deepEqual(seeded, { 'cursor-a': NOW - 2 * MIN, 'cursor-b': NOW - 5 * MIN });
-  const pick = decide(facts({ agentLastUsed: seeded }), config);
-  assert.deepEqual([pick.type, pick.agent], ['request-spec', 'claude-a'], 'the id never started goes first');
+  const commentsOf = async (e) => comments[e.number] || [];
+  const used = await lastUsedOnIssue({ entry: entry(1, 'In analysis'), commentsOf, config });
+  assert.deepEqual(used, { 'cursor-a': NOW - 2 * MIN, 'cursor-b': NOW - 5 * MIN });
+  const pick = decide(facts({ agentLastUsed: used }), config);
+  assert.deepEqual([pick.type, pick.agent], ['request-spec', 'claude-a'], 'the id never started on this issue goes first');
+  assert.deepEqual(await lastUsedOnIssue({ entry: entry(3, 'Backlog'), commentsOf, config }), {}, 'Backlog: comments are not read');
 });
 
 test('a failed comment read in the board pass does not stop the tick', async () => {
@@ -129,7 +126,7 @@ test('a failed comment read in the board pass does not stop the tick', async () 
   };
   const entries = [entry(1, 'In progress'), entry(2, 'In progress')];
   assert.equal(await countEngineWip({ entries, commentsOf, engineLogins: ['pawpet-engine'] }), 1);
-  assert.deepEqual(await seedLastUsed({ entries, commentsOf, config }), { 'cursor-a': NOW - MIN });
+  assert.deepEqual(await lastUsedOnIssue({ entry: entries[1], commentsOf, config }), {});
 });
 
 test('comments are read once per issue per tick', async () => {
@@ -195,22 +192,23 @@ test('#2428: a dry-run never logs `pipeline_v2_applied`; it logs what it would h
   assert.ok(planned && planned.planned.includes('comment:spec-request'));
 });
 
-test('#2385: an out-of-scope pick does not advance the rotation for scoped issues', async () => {
-  // Issue 1 is out of scope and decided first; issue 2 is the soak issue.
-  const io = tickIo({ issues: { 1: todo(1), 2: todo(2, ['pipeline-beta']) } });
-  const { result } = await runTick(io);
-  const agentOf = (n) => result.actions.find((a) => a.issue === n).action.agent;
-  assert.equal(agentOf(1), 'cursor-a');
-  assert.equal(agentOf(2), 'cursor-a', 'the simulated pick on issue 1 is not remembered');
-});
-
-test('#2484: the tick seeds rotation from launch records on other issues', async () => {
+test('#2484: rotation is per issue: picks on other issues, in this tick or earlier, do not count', async () => {
+  const ready = { field_id: 1, single_select_option: { name: 'Ready' } };
   const io = tickIo({
-    issues: { 1: todo(1, ['pipeline-beta']), 2: { ...todo(2, ['pipeline-beta']), issue_field_values: [{ field_id: 1, single_select_option: { name: 'Ready' } }] } },
-    comments: { 2: [launchRecord('cursor-a', NOW - 10 * MIN, 2), launchRecord('cursor-b', NOW - 5 * MIN, 2)] },
+    issues: {
+      1: todo(1, ['pipeline-beta']),
+      2: todo(2, ['pipeline-beta']),
+      3: { ...todo(3, ['pipeline-beta']), issue_field_values: [ready] },
+    },
+    comments: {
+      1: [launchRecord('cursor-a', NOW - 10 * MIN, 1), launchRecord('cursor-b', NOW - 5 * MIN, 1)],
+      3: [launchRecord('cursor-a', NOW - 10 * MIN, 3)],
+    },
   });
   const { result } = await runTick(io);
-  assert.equal(result.actions.find((a) => a.issue === 1).action.agent, 'claude-a');
+  const agentOf = (n) => result.actions.find((a) => a.issue === n).action.agent;
+  assert.equal(agentOf(1), 'claude-a', 'issue 1 already used cursor-a and cursor-b');
+  assert.equal(agentOf(2), 'cursor-a', 'issue 2 has no history: config order, unaffected by issue 1 or 3');
 });
 
 // --- Claude runner (#2485) -----------------------------------------------------------------------

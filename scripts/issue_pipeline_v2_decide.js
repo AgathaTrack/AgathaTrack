@@ -18,7 +18,7 @@
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
  *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
- *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (seeded from launch records)
+ *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (this issue's own launch records)
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
  *   review          { requestedHash, requestedAt, assignedTo, timedOut[], votes[{login,vote,hash}] }
  *   wip             In progress issues the engine launched (hand-driven and manual-only excluded)
