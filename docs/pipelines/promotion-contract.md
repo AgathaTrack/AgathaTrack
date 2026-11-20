@@ -155,6 +155,41 @@ Step summary must state explicitly:
 > Prod deployment skipped intentionally (`PROD_DEPLOY_ENABLED` is not `true`).
 > No FTP/SSH steps ran.
 
+**Acceptance guard (#2424).** After `resolve-trigger` validates the dispatch, the step **AAT prod gate** runs
+`scripts/ci/aat-prod-gate.js` against the promoted SHA. It is controlled by repository variable **`AAT_GATE`**:
+
+| `AAT_GATE` | Behaviour |
+|------------|-----------|
+| unset / `off` (default) | No API calls; the step passes. |
+| `dry-run` | Lists engine-owned issues in `In Main` or `In UAT` whose latest merge is contained in the promoted SHA and whose acceptance is not satisfied. Writes the list to the job summary and always passes. |
+| `on` | Fails `resolve-trigger`, so `deploy-prod` does not run, when any such merge is unsatisfied. An API or configuration error also fails closed. |
+
+The rules are the engine's (#2448), not a copy: `aatGateOn`, `deriveAatState`, `aatSatisfied` and `newestActionable`
+in `scripts/issue_pipeline_v2_acceptance.js`. "Satisfied" means the newest actionable verdict for that merge is `pass`,
+or the human `Acceptance` value is `Manual` / `Skipped` with an engine waive bound to that merge. A bare `Passed` value is not enough.
+
+Which merges are gated:
+
+- The issue is `In Main` or `In UAT`, or it is `In progress` and its newest actionable verdict for that merge is a
+  `scope` or `implementation` fail (the rewind rows of #2448).
+- The gate is active only when `aat.enabled` is `true` in `.github/pipeline-agents.json` and both org fields
+  `Acceptance` and `Acceptance fail reason` exist. Otherwise nothing is read beyond the field definitions and nothing blocks.
+  With `aat.enabled` `false` the guard makes no API calls, even in `on`.
+- Follow-up issues (`v2:follow-up` body marker) and `manual-only` issues are exempt, as the engine exempts them.
+
+An unknown `AAT_GATE` value runs as `dry-run`.
+
+The guard reads the board with the secret **`AAT_GATE_READ_TOKEN`** (read-only). It is required; there is no fallback to
+`GITHUB_TOKEN`, which cannot read the project board. The write-capable engine token is never passed to this workflow.
+
+The override is the `workflow_dispatch` input **`aat_override_reason`**. It passes an `on` gate only when the
+dispatching user (`github.actor`) is listed in the repository variable **`AAT_OVERRIDE_ACTORS`** (comma-separated logins).
+An empty or unset list means no override is possible. An override from anyone else is ignored and the summary says so.
+Authorised overrides are recorded in the job summary. `deploy-uat` never sets the input.
+
+Summary and log text from issue fields, API errors and the dispatch input is reduced to plain text, so user-supplied
+values cannot inject workflow commands.
+
 ---
 
 ## Concurrency
