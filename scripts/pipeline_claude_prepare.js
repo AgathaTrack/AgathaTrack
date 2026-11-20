@@ -9,7 +9,9 @@ const fs = require('fs');
 const { parseRepo } = require('../.github/scripts/github-project-lib');
 const { loadConfig, resolveAgent } = require('./issue_pipeline_v2_config');
 const { deriveRunSecret } = require('./issue_pipeline_v2_secrets');
-const { METHOD_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
+const { METHOD_PROMPTS, STAGE_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
+const { listIssueComments } = require('./issue_pipeline_v2_comments');
+const { findRequestComment, reactionHint } = require('./pipeline_claude_run_lib');
 
 function appendEnv(name, value) {
   const path = process.env.GITHUB_ENV;
@@ -53,13 +55,28 @@ async function main() {
   appendEnv('PIPELINE_RUN_NONCE', nonce);
   appendEnv('PIPELINE_ISSUE', String(issueNumber));
   appendEnv('PIPELINE_STAGE', stage);
+  // The verify step counts only what the run posts after this instant.
+  appendEnv('PIPELINE_RUN_STARTED_AT', new Date().toISOString());
 
   const prompts = stagePromptsForConfig(config, agent);
   const extra = stage ? prompts[stage] : METHOD_PROMPTS[method];
+  // Reaction path only (a login with one pool id): name the comment and the exact command, so the
+  // vote does not depend on the run finding the comment id itself (soak-6, #2485).
+  let hint = '';
+  if (stage && prompts === STAGE_PROMPTS) {
+    try {
+      const comments = await listIssueComments({ owner, repo, issueNumber, token });
+      const request = findRequestComment({ comments, stage, engineLogins: config.engine.logins });
+      hint = reactionHint({ owner, repo, stage, commentId: request?.id });
+    } catch (error) {
+      console.log(`::warning::could not read the request comment: ${error?.message || error}`);
+    }
+  }
   const prompt = [
     `You are pipeline agent \`${agentId}\` (\`@${agent.actsAs}\`).`,
     `Repository: ${owner}/${repo}. Issue #${issueNumber}.`,
     extra || '',
+    hint,
     'Follow AGENTS.md and CLAUDE.md in this repository.',
     `Issue URL: https://github.com/${owner}/${repo}/issues/${issueNumber}`,
   ]

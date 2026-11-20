@@ -68,9 +68,21 @@ jobs:
           PIPELINE_RUN_NONCE: ${{ env.PIPELINE_RUN_NONCE }}
           PIPELINE_ISSUE: ${{ env.PIPELINE_ISSUE }}
           PIPELINE_STAGE: ${{ env.PIPELINE_STAGE }}
+          # `gh` and scripts/pipeline_verdict.js read the token from the environment; without it
+          # the run can read the issue but cannot react, comment or sign (soak-6, #2485).
+          GH_TOKEN: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
           prompt: ${{ steps.prep.outputs.prompt }}
           claude_args: '--allowedTools Bash,Edit,Write,Read,Glob,Grep'
+
+      # A run that ends `success` with no vote, question or comment would otherwise read as
+      # `finished` and hold the pickup behind `busy`. Failing here makes the runner status
+      # `failed`, so the next live tick reassigns at once.
+      - name: Verify the run left a result on the issue
+        env:
+          GH_TOKEN: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/pipeline_claude_verify.js

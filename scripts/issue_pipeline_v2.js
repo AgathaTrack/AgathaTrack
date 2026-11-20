@@ -34,6 +34,7 @@ const {
 } = require('./issue_pipeline_v2_comments');
 const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
+const { memoComments, countEngineWip, seedLastUsed } = require('./issue_pipeline_v2_tick_facts');
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
 
@@ -252,14 +253,6 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
   return merged;
 }
 
-function countWip(entries) {
-  return entries.filter(
-    (entry) =>
-      !entry.closed &&
-      canonicalStage(entry.stage) === 'In progress' && !entry.labels.includes('manual-only'),
-  ).length;
-}
-
 async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, io = {} }) {
   const runMode = mode();
   if (runMode === 'off') {
@@ -334,9 +327,15 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       entries.push({ number, issue, parsed, stage: parsed.stage, labels, closed: true });
     }
   }
-  let wip = countWip(entries);
-  // Least recently used, within this tick: each agent rung is remembered so the next pick moves on.
-  const lastUsed = {};
+  // One comment read per issue per tick, shared by the board pass below and the per-issue facts.
+  const listComments = memoComments(io.listIssueComments || listIssueComments);
+  const tickIo = { ...io, listIssueComments: listComments };
+  const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
+  // WIP counts only In progress issues the engine started: hand-driven work takes no pipeline slot.
+  let wip = await countEngineWip({ entries, commentsOf, engineLogins: config.engine.logins });
+  // Least recently used across ticks: seeded from the engine's launch records on the board, then
+  // each in-scope pick in this tick is remembered so the next pick moves on.
+  const lastUsed = await seedLastUsed({ entries, commentsOf, config });
   let clock = now0();
   const scopeLabel = io.scopeLabel !== undefined ? io.scopeLabel : process.env.ISSUE_PIPELINE_V2_LABEL || '';
   const now = Date.now();
@@ -365,15 +364,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         agentLastUsed: { ...lastUsed },
         aatFieldsPresent,
         isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
-        ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io, runMode, now })),
+        ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io: tickIo, runMode, now })),
       };
       if (entry.closed) {
-        const comments = await (io.listIssueComments || listIssueComments)({
-          owner,
-          repo,
-          issueNumber: entry.number,
-          token: projectsPat,
-        });
+        const comments = await commentsOf(entry);
         facts.closed = true;
         facts.closeReason = entry.issue.state_reason;
         facts.reopenedBefore = reopenedByEngine(comments, config.engine.logins);
@@ -382,11 +376,12 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
-      if (action.agent) {
-        clock += 1;
+      const inScope = !scopeLabel || entry.labels.includes(scopeLabel);
+      // An out-of-scope pick is only simulated: it must not move the rotation for scoped issues.
+      if (action.agent && inScope) {
+        clock = Math.max(clock + 1, now0());
         lastUsed[action.agent] = clock;
       }
-      const inScope = !scopeLabel || entry.labels.includes(scopeLabel);
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
       console.log(
         JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action }),
@@ -439,9 +434,11 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         },
       });
       actions[actions.length - 1].applied = result.applied;
-      // The action line above is logged before it is applied, so say what actually happened.
+      // The action line above is logged before it is applied, so say what actually happened. A
+      // dry-run (mode, identity or scope) wrote nothing: say `planned`, never `applied`.
       if (result.applied.length > 0) {
-        console.log(JSON.stringify({ event: 'pipeline_v2_applied', issue: entry.number, applied: result.applied }));
+        const event = live && inScope ? 'pipeline_v2_applied' : 'pipeline_v2_planned';
+        console.log(JSON.stringify({ event, issue: entry.number, [event === 'pipeline_v2_applied' ? 'applied' : 'planned']: result.applied }));
       }
       if (inScope && result.applied.some((entry) => entry.startsWith('launch:'))) {
         wip += 1; // a started run takes a slot; a failed launch or an out-of-scope simulation does not
@@ -489,4 +486,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { tick, buildBaseFacts, buildCommentFacts, buildWrites, countWip };
+module.exports = { tick, buildBaseFacts, buildCommentFacts, buildWrites };
