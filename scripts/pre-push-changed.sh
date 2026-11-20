@@ -233,6 +233,7 @@ run_governance() {
   node --test scripts/issue_pipeline_v2_release.test.js
   node --test scripts/issue_pipeline_v2_migrate.test.js
   node --test scripts/issue_pipeline_v2_reopen.test.js
+  node --test scripts/issue_pipeline_v2_soak_fixes.test.js
   node --test .github/scripts/pipeline-v2-owner.test.js
   node --test .github/scripts/issue-agent-handlers.test.js
   node --test .github/scripts/github-project-lib.test.js

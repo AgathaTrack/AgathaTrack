@@ -535,6 +535,11 @@ test('runner: WIP_LIMIT=off reaches tick; a Ready issue over the cap launches on
     listProjectIssues: async () =>
       [1, 10, 11, 12].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } })),
     getIssue: async (n) => board[n],
+    // WIP counts only In progress issues the engine started, so each carries an engine launch record.
+    listIssueComments: async ({ issueNumber }) =>
+      issueNumber >= 10
+        ? [{ id: issueNumber, user: { login: 'pawpet-engine' }, created_at: '2026-11-16T10:00:00Z', body: '<!-- v2:launch run=r agent=cursor-a -->' }]
+        : [],
   });
   const args = { owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S', only: 1, io };
   const actionFor = async (raw) => {
