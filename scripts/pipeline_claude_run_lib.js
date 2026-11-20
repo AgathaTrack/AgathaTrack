@@ -20,16 +20,46 @@ const REQUEST_MARKERS = {
 /** Allowed clock drift between the runner and GitHub timestamps. */
 const SKEW_MS = 60 * 1000;
 
+/**
+ * `<!--` then optional whitespace, then `marker` as a whole token. String scan, not a RegExp built
+ * from the marker: the marker is a fixed token and must not be interpreted as a pattern.
+ */
+function bodyHasRequestMarker(body, marker) {
+  const text = String(body || '');
+  const token = String(marker || '');
+  if (!token) {
+    return false;
+  }
+  let from = 0;
+  while (from < text.length) {
+    const start = text.indexOf('<!--', from);
+    if (start < 0) {
+      return false;
+    }
+    let i = start + 4;
+    while (i < text.length && /\s/.test(text[i])) {
+      i += 1;
+    }
+    if (text.startsWith(token, i)) {
+      const after = text[i + token.length];
+      if (!after || !/[\w-]/.test(after)) {
+        return true;
+      }
+    }
+    from = start + 4;
+  }
+  return false;
+}
+
 function findRequestComment({ comments, stage, engineLogins }) {
   const marker = REQUEST_MARKERS[stage];
   if (!marker) {
     return null;
   }
   const engine = new Set(engineLogins || []);
-  const pattern = new RegExp(`<!--\\s*${marker.replace(/[-:]/g, '\\$&')}(?![\\w-])`);
   return (
     (comments || [])
-      .filter((comment) => engine.has(comment.user?.login) && pattern.test(comment.body || ''))
+      .filter((comment) => engine.has(comment.user?.login) && bodyHasRequestMarker(comment.body, marker))
       .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
       .at(-1) || null
   );
@@ -75,4 +105,4 @@ function runEvidence({ comments, reactions, actsAs, sinceMs }) {
   return { ok: false, evidence: null };
 }
 
-module.exports = { REQUEST_MARKERS, SKEW_MS, findRequestComment, reactionHint, runEvidence };
+module.exports = { REQUEST_MARKERS, SKEW_MS, bodyHasRequestMarker, findRequestComment, reactionHint, runEvidence };

@@ -343,6 +343,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     if (only && entry.number !== only) {
       continue;
     }
+    const inScope = !scopeLabel || (entry.labels || []).includes(scopeLabel);
     try {
       const facts = {
         ...buildBaseFacts({
@@ -369,7 +370,6 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
-      const inScope = !scopeLabel || entry.labels.includes(scopeLabel);
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
       console.log(
         JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action }),
@@ -434,7 +434,13 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     } catch (error) {
       // One issue's failure must not stop the rest of the board; the run still ends red.
       if (Array.isArray(error?.applied) && error.applied.length > 0) {
-        console.log(JSON.stringify({ event: 'pipeline_v2_applied', issue: entry.number, applied: error.applied, partial: true }));
+        const event = live && inScope ? 'pipeline_v2_applied' : 'pipeline_v2_planned';
+        console.log(JSON.stringify({
+          event,
+          issue: entry.number,
+          partial: true,
+          [event === 'pipeline_v2_applied' ? 'applied' : 'planned']: error.applied,
+        }));
       }
       console.error(JSON.stringify({ event: 'pipeline_v2_error', issue: entry.number, message: error?.message ?? String(error) }));
       errors.push({ issue: entry.number, message: error?.message ?? String(error) });

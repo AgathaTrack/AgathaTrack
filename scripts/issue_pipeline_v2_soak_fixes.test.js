@@ -11,7 +11,7 @@ const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide } = require('./issue_pipeline_v2_decide');
 const { tick } = require('./issue_pipeline_v2');
 const { memoComments, countEngineWip, lastUsedOnIssue } = require('./issue_pipeline_v2_tick_facts');
-const { findRequestComment, reactionHint, runEvidence } = require('./pipeline_claude_run_lib');
+const { bodyHasRequestMarker, findRequestComment, reactionHint, runEvidence } = require('./pipeline_claude_run_lib');
 const { verify } = require('./pipeline_claude_verify');
 
 const config = loadConfig(); // cursor-a and cursor-b share pawpet-bot; claude-a is pawpet-claude
@@ -192,6 +192,20 @@ test('#2428: a dry-run never logs `pipeline_v2_applied`; it logs what it would h
   assert.ok(planned && planned.planned.includes('comment:spec-request'));
 });
 
+test('#2428: a dry-run that fails part-way logs planned, not applied', async () => {
+  const io = tickIo({ issues: { 1: todo(1, ['pipeline-beta']) } });
+  io.applyAction = async () => {
+    const error = new Error('simulated write failed');
+    error.applied = ['comment:spec-request'];
+    throw error;
+  };
+  const { events, result } = await runTick(io);
+  assert.equal(events.filter((e) => e.event === 'pipeline_v2_applied').length, 0);
+  const planned = events.find((e) => e.event === 'pipeline_v2_planned' && e.partial);
+  assert.deepEqual(planned && planned.planned, ['comment:spec-request']);
+  assert.equal(result.errors.length, 1);
+});
+
 test('#2484: rotation is per issue: picks on other issues, in this tick or earlier, do not count', async () => {
   const ready = { field_id: 1, single_select_option: { name: 'Ready' } };
   const io = tickIo({
@@ -214,6 +228,15 @@ test('#2484: rotation is per issue: picks on other issues, in this tick or earli
 // --- Claude runner (#2485) -----------------------------------------------------------------------
 
 const engineComment = (id, body, at) => ({ id, user: { login: 'pawpet-engine' }, created_at: iso(at), body });
+
+test('#2485: a request marker matches only as a whole token, including when the body contains backslashes', () => {
+  assert.equal(bodyHasRequestMarker('<!-- v2:spec-request assigned=claude-a -->', 'v2:spec-request'), true);
+  assert.equal(bodyHasRequestMarker('<!-- v2:spec-request -->', 'v2:spec-request'), true);
+  assert.equal(bodyHasRequestMarker('<!--v2:spec-request-->', 'v2:spec-request'), false);
+  assert.equal(bodyHasRequestMarker('<!-- v2:spec-request-extra -->', 'v2:spec-request'), false);
+  assert.equal(bodyHasRequestMarker('note \\\\ <!-- v2:spec-request -->', 'v2:spec-request'), true);
+  assert.equal(bodyHasRequestMarker('<!-- v2:review-request -->', 'v2:spec-request'), false);
+});
 
 test('#2485: the prepare step names the newest request comment for the stage and the exact vote command', () => {
   const comments = [
