@@ -73,9 +73,12 @@ one agent action per launch and end the turn when the decision `actor` is `drive
 sudo pg_ctlcluster 16 main start
 ```
 
-Dev DB defaults (no `.env` needed): `agatha_db`, user `user` / password `password`, `localhost:5432`.
+Dev DB defaults (no `.env` needed): `agatha_db`, user `user` / password `password`, `localhost:5432`. The role and
+database must exist first (cloud images and the Claude Code `agathatrack` environment create them).
 
-**Migrations:** `cd server && node scripts/migrate.js up`. Do not use `gen_random_uuid()` in SQL — generate UUIDs in code.
+**Schema:** empty database → `./e2e/scripts/bootstrap-db.sh` (canonical snapshot + migration ledger; never `migrate.js up`
+on an empty DB). Existing database → `cd server && node scripts/migrate.js up`. Do not use `gen_random_uuid()` in SQL —
+generate UUIDs in code.
 
 ### Running the backend (single-origin E2E)
 

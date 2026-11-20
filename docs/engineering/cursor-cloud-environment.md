@@ -56,6 +56,52 @@ any module that calls GitHub with `fetch` is loaded. Covered today: `scripts/git
 need an audit — tracking issue #2472 (`reexecWithEnvProxy` or route through `gh`). The `scripts/ci/*` and `.github/scripts/*` callers
 run only in GitHub Actions, which has no proxy, so they need no change.
 
+## Claude Code cloud sessions (`agathatrack` environment)
+
+Claude Code on the web runs in a fresh container per session. Use the personal cloud environment **`agathatrack`**, not
+**Default** (Default has no setup script, so the toolchain, server deps and dev database are all missing). Its setup
+script runs as root after the repository is cloned, from the directory that holds the checkout. It makes
+`./scripts/pre-push-changed.sh` work on the first run:
+
+- Flutter 3.44.0 is the checksum-verified SDK from `scripts/flutter-sdk.sh` (the copy pre-push verifies), owned by root
+  and linked at `/opt/flutter`;
+- `flutter pub get`, `server` `npm ci`, and `shellcheck` (pre-push lints shell scripts);
+- the AGENTS.md dev role and database (`user` with `LOGIN CREATEDB`, not superuser; `agatha_db`), then
+  `e2e/scripts/bootstrap-db.sh`.
+
+It is idempotent (about 6 s on a warm container). It runs only when a container is built fresh, not when a session resumes or its worker restarts; a restart stops PostgreSQL, so run `sudo pg_ctlcluster 16 main start` (AGENTS.md §PostgreSQL) after one. `flutter pub get` may rewrite `flutter_app/pubspec.lock` when the committed lock drifts from the SDK's pinned packages; do not commit that rewrite with unrelated work. The stored copy lives in the environment settings; keep this copy in
+step when you change it:
+
+```bash
+set -e
+# AgathaTrack cloud session setup: pre-push (./scripts/pre-push-changed.sh) works on the first run.
+if [ -d AgathaTrack ]; then
+  cd AgathaTrack
+  # Flutter 3.44.0: the checksum-verified SDK that scripts/flutter-sdk.sh (pre-push) uses.
+  (. scripts/flutter-sdk.sh && agatha_flutter_install)
+  sdk="${XDG_CACHE_HOME:-$HOME/.cache}/agatha-track/flutter-3.44.0-linux"
+  # The release tarball keeps uid 1000; as root, git then refuses the SDK ("dubious ownership").
+  chown -R root:root "$sdk"
+  ln -sfn "$sdk" /opt/flutter
+  ln -sf /opt/flutter/bin/flutter /usr/local/bin/flutter
+  ln -sf /opt/flutter/bin/dart /usr/local/bin/dart
+  flutter config --no-analytics
+  flutter precache --web
+  (cd flutter_app && flutter pub get)
+  (cd server && npm ci --no-audit --no-fund)
+  cd ..
+fi
+# shellcheck: pre-push lints shell scripts.
+command -v shellcheck >/dev/null || apt-get install -y shellcheck || (apt-get update && apt-get install -y shellcheck)
+# PostgreSQL dev DB with the AGENTS.md defaults (user/password, agatha_db).
+pg_ctlcluster 16 main start || true
+psql_pg() { runuser -u postgres -- psql -tAc "$1"; }
+psql_pg "select 1 from pg_roles where rolname='user'" | grep -q 1 || psql_pg "create role \"user\" login createdb password 'password'"
+psql_pg "select 1 from pg_database where datname='agatha_db'" | grep -q 1 || psql_pg "create database agatha_db owner \"user\""
+# Empty DB: canonical snapshot + migration ledger. Existing DB: pending migrations only.
+if [ -d AgathaTrack ]; then (cd AgathaTrack && ./e2e/scripts/bootstrap-db.sh); fi
+```
+
 ## Rebuild after a toolchain bump
 
 The Flutter SDK is baked into the image via `.cursor/Dockerfile` (`FLUTTER_VERSION=3.44.0`). After a toolchain bump,
