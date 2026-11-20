@@ -18,10 +18,10 @@
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
  *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
- *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (in-tick)
+ *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (this issue's own launch records)
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
  *   review          { requestedHash, requestedAt, assignedTo, timedOut[], votes[{login,vote,hash}] }
- *   wip             issues currently In progress (manual-only excluded)
+ *   wip             In progress issues the engine launched (hand-driven and manual-only excluded)
  *   deliveryMethod  'PR' | 'light-plan' | 'execute-plan'
  *   launch          { runId, startedAt, busy, failures, lastFailureAt }
  *   delivery        { busy, dodComplete, openLinkedPrs, mergedIntoMain, lastActivityAt, resumed }
@@ -53,6 +53,8 @@ const STAGES = [
 ];
 
 const MIN = 60 * 1000;
+/** A `busy` doorbell holds a pickup for this many review timeouts, then the pickup moves on. */
+const BUSY_HOLD_TIMEOUTS = 2;
 const HOUR = 60 * MIN;
 
 /** Canonical stage name; empty reads as Backlog; unknown names return null. */
@@ -154,7 +156,9 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     return none(`${rowPrefix}.waiting`);
   }
   // Doorbell runs mark the issue `busy`; do not ring a second agent until that work finishes.
-  if ((facts.labels || []).includes('busy')) {
+  // A doorbell run that ends without a vote never clears `busy` (the engine clears it only on a
+  // stage advance or a Blocked write), so the hold lasts one extra timeout at most (soak-6, #2485).
+  if ((facts.labels || []).includes('busy') && facts.now - state.requestedAt < BUSY_HOLD_TIMEOUTS * timeoutMs) {
     return none(`${rowPrefix}.waiting-busy`);
   }
   const timedOut = timedOutSet(state, facts.now, timeoutMs);
@@ -223,7 +227,13 @@ function approvalsOnCurrentHash(facts, config) {
       }
     }
   }
-  return { editor, editorIsAgent: logins.has(editor), up: voters, voted };
+  // D16 (#2428): an edit by a login that several ids share is an agent edit only when a verified
+  // `edit` claim names the id. Unclaimed, nobody can tell which run edited, so it is treated as a
+  // human edit and two distinct ids must approve. Otherwise a run could approve its own edit with a
+  // signed review (soak-1, #2480).
+  const sharedLogin = (config.agents || []).filter((agent) => entryActsAs(agent) === editor).length > 1;
+  const editorIsAgent = logins.has(editor) && (!sharedLogin || Boolean(facts.editorAgentId));
+  return { editor, editorIsAgent, up: voters, voted };
 }
 
 function decideInAnalysis(facts, config) {
@@ -415,6 +425,10 @@ function decide(facts, config) {
       : none('closed');
   }
   if (facts.blocked) {
+    // `paused` is the owner's hold: nothing happens, a comment wakes nobody, until the owner clears it.
+    if (String(facts.blocked).trim().toLowerCase() === 'paused') {
+      return none('blocked.paused');
+    }
     // Only a human comment wakes a blocked issue, once per comment; the engine never clears the flag.
     const answered = (facts.wokenFor || []).includes(facts.humanCommentId);
     if (!(facts.humanCommentSinceBlock && !answered)) {
