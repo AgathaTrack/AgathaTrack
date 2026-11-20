@@ -3,7 +3,7 @@ title: Agatha Track — Database Deployment Guide
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-08-21
+last_updated: 2026-11-20
 tags: [deployment,operations]
 ---
 # Agatha Track — Database Deployment Guide
@@ -93,7 +93,18 @@ Migration files live in `db/migrations/`:
 
 **Phased bootstrap model:** [docs/pipelines/db-schema-bootstrap-plan.md](docs/pipelines/db-schema-bootstrap-plan.md)
 
-Fresh installs (dev/E2E) use `e2e/scripts/bootstrap-db.sh` (canonical + migration ledger). Production/UAT upgrades use `migrate.js up` only.
+### Bootstrap profiles (non-production)
+
+| Profile | What you get | Command |
+|---------|----------------|---------|
+| **clean** | Migration head, empty app data | `e2e/scripts/bootstrap-db.sh` on an empty database |
+| **uat-demo** | clean + synthetic personas | `scripts/db/uat-reset.sh` (drop DB) or `scripts/db/uat-refresh-demo.sh` (re-seed only) |
+
+There is a single generated schema file (`db/schema/canonical.sql`). Demo data lives in `server/db/seeds/` and is applied with `node server/scripts/seed.js` — not a second canonical SQL file.
+
+**Existing production or UAT with real data:** run `node scripts/migrate.js up` only. Do not use clean bootstrap or `uat-reset` to replace a database that holds production or customer data without a dedicated backup and migration runbook (see safeguarding rules in the bootstrap plan).
+
+Fresh dev/E2E installs use the **clean** profile. Production deploy uses `migrate.js up` only.
 
 1. Create the next numbered file (e.g. `021_add_feature.sql`).
 2. Append the filename to `db/schema/migration-manifest.json`.
@@ -138,6 +149,8 @@ Set `DATABASE_URL` and `SESSION_SECRET` in your deployment platform's environmen
 Deploy workflows (`deploy-prod.yml`, UAT SSH deploy) are audited by `scripts/ci/assert-prod-deploy-db-commands.sh` to invoke **only** `migrate.js up`.
 
 Set `APP_ENV=production` on production hosts. Destructive/bootstrap scripts refuse to run when `APP_ENV` or `NODE_ENV` is `production`.
+
+**Safeguarding:** principles P1–P5 in [docs/pipelines/db-schema-bootstrap-plan.md](docs/pipelines/db-schema-bootstrap-plan.md#safeguarding-principle) — bootstrap, seed, and drop-and-recreate are non-production; deploy automation is audited to call only `migrate.js up` on production.
 
 **Database credentials (recommended):** application runtime user — DML only (`SELECT`, `INSERT`, `UPDATE`, `DELETE`). Migration user — DDL for `migrate.js up` only; no `DROP DATABASE`. Never use superuser credentials in the app `.env`.
 

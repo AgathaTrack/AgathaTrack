@@ -3,7 +3,7 @@ title: Database schema bootstrap plan
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-08-22
+last_updated: 2026-11-20
 tags: [database, bootstrap, plan]
 ---
 # Database schema bootstrap — phased plan
@@ -22,15 +22,62 @@ See also: [DEPLOYMENT_DB.md](../DEPLOYMENT_DB.md) (deploy commands), [calendar-d
 | **Incremental migrations** | `db/migrations/NNN_*.sql` | Authoritative upgrade path | **Yes** — `migrate.js up` only |
 | **Migration manifest** | `db/schema/migration-manifest.json` | Ledger of incrementals; CI integrity | No (metadata) |
 | **Canonical snapshot** | `db/schema/canonical.sql` | Generated end-state DDL; drift check | No (bootstrap only) |
-| **Legacy baseline** | `db/migrations/v3__initial_uuid_schema.sql` | Historical fresh-install base | Retired in Phase 3 |
-| **UAT/demo seeds** | `db/seeds/` (Phase 4) | Idempotent personas | **Never** |
+| **Legacy baseline** | `db/migrations/archive/v3__initial_uuid_schema.sql` | Regeneration + CI legacy path only | Never in deploy |
+| **UAT/demo seeds** | `server/db/seeds/` | Idempotent synthetic personas (Node) | **Never** |
 
-### Data categories (Phase 4+)
+### Bootstrap profiles
+
+There is **one** checked-in schema artifact (`db/schema/canonical.sql`). UAT does not use a second “canonical with data” SQL file. Synthetic data is applied **after** a clean bootstrap.
+
+| Profile | Steps | Typical use |
+|---------|--------|-------------|
+| **clean** | Apply `canonical.sql` on an empty database → `server/scripts/seed-migration-ledger.js` | Dev, CI/E2E, clean UAT (schema only, no personas) |
+| **uat-demo** | **clean** → `node server/scripts/seed.js` (scenarios) | UAT reset, demos, rich manual/Playwright testing |
+
+**Commands:**
+
+| Profile | Command |
+|---------|---------|
+| clean | `e2e/scripts/bootstrap-db.sh` (empty DB) or existing DB → `node scripts/migrate.js up` |
+| uat-demo (full wipe) | `scripts/db/uat-reset.sh` (non-prod; drop DB + clean + all scenarios) |
+| uat-demo (data only) | `scripts/db/uat-refresh-demo.sh` (truncate app tables, re-seed; keeps schema) |
+
+**Production and long-lived databases:** only `node scripts/migrate.js up` (forward SQL + registered JS hooks). Do not apply `canonical.sql` to replace data on a database that has served real users without a separate save/migrate workflow (that workflow is documented later).
+
+### Data categories
 
 | Type | Examples | Where |
 |------|----------|-------|
-| **Reference data** | Rows the app assumes exist on day one | Forward migration or controlled bootstrap |
-| **Demo / UAT data** | Alice, Happy Paws Clinic, foster scenarios | `db/seeds/` only; non-prod |
+| **Reference data** | Rows the app assumes exist on day one in every environment | Forward migration only |
+| **Demo / UAT data** | Alice, Happy Paws Clinic, foster scenarios | `server/db/seeds/` via `seed.js` only; **uat-demo** profile |
+
+### Code migrations (`code_migrations` in manifest)
+
+Some incrementals pair SQL with Node backfills (`CODE_MIGRATIONS` in `server/scripts/migrate.js`). On an **empty** database:
+
+- **clean** bootstrap applies end-state DDL from `canonical.sql` only (generated after the legacy path ran once).
+- JS backfills do **not** run on fast bootstrap (nothing to backfill).
+- `seed-migration-ledger.js` still records those files in `_migrations` so `migrate.js up` will not replay them.
+
+### Safeguarding (principle)
+
+These rules are enforced today by `APP_ENV` guards and deploy audits; operational workflows for prod export/restore are tracked separately.
+
+| ID | Rule |
+|----|------|
+| P1 | Clean bootstrap (canonical apply, `DROP DATABASE`, ledger seed on empty) is **non-production only**. |
+| P2 | Production deploy paths may invoke **only** `migrate.js up`. |
+| P3 | Destructive reset refuses when `APP_ENV=production` (or equivalent). |
+| P4 | Regenerating `canonical.sql` is dev/CI tooling — never prod deploy. |
+| P5 | Synthetic seeds never run in production. |
+
+**Anti-pattern:** Running `uat-reset`, drop-and-recreate, or `canonical.sql` against a database that holds or held production data without an approved backup and migration plan.
+
+### Decision log
+
+| ID | Date | Decision |
+|----|------|----------|
+| D-DB-BOOT-001 | 2026-11-20 | Single clean schema snapshot; UAT = clean + Node seeds (no second canonical SQL). Prod authority remains incremental `migrate.js up`. Prod replace/save workflows out of scope for this doc until a dedicated runbook lands. |
 
 ---
 
@@ -163,8 +210,18 @@ See also: [DEPLOYMENT_DB.md](../DEPLOYMENT_DB.md) (deploy commands), [calendar-d
 | `scripts/db/check-schema-equivalence.sh` | Yes | After schema changes; CI Phase 2 |
 | `scripts/db/regenerate-canonical.sh` | Yes | After new migration committed |
 | `node scripts/migrate.js up` | Yes | **Prod/UAT deploy only** |
-| `e2e/scripts/bootstrap-db.sh` | Yes | Dev/E2E — canonical snapshot + migration ledger |
+| `e2e/scripts/bootstrap-db.sh` | Yes | **clean** profile — canonical + migration ledger |
+| `scripts/db/uat-reset.sh` | Yes | **uat-demo** profile — drop + clean + `seed.js --scenario=all` |
 | `scripts/db/bootstrap-legacy-db.sh` | Yes | Regenerate canonical + CI path equivalence only |
+
+### Schema change checklist (every PR)
+
+1. Add forward-only `db/migrations/NNN_*.sql` (and `_down` if used locally).
+2. Register JS hook in `migrate.js` when needed; add name to manifest `code_migrations`.
+3. Append filename to `db/schema/migration-manifest.json` (sorted).
+4. Run `scripts/db/regenerate-canonical.sh`; commit `db/schema/canonical.sql`.
+5. Run `scripts/db/check-bootstrap-paths-equivalence.sh` and `scripts/db/check-schema-equivalence.sh` when Postgres is available.
+6. Update demo scenarios under `server/db/seeds/scenarios/` only when **uat-demo** data must change.
 
 ---
 
