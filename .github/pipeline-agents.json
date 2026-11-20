@@ -52,7 +52,7 @@
     "followUpMaxDepth": 2
   },
   "aat": {
-    "enabled": false,
+    "enabled": true,
     "timeoutMin": 120,
     "maxInconclusive": 2
   }
