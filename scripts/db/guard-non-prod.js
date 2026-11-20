@@ -2,7 +2,7 @@
  * Refuse destructive or demo-only database operations in production.
  */
 export function resolveAppEnv() {
-  return process.env.APP_ENV || process.env.NODE_ENV || 'development';
+  return process.env.APP_ENV || process.env.NODE_ENV || '';
 }
 
 export function isProductionEnv() {
@@ -10,9 +10,10 @@ export function isProductionEnv() {
 }
 
 export function assertNonProduction(operationName) {
-  if (isProductionEnv()) {
+  const env = resolveAppEnv();
+  if (!env || env === 'production') {
     throw new Error(
-      `Refusing ${operationName} when APP_ENV/NODE_ENV is production`
+      `Refusing ${operationName} when APP_ENV/NODE_ENV is missing or production`
     );
   }
 }

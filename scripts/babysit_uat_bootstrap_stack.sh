@@ -10,7 +10,7 @@ sudo pg_ctlcluster 16 main start 2>/dev/null || true
 
 echo "==> DB bootstrap"
 chmod +x "${ROOT}/e2e/scripts/bootstrap-db.sh"
-"${ROOT}/e2e/scripts/bootstrap-db.sh"
+APP_ENV="${APP_ENV:-ci}" "${ROOT}/e2e/scripts/bootstrap-db.sh"
 
 echo "==> Flutter web build"
 cd "${ROOT}/flutter_app"

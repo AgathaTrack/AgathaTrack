@@ -10,7 +10,7 @@ sudo pg_ctlcluster 16 main start 2>/dev/null || true
 
 echo "==> Bootstrapping database"
 chmod +x "$ROOT/e2e/scripts/bootstrap-db.sh"
-"$ROOT/e2e/scripts/bootstrap-db.sh"
+APP_ENV="${APP_ENV:-development}" "$ROOT/e2e/scripts/bootstrap-db.sh"
 
 echo "==> Building Flutter web (if missing or stale)"
 if [ ! -d "$ROOT/flutter_app/build/web" ]; then

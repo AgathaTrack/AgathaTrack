@@ -45,6 +45,12 @@ describe('guard-non-prod', () => {
     process.env.APP_ENV = 'development';
     expect(() => assertNonProduction('database seed')).not.toThrow();
   });
+
+  it('blocks seed operations when APP_ENV is unset', () => {
+    delete process.env.APP_ENV;
+    delete process.env.NODE_ENV;
+    expect(() => assertNonProduction('database seed')).toThrow(/missing or production/);
+  });
 });
 
 describe('seed demo constants', () => {

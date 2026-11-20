@@ -21,7 +21,7 @@ npm ci
 
 echo "==> Bootstrap database (canonical snapshot + ledger, same as PR CI)"
 chmod +x "${ROOT}/e2e/scripts/bootstrap-db.sh"
-bash "${ROOT}/e2e/scripts/bootstrap-db.sh"
+APP_ENV=ci bash "${ROOT}/e2e/scripts/bootstrap-db.sh"
 
 echo "==> Start server"
 node bin/start.js &

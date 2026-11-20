@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Reset a non-prod database and load UAT demo personas.
-# Requires PostgreSQL and refuses APP_ENV=production.
+# Requires PostgreSQL and refuses APP_ENV/NODE_ENV production (fail closed).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -9,12 +9,8 @@ export PGPASSWORD="${PGPASSWORD:-password}"
 export PGHOST="${PGHOST:-localhost}"
 export PGPORT="${PGPORT:-5432}"
 export PGDATABASE="${PGDATABASE:-agatha_db}"
-export APP_ENV="${APP_ENV:-development}"
 
-node "${ROOT}/scripts/db/guard-non-prod-cli.js" uat-reset || {
-  echo "uat-reset: refused — set APP_ENV to development, ci, or uat" >&2
-  exit 1
-}
+ROOT="$ROOT" bash "${ROOT}/scripts/db/lib/require-non-prod.sh" uat-reset
 
 echo "==> Reset database ${PGDATABASE}"
 psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d postgres -v ON_ERROR_STOP=1 <<SQL

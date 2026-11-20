@@ -10,13 +10,13 @@ SLEEP_SECS="${SLEEP_SECS:-2}"
 SERVER_LOG="$(mktemp)"
 SERVER_PID=""
 
-bash "${ROOT}/e2e/scripts/bootstrap-db.sh"
+APP_ENV=ci bash "${ROOT}/e2e/scripts/bootstrap-db.sh"
 
 echo "==> Schema drift check (canonical vs bootstrap path)"
-RESET_DB=false bash "${ROOT}/scripts/db/check-schema-equivalence.sh"
+APP_ENV=ci RESET_DB=false bash "${ROOT}/scripts/db/check-schema-equivalence.sh"
 
 echo "==> Bootstrap path equivalence (legacy vs canonical+ledger)"
-RESET_DB=false bash "${ROOT}/scripts/db/check-bootstrap-paths-equivalence.sh"
+APP_ENV=ci RESET_DB=false bash "${ROOT}/scripts/db/check-bootstrap-paths-equivalence.sh"
 
 echo "==> cPanel Passenger-style startup (require bin/start.js)"
 node "${ROOT}/scripts/check_cpanel_startup_entry.js"
