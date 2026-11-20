@@ -44,7 +44,7 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
 | `WIP_LIMIT` | repo variable | Temporary. `off` lifts the Ready queue cap (`limits.wip`) for every tick, so Ready issues launch without waiting for a free slot. Any other value, or unset, keeps the committed limit. Remove the variable to restore it. |
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
-| `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (default false), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
+| `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (boolean; true in this repo), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
 
 The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch.
 Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the tick line reports `errors`.
@@ -188,7 +188,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   bodies and puts depth 1–2 in To do, deeper in Backlog. A review counts for one merge; a later merge needs its own.
   When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exist, a non-follow-up does not get this
   doorbell: that check is part of agent acceptance. Follow-ups still get it. If either field is missing, the tick logs
-  `acceptance.field-missing` once and keeps this doorbell. In `.github/pipeline-agents.json`, `aat.enabled` is true when both org fields exist (Refs #2448).
+  `acceptance.field-missing` once and keeps this doorbell. In `.github/pipeline-agents.json`, `aat.enabled` is true (Refs #2448). The flag stays true if a field later disappears; the acceptance gate is active only while both org fields are present.
 
 ### Blocked reasons
 
