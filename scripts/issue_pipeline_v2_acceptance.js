@@ -417,6 +417,7 @@ module.exports = {
   aatGateOn,
   aatSatisfied,
   deriveAatState,
+  newestActionable,
   acceptanceInMain,
   acceptanceInProgress,
   implementationFailActive,

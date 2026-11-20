@@ -23,7 +23,8 @@ flowchart TD
   PRE -->|green + HEAD match| PROMOTE[promote-uat.yml — uat-* tag]
   PROMOTE --> DEPLOY["deploy-uat.yml — deploy + HTTP smoke"]
   DEPLOY --> READY[prod-ready]
-  READY --> PROD[deploy-prod.yml]
+  READY --> AAT["AAT prod gate (#2424, AAT_GATE)"]
+  AAT --> PROD[deploy-prod.yml]
 
   NIGHTLY["uat-live-e2e.yml — in-host SSH smoke"] -.->|advisory| WARN[warning only]
   BROWSER["optional browser @smoke-uat"] -.->|WAF inconclusive| WARN

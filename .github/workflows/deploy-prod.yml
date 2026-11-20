@@ -14,6 +14,10 @@ on:
         description: Rebuild web if promoted artifact is missing/expired (audited fallback)
         type: boolean
         default: false
+      aat_override_reason:
+        description: Waiver for the acceptance guard (#2424). Honoured only when the dispatching user is listed in the AAT_OVERRIDE_ACTORS variable; recorded in the job summary. Leave empty otherwise.
+        required: false
+        default: ''
 env:
   FLUTTER_VERSION: '3.44.0'
   PROD_BASE_URL: https://agathatrack.com
@@ -44,6 +48,7 @@ jobs:
           # by pointing inputs.ref at an older tag/branch missing this script.
           ref: main
           fetch-depth: 1
+          # AAT prod guard (#2424) and the engine modules it reuses are read from main as well.
           sparse-checkout: |
             scripts/ci/resolve-prod-trigger.sh
             scripts/ci/resolve-prod-dispatch-guard.js
@@ -53,6 +58,28 @@ jobs:
             scripts/lib/execute_plan_uat_observe.js
             scripts/lib/main_ancestry.js
             .github/execute-plan.config.json
+            scripts/ci/aat-prod-gate.js
+            scripts/lib/aat_prod_gate.js
+            scripts/lib/aat_prod_gate_collect.js
+            scripts/issue_pipeline_v2_acceptance.js
+            scripts/issue_pipeline_v2_comments.js
+            scripts/issue_pipeline_v2_config.js
+            scripts/issue_pipeline_v2_decide.js
+            scripts/issue_pipeline_v2_fields.js
+            scripts/issue_pipeline_v2_intent.js
+            scripts/issue_pipeline_v2_launch.js
+            scripts/issue_pipeline_v2_release.js
+            scripts/issue_pipeline_v2_secrets.js
+            scripts/issue_pipeline_v2_verdict.js
+            scripts/pipeline_runners/claude.js
+            scripts/pipeline_runners/cursor.js
+            .github/pipeline-agents.json
+            .github/scripts/agent-payload-lib.js
+            .github/scripts/agent-safety-lib.js
+            .github/scripts/execute-plan-launch.js
+            .github/scripts/github-project-lib.js
+            .github/scripts/launch-cursor-agent.js
+            .github/scripts/triage-lib.js
           sparse-checkout-cone-mode: false
 
       - name: Begin job timing
@@ -66,6 +93,25 @@ jobs:
           DISPATCH_UAT_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.uat_run_id || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/ci/resolve-prod-trigger.sh
+
+      # Prod acceptance guard (#2424). AAT_GATE unset = off (no API calls). dry-run only reports.
+      # on fails this job, so deploy-prod does not run. An override counts only when the dispatching
+      # actor is listed in the AAT_OVERRIDE_ACTORS repository variable; it is recorded in the summary.
+      # The read token is required: there is no fallback to GITHUB_TOKEN.
+      - name: AAT prod gate
+        if: steps.resolve.outputs.proceed == 'true'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          AAT_GATE: ${{ vars.AAT_GATE }}
+          AAT_GATE_READ_TOKEN: ${{ secrets.AAT_GATE_READ_TOKEN }}
+          AAT_OVERRIDE_ACTORS: ${{ vars.AAT_OVERRIDE_ACTORS }}
+          GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
+          GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
+          ISSUE_PIPELINE_V2_LABEL: ${{ vars.ISSUE_PIPELINE_V2_LABEL }}
+          PROMOTED_SHA: ${{ steps.resolve.outputs.commit_sha }}
+          AAT_OVERRIDE_REASON: ${{ github.event_name == 'workflow_dispatch' && inputs.aat_override_reason || '' }}
+        run: node scripts/ci/aat-prod-gate.js
 
       - name: Write resolve summary
         if: always()
