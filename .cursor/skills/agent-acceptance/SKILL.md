@@ -125,7 +125,8 @@ Required when the issue changes user-visible or API behaviour.
    cd flutter_app && flutter build web --release --no-tree-shake-icons
    ```
 
-3. **Environment:** `sudo pg_ctlcluster 16 main start`; `cd server && node scripts/migrate.js up`; start `cd server && PGUSER=user PGPASSWORD=password PGHOST=localhost PGPORT=5432 PGDATABASE=agatha_db node bin/start.js` → `http://localhost:3000/`.
+3. **Environment:** `sudo pg_ctlcluster 16 main start`; schema per AGENTS.md §PostgreSQL (empty database →
+   `./e2e/scripts/bootstrap-db.sh`, existing → `cd server && node scripts/migrate.js up`); start `cd server && PGUSER=user PGPASSWORD=password PGHOST=localhost PGPORT=5432 PGDATABASE=agatha_db node bin/start.js` → `http://localhost:3000/`.
 4. **Auth:** Register via the app UI, or reuse patterns from `e2e/playwright/support/api.ts` against `/backend` to create a user, then sign in. Document the account used in the verdict comment (no real user PII).
 5. **Exercise** acceptance flows within the scope budget.
 6. **Evidence:** Save screenshots or recordings under `/opt/cursor/artifacts/`. In the GitHub comment, describe each flow (steps, expected, actual) as text and link the **Cursor agent run URL** (artifacts live there — do not cite `/opt/cursor/…` paths on the issue).

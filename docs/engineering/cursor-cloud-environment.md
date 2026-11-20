@@ -69,8 +69,7 @@ script runs as root after the repository is cloned, from the directory that hold
 - the AGENTS.md dev role and database (`user` with `LOGIN CREATEDB`, not superuser; `agatha_db`), then
   `e2e/scripts/bootstrap-db.sh`.
 
-It is idempotent (about 6 s on a warm container). It runs only when a container is built fresh, not when a session resumes or its worker restarts; a restart stops PostgreSQL, so run `sudo pg_ctlcluster 16 main start` (AGENTS.md §PostgreSQL) after one. `flutter pub get` may rewrite `flutter_app/pubspec.lock` when the committed lock drifts from the SDK's pinned packages; do not commit that rewrite with unrelated work. The stored copy lives in the environment settings; keep this copy in
-step when you change it:
+It is idempotent (about 6 s on a warm container). It runs only when a container is built fresh, not when a session resumes or its worker restarts; a restart stops PostgreSQL, so run `sudo pg_ctlcluster 16 main start` (AGENTS.md §PostgreSQL) after one. `flutter pub get` may rewrite `flutter_app/pubspec.lock` when the committed lock drifts from the SDK's pinned packages; do not commit that rewrite with unrelated work. The environment settings hold the live script; this copy must match it, so update both together:
 
 ```bash
 set -e
@@ -80,7 +79,7 @@ if [ -d AgathaTrack ]; then
   # Flutter 3.44.0: the checksum-verified SDK that scripts/flutter-sdk.sh (pre-push) uses.
   (. scripts/flutter-sdk.sh && agatha_flutter_install)
   sdk="${XDG_CACHE_HOME:-$HOME/.cache}/agatha-track/flutter-3.44.0-linux"
-  # The release tarball keeps uid 1000; as root, git then refuses the SDK ("dubious ownership").
+  # Older checkouts extract without --no-same-owner (uid 1000), which git refuses as root; harmless otherwise.
   chown -R root:root "$sdk"
   ln -sfn "$sdk" /opt/flutter
   ln -sf /opt/flutter/bin/flutter /usr/local/bin/flutter
