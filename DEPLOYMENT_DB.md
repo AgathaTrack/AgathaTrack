@@ -148,9 +148,9 @@ Set `DATABASE_URL` and `SESSION_SECRET` in your deployment platform's environmen
 
 Deploy workflows (`deploy-prod.yml`, UAT SSH deploy) are audited by `scripts/ci/assert-prod-deploy-db-commands.sh` to invoke **only** `migrate.js up`.
 
-Set `APP_ENV=production` on production hosts. Destructive/bootstrap scripts refuse to run when `APP_ENV` or `NODE_ENV` is `production`.
+Set `APP_ENV=production` on production hosts. Destructive/bootstrap shell scripts use `scripts/db/lib/require-non-prod.sh`: they refuse when `APP_ENV`/`NODE_ENV` is missing, `production`, or when `server/.env` sets production unless the caller overrides with an explicit non-production value. Node seed/truncate code adds a second `assertNonProduction` check.
 
-**Safeguarding:** principles P1–P5 in [docs/pipelines/db-schema-bootstrap-plan.md](docs/pipelines/db-schema-bootstrap-plan.md#safeguarding-principle) — bootstrap, seed, and drop-and-recreate are non-production; deploy automation is audited to call only `migrate.js up` on production.
+**Safeguarding:** principles P1–P5 and the **Enforced by** column in [docs/pipelines/db-schema-bootstrap-plan.md](docs/pipelines/db-schema-bootstrap-plan.md#safeguarding-principle). Production deploy automation is audited (`assert-prod-deploy-db-commands.sh`) to call only `migrate.js up`. One-off production emptying is manual — [care-tick runbook](docs/ops/care-tick.md#production-reset-one-off-2026-10), not `uat-reset` or `bootstrap-db.sh`.
 
 **Database credentials (recommended):** application runtime user — DML only (`SELECT`, `INSERT`, `UPDATE`, `DELETE`). Migration user — DDL for `migrate.js up` only; no `DROP DATABASE`. Never use superuser credentials in the app `.env`.
 

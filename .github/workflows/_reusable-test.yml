@@ -311,6 +311,7 @@ jobs:
           PGHOST: localhost
           PGPORT: 5432
           PGDATABASE: agatha_db
+          APP_ENV: ci
         run: |
           chmod +x e2e/scripts/bootstrap-db.sh
           ./e2e/scripts/bootstrap-db.sh

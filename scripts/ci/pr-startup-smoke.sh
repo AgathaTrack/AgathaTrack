@@ -10,7 +10,7 @@ SLEEP_SECS="${SLEEP_SECS:-2}"
 SERVER_LOG="$(mktemp)"
 SERVER_PID=""
 
-bash "${ROOT}/e2e/scripts/bootstrap-db.sh"
+APP_ENV=ci bash "${ROOT}/e2e/scripts/bootstrap-db.sh"
 
 echo "==> Schema drift check (canonical vs bootstrap path)"
 RESET_DB=false bash "${ROOT}/scripts/db/check-schema-equivalence.sh"

@@ -4,8 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-export APP_ENV="${APP_ENV:-development}"
-node "${ROOT}/scripts/db/guard-non-prod-cli.js" regenerate-canonical
+ROOT="$ROOT" bash "${ROOT}/scripts/db/lib/require-non-prod.sh" regenerate-canonical
 
 export PGUSER="${PGUSER:-user}"
 export PGPASSWORD="${PGPASSWORD:-password}"

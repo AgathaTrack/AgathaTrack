@@ -24,6 +24,8 @@ Credential reference (auto-synced from seed constants): [uat-demo-personas.md](.
 APP_ENV=development scripts/db/uat-reset.sh
 ```
 
+(`APP_ENV` or `NODE_ENV` must be set to a non-production value; scripts fail closed if unset.)
+
 Drops the database (all tables), bootstraps schema from canonical snapshot, then loads all demo scenarios.
 
 ### UAT server (data only — truncates all application tables, keeps schema)

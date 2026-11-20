@@ -3,6 +3,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+
+ROOT="$ROOT" bash "${ROOT}/scripts/db/lib/require-non-prod.sh" bootstrap-db
+
 export PGUSER="${PGUSER:-user}"
 export PGPASSWORD="${PGPASSWORD:-password}"
 export PGHOST="${PGHOST:-localhost}"

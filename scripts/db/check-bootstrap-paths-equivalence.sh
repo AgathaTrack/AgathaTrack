@@ -3,8 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-export APP_ENV="${APP_ENV:-development}"
-node "${ROOT}/scripts/db/guard-non-prod-cli.js" bootstrap-paths-equivalence
+export APP_ENV="${APP_ENV:-ci}"
+ROOT="$ROOT" bash "${ROOT}/scripts/db/lib/require-non-prod.sh" bootstrap-paths-equivalence
 
 export PGUSER="${PGUSER:-user}"
 export PGPASSWORD="${PGPASSWORD:-password}"
@@ -42,7 +42,7 @@ dump_normalized > "${WORK}/legacy.sql"
 
 echo "==> Canonical bootstrap path"
 reset_db
-bash "${ROOT}/e2e/scripts/bootstrap-db.sh" > /dev/null
+APP_ENV="${APP_ENV:-ci}" bash "${ROOT}/e2e/scripts/bootstrap-db.sh" > /dev/null
 dump_normalized > "${WORK}/canonical.sql"
 
 if diff -u "${WORK}/legacy.sql" "${WORK}/canonical.sql" > "${WORK}/diff.txt"; then

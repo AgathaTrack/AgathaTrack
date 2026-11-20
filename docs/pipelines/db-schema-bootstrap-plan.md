@@ -61,23 +61,25 @@ Some incrementals pair SQL with Node backfills (`CODE_MIGRATIONS` in `server/scr
 
 ### Safeguarding (principle)
 
-These rules are enforced today by `APP_ENV` guards and deploy audits; operational workflows for prod export/restore are tracked separately.
+Operational workflows for prod export/restore before any destructive reset are tracked separately ([Care tick — production reset](../ops/care-tick.md#production-reset-one-off-2026-10) is a documented **manual** exception, not `uat-reset` / `uat-refresh-demo`).
 
-| ID | Rule |
-|----|------|
-| P1 | Clean bootstrap (canonical apply, `DROP DATABASE`, ledger seed on empty) is **non-production only**. |
-| P2 | Production deploy paths may invoke **only** `migrate.js up`. |
-| P3 | Destructive reset refuses when `APP_ENV=production` (or equivalent). |
-| P4 | Regenerating `canonical.sql` is dev/CI tooling — never prod deploy. |
-| P5 | Synthetic seeds never run in production. |
+| ID | Rule | Enforced by |
+|----|------|-------------|
+| P1 | Clean bootstrap (`canonical.sql`, migration ledger seed) is **non-production only**. | `scripts/db/lib/require-non-prod.sh` at start of `e2e/scripts/bootstrap-db.sh`; tests in `scripts/test/require-non-prod-wrappers.test.sh` |
+| P2 | Production deploy paths may invoke **only** `migrate.js up`. | `scripts/ci/assert-prod-deploy-db-commands.sh` (deploy workflow audit) |
+| P3 | Destructive reset / truncate refuses when env is missing or `production` (including `server/.env`). | `require-non-prod.sh` on `uat-reset.sh`, `uat-refresh-demo.sh`, and DB-drop equivalence scripts; Node `assertNonProduction` in `seed.js` / `truncate-data.js` |
+| P4 | Regenerating `canonical.sql` is dev/CI tooling — not prod deploy. | `require-non-prod.sh` on `regenerate-canonical.sh`, `bootstrap-legacy-db.sh`; prod deploy audit (same as P2) |
+| P5 | Synthetic seeds never run in production. | Shell guard before `seed.js`; `assertNonProduction` in `seed.js` and `truncate-data.js` |
 
 **Anti-pattern:** Running `uat-reset`, drop-and-recreate, or `canonical.sql` against a database that holds or held production data without an approved backup and migration plan.
+
+Set an explicit non-production `APP_ENV` (e.g. `development`, `ci`, `uat`) before any bootstrap/reset script; guards **fail closed** when it is unset.
 
 ### Decision log
 
 | ID | Date | Decision |
 |----|------|----------|
-| D-DB-BOOT-001 | 2026-11-20 | Single clean schema snapshot; UAT = clean + Node seeds (no second canonical SQL). Prod authority remains incremental `migrate.js up`. Prod replace/save workflows out of scope for this doc until a dedicated runbook lands. |
+| D-DB-BOOT-001 | 2026-11-20 | Single clean schema snapshot; UAT = clean + Node seeds (no second canonical SQL). Prod authority remains incremental `migrate.js up`. One-off prod emptying stays manual per `docs/ops/care-tick.md`, not the automated bootstrap profiles. |
 
 ---
 
@@ -216,7 +218,7 @@ These rules are enforced today by `APP_ENV` guards and deploy audits; operationa
 
 ### Schema change checklist (every PR)
 
-1. Add forward-only `db/migrations/NNN_*.sql` (and `_down` if used locally).
+1. Add forward-only `db/migrations/NNN_*.sql` for production (`migrate.js up` never runs `*_down.sql`; committed `*_down.sql` files are for optional local rollback only).
 2. Register JS hook in `migrate.js` when needed; add name to manifest `code_migrations`.
 3. Append filename to `db/schema/migration-manifest.json` (sorted).
 4. Run `scripts/db/regenerate-canonical.sh`; commit `db/schema/canonical.sql`.

@@ -54,7 +54,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BOOTSTRAP_DB="${ROOT}/e2e/scripts/bootstrap-db.sh"
 if [[ -f "$BOOTSTRAP_DB" ]]; then
   log "ensuring database schema (bootstrap-db)"
-  bash "$BOOTSTRAP_DB"
+  APP_ENV="${APP_ENV:-development}" bash "$BOOTSTRAP_DB"
 else
   die "bootstrap-db.sh not found at ${BOOTSTRAP_DB}; cannot ensure application schema"
 fi

@@ -11,20 +11,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-export APP_ENV="${APP_ENV:-uat}"
 
-node "${ROOT}/scripts/db/guard-non-prod-cli.js" uat-refresh-demo || {
-  echo "uat-refresh-demo: refused — set APP_ENV to development, ci, or uat" >&2
-  exit 1
-}
-
-# Load backend .env when present (UAT server / local dev)
-if [[ -f "${ROOT}/server/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "${ROOT}/server/.env"
-  set +a
-fi
+ROOT="$ROOT" bash "${ROOT}/scripts/db/lib/require-non-prod.sh" uat-refresh-demo
 
 export PGUSER="${PGUSER:-user}"
 export PGPASSWORD="${PGPASSWORD:-password}"
