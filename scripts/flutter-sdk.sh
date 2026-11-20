@@ -60,7 +60,9 @@ agatha_flutter_install() {
   fi
 
   if [[ "${archive_type}" == "tar.xz" ]]; then
-    tar --extract --xz --file "${archive_path}" --directory "${install_dir}"
+    # --no-same-owner: the archive stores uid 1000; extracted as root, git then refuses the SDK
+    # ("detected dubious ownership") and `flutter --version` prints no version line.
+    tar --extract --xz --no-same-owner --file "${archive_path}" --directory "${install_dir}"
   else
     unzip -q "${archive_path}" -d "${install_dir}"
   fi
@@ -96,7 +98,9 @@ agatha_flutter_verify() {
     return 1
   fi
   if [[ "${flutter_version}" != "Flutter ${AGATHA_FLUTTER_VERSION} "* ]]; then
-    echo "Expected Flutter ${AGATHA_FLUTTER_VERSION}; found: ${flutter_version}" >&2
+    echo "Expected Flutter ${AGATHA_FLUTTER_VERSION}; found: ${flutter_version:-no version line}" >&2
+    # Show what the tool said instead (e.g. a git ownership refusal), not an empty "found:".
+    flutter --version 2>&1 | head -n 8 >&2
     return 1
   fi
 }

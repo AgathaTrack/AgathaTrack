@@ -66,6 +66,7 @@ Institutional knowledge for cloud agents. Domain workflows live in **Skills** (`
 - Replit operating rules now live in `replit.md` (Replit mechanics) + `AGENTS.md` (shared rules).
 - [Flutter pub cache Matrix4 quirk](flutter-pubcache-matrix4.md) — `flutter test` failing inside the SDK's painting lib (Matrix4/Vector4 undefined) = stale cache; run `flutter pub get` first.
 - [Replit Flutter preview compatibility](replit-flutter-preview-compatibility.md) — preview toolchain can lag the app’s Dart requirement; never treat an older CI bundle as current-source visual verification.
+- [Cloud container bootstrap](cloud-container-bootstrap.md) — one-pass prerequisite check; `bootstrap-db.sh` for an empty DB; no destructive step inside a long run; report checks the container cannot run.
 - [Replit test runtime](replit-test-runtime.md) — keep disposable PostgreSQL alive across shell calls; supply Nix libraries to the matching Playwright browser.
 - [GitHub API publishing fallback](github-api-publish-fallback.md) — when shell Git auth is unavailable but GitHub OAuth works, publish a verified branch through guarded Git data API calls.
 - [Mockup sandbox hygiene](mockup-sandbox-registration.md) — use managed sandboxes; keep nested installs artifact-scoped and prevent verification builds from dirtying tracked dist output.
