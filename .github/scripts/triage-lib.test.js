@@ -102,3 +102,23 @@ test('detectRiskyScope still honors Security or Sensitive Area: Yes', () => {
   const risks = detectRiskyScope('Secrets doc', body, sections);
   assert.ok(risks.includes('declared sensitive/security area'));
 });
+
+test('detectRiskyScope scans headingless bodies', () => {
+  const body = 'Please change authentication middleware for admin routes without section headings.';
+  const risks = detectRiskyScope('Auth tweak', body, {});
+  assert.ok(risks.includes('authentication'));
+});
+
+test('detectRiskyScope includes non-excluded section headings', () => {
+  const body = `### Authentication\n\nNo meaningful change in this section body.\n\n### Out of Scope\n\nBilling and migrations.`;
+  const sections = parseSections(body);
+  const risks = detectRiskyScope('Task', body, sections);
+  assert.ok(risks.includes('authentication'));
+});
+
+test('detectRiskyScope scans every in-scope section when headings repeat', () => {
+  const body = `### Scope\n\nDocs only.\n\n### Scope\n\nAlso touches authentication hooks in server.`;
+  const sections = parseSections(body);
+  const risks = detectRiskyScope('Task', body, sections);
+  assert.ok(risks.includes('authentication'));
+});
