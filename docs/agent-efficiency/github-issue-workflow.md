@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-21
+last_updated: 2026-11-22
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -117,6 +117,8 @@ listed agent); the engine never clears the flag. `paused` is the owner's hold: a
 clears it.
 
 ### Review: votes and the markers
+
+**Proposed replacement (not active):** [Review process v3](./changes/pipeline-v2-review-process-v3.md) (`status: proposed`) replaces In analysis pickup/convergence from [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385) and review lanes from [#2428](https://github.com/AgathaTrack/AgathaTrack/issues/2428) once delivered (P1–P6). Shipped behaviour below stays in force until then.
 
 - **Spec and review requests** are engine comments with a hidden marker: `v2:spec-request` and `v2:review-request hash=<hash>`
   store the assigned agent **id** and who timed out; the visible line `@mentions` the agent's **`actsAs`** login. A reassignment edits the comment in place. A review request is posted on
@@ -272,6 +274,7 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-SOAK-008 | Spec and review agents must not edit the issue body to evade launch safety (`detectRiskyScope` in `.github/scripts/triage-lib.js`, `preflightIssue` in `agent-safety-lib.js`): e.g. rewording **Security or Sensitive Area** to `No` while the plan still describes security/crypto escalation. Use **`Blocked=decision`** and leave the body truthful. Soak2 #2495: spec passed, then review edited the body to drop keyword tripwires | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-PREFLIGHT-001 | Delivery preflight keyword scan ignores bodies under **`### Out of scope`** / `Out-of-scope`; title, preamble, and all other sections still count. **Security or Sensitive Area: Yes** is unchanged. Soak2 #2507/#2499/#2498/#2508 launch-failed on exclusion-list keywords in whole-body scan | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-RUNNER-001 | Claude runner WIP (`limits.runnerWip.claude`, default **3** when unset): counts active `pipeline-claude-run.yml` jobs. On cap, defer with label **`queued`** and `ring-doorbell` while pickup is within `reviewTimeoutMin`; after that, normal timeout/reassign (e.g. Cursor). Real doorbell failures clear **`queued`** so `ringFailed` can reassign. Cursor runners have no repo-side cap. Owner agreed **3** concurrent Claude runs (2026-11-21). Agents remove `queued` via `clear-queued` at doorbell start or `finish-work` when done | Accepted (2026-11-21) |
+| PIPE-V2-D-REV3-001 | Review process v3 (revision 3): proposal in [`changes/pipeline-v2-review-process-v3.md`](./changes/pipeline-v2-review-process-v3.md). When accepted and delivered (P1–P6), replaces In analysis adversarial pickup/convergence (#2385) and review lanes (#2428); identity-based convergence, tier-a/tier-b rounds, challenge label, watchers and event triggers per that doc. Until then, §Review (shipped) and `decideInAnalysis` behaviour remain authoritative | Proposed |
 | PIPE-AAT-D-009 | Inconclusive and timeout share `maxInconclusive`, then `Blocked=stalled`. Product fails are not a two-strike `Blocked=decision` cap. This supersedes #2424 owner decision 3 for the In Main gate | Accepted for this issue |
 
 ## Live workflow (legacy, until `ISSUE_PIPELINE=on`)
