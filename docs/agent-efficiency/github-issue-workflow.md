@@ -213,6 +213,10 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   (from the board column, else Backlog) and a `Blocked` reason from the legacy `question` / `needs-owner` labels.
 - **Soak:** `dry-run` for a day; then `on` with `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`, taking one sandbox issue
   To do → Done and sending one to each `Blocked` reason; then `on` for the board (clear the label variable).
+- **Soak2 (2026-11-21):** three live ticks on `main` at `133d037` (~16:44–17:00 UTC); see decision log PIPE-V2-D-SOAK-006–008.
+  Fixture matrix (proposed): [pipeline-v2-soak2-matrix.md](./changes/pipeline-v2-soak2-matrix.md) (**PR #2509**). Tick outcome table
+  (in delivery): [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) (**PR #2511**). Round robin fix shipped **#2510**
+  (not soak-covered until a later `on` window). Owner: re-tick **`pipeline-beta`** issues stuck **In analysis** after reviews landed in `dry-run`.
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
@@ -261,6 +265,7 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-SOAK-004 | A `busy` doorbell holds a timed-out pickup for one extra timeout at most; the Claude workflow fails a run that left no comment or reaction | Proposed |
 | PIPE-V2-D-SOAK-005 | `Blocked=paused` is never woken by a comment. Dry-run, no-identity and out-of-scope actions log `pipeline_v2_planned`, not `pipeline_v2_applied` | Proposed |
 | PIPE-V2-D-SOAK-007 | **In analysis → Ready** and `busy` removal apply on a tick while `ISSUE_PIPELINE_V2=on`. Signed reviews that land after the repo returns to `dry-run`, or between ticks, do not move `Stage` until the next live tick (soak2 #2507/#2508). Agents must not open delivery PRs until **Ready** | Accepted (soak2, 2026-11-21) |
+| PIPE-V2-D-SOAK-008 | Spec and review agents must not edit the issue body to evade launch safety (`detectRiskyScope` in `.github/scripts/triage-lib.js`, `preflightIssue` in `agent-safety-lib.js`): e.g. rewording **Security or Sensitive Area** to `No` while the plan still describes security/crypto escalation. Use **`Blocked=decision`** and leave the body truthful. Soak2 #2495: spec passed, then review edited the body to drop keyword tripwires | Accepted (soak2, 2026-11-21) |
 | PIPE-AAT-D-009 | Inconclusive and timeout share `maxInconclusive`, then `Blocked=stalled`. Product fails are not a two-strike `Blocked=decision` cap. This supersedes #2424 owner decision 3 for the In Main gate | Accepted for this issue |
 
 ## Live workflow (legacy, until `ISSUE_PIPELINE=on`)

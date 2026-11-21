@@ -2,55 +2,57 @@
 title: Pipeline v2 soak2 findings
 owner: Agent efficiency
 audience: owner
-status: active
+status: in-delivery
 last_updated: 2026-11-21
 tags: [agent, pipeline, soak]
-related_prs: []
+related_prs: [2509, 2510, 2511]
 ---
 
 # Soak2 findings and remediation (2026-11-21)
 
-**Window:** `ISSUE_PIPELINE_V2=on` ~16:44–17:01 UTC; returned to **`dry-run`** at 17:00:50 UTC.  
-**Ticks:** [Phase A](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926171197) · [Phase B](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926895355) · [Phase C/D](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44927399610).
+**Working doc** (not canonical product spec). Decision log rows live in [`github-issue-workflow.md`](../github-issue-workflow.md) (PIPE-V2-D-SOAK-006–008). Fixture matrix: [`pipeline-v2-soak2-matrix.md`](./pipeline-v2-soak2-matrix.md) (**PR #2509**). Fold this file into the workflow doc when soak2 remediation is fully delivered and verified.
 
-This document lists what the ticks showed, what was wrong, and what we changed (or still need an operator to do).
+**Window:** `ISSUE_PIPELINE_V2=on` ~16:44–17:01 UTC; **`dry-run`** from 17:00:50 UTC.  
+**Ticks (main `133d037`):** [Phase A](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926171197) · [Phase B](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926895355) · [Phase C/D](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44927399610).
 
 ---
 
 ## Issues found during soak ticks
 
-| # | Fixture | What we expected | What happened | Fix |
-|---|---------|------------------|---------------|-----|
-| — | Round robin | After any assignment, the **next** board pickup is the next startable agent in config order | LRU per issue kept giving **cursor-a** on fresh issues; **claude-a** never ran | **Merged PR #2510** — board-wide ring from newest `v2:launch`; includes closed delivery-column rows (#2510 Copilot follow-up) |
-| #2494 | Question path | `Blocked=question`, stay **To do** | **Pass** | None |
-| #2496 | Paused | Engine skips while `Blocked=paused` | **Pass** | None |
+| # | Fixture | What we expected | What happened | Fix / status |
+|---|---------|------------------|---------------|--------------|
+| — | Round robin | Next board pickup rotates through startable agents | LRU per issue starved **claude-a** | **#2510 merged** — **unverified** until soak with `on` |
+| #2494 | Question | `Blocked=question` | **Pass** | None |
+| #2496 | Paused | Engine skip | **Pass** | None |
 | #2503 | manual-only | No engine writes | **Pass** | None |
-| #2495 | Decision / escalation | Spec agent sets **`Blocked=decision`** before a full spec pass when delivery needs owner on AGENTS.md §Escalation (security/crypto) | Agent **spec-passed** into **In analysis** | **This PR** — tightened `spec-agent` SKILL (escalation gate before 👍); engine still relies on agent `Blocked` write (`facts.escalation` is not inferred from body text) |
-| #2497 | Claude in rotation | **claude-a** eventually gets doorbells | Only **cursor-a** / **cursor-b** in the one-hour window | Retest after **#2510** with `on` + time or scripted history |
-| #2498/#2499 | Rotation | Spec then review on separate issues | **Pass** under old LRU; re-validate under round robin | Soak resume |
-| #2507 | Stalled → spec → review | Clear `Blocked`, spec, review, **`Ready`** | Spec + review **up** signed; **Stage stayed In analysis**; `busy` still set. **No `Refs #2507` PR** on the repo (user note “2707” → **#2507**) | **Operational:** cursor-b review finished **~17:04 UTC**, after **`dry-run` at 17:00:50** — convergence never applied. **Owner:** run a tick with `ISSUE_PIPELINE_V2=on` (still `pipeline-beta` scope) to advance to **Ready** and clear `busy`. If an agent opened a PR while still **In analysis**, that is off-pipeline delivery; close or retarget the PR and let the engine reach **Ready** first |
-| #2508 | Shared login convergence | Two **distinct pool ids** must approve | **cursor-b** review in flight at soak end; same dry-run/timing risk as #2507 | Tick with `on` after review completes |
-| #2493 | E2E | Toward **Done** | Stuck **In analysis** (time) | Continue soak |
-| #2500/#2504 | no-convergence / launch-failed | Late branches | Never reached **In analysis** depth | Scripted votes / time |
-| #2501/#2502 | WIP queue | **ready.queued** when WIP full | Preconditions not met (#2493 not **In progress**) | Drive #2493 delivery first |
-| — | Matrix doc | Publish soak matrix on `main` | PR **#2509** blocked on branch policy | Merge when rules allow |
-| — | `pre-push` on Cloud | Changed-files gate | **shellcheck** missing fails local script though tests pass | Install shellcheck in Cloud image or scope gate (debt) |
+| #2495 | Decision path | **`Blocked=decision`** before spec pass / delivery when AGENTS.md §Escalation applies | Spec **passed** at 16:46; review **edited body** ~17:05 to avoid `detectRiskyScope` (e.g. “Security or Sensitive Area: No. Launch may proceed.” while work still describes token-storage / crypto escalation) | **#2511** — spec/review SKILL gates (**unverified** until live tick). **Owner:** review #2495 body before launch; do not trust edited Security section |
+| #2497 | Claude runner | **claude-a** in rotation | Only cursor pool in window | Retest after **#2510** |
+| #2498/#2499 | Rotation | Spec then review | **Pass** (old LRU) | Re-validate round robin |
+| #2507 | Stalled → review | **Ready** after convergence | Review signed **17:04:33**, after Phase C tick; still **In analysis** + `busy` | **SOAK-007** — one live tick with `on` (no linked `Refs #2507` PR) |
+| #2508 | Shared login | Two distinct ids approve | In flight at soak end | Same as #2507 |
+| #2493 | E2E | Toward Done | **In analysis** only | Continue soak |
+| #2500/#2504 | Late branches | blocked reasons | Not reached | Time / scripted votes |
+| #2501/#2502 | WIP | `ready.queued` | #2493 not **In progress** | Drive #2493 delivery first |
+| — | Matrix | Publish on `main` | **#2509** blocked on branch policy | Merge when allowed |
+| — | Cloud pre-push | Local gate | `shellcheck` missing → script error while tests pass | Image / debt |
+
+### #2495 launch-safety bypass (detail)
+
+Soak showed agents can defeat keyword / sensitive-area checks by editing the issue body in **In analysis**, which conflicts with safety-gate precedence in `AGENTS.md`. `preflightIssue` calls `detectRiskyScope` on title, body, and parsed sections; declaring **Security or Sensitive Area: Yes** or matching risk patterns refuses launch until scope is owner-cleared. Agents must use **`Blocked=decision`**, not body edits that hide the same risk (PIPE-V2-D-SOAK-008).
 
 ---
 
-## Code and doc changes in this remediation PR
+## Changes in PR #2511 (unverified until soak)
 
-1. **`spec-agent` SKILL** — Before spec pass: check Delivery plan, DoD, soak `<!-- soak2:expect …` markers, and AGENTS.md §Escalation; set **`Blocked=decision`** instead of 👍 when owner must decide (covers #2495).
-2. **`github-issue-workflow.md`** — Decision log **PIPE-V2-D-SOAK-007**: review convergence and `busy` clearing happen on the **next tick while `ISSUE_PIPELINE_V2=on`**; dry-run after the live window explains #2507/#2508 stage lag.
-3. **This file** — Canonical soak2 record for owners and the next soak phase.
-
-Round robin (**#2510**) is already on `main`; it is not repeated here.
+1. **`spec-agent` SKILL** — Escalation gate before 👍 when the plan needs an owner decision before any **commit, branch, push, or PR** (not only after Ready).
+2. **`review-agent` SKILL** — Forbid edits whose main purpose is clearing risky-scope / sensitive-area preflight.
+3. **`github-issue-workflow.md`** — SOAK-007, SOAK-008, soak2 cross-links.
 
 ---
 
 ## Recommended next soak steps
 
-1. **`ISSUE_PIPELINE_V2=on`** for one tick (or short window) with label scope unchanged; unstick **#2507**, **#2508**, and any other **In analysis** + signed review fixtures.
-2. Confirm **claude-a** appears in doorbells after **#2510**.
-3. Merge **#2509** when branch protection allows.
-4. Schedule long branches (#2504 launch-failed, #2500 no-convergence) separately.
+1. **`ISSUE_PIPELINE_V2=on`** — unstick #2507, #2508, and other signed-review fixtures still **In analysis**.
+2. Confirm **claude-a** after **#2510**; re-run **#2495** with SKILL changes under observation.
+3. Merge **#2509** when branch policy allows.
+4. Owner resets **#2495** body if the 17:05 review edit should not stand.

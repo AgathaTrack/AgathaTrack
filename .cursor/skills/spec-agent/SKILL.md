@@ -11,7 +11,7 @@ You were asked to make an issue **ready**: a reviewer should be able to approve 
 ## Procedure
 
 1. Read the issue, its comments and linked issues. Read the canonical doc for the affected area (`docs/domains/<domain>/README.md`, then `docs/architecture/index.md`).
-2. **Escalation gate (before any spec pass):** Read **Delivery plan**, **Definition of Done**, and any soak markers in the body (e.g. `<!-- soak2:expect Blocked=decision … -->`). If the work requires an owner decision under AGENTS.md §Escalation (security/crypto, breaking API, production migration, CI gate change, product or legal call) **before** delivery can start — including “describe where secrets live” style security notes — set org field **`Blocked=decision`**, post one recommendation comment, remove `busy` if you added it, and **stop**. Do not react 👍 and do not finish the DoR pass. The engine does not infer `escalation` from issue text; you must write `Blocked`.
+2. **Escalation gate (before any spec pass):** Read **Delivery plan**, **Definition of Done**, and any soak markers in the body (e.g. `<!-- soak2:expect Blocked=decision … -->`). If the work requires an owner decision under AGENTS.md §Escalation (security/crypto, breaking API, production migration, CI gate change, product or legal call) **before any commit, branch, push, or pull request** — including “describe where secrets live” style security notes, even when the first delivery step is only setting **`Blocked=decision`** — set org field **`Blocked=decision`**, post one recommendation comment, remove `busy` if you added it, and **stop**. Do not react 👍 and do not finish the DoR pass. The engine does not infer `escalation` from issue text; you must write `Blocked`. Never set **Security or Sensitive Area** to `No` to hide work that still needs an escalation stop.
 3. **Draft the missing sections from the codebase and docs**, in the issue body, using the sections of its template (task, feature or bug). Prefer concrete files, behaviour and acceptance criteria over prose. Do not invent product decisions.
 4. **Check the mechanical DoR**: save the body to a file and run
 
@@ -28,4 +28,5 @@ You were asked to make an issue **ready**: a reviewer should be able to approve 
 
 - Never write `Stage` (the engine does, or the owner during bootstrap); you may write `Blocked`, the `busy` label and the body.
 - Hit an item on the AGENTS.md escalation list (security, breaking API, production migration, CI gate, product or legal call)? Set `Blocked=decision` with your recommendation instead.
+- Never edit the body to evade launch safety checks (`detectRiskyScope` / **Security or Sensitive Area**); that is SOAK-008 in `docs/agent-efficiency/github-issue-workflow.md`.
 - Evidence goes on the issue, not only in chat.
