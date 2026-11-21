@@ -23,7 +23,9 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
   const active = await countActiveClaudeRuns({ owner, repo, deps });
   const cap = config?.limits?.runnerWip?.claude || 1;
   if (active >= cap) {
-    throw new Error(`claude runner at WIP cap (${active}/${cap})`);
+    const error = new Error(`claude runner at WIP cap (${active}/${cap})`);
+    error.code = 'RUNNER_QUEUED';
+    throw error;
   }
   await restFn('POST', enc(owner, repo, `/actions/workflows/${WORKFLOW_FILE}/dispatches`), token, {
     ref: 'main',
@@ -77,4 +79,8 @@ async function status({ nonce, owner, repo, deps = {} }) {
   return 'running';
 }
 
-module.exports = { launch, status, countActiveClaudeRuns, WORKFLOW_FILE };
+function isRunnerQueuedError(error) {
+  return error?.code === 'RUNNER_QUEUED';
+}
+
+module.exports = { launch, status, countActiveClaudeRuns, isRunnerQueuedError, WORKFLOW_FILE };

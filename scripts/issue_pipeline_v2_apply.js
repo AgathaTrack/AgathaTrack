@@ -17,6 +17,7 @@ const { buildReopened, buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchPending, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 const { buildAatLaunch, buildAatRelaunch, buildAatReset, buildAatWaive } = require('./issue_pipeline_v2_acceptance');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
+const { isRunnerQueuedError } = require('./pipeline_runners/claude');
 
 /**
  * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
@@ -88,6 +89,15 @@ async function applyAction({ action: decided, ctx }) {
       }
     }
   };
+  const deleteQueuedLabel = async () => {
+    try {
+      await request('DELETE', `${base}/labels/queued`);
+    } catch (error) {
+      if (!isGithubNotFound(error)) {
+        throw error;
+      }
+    }
+  };
   try {
 
     const assign = async (agent) => {
@@ -144,7 +154,14 @@ async function applyAction({ action: decided, ctx }) {
           'comment:doorbell-launch',
         );
         applied.push(`doorbell:${agent}`);
+        await deleteQueuedLabel();
+        applied.push('labels:queued-removed');
       } catch (error) {
+        if (isRunnerQueuedError(error)) {
+          await request('POST', `${base}/labels`, { labels: ['queued'] });
+          applied.push(`runner-queued:${agent}`);
+          return;
+        }
         applied.push(`doorbell-failed:${agent}:${String(error?.message ?? error).slice(0, 120)}`);
       }
     };
@@ -187,6 +204,9 @@ async function applyAction({ action: decided, ctx }) {
         );
         await assign(action.agent);
         await ring(action.agent, ctx.facts.stage);
+        break;
+      case 'ring-doorbell':
+        await ring(action.agent, action.stage);
         break;
       case 'launch': {
         let attempts = action.attempts;

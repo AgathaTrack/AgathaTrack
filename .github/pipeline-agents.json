@@ -38,7 +38,7 @@
   "limits": {
     "wip": 2,
     "runnerWip": {
-      "claude": 1
+      "claude": 3
     },
     "reviewTimeoutMin": 30,
     "ackWindowMin": 15,

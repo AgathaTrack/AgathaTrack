@@ -10,7 +10,7 @@ You were asked to review **one version** of an issue body, identified by the has
 
 ## Procedure
 
-1. Read the issue body, its comments and the request comment. Check the hash still matches the body you are reading; if the body changed, wait for the new request.
+1. Read the issue body, its comments and the request comment. Run `node scripts/github_issue_workflow.js finish-work --issue <n>` first (clears `busy` and `queued`). Check the hash still matches the body you are reading; if the body changed, wait for the new request.
 2. **Review against the code, not only the text.** Open the files, workflows and docs the issue names. Confirm the facts it states, the paths it plans to touch, and that its Definition of Done is testable. The delivery plan (method, planned work, `agent-paths`, Definition of Done) is part of what you approve.
 3. **Fix what you can yourself** by editing the body. An edit creates a new hash, counts as your approval of that new version, and a new review request follows; the other agent then reviews it. **Do not** edit to evade launch safety: never reword **Security or Sensitive Area**, titles, or scope text so `detectRiskyScope` / `preflightIssue` would pass while the plan still needs AGENTS.md §Escalation (soak2 #2495). Use **`Blocked=decision`** and keep the body truthful (PIPE-V2-D-SOAK-008).
 4. Otherwise **vote on the request comment**:

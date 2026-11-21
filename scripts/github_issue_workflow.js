@@ -130,7 +130,7 @@ async function main() {
 
     case 'finish-work': {
       const client = makeWorkflowClient();
-      const labelResult = await editIssueLabels(client, issueNumber, { remove: ['busy'] });
+      const labelResult = await editIssueLabels(client, issueNumber, { remove: ['busy', 'queued'] });
       printJson({ labels: labelResult });
       break;
     }

@@ -168,6 +168,15 @@ test('pickup rotation only draws from agents the engine can start (launchRunners
   }
 });
 
+test('queued label retries the doorbell for the held assignee', () => {
+  const action = decide(facts({
+    labels: ['queued'],
+    stage: 'In analysis',
+    review: { requestedHash: 'h1', requestedAt: NOW - 5 * MIN, assignedTo: 'claude-a' },
+  }), config);
+  assert.deepEqual([action.type, action.agent, action.row], ['ring-doorbell', 'claude-a', 'analysis.runner-queued']);
+});
+
 test('To do: request, wait, reassign, stall, pass', () => {
   assert.equal(rowOfBoth({}).type, 'request-spec');
   const base = { spec: { requestedAt: NOW - 5 * MIN, assignedTo: 'pawpet-bot' } };

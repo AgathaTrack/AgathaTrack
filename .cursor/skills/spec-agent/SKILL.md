@@ -10,7 +10,7 @@ You were asked to make an issue **ready**: a reviewer should be able to approve 
 
 ## Procedure
 
-1. Read the issue, its comments and linked issues. Read the canonical doc for the affected area (`docs/domains/<domain>/README.md`, then `docs/architecture/index.md`).
+1. Read the issue, its comments and linked issues. Clear stale pipeline holds: `node scripts/github_issue_workflow.js finish-work --issue <n>` (removes `busy` and `queued`). Read the canonical doc for the affected area (`docs/domains/<domain>/README.md`, then `docs/architecture/index.md`).
 2. **Escalation gate (before any spec pass):** Read **Delivery plan**, **Definition of Done**, and any soak markers in the body (e.g. `<!-- soak2:expect Blocked=decision … -->`). If the work requires an owner decision under AGENTS.md §Escalation (security/crypto, breaking API, production migration, CI gate change, product or legal call) **before any commit, branch, push, or pull request** — including “describe where secrets live” style security notes, even when the first delivery step is only setting **`Blocked=decision`** — do the following and **stop** (no 👍, no DoR pass):
    - Post one recommendation comment.
    - Read the issue's current org fields (`Stage`, `Attempts`, any existing `Blocked`) and patch **`Blocked=decision`** in the **same** payload — org field `PATCH` replaces the whole value set (`github-issue-workflow.md`); never send only `Blocked` or you erase `Stage`.

@@ -142,6 +142,49 @@ test('a request that fails after others went out carries what was applied', asyn
   );
 });
 
+test('runner WIP cap queues the issue instead of doorbell-failed', async () => {
+  const { restFn, sent } = recorder();
+  const withRunners = {
+    ...config,
+    launchRunners: ['claude'],
+    agents: [{ id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'] }],
+  };
+  const queued = Object.assign(new Error('claude runner at WIP cap (1/1)'), { code: 'RUNNER_QUEUED' });
+  const result = await applyAction({
+    action: { type: 'request-spec', agent: 'claude-a' },
+    ctx: ctx({
+      restFn,
+      config: withRunners,
+      launchFn: async () => {
+        throw queued;
+      },
+    }),
+  });
+  assert.ok(result.applied.includes('runner-queued:claude-a'));
+  assert.ok(!result.applied.some((line) => line.startsWith('doorbell-failed:')));
+  assert.ok(sent.some((call) => call.method === 'POST' && call.path.endsWith('/labels') && call.body?.labels?.includes('queued')));
+});
+
+test('ring-doorbell success clears queued', async () => {
+  const { restFn, sent } = recorder();
+  const withRunners = {
+    ...config,
+    launchRunners: ['cursor'],
+    agents: [{ id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }],
+  };
+  const result = await applyAction({
+    action: { type: 'ring-doorbell', agent: 'cursor-a', stage: 'In analysis' },
+    ctx: ctx({
+      restFn,
+      config: withRunners,
+      launchFn: async () => ({ runId: 'r1' }),
+    }),
+  });
+  assert.ok(result.applied.includes('doorbell:cursor-a'));
+  assert.ok(result.applied.includes('labels:queued-removed'));
+  assert.ok(sent.some((call) => call.method === 'DELETE' && call.path.endsWith('/labels/queued')));
+});
+
 test('a doorbell that rejects with a non-Error keeps its reason', async () => {
   const { restFn } = recorder();
   const withRunners = { ...config, launchRunners: ['cursor'], agents: [{ login: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }] };

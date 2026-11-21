@@ -110,6 +110,19 @@ function timedOutSet(state, now, timeoutMs) {
 /** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  const startable = new Set(startableIds(config));
+  if (
+    (facts.labels || []).includes('queued') &&
+    state.assignedTo &&
+    startable.has(state.assignedTo)
+  ) {
+    return {
+      type: 'ring-doorbell',
+      agent: state.assignedTo,
+      stage,
+      row: `${rowPrefix}.runner-queued`,
+    };
+  }
   if (state.ringFailed && state.assignedTo) {
     const timedOut = new Set([...(state.timedOut || []), state.assignedTo]);
     const remaining = eligible.filter((login) => !timedOut.has(login));
@@ -126,7 +139,6 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     };
   }
   const held = state.assignedTo;
-  const startable = new Set(startableIds(config));
   // No assignee yet, or the assignee is not one the engine can start: pick now. Waiting out
   // reviewTimeoutMin for pawpet-claude is the churn this interim fix exists to stop.
   // `eligible` is who may be asked next, which is narrower than startable (it drops the editor

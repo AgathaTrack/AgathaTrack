@@ -226,6 +226,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 | Label | Meaning |
 |-------|---------|
 | `busy` | a delivery agent is working on the issue; do not start a second run |
+| `queued` | the engine could not start the assigned runner (Claude WIP cap); retry on the next tick; agents clear it via `finish-work` when they start |
 | `manual-only` | hand-driven; the engine and autonomous implementation never touch it |
 | `needs-owner` | only on execute-plan control issues, where the runtime reads it; not an issue-pipeline state |
 | `in-prod` | added by the engine when an issue reaches Done |
@@ -266,6 +267,7 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-SOAK-005 | `Blocked=paused` is never woken by a comment. Dry-run, no-identity and out-of-scope actions log `pipeline_v2_planned`, not `pipeline_v2_applied` | Proposed |
 | PIPE-V2-D-SOAK-007 | **In analysis → Ready** and `busy` removal apply on a tick while `ISSUE_PIPELINE_V2=on`. Signed reviews that land after the repo returns to `dry-run`, or between ticks, do not move `Stage` until the next live tick (soak2 #2507/#2508). Agents must not open delivery PRs until **Ready** | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-SOAK-008 | Spec and review agents must not edit the issue body to evade launch safety (`detectRiskyScope` in `.github/scripts/triage-lib.js`, `preflightIssue` in `agent-safety-lib.js`): e.g. rewording **Security or Sensitive Area** to `No` while the plan still describes security/crypto escalation. Use **`Blocked=decision`** and leave the body truthful. Soak2 #2495: spec passed, then review edited the body to drop keyword tripwires | Accepted (soak2, 2026-11-21) |
+| PIPE-V2-D-RUNNER-001 | Claude runner WIP (`limits.runnerWip.claude`, default **3**): counts active `pipeline-claude-run.yml` jobs. On cap, defer with label **`queued`** and `ring-doorbell` on later ticks — not `doorbell-failed`. Cursor runners have no repo-side cap. Agents remove `queued` via `finish-work` | Accepted (2026-11-21) |
 | PIPE-AAT-D-009 | Inconclusive and timeout share `maxInconclusive`, then `Blocked=stalled`. Product fails are not a two-strike `Blocked=decision` cap. This supersedes #2424 owner decision 3 for the In Main gate | Accepted for this issue |
 
 ## Live workflow (legacy, until `ISSUE_PIPELINE=on`)
