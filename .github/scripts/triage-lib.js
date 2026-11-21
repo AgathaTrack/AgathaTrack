@@ -122,13 +122,43 @@ function detectInjection(text) {
 }
 
 /**
+ * Headings whose body text is excluded from keyword risk scanning (exclusion lists only).
+ * @param {string} heading lowercased ### heading from parseSections
+ */
+function isOutOfScopeHeading(heading) {
+  const key = heading.trim().toLowerCase();
+  return key === 'out of scope' || key === 'out-of-scope' || key.startsWith('out of scope ');
+}
+
+/**
+ * Text scanned for risk keywords: title, preamble, and in-scope sections — not **Out of scope**.
+ * @param {string} title
+ * @param {string} body
+ * @param {Record<string, string>} sections
+ */
+function buildRiskScanText(title, body, sections) {
+  const parts = [title];
+  const firstHeading = body.search(/^### /m);
+  if (firstHeading > 0) {
+    parts.push(body.slice(0, firstHeading));
+  }
+  for (const [heading, content] of Object.entries(sections)) {
+    if (isOutOfScopeHeading(heading)) {
+      continue;
+    }
+    parts.push(content);
+  }
+  return parts.join('\n');
+}
+
+/**
  * @param {string} title
  * @param {string} body
  * @param {Record<string, string>} sections
  */
 function detectRiskyScope(title, body, sections) {
   const reasons = [];
-  const combined = `${title}\n${body}`;
+  const combined = buildRiskScanText(title, body, sections);
 
   for (const { pattern, reason } of RISK_PATTERNS) {
     if (pattern.test(combined)) {
@@ -330,5 +360,7 @@ module.exports = {
   isValidTitle,
   evaluateIssue,
   buildComment,
+  isOutOfScopeHeading,
+  buildRiskScanText,
   detectRiskyScope,
 };
