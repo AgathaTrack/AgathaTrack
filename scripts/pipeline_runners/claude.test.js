@@ -39,6 +39,30 @@ test('claude runner dispatches pipeline-claude-run with public inputs only', asy
   });
 });
 
+test('launch at runner WIP cap throws RUNNER_QUEUED', async () => {
+  const config = { limits: { runnerWip: { claude: 1 } } };
+  const runs = { workflow_runs: [{ status: 'in_progress' }] };
+  const restFn = async (method, path) => {
+    if (path.includes('/runs?')) return runs;
+    return {};
+  };
+  await assert.rejects(
+    () =>
+      launch({
+        agent: { id: 'claude-a' },
+        issue: { number: 1 },
+        owner: 'o',
+        repo: 'r',
+        stage: 'To do',
+        method: 'PR',
+        nonce: 'n',
+        config,
+        deps: { restFn, dispatchToken: 't' },
+      }),
+    (error) => error.code === 'RUNNER_QUEUED',
+  );
+});
+
 test('claude status maps workflow conclusion', async () => {
   const runs = {
     workflow_runs: [
