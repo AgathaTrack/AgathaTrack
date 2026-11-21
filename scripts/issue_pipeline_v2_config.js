@@ -6,6 +6,10 @@ const path = require('path');
 const DEFAULT_CONFIG_PATH = path.join(__dirname, '..', '.github', 'pipeline-agents.json');
 const KNOWN_METHODS = new Set(['PR', 'light-plan', 'execute-plan']);
 const ID_PATTERN = /^[A-Za-z0-9-]+$/;
+const TIERS = new Set(['a', 'b']);
+const EFFORTS = new Set(['low', 'medium', 'high']);
+// Model names reach the Claude CLI as an argv token: keep them to a safe character set.
+const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const LIMIT_KEYS = [
   'wip',
   'reviewTimeoutMin',
@@ -27,6 +31,12 @@ function normalizeAgentEntry(raw) {
   };
   if (typeof raw?.model === 'string' && raw.model.length > 0) {
     normalized.model = raw.model;
+  }
+  if (typeof raw?.tier === 'string') {
+    normalized.tier = raw.tier;
+  }
+  if (typeof raw?.effort === 'string') {
+    normalized.effort = raw.effort;
   }
   if (login) {
     normalized.login = login;
@@ -74,6 +84,15 @@ function validateConfig(config) {
       if (!KNOWN_METHODS.has(method)) {
         problems.push(`${agent.id}: unknown method ${method}`);
       }
+    }
+    if (agent.tier !== undefined && !TIERS.has(agent.tier)) {
+      problems.push(`${agent.id}: tier must be a or b`);
+    }
+    if (agent.effort !== undefined && !EFFORTS.has(agent.effort)) {
+      problems.push(`${agent.id}: effort must be low, medium or high`);
+    }
+    if (agent.model !== undefined && !MODEL_PATTERN.test(agent.model)) {
+      problems.push(`${agent.id}: model must contain only letters, digits, dot, underscore or dash`);
     }
     normalized.push(agent);
   }
