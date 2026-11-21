@@ -10,7 +10,7 @@ const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/githu
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
-const { agentLogins, applyWipOverride, loadConfig } = require('./issue_pipeline_v2_config');
+const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
@@ -34,7 +34,7 @@ const {
 } = require('./issue_pipeline_v2_comments');
 const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
-const { memoComments, countEngineWip, lastUsedOnIssue } = require('./issue_pipeline_v2_tick_facts');
+const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
 
@@ -329,6 +329,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
   // WIP counts only In progress issues the engine started: hand-driven work takes no pipeline slot.
   let wip = await countEngineWip({ entries, commentsOf, engineLogins: config.engine.logins });
+  // One ring for the board. Null means nothing has been assigned yet, so the next pick is the
+  // first startable agent. Each in-scope assignment this tick advances the ring.
+  let roundRobinAfter = await lastAssignedAgent({ entries, commentsOf, config });
+  const roundRobinOrder = startableIds(config);
   const scopeLabel = io.scopeLabel !== undefined ? io.scopeLabel : process.env.ISSUE_PIPELINE_V2_LABEL || '';
   const now = Date.now();
   const actions = [];
@@ -354,8 +358,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           now,
           runMode,
         }),
-        // Least recently used on this issue (its own launch records), across ticks.
-        agentLastUsed: await lastUsedOnIssue({ entry, commentsOf, config }),
+        roundRobinAfter,
+        roundRobinOrder,
         aatFieldsPresent,
         isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io: tickIo, runMode, now })),
@@ -370,6 +374,9 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
+      if (inScope && action.agent) {
+        roundRobinAfter = action.agent;
+      }
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
       console.log(
         JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action }),

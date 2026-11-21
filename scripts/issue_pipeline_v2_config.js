@@ -181,6 +181,29 @@ function agentLogins(config) {
 }
 
 /**
+ * Next id after `afterId` in `order`, limited to `candidates`. No previous assignment (or one
+ * outside the ring) starts at the first candidate. The ring wraps.
+ */
+function nextInLine(candidates, afterId, order) {
+  const pool = candidates || [];
+  if (pool.length === 0) {
+    return null;
+  }
+  const ring = order && order.length ? order : pool;
+  const afterIndex = afterId ? ring.indexOf(afterId) : -1;
+  if (afterIndex < 0) {
+    return pool[0];
+  }
+  for (let step = 1; step <= ring.length; step += 1) {
+    const id = ring[(afterIndex + step) % ring.length];
+    if (pool.includes(id)) {
+      return id;
+    }
+  }
+  return pool[0];
+}
+
+/**
  * Ids whose runner the engine can start (the doorbell set). Pickup rotation draws only from these.
  */
 function startableIds(config) {
@@ -250,6 +273,7 @@ module.exports = {
   agentIds,
   agentLogins,
   launchableAgents,
+  nextInLine,
   startableIds,
   selfStartingLogins,
   sharedActsAs,
