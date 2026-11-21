@@ -11,17 +11,18 @@ You were asked to make an issue **ready**: a reviewer should be able to approve 
 ## Procedure
 
 1. Read the issue, its comments and linked issues. Read the canonical doc for the affected area (`docs/domains/<domain>/README.md`, then `docs/architecture/index.md`).
-2. **Draft the missing sections from the codebase and docs**, in the issue body, using the sections of its template (task, feature or bug). Prefer concrete files, behaviour and acceptance criteria over prose. Do not invent product decisions.
-3. **Check the mechanical DoR**: save the body to a file and run
+2. **Escalation gate (before any spec pass):** Read **Delivery plan**, **Definition of Done**, and any soak markers in the body (e.g. `<!-- soak2:expect Blocked=decision … -->`). If the work requires an owner decision under AGENTS.md §Escalation (security/crypto, breaking API, production migration, CI gate change, product or legal call) **before** delivery can start — including “describe where secrets live” style security notes — set org field **`Blocked=decision`**, post one recommendation comment, remove `busy` if you added it, and **stop**. Do not react 👍 and do not finish the DoR pass. The engine does not infer `escalation` from issue text; you must write `Blocked`.
+3. **Draft the missing sections from the codebase and docs**, in the issue body, using the sections of its template (task, feature or bug). Prefer concrete files, behaviour and acceptance criteria over prose. Do not invent product decisions.
+4. **Check the mechanical DoR**: save the body to a file and run
 
    ```bash
    node scripts/issue_pipeline_v2_dor.js --body-file <file> --labels <label,label>
    ```
 
    Exit `0` means every required section is present and non-empty (and has a checkbox where required). Fix what it lists and re-run.
-4. **Judge** the rest: one outcome you can state in a sentence; understandable without the owner; not a duplicate of an open issue (search first); no open question only the owner can answer.
-5. **Pass:** react 👍 on the "Spec requested" comment. That also counts as your approval of this version of the body.
-6. **Cannot pass:** post **one** consolidated comment with only the questions you could not answer yourself, each with your recommendation, then set the `Blocked` field to `question`. Do not move `Stage`. A human reply wakes you; fold the answer into the body and re-check.
+5. **Judge** the rest: one outcome you can state in a sentence; understandable without the owner; not a duplicate of an open issue (search first); no open question only the owner can answer.
+6. **Pass:** react 👍 on the "Spec requested" comment. That also counts as your approval of this version of the body.
+7. **Cannot pass:** post **one** consolidated comment with only the questions you could not answer yourself, each with your recommendation, then set the `Blocked` field to `question`. Do not move `Stage`. A human reply wakes you; fold the answer into the body and re-check.
 
 ## Rules
 
