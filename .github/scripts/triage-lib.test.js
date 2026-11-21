@@ -7,6 +7,7 @@ const {
   evaluateIssue,
   buildComment,
   isMeaningfulText,
+  detectRiskyScope,
 } = require('./triage-lib');
 
 test('parseSections extracts GitHub form headings', () => {
@@ -79,4 +80,45 @@ test('buildComment includes triage marker', () => {
 test('isMeaningfulText rejects short placeholder values', () => {
   assert.equal(isMeaningfulText('TBD'), false);
   assert.equal(isMeaningfulText('A sufficiently detailed description'), true);
+});
+
+test('detectRiskyScope ignores keywords listed only under Out of scope', () => {
+  const body = `### Objective\n\nCorrect one spelling in docs/agent-efficiency/.\n\n### Scope\n\nOne markdown file under docs/agent-efficiency/.\n\n### Out of Scope\n\nProduct code, migrations, infra, auth, and billing.\n\n### Security or Sensitive Area\n\nNo`;
+  const sections = parseSections(body);
+  const risks = detectRiskyScope('Docs typo', body, sections);
+  assert.deepEqual(risks, []);
+});
+
+test('detectRiskyScope still flags in-scope auth work when Out of scope excludes it', () => {
+  const body = `### Objective\n\nHarden session validation in server auth middleware.\n\n### Scope\n\nserver/auth middleware and tests.\n\n### Out of Scope\n\nFlutter UI only.\n\n### Security or Sensitive Area\n\nNo`;
+  const sections = parseSections(body);
+  const risks = detectRiskyScope('Auth task', body, sections);
+  assert.ok(risks.includes('authentication'));
+});
+
+test('detectRiskyScope still honors Security or Sensitive Area: Yes', () => {
+  const body = `### Objective\n\nDocument API key rotation.\n\n### Scope\n\nRunbook only.\n\n### Out of Scope\n\nNo code changes.\n\n### Security or Sensitive Area\n\nYes - secrets handling`;
+  const sections = parseSections(body);
+  const risks = detectRiskyScope('Secrets doc', body, sections);
+  assert.ok(risks.includes('declared sensitive/security area'));
+});
+
+test('detectRiskyScope scans headingless bodies', () => {
+  const body = 'Please change authentication middleware for admin routes without section headings.';
+  const risks = detectRiskyScope('Auth tweak', body, {});
+  assert.ok(risks.includes('authentication'));
+});
+
+test('detectRiskyScope includes non-excluded section headings', () => {
+  const body = `### Authentication\n\nNo meaningful change in this section body.\n\n### Out of Scope\n\nBilling and migrations.`;
+  const sections = parseSections(body);
+  const risks = detectRiskyScope('Task', body, sections);
+  assert.ok(risks.includes('authentication'));
+});
+
+test('detectRiskyScope scans every in-scope section when headings repeat', () => {
+  const body = `### Scope\n\nDocs only.\n\n### Scope\n\nAlso touches authentication hooks in server.`;
+  const sections = parseSections(body);
+  const risks = detectRiskyScope('Task', body, sections);
+  assert.ok(risks.includes('authentication'));
 });
