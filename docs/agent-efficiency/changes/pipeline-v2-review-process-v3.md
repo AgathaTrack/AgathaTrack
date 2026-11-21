@@ -5,7 +5,7 @@ audience: owner
 status: proposed
 last_updated: 2026-11-21
 tags: [agent, pipeline, review]
-related_prs: []
+related_prs: [2519]
 ---
 
 # Pipeline v2: review process v3 (spec, revision 3)
