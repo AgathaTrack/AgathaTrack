@@ -18,6 +18,8 @@ related_prs: [2509, 2510, 2511, 2512]
 |--------|---------------------|------|
 | Initial soak | `on` ~16:44–17:01 UTC, then `dry-run` | [44926171197](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926171197) · [44926895355](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926895355) · [44927399610](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44927399610) |
 | Post-#2510/#2511/#2512 resume | `on` ~21:27–22:05 UTC, then **`dry-run`** (22:06 UTC) | [44951660909](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44951660909) · [44952597885](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44952597885) · [44954818042](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44954818042) |
+| Post-**#2517** preflight | `on` ~23:01 UTC, then **`dry-run`** | [44959762695](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44959762695) |
+| WIP queue check | `on` ~23:21 UTC (×2), then **`dry-run`** | [44961334156](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44961334156) · [44961477565](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44961477565) |
 
 ---
 
@@ -29,12 +31,12 @@ related_prs: [2509, 2510, 2511, 2512]
 | #2494 | Question | Skip | **`blocked`** | — | **Pass** |
 | #2496 | Paused | Skip | **`blocked.paused`** | — | **Pass** |
 | #2503 | manual-only | No writes | **`manual-only`** | — | **Pass** |
-| #2495 | Decision / SOAK-008 | **`Blocked=decision`**, no launch until owner clears | Pre-reset: converged **Ready**, **launch:cursor-a** (tick 2). Owner reset **In analysis** + **`Blocked=decision`** → tick 3 **`blocked`** (no launch) | Review edited Security to evade keywords; engine does not infer **`Blocked=decision`** from plan text alone | **#2511** skills; operator restored truthful **Security or Sensitive Area: Yes** and cleared **`Blocked`** (2026-11-21). Re-test escalation on next `on` slice |
-| #2493 | E2E → Done | Full stage path | **In analysis**, rotation continues | Time / WIP; not converged yet | **Deferred** (owner: wait) |
+| #2495 | Decision / SOAK-008 | **`Blocked=decision`**, no launch until owner clears | Pre-reset: bad **launch**. Post-fix: **In analysis**, **`request-review` cursor-a** doorbell (tick [44959762695](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44959762695)); Security **Yes**; `busy` | Engine does not infer **`Blocked=decision`** from plan alone; delivery agent must set it | Watch review/spec under **#2511** skills; next ticks after review converge |
+| #2493 | E2E → Done | Full stage path | **Ready** after convergence tick [44961334156](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44961334156); then **`ready.queued`** (WIP=2) | #2497/#2505 deliveries hold cap | Launch when WIP frees (delivery PRs [#2515](https://github.com/AgathaTrack/AgathaTrack/pull/2515), [#2516](https://github.com/AgathaTrack/AgathaTrack/pull/2516) open) |
 | #2497 | Claude runner | claude-a path → delivery | **In progress** (claude assignee) after **`ready.launched`** tick 3 | — | **Pass** (in flight) |
 | #2505 | Ready launch | Delivery | **`ready.launched`** → **In progress** tick 3 | — | **Pass** (in flight) |
-| #2498/#2508 | Converge + launch | Docs PR | **Ready**; **`launch-failed`**: `migrations` | `detectRiskyScope` scanned whole body | **PIPE-V2-D-PREFLIGHT-001** (Out of scope excluded) |
-| #2507/#2499 | Stalled wake + launch | **Ready** → typo PR | **Ready** (SOAK-007); **`launch-failed`**: auth/billing/infra/migrations | Exclusion lists in **Out of scope** tripped whole-body scan | **PIPE-V2-D-PREFLIGHT-001** |
+| #2498/#2508 | Converge + launch | Docs PR | Pre-#2517: **`launch-failed`** (migrations). Post-#2517 tick: **`ready.queued`** (WIP) | False-positive preflight fixed | **Pass** preflight; launch waits on WIP slot |
+| #2507/#2499 | Stalled wake + launch | **Ready** → typo PR | Pre-#2517: **`launch-failed`**. Post-#2517: **`ready.queued`** | Same | **Pass** preflight; launch waits on WIP slot |
 | #2506 | Bug DoR delivery | Docs PR | **Ready**; **`launch-failed`**: auth/billing in **Acceptance criteria** prose | Keywords in in-scope section (not Out of scope heading) | Operator reworded acceptance line on issue (2026-11-21) |
 | #2504 | Sensitive probe | Refuse launch | **`launch-failed`**: secrets + Security **Yes** | Intentional fixture | **Pass** (gate works) |
 | #2500 | Late branch | Reassign / blocked paths | **`analysis.reassign`** claude-a | Scripted soak | In progress |
@@ -57,7 +59,7 @@ Agents must not edit **Security or Sensitive Area** (or scope prose) to evade `p
 | **#2510** round robin | Merged |
 | **#2511** SOAK-007/008 docs + spec/review skills | Merged |
 | **#2512** Claude runner WIP + **`queued`** | Merged |
-| **PIPE-V2-D-PREFLIGHT-001** — Out of scope excluded from keyword scan | PR in flight (preflight fix) |
+| **PIPE-V2-D-PREFLIGHT-001** — Out of scope excluded from keyword scan | **Merged #2517** (post-merge tick [44959762695](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44959762695)) |
 | **#2495** body + **`Blocked`** operator reset | Done on issue (2026-11-21) |
 | **#2506** acceptance-criteria wording | Done on issue (2026-11-21) |
 
@@ -65,7 +67,7 @@ Agents must not edit **Security or Sensitive Area** (or scope prose) to evade `p
 
 ## Recommended next soak steps
 
-1. Merge preflight PR; confirm #2507/#2498/#2508/#2499 pass local `preflightIssue` on current bodies.
-2. Short **`on`** window if you want #2495 escalation path + #2493 progress (owner deferred full E2E).
+1. Confirm preflight on soak bodies (done on `main` via **#2517**); drain WIP or merge #2515/#2516 so **Ready** fixtures launch (not only `ready.queued`).
+2. **`on`** tick after WIP is below cap to see **#2507/#2508** `launch:` (preflight should pass); **#2495** needs convergence then watch escalation / preflight tension noted in review on issue.
 3. Merge **#2509** matrix when branch policy allows.
 4. Fold this doc into `github-issue-workflow.md` §Soak2 when signed off.
