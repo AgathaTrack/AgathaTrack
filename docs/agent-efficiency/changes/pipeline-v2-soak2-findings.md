@@ -10,7 +10,7 @@ related_prs: [2509, 2510, 2511]
 
 # Soak2 findings and remediation (2026-11-21)
 
-**Working doc** (not canonical product spec). Decision log rows live in [`github-issue-workflow.md`](../github-issue-workflow.md) (PIPE-V2-D-SOAK-006–008). Fixture matrix: [`pipeline-v2-soak2-matrix.md`](./pipeline-v2-soak2-matrix.md) (**PR #2509**). Fold this file into the workflow doc when soak2 remediation is fully delivered and verified.
+**Proposal / in-delivery** (`status: in-delivery` per `docs/domains/documentation/standards.md`) — tick outcome table for soak2; **not** a historical archive yet. Canonical decisions: [`github-issue-workflow.md`](../github-issue-workflow.md) (PIPE-V2-D-SOAK-006–008). Fixture matrix: [`pipeline-v2-soak2-matrix.md`](./pipeline-v2-soak2-matrix.md) (**PR #2509**). **Fold target:** merge this table into `github-issue-workflow.md` §Soak2 (or delete after #2509+#2511 land) once owner signs off the next live tick.
 
 **Window:** `ISSUE_PIPELINE_V2=on` ~16:44–17:01 UTC; **`dry-run`** from 17:00:50 UTC.  
 **Ticks (main `133d037`):** [Phase A](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926171197) · [Phase B](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44926895355) · [Phase C/D](https://github.com/AgathaTrack/AgathaTrack/actions/runs/44927399610).

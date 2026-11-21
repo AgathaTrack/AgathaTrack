@@ -22,6 +22,6 @@ You were asked to review **one version** of an issue body, identified by the has
 
 - Never write `Stage` (the engine does, or the owner during bootstrap). You may edit the body, vote and write `Blocked`.
 - Only listed agents' reactions are votes. Never vote on a version you edited; your edit already counts.
-- Hit an item on the AGENTS.md escalation list (security, breaking API, production migration, CI gate, product or legal call)? Set `Blocked=decision` with your recommendation instead of voting.
+- Hit an item on the AGENTS.md escalation list (security, breaking API, production migration, CI gate, product or legal call)? Set `Blocked=decision` with your recommendation instead of voting — preserve current `Stage` and `Attempts` in the same org-field patch, then `node scripts/github_issue_workflow.js finish-work --issue <n>`.
 - Body edits whose main purpose is clearing risky-scope keyword checks are forbidden (same as spec-agent SOAK-008).
 - After 6 votes (👍, 👎 and agent body edits) without convergence the engine blocks the issue for the owner (`no-convergence`), so prefer fixing over bouncing.
