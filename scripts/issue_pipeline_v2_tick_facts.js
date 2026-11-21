@@ -51,6 +51,21 @@ function readsComments(entry) {
   return COMMENT_STAGES.has(canonicalStage(entry.stage)) || Boolean(entry.parsed?.blocked);
 }
 
+/**
+ * Whether `v2:launch` on this board row counts toward board-wide round robin.
+ * Closed rows are included when the tick keeps them for delivery columns (`issue_pipeline_v2.js`);
+ * per-issue facts still use `readsComments` only.
+ */
+function includeInBoardLaunchHistory(entry) {
+  if (entry.labels.includes('manual-only')) {
+    return false;
+  }
+  if (entry.closed) {
+    return COMMENT_STAGES.has(canonicalStage(entry.stage));
+  }
+  return readsComments(entry);
+}
+
 async function countEngineWip({ entries, commentsOf, engineLogins }) {
   const engine = new Set(engineLogins || []);
   let wip = 0;
@@ -74,7 +89,7 @@ async function lastAssignedAgent({ entries, commentsOf, config }) {
   let best = null;
   let bestAt = -1;
   for (const entry of entries) {
-    if (!readsComments(entry)) {
+    if (!includeInBoardLaunchHistory(entry)) {
       continue;
     }
     const comments = await safeComments(commentsOf, entry);
@@ -116,6 +131,7 @@ async function lastUsedOnIssue({ entry, commentsOf, config }) {
 module.exports = {
   memoComments,
   readsComments,
+  includeInBoardLaunchHistory,
   countEngineWip,
   lastAssignedAgent,
   lastUsedOnIssue,

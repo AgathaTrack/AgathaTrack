@@ -10,7 +10,13 @@ const assert = require('node:assert/strict');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide } = require('./issue_pipeline_v2_decide');
 const { tick } = require('./issue_pipeline_v2');
-const { memoComments, countEngineWip, lastUsedOnIssue } = require('./issue_pipeline_v2_tick_facts');
+const {
+  memoComments,
+  countEngineWip,
+  lastUsedOnIssue,
+  lastAssignedAgent,
+  includeInBoardLaunchHistory,
+} = require('./issue_pipeline_v2_tick_facts');
 const { bodyHasRequestMarker, findRequestComment, reactionHint, runEvidence } = require('./pipeline_claude_run_lib');
 const { verify } = require('./pipeline_claude_verify');
 
@@ -207,6 +213,21 @@ test('#2428: a dry-run that fails part-way logs planned, not applied', async () 
   const planned = events.find((e) => e.event === 'pipeline_v2_planned' && e.partial);
   assert.deepEqual(planned && planned.planned, ['comment:spec-request']);
   assert.equal(result.errors.length, 1);
+});
+
+test('board round robin: a closed In progress row still contributes its newest launch', async () => {
+  const closedDelivery = {
+    number: 99,
+    closed: true,
+    labels: [],
+    stage: 'In progress',
+    parsed: { stage: 'In progress' },
+  };
+  assert.equal(includeInBoardLaunchHistory(closedDelivery), true);
+  const commentsOf = async (entry) =>
+    entry.number === 99 ? [launchRecord('claude-a', NOW - MIN, 99)] : [launchRecord('cursor-a', NOW - 2 * MIN, 1)];
+  const agent = await lastAssignedAgent({ entries: [closedDelivery, { number: 1, labels: [], stage: 'To do', parsed: {} }], commentsOf, config });
+  assert.equal(agent, 'claude-a');
 });
 
 test('#2484: one ring: the newest launch sets the start, then each issue takes the next agent', async () => {
