@@ -154,6 +154,8 @@ test('intent review: the request carries the marker the delivery facts read back
     comments: [{ user: { login: 'pawpet-engine' }, body, created_at: '2026-11-10T00:00:00Z' }],
   });
   assert.equal(facts.intentReview.requested, true);
+  assert.equal(facts.intentReview.agent, 'claude-a');
+  assert.ok(Number.isFinite(facts.intentReview.requestedAt));
   const later = deriveDeliveryFacts({
     issue: { body: '', labels: [] }, prs: [merged('abc', '2026-11-10T00:00:00Z'), merged('def', '2026-11-12T00:00:00Z')], engineLogins: engine,
     comments: [{ user: { login: 'pawpet-engine' }, body, created_at: '2026-11-10T00:00:00Z' }],

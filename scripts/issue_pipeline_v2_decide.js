@@ -107,24 +107,43 @@ function timedOutSet(state, now, timeoutMs) {
   return set;
 }
 
-/** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
-function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
+/** Retry a doorbell deferred at Claude runner cap; never over an active `busy` hold. */
+function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, requestedAt }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  const labels = facts.labels || [];
   const startable = new Set(startableIds(config));
-  const withinPickupTimeout =
-    state.requestedAt && facts.now - state.requestedAt < timeoutMs;
+  const withinPickupTimeout = requestedAt && facts.now - requestedAt < timeoutMs;
   if (
-    (facts.labels || []).includes('queued') &&
-    state.assignedTo &&
-    startable.has(state.assignedTo) &&
+    labels.includes('queued') &&
+    !labels.includes('busy') &&
+    assignedTo &&
+    startable.has(assignedTo) &&
     withinPickupTimeout
   ) {
     return {
       type: 'ring-doorbell',
-      agent: state.assignedTo,
+      agent: assignedTo,
       stage,
       row: `${rowPrefix}.runner-queued`,
     };
+  }
+  return null;
+}
+
+/** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
+function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
+  const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  const startable = new Set(startableIds(config));
+  const queuedRetry = runnerQueuedRetry({
+    facts,
+    config,
+    stage,
+    rowPrefix,
+    assignedTo: state.assignedTo,
+    requestedAt: state.requestedAt,
+  });
+  if (queuedRetry) {
+    return queuedRetry;
   }
   if (state.ringFailed && state.assignedTo) {
     const timedOut = new Set([...(state.timedOut || []), state.assignedTo]);
@@ -394,6 +413,18 @@ function decideInMain(facts, config) {
       return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };
     }
     // Intent review is non-gating; still evaluate UAT when nobody is startable for a ring.
+  } else {
+    const intentRetry = runnerQueuedRetry({
+      facts,
+      config,
+      stage: 'In Main',
+      rowPrefix: 'main.intent',
+      assignedTo: facts.intentReview.agent,
+      requestedAt: facts.intentReview.requestedAt,
+    });
+    if (intentRetry) {
+      return intentRetry;
+    }
   }
   if (facts.uatContainsLatestMerge) {
     return setStage('In UAT', 'main.uat');

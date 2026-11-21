@@ -177,6 +177,26 @@ test('queued label retries the doorbell for the held assignee', () => {
   assert.deepEqual([action.type, action.agent, action.row], ['ring-doorbell', 'claude-a', 'analysis.runner-queued']);
 });
 
+test('queued does not ring-doorbell while busy holds the active run', () => {
+  const action = decide(facts({
+    labels: ['queued', 'busy'],
+    stage: 'In analysis',
+    review: { requestedHash: 'h1', requestedAt: NOW - 5 * MIN, assignedTo: 'claude-a' },
+  }), config);
+  assert.equal(action.reason, 'analysis.waiting');
+});
+
+test('In Main retries queued intent-review doorbell before waiting on UAT', () => {
+  const action = decide(facts({
+    labels: ['queued'],
+    stage: 'In Main',
+    delivery: { lastMergeSha: 'a'.repeat(40) },
+    intentReview: { requested: true, agent: 'claude-a', requestedAt: NOW - 5 * MIN },
+    uatContainsLatestMerge: false,
+  }), config);
+  assert.deepEqual([action.type, action.agent, action.stage], ['ring-doorbell', 'claude-a', 'In Main']);
+});
+
 test('queued label past pickup timeout reassigns instead of endless ring-doorbell', () => {
   const action = decide(facts({
     labels: ['queued'],
