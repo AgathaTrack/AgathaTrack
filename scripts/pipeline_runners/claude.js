@@ -21,7 +21,7 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
   const token = deps.dispatchToken || process.env.GH_PROJECTS_PAT;
   const restFn = deps.restFn || rest;
   const active = await countActiveClaudeRuns({ owner, repo, deps });
-  const cap = config?.limits?.runnerWip?.claude || 1;
+  const cap = config?.limits?.runnerWip?.claude ?? 3;
   if (active >= cap) {
     const error = new Error(`claude runner at WIP cap (${active}/${cap})`);
     error.code = 'RUNNER_QUEUED';

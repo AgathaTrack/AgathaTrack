@@ -111,10 +111,13 @@ function timedOutSet(state, now, timeoutMs) {
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
   const startable = new Set(startableIds(config));
+  const withinPickupTimeout =
+    state.requestedAt && facts.now - state.requestedAt < timeoutMs;
   if (
     (facts.labels || []).includes('queued') &&
     state.assignedTo &&
-    startable.has(state.assignedTo)
+    startable.has(state.assignedTo) &&
+    withinPickupTimeout
   ) {
     return {
       type: 'ring-doorbell',

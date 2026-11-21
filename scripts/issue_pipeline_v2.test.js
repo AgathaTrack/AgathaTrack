@@ -177,6 +177,29 @@ test('queued label retries the doorbell for the held assignee', () => {
   assert.deepEqual([action.type, action.agent, action.row], ['ring-doorbell', 'claude-a', 'analysis.runner-queued']);
 });
 
+test('queued label past pickup timeout reassigns instead of endless ring-doorbell', () => {
+  const action = decide(facts({
+    labels: ['queued'],
+    stage: 'In analysis',
+    review: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'claude-a' },
+  }), config);
+  assert.equal(action.type, 'reassign', action.row);
+});
+
+test('queued with ringFailed reassigns once queued is cleared on a real doorbell failure', () => {
+  const action = decide(facts({
+    labels: [],
+    stage: 'In analysis',
+    review: {
+      requestedHash: 'h1',
+      requestedAt: NOW - 10 * MIN,
+      assignedTo: 'claude-a',
+      ringFailed: true,
+    },
+  }), config);
+  assert.equal(action.type, 'reassign', action.row);
+});
+
 test('To do: request, wait, reassign, stall, pass', () => {
   assert.equal(rowOfBoth({}).type, 'request-spec');
   const base = { spec: { requestedAt: NOW - 5 * MIN, assignedTo: 'pawpet-bot' } };

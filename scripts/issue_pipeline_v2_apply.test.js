@@ -3,6 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { applyAction, doorbellAssignees } = require('./issue_pipeline_v2_apply');
+const { launchIssue } = require('./issue_pipeline_v2_launch');
+const claudeRunner = require('./pipeline_runners/claude');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
 
 const { validateConfig, loadConfig } = require('./issue_pipeline_v2_config');
@@ -193,6 +195,72 @@ test('a doorbell that rejects with a non-Error keeps its reason', async () => {
     ctx: ctx({ restFn, config: withRunners, launchFn: async () => { throw 'rate limited'; } }),
   });
   assert.ok(result.applied.includes('doorbell-failed:pawpet-bot:rate limited'));
+});
+
+test('doorbell failure clears queued so the next tick can reassign', async () => {
+  const { restFn, sent } = recorder();
+  const withRunners = {
+    ...config,
+    launchRunners: ['claude'],
+    agents: [{ id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'] }],
+  };
+  const result = await applyAction({
+    action: { type: 'ring-doorbell', agent: 'claude-a', stage: 'To do' },
+    ctx: ctx({
+      restFn,
+      config: withRunners,
+      launchFn: async () => {
+        throw new Error('dispatch 422');
+      },
+    }),
+  });
+  assert.ok(result.applied.includes('doorbell-failed:claude-a:dispatch 422'));
+  assert.ok(result.applied.includes('labels:queued-removed'));
+  assert.ok(sent.some((call) => call.method === 'DELETE' && call.path.endsWith('/labels/queued')));
+});
+
+test('launchIssue surfaces RUNNER_QUEUED through the production launch wrapper', async () => {
+  const withRunners = {
+    ...config,
+    launchRunners: ['claude'],
+    agents: [{ id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'] }],
+    limits: { ...config.limits, runnerWip: { claude: 1 } },
+  };
+  const launchFn = async ({ agent, stage, purpose, nonce }) => {
+    try {
+      return await launchIssue({
+        agent,
+        stage,
+        purpose,
+        nonce,
+        config: withRunners,
+        owner: 'o',
+        repo: 'r',
+        issue: { number: 7, labels: [], title: 't', body: 'b' },
+        token: 'pat',
+        deps: {
+          lib: { setLabels: async () => {} },
+          runners: { claude: claudeRunner },
+          restFn: async (method, path) => {
+            if (path.includes('/runs?')) {
+              return { workflow_runs: [{ status: 'in_progress' }] };
+            }
+            return {};
+          },
+        },
+      });
+    } catch (error) {
+      throw error;
+    }
+  };
+  const { restFn, sent } = recorder();
+  const result = await applyAction({
+    action: { type: 'request-spec', agent: 'claude-a' },
+    ctx: ctx({ restFn, config: withRunners, launchFn }),
+  });
+  assert.ok(result.applied.includes('runner-queued:claude-a'));
+  assert.ok(!result.applied.some((line) => line.startsWith('doorbell-failed:')));
+  assert.ok(sent.some((call) => call.method === 'POST' && call.path.endsWith('/labels') && call.body?.labels?.includes('queued')));
 });
 
 test('request-review carries the hash', async () => {

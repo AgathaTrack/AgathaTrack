@@ -162,6 +162,8 @@ async function applyAction({ action: decided, ctx }) {
           applied.push(`runner-queued:${agent}`);
           return;
         }
+        await deleteQueuedLabel();
+        applied.push('labels:queued-removed');
         applied.push(`doorbell-failed:${agent}:${String(error?.message ?? error).slice(0, 120)}`);
       }
     };
