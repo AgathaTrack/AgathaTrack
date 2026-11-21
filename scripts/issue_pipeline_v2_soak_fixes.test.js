@@ -10,7 +10,13 @@ const assert = require('node:assert/strict');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide } = require('./issue_pipeline_v2_decide');
 const { tick } = require('./issue_pipeline_v2');
-const { memoComments, countEngineWip, lastUsedOnIssue } = require('./issue_pipeline_v2_tick_facts');
+const {
+  memoComments,
+  countEngineWip,
+  lastUsedOnIssue,
+  lastAssignedAgent,
+  includeInBoardLaunchHistory,
+} = require('./issue_pipeline_v2_tick_facts');
 const { bodyHasRequestMarker, findRequestComment, reactionHint, runEvidence } = require('./pipeline_claude_run_lib');
 const { verify } = require('./pipeline_claude_verify');
 
@@ -114,8 +120,11 @@ test('#2484: last-used is read from this issue\'s own launch records, newest per
   const commentsOf = async (e) => comments[e.number] || [];
   const used = await lastUsedOnIssue({ entry: entry(1, 'In analysis'), commentsOf, config });
   assert.deepEqual(used, { 'cursor-a': NOW - 2 * MIN, 'cursor-b': NOW - 5 * MIN });
-  const pick = decide(facts({ agentLastUsed: used }), config);
-  assert.deepEqual([pick.type, pick.agent], ['request-spec', 'claude-a'], 'the id never started on this issue goes first');
+  const pick = decide(
+    facts({ roundRobinAfter: 'cursor-b', roundRobinOrder: ['cursor-a', 'cursor-b', 'claude-a'] }),
+    config,
+  );
+  assert.deepEqual([pick.type, pick.agent], ['request-spec', 'claude-a'], 'the next assignment is the next agent in the ring');
   assert.deepEqual(await lastUsedOnIssue({ entry: entry(3, 'Backlog'), commentsOf, config }), {}, 'Backlog: comments are not read');
 });
 
@@ -206,7 +215,22 @@ test('#2428: a dry-run that fails part-way logs planned, not applied', async () 
   assert.equal(result.errors.length, 1);
 });
 
-test('#2484: rotation is per issue: picks on other issues, in this tick or earlier, do not count', async () => {
+test('board round robin: a closed In progress row still contributes its newest launch', async () => {
+  const closedDelivery = {
+    number: 99,
+    closed: true,
+    labels: [],
+    stage: 'In progress',
+    parsed: { stage: 'In progress' },
+  };
+  assert.equal(includeInBoardLaunchHistory(closedDelivery), true);
+  const commentsOf = async (entry) =>
+    entry.number === 99 ? [launchRecord('claude-a', NOW - MIN, 99)] : [launchRecord('cursor-a', NOW - 2 * MIN, 1)];
+  const agent = await lastAssignedAgent({ entries: [closedDelivery, { number: 1, labels: [], stage: 'To do', parsed: {} }], commentsOf, config });
+  assert.equal(agent, 'claude-a');
+});
+
+test('#2484: one ring: the newest launch sets the start, then each issue takes the next agent', async () => {
   const ready = { field_id: 1, single_select_option: { name: 'Ready' } };
   const io = tickIo({
     issues: {
@@ -221,8 +245,8 @@ test('#2484: rotation is per issue: picks on other issues, in this tick or earli
   });
   const { result } = await runTick(io);
   const agentOf = (n) => result.actions.find((a) => a.issue === n).action.agent;
-  assert.equal(agentOf(1), 'claude-a', 'issue 1 already used cursor-a and cursor-b');
-  assert.equal(agentOf(2), 'cursor-a', 'issue 2 has no history: config order, unaffected by issue 1 or 3');
+  assert.equal(agentOf(1), 'claude-a', 'newest launch on the board is cursor-b');
+  assert.equal(agentOf(2), 'cursor-a', 'the assignment on issue 1 advanced the ring');
 });
 
 // --- Claude runner (#2485) -----------------------------------------------------------------------

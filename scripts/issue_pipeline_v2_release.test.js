@@ -211,7 +211,7 @@ test('runner: an empty-stage follow-up goes to To do within depth 2, to Backlog 
   }
 });
 
-test('runner: pickup is per issue (no history → config order), and a scope label limits where `on` writes', async () => {
+test('runner: pickup walks one ring across issues, and a scope label limits where `on` writes', async () => {
   const prior = process.env.ISSUE_PIPELINE_V2;
   process.env.ISSUE_PIPELINE_V2 = 'on';
   try {
@@ -228,7 +228,7 @@ test('runner: pickup is per issue (no history → config order), and a scope lab
         fields: { stage: { id: 1, name: 'Stage', options: [] }, blocked: { id: 2, name: 'Blocked', options: [] }, attempts: { id: 3, name: 'Attempts', options: [] } },
         listProjectIssues: async () => board,
         getIssue: async (n) => issues[n],
-        // Issue 3 already started cursor-a and cursor-b: its next pick is claude-a.
+        // Issue 3's newer launch is cursor-b, so the ring's next agent is claude-a.
         listIssueComments: async ({ issueNumber }) =>
           issueNumber === 3
             ? ['cursor-a', 'cursor-b'].map((agent, i) => ({ id: i, user: { login: 'pawpet-engine' }, created_at: `2026-11-20T0${i}:00:00Z`, body: `<!-- v2:launch run=r${i} agent=${agent} purpose=doorbell stage=To do nonce=${'a'.repeat(32)} -->` }))
@@ -239,8 +239,8 @@ test('runner: pickup is per issue (no history → config order), and a scope lab
     await run('');
     assert.deepEqual(
       seen.map((s) => s[1]),
-      ['cursor-a', 'cursor-a', 'claude-a'],
-      'least recently used on each issue; other issues in the tick do not count',
+      ['claude-a', 'cursor-a', 'cursor-b'],
+      'newest launch is cursor-b, then each in-scope assignment takes the next agent',
     );
     assert.deepEqual(seen.map((s) => s[2]), [false, false, false]);
     seen.length = 0;

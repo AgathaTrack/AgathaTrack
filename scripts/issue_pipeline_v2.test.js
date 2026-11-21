@@ -44,7 +44,7 @@ function facts(over = {}) {
 }
 
 const rowOf = (over) => decide(facts(over), legacyConfig);
-// Both runners startable: exercises LRU rotation across every listed agent.
+// Both runners startable: the ring includes every startable agent.
 const bothStartable = { ...legacyConfig, launchRunners: ['cursor', 'claude'] };
 const rowOfBoth = (over) => decide(facts(over), bothStartable);
 
@@ -109,7 +109,7 @@ test('guards: a Blocked issue only wakes on a human comment and is never cleared
   assert.equal(rowOf({ blocked: 'question' }).reason, 'blocked');
   const wake = rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7 });
   assert.deepEqual([wake.type, wake.stage, wake.row, wake.commentId], ['wake-stage-agent', 'To do', 'blocked.wake', 7]);
-  assert.equal(wake.agent, 'pawpet-bot', 'with no request holder the least recently used agent is rung');
+  assert.equal(wake.agent, 'pawpet-bot', 'with no request holder the ring starts at the first startable agent');
   assert.equal(
     rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, spec: { assignedTo: 'pawpet-claude' } }).agent,
     'pawpet-bot',
@@ -189,8 +189,12 @@ test('To do: request, wait, reassign, stall, pass', () => {
   assert.equal(rowOfBoth({ spec: { passedBy: 'pawpet-bot' } }).to, 'In analysis');
 });
 
-test('To do: the least recently used agent is picked', () => {
-  const action = rowOfBoth({ agentLastUsed: { 'pawpet-bot': NOW - MIN, 'pawpet-claude': NOW - 99 * MIN } });
+test('To do: no history starts at the first agent; the next assignment is the next in the ring', () => {
+  assert.equal(rowOfBoth({}).agent, 'pawpet-bot');
+  const action = rowOfBoth({
+    roundRobinAfter: 'pawpet-bot',
+    roundRobinOrder: ['pawpet-bot', 'pawpet-claude'],
+  });
   assert.equal(action.agent, 'pawpet-claude');
 });
 

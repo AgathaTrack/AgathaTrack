@@ -18,7 +18,8 @@
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
  *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
- *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (this issue's own launch records)
+ *   roundRobinAfter id last assigned on the board (newest v2:launch, then earlier picks this tick)
+ *   roundRobinOrder startable ids in config order; the ring the cursor walks
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
  *   review          { requestedHash, requestedAt, assignedTo, timedOut[], votes[{login,vote,hash}] }
  *   wip             In progress issues the engine launched (hand-driven and manual-only excluded)
@@ -35,6 +36,7 @@ const {
   agentActsAs,
   launchableAgents,
   resolveAgent,
+  nextInLine,
   startableIds,
   entryId,
   entryActsAs,
@@ -68,7 +70,7 @@ function canonicalStage(raw) {
 
 /**
  * The agent a wake rings. The holder is used only when the engine can start them. Otherwise the
- * least recently used startable agent, or null when none is startable.
+ * next startable agent in the round robin, or null when none is startable.
  */
 function wakeAgent(facts, stage, config) {
   const holder =
@@ -92,16 +94,9 @@ function setBlocked(reason, row) {
   return { type: 'set-blocked', reason, row };
 }
 
-/** Least recently used first; ties keep the order in the config file. */
+/** Next startable id after the board cursor. Candidates stay in config order. */
 function pickAgent(candidates, facts) {
-  const used = facts.agentLastUsed || {};
-  let best = null;
-  for (const login of candidates) {
-    if (best === null || (used[login] || 0) < (used[best] || 0)) {
-      best = login;
-    }
-  }
-  return best;
+  return nextInLine(candidates, facts.roundRobinAfter, facts.roundRobinOrder || candidates);
 }
 
 function timedOutSet(state, now, timeoutMs) {
