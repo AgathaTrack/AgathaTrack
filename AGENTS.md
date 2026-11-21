@@ -76,7 +76,7 @@ sudo pg_ctlcluster 16 main start
 Dev DB defaults (no `.env` needed): `agatha_db`, user `user` / password `password`, `localhost:5432`. The role and
 database must exist first (cloud images and the Claude Code `agathatrack` environment create them).
 
-**Schema:** empty database → `./e2e/scripts/bootstrap-db.sh` (canonical snapshot + migration ledger; never `migrate.js up`
+**Schema:** empty database → `APP_ENV=development ./e2e/scripts/bootstrap-db.sh` (canonical snapshot + migration ledger; it refuses unless `APP_ENV` is non-production; never `migrate.js up`
 on an empty DB). Existing database → `cd server && node scripts/migrate.js up`. Do not use `gen_random_uuid()` in SQL —
 generate UUIDs in code.
 

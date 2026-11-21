@@ -38,7 +38,7 @@ There is **one** checked-in schema artifact (`db/schema/canonical.sql`). UAT doe
 
 | Profile | Command |
 |---------|---------|
-| clean | `e2e/scripts/bootstrap-db.sh` (empty DB) or existing DB → `node scripts/migrate.js up` |
+| clean | `APP_ENV=development e2e/scripts/bootstrap-db.sh` (empty DB) or existing DB → `node scripts/migrate.js up` |
 | uat-demo (full wipe) | `scripts/db/uat-reset.sh` (non-prod; drop DB + clean + all scenarios) |
 | uat-demo (data only) | `scripts/db/uat-refresh-demo.sh` (truncate app tables, re-seed; keeps schema) |
 

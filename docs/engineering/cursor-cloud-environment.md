@@ -67,7 +67,7 @@ script runs as root after the repository is cloned, from the directory that hold
   and linked at `/opt/flutter`;
 - `flutter pub get`, `server` `npm ci`, and `shellcheck` (pre-push lints shell scripts);
 - the AGENTS.md dev role and database (`user` with `LOGIN CREATEDB`, not superuser; `agatha_db`), then
-  `e2e/scripts/bootstrap-db.sh`.
+  `APP_ENV=development e2e/scripts/bootstrap-db.sh` (it refuses unless `APP_ENV` is non-production).
 
 It is idempotent (about 6 s on a warm container). It runs only when a container is built fresh, not when a session resumes or its worker restarts; a restart stops PostgreSQL, so run `sudo pg_ctlcluster 16 main start` (AGENTS.md §PostgreSQL) after one. `flutter pub get` may rewrite `flutter_app/pubspec.lock` when the committed lock drifts from the SDK's pinned packages; do not commit that rewrite with unrelated work. The environment settings hold the live script; this copy must match it, so update both together:
 
@@ -98,7 +98,7 @@ psql_pg() { runuser -u postgres -- psql -tAc "$1"; }
 psql_pg "select 1 from pg_roles where rolname='user'" | grep -q 1 || psql_pg "create role \"user\" login createdb password 'password'"
 psql_pg "select 1 from pg_database where datname='agatha_db'" | grep -q 1 || psql_pg "create database agatha_db owner \"user\""
 # Empty DB: canonical snapshot + migration ledger. Existing DB: pending migrations only.
-if [ -d AgathaTrack ]; then (cd AgathaTrack && ./e2e/scripts/bootstrap-db.sh); fi
+if [ -d AgathaTrack ]; then (cd AgathaTrack && APP_ENV=development ./e2e/scripts/bootstrap-db.sh); fi
 ```
 
 ## Rebuild after a toolchain bump
