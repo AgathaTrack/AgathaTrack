@@ -324,7 +324,7 @@ GitHub remains the source of truth. Cursor Cloud Agents are workers that impleme
 
 An issue is dispatched when **all** are true:
 
-- Project status **Ready** (when project secrets configured; otherwise label-only fallback)
+- Project status **Ready** (when project secrets are configured; otherwise label-only fallback)
 - Labels: `agent-approved`
 - Labels **not** present: `busy`, `manual-only`, `blocked`
 - Labels **required**: `human-reviewed` (workflow pause when removed)
