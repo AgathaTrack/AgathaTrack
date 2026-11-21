@@ -77,13 +77,16 @@ Not a dedicated fixture. On any **spec** or **review** pickup: after `reviewTime
 
 - Repo variable **`PROD_DEPLOY_ENABLED`** is **unset** (2026-11-21): prod path uses **stub** `vX.Y.Z-rc.N` tags per [github-issue-workflow.md §Production promotion](../github-issue-workflow.md); **not** full FTP prod deploy.
 - Engine **Done** still requires a **successful** `deploy-prod.yml` run whose `head_sha` **contains** the issue’s latest merge into `main` (stub success still counts if the workflow is green).
-- Owner should accept: docs-only PR on **`main`** flows through **UAT pipeline** and **prod promotion workflow** (stub or real).
+- **Soak caveat:** with stub prod, **`in-prod` + Done** mean the workflow graph passed, **not** that customer production was updated. Accept for soak; do not treat `in-prod` as a real deploy signal here.
+- Owner accepts: docs-only PR on **`main`** flows through **UAT pipeline** and **stub prod promotion** (`deploy-skipped-stub` when `PROD_DEPLOY_ENABLED` is unset).
 
 ## Go-live order (WIP 2, Claude cap 1)
 
-1. **Phase A** (no WIP consumption): #2494, #2495, #2496, #2505, #2506, #2507 (after clear), #2508 — plus #2503 control (no writes).
-2. **Phase B**: #2493 and #2497 (doorbell; #2497 uses Claude runner cap, not WIP).
-3. **Phase C**: #2501, #2502 while #2493 is **In progress** (WIP cap).
-4. **Phase D** (long): #2500, #2504; start #2498 / #2499 early in parallel for rotation timing.
+Scope control: only issues carrying **`pipeline-beta`** receive writes when `ISSUE_PIPELINE_V2=on`. Remove the label from later phases until that phase starts.
 
-Then set **`ISSUE_PIPELINE_V2=on`** (scope stays `pipeline-beta`) when dry-run logs match this table.
+1. **Phase A** (no WIP consumption; rotation on first tick): #2494, #2495, #2496, **#2498, #2499**, #2505, #2506, #2507 (clear `Blocked` first), #2508 — #2503 control (keep `pipeline-beta`; engine skips).
+2. **Phase B**: add `pipeline-beta` to #2493 and #2497 (E2E + Claude doorbell).
+3. **Phase C**: add `pipeline-beta` to #2501, #2502 **after** #2493 is **In progress** and they have reached **Ready** (spec + review first — expect delay before `ready.queued` is observable).
+4. **Phase D** (long): add `pipeline-beta` to #2500 and #2504.
+
+`ISSUE_PIPELINE_V2=on` with label scope from Phase A onward; read each tick’s `pipeline_v2_applied` lines before widening the label set.
