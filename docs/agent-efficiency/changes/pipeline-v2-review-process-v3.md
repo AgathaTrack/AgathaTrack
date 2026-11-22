@@ -75,6 +75,7 @@ One green on the current body hash converges the issue when the green comes from
 - Attribution of a body edit to a run uses the nonce in a verified `edit` claim. Spec and review runs must post that claim when they edit. Without it the edit cannot be tied to a run, and convergence waits for the engine to see one.
 - A round that edits the body changes the hash, so a later round's vote applies to the new hash only.
 - The two-approval rule for unknown authors and the six-vote cap are superseded for In analysis (PIPE-V2-D-REV3-003), so they do not apply after P4.
+- Authorship comes from the open round the engine started, matched on login within tier a (REV3-003). An `edit` claim is audit only. Challenge-tier attribution is an open decision (REV3-003).
 
 ## 6. Normal tier (a)
 
@@ -90,7 +91,7 @@ The writer is the least recently used tier-a identity. The spec pass moves the i
 - **Budget:** three reviews after the spec (R2, R3, R4).
 - **Fast path:** R2 green converges immediately.
 - **Implicit approval:** removed. Every convergence is an explicit green on the current hash.
-- **Red:** a red must edit the body with its reasons. A red that does not edit is a failed attempt; the other brand takes the same hash on that tick and the deviation is logged (PIPE-V2-D-REV3-005).
+- **Red:** a red must edit the body with its reasons. A red that does not edit keeps its round open on the same hash; the other brand does not receive the rejected body. The round ends on an edit (new hash) or on silence at `reviewTimeoutMin`, and a silent timeout counts as a failed attempt. The deviation is logged (PIPE-V2-D-REV3-005).
 
 ## 7. Challenge tier (b)
 

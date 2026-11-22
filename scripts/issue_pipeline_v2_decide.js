@@ -76,7 +76,8 @@ function canonicalStage(raw) {
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  const startable = reviewPoolIds(config);
+  // Only spec and review pickup is tier-a-only. Blocked delivery and intent-review wakes keep every startable id.
+  const startable = stage === 'To do' || stage === 'In analysis' ? reviewPoolIds(config) : startableIds(config);
   if (holder && startable.includes(holder)) {
     return holder;
   }
@@ -109,10 +110,11 @@ function timedOutSet(state, now, timeoutMs) {
 }
 
 /** Retry a doorbell deferred at Claude runner cap; never over an active `busy` hold. */
-function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, requestedAt }) {
+function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, requestedAt, allowed }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
   const labels = facts.labels || [];
-  const startable = new Set(startableIds(config));
+  // `allowed` is the caller's pool: the tier-a review pool for spec and review, every startable id for intent review.
+  const startable = new Set(allowed);
   const withinPickupTimeout = requestedAt && facts.now - requestedAt < timeoutMs;
   if (
     labels.includes('queued') &&
@@ -142,6 +144,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     rowPrefix,
     assignedTo: state.assignedTo,
     requestedAt: state.requestedAt,
+    allowed: startable,
   });
   if (queuedRetry) {
     return queuedRetry;
@@ -422,6 +425,7 @@ function decideInMain(facts, config) {
       rowPrefix: 'main.intent',
       assignedTo: facts.intentReview.agent,
       requestedAt: facts.intentReview.requestedAt,
+      allowed: startableIds(config),
     });
     if (intentRetry) {
       return intentRetry;
