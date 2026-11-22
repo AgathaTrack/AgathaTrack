@@ -50,13 +50,15 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 - Fixture **soak4-01** (**#2539**) only, **`Stage=To do` on Pawpet**, labels **`soak4`** (+ `task`) only. Issues absent from the Pawpet project are **`not-on-board`** and are not ticked. A Pawpet row with **no org `Stage` or `Stage=Backlog`** yields `stage-backlog` and does not spec — operator sets **`Stage=To do`**.
 - `on` ticks until spec moves issue to In analysis or **4 ticks** spent.
-- **Exit:** `request-spec` to tier-a (`cursor-a` or `claude-a`) on first tick; spec round close (`verdict spec`); no `request-review` to tier-b.
-- **Run:** `ISSUE_PIPELINE_V2=on`, label scope `soak4` — runs [45054287493](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054287493), [45054367168](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054367168), [45054443295](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054443295), [45054529172](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054529172). Log: [`soak4-phase-1-log.jsonl`](./soak4-phase-1-log.jsonl). `ISSUE_PIPELINE_V2` restored to `dry-run` after.
-- **Result:** **not reached** — four ticks logged **`none` / `stage-backlog`** for #2539 (not **To do**); no `request-spec`; no tier-b. **Operator:** confirm Pawpet membership and set **`Stage=To do`** before retry.
+- **Exit (soak4 plan only):** `request-spec` to tier-a on first applicable tick; spec round close (`verdict spec`); issue reaches **`Stage=In analysis`**; no `request-review` to tier-b **in this phase**. (Issue #2539 Definition of Done names **Ready**; that is Phase 2+, not Phase 1.)
+- **Run (blocked, appended):** [45054287493](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054287493) … [45054529172](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054529172) — retained at top of [`soak4-phase-1-log.jsonl`](./soak4-phase-1-log.jsonl).
+- **Run (pass):** [45079799282](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45079799282), [45079886356](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45079886356), [45079972407](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45079972407). Restored `dry-run` after.
+- **Result:** **pass** — tick 1 `request-spec` → **claude-a**; tick 2 `todo.waiting`; tick 3 **`Stage=In analysis`** (`todo.dor-pass`, round close). **Phase 1 stops at tick 3.** Tick 4 `request-review` (run [45080061083](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45080061083)) is **Phase 2** preamble — see [`soak4-phase-2-log.jsonl`](./soak4-phase-2-log.jsonl).
 
 ### Phase 2 — one green converges
 
 - Same fixture, **In analysis**.
+- **Preamble (2026-11-22):** before owner **continue**, tick 4 of the Phase 1 budget already dispatched **R2 `request-review` cursor-a** — logged in [`soak4-phase-2-log.jsonl`](./soak4-phase-2-log.jsonl).
 - `on` ticks until converge or **6 ticks**.
 - **Exit:** first `request-review` to other brand than spec writer; verified pool green → `set-stage Ready` with `analysis.converged`; close marker `verdict converged` + approving identity; nonce-free launch + verdict evidence (`commit=` in launch, nonce in verdict only).
 
@@ -93,4 +95,4 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 |-------|------------|--------|----------------|
 | — | 2026-11-22 | Plan proposed; soak3 tidy | — |
 | 0 | 2026-11-22 | **pass** (post-#2542, `025a33ed`) | — |
-| 1 | 2026-11-22 | **not reached** (#2539 not on Pawpet) | Add #2539 to Pawpet, **`Stage=To do`**, then **continue** |
+| 1 | 2026-11-22 | **pass** (#2539 → In analysis, tick 3) | **continue** → Phase 2 |
