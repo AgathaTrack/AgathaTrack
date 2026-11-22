@@ -140,8 +140,13 @@ function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
   const author = authorOf(rounds, bodyHash);
   const prevBrand = author.human ? null : brandOf(config, author.type);
 
-  // 1. Convergence: one green on the current hash, from a run other than the one that wrote it.
-  if (last.kind === 'review' && state === 'green' && last.hashIn === bodyHash) {
+  // A holder outside the round's tier pool (a tier-b id on a tier-a round, or one that cannot be
+  // started) is not waited for and its verdict does not count: it is reassigned at once (REV3-004).
+  const holderOut = Boolean(lastAttempt.type) && !tierPool(config, last.tier).includes(lastAttempt.type);
+
+  // 1. Convergence: one green on the current hash, from a run other than the one that wrote it,
+  //    and from a pool identity.
+  if (last.kind === 'review' && state === 'green' && !holderOut && last.hashIn === bodyHash) {
     // Only compare nonces that are known; an unknown nonce cannot prove the same run.
     if (!author.human && lastAttempt.nonce && author.nonce && lastAttempt.nonce === author.nonce) {
       return { type: 'none', reason: 'analysis.green-by-author-ignored' };
@@ -155,10 +160,7 @@ function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
   }
 
   // 2. The last round is still open on the current hash.
-  // A holder outside the round's tier pool (a tier-b id on a tier-a round, or one that cannot be
-  // started) is not waited for: it is reassigned at once, as REV3-004 requires.
-  const holderOut = Boolean(lastAttempt.type) && !tierPool(config, last.tier).includes(lastAttempt.type);
-  const effective = holderOut && (state === 'pending' || state === 'red-hold') ? 'silent' : state;
+  const effective = holderOut && ['pending', 'red-hold', 'green'].includes(state) ? 'silent' : state;
   const open = last.hashIn === bodyHash && ['pending', 'red-hold', 'silent'].includes(effective);
   if (open) {
     if (effective === 'pending' || effective === 'red-hold') {

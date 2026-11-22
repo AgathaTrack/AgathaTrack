@@ -61,3 +61,8 @@ Pre-run test gate: **1 failing test** in the mandated suite (unchanged by this r
 ## Raw log
 
 [`p4-acceptance-rerun.jsonl`](./p4-acceptance-rerun.jsonl)
+## Review addendum (Claude, after the re-run)
+
+- **#2533 converged on a non-pool green.** The green was from `claude-b`, a tier-b identity, on a tier-a round. REV3-004 says tier b does not take tier-a rounds, so this was not agreement. `decideRound` now refuses to converge on a green from outside the round's pool and retries the same round with a pool identity (`reason: not-startable`, test added in `issue_pipeline_v2_rounds.test.js`). This run's #2533 result predates that fix and must be re-evaluated on a new dry-run.
+- **Test gate.** On `59d323c1` the full pipeline suite passes (332 pass, 0 fail). The single launch-test failure reported in the run did not reproduce: `runner: one failing issue…` passed in 15 of 15 targeted runs. Cursor's log for the failing run is needed to chase it.
+- **Verdict.** NOT ACCEPTED stands. Acceptance needs a dry-run on the commit with the fix above, showing (a) `not-startable` at once, (b) every disagreement explained, (c) at least one visible red-with-edit with its `v2:claim` and `v2:verdict`.

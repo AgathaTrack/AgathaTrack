@@ -243,3 +243,14 @@ test('a holder outside the tier pool is reassigned at once, not after the timeou
   assert.equal(out.agent, 'claude-a', 'the other brand from cursor-a, the spec writer');
   assert.equal(out.attempt, 2);
 });
+
+test('a green from outside the tier pool does not converge; the round is retried with a pool identity', () => {
+  // #2533 in the P4 re-run: claude-b (tier b) greened a tier-a round. That is not agreement.
+  const rounds = [spec('h0', 'cursor-a'), review('a', 'h0', 'claude-b', 'n2', 'green')];
+  const out = decideRound({ bodyHash: 'h0', rounds, now: NOW, config });
+  assert.notEqual(out.type, 'set-stage', 'no Ready on a non-pool green');
+  assert.equal(out.type, 'request-round');
+  assert.equal(out.round, 'R2', 'the same round, retried');
+  assert.equal(out.agent, 'claude-a', 'a pool identity, the other brand from cursor-a');
+  assert.equal(out.reason, 'not-startable');
+});
