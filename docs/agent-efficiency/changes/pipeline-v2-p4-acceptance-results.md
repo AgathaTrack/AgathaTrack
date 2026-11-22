@@ -83,5 +83,5 @@ Committed at [`docs/agent-efficiency/changes/p4-acceptance-dry-run.jsonl`](./p4-
 
 **What holds:** coverage of the six issues, no errors, no `writes: true`, tier-a discipline, round labels for R2 and R3, retry excludes the silent holder, and `fallback: true` on #2531. Stability was checked on one repeat tick.
 
-**To accept P4:** re-run this acceptance with `PIPELINE_VOTE_KEY` set and the branch at or after the fix. Pass when (a) the non-pool holder cases show `not-startable` at once, (b) any identity disagreement has a cause in the table, and (c) at least one issue shows a visible red-with-edit, so the author attribution is tested with a real verdict. Until then P4 stays open (REV3-007).
+**To accept P4:** re-run this acceptance on a branch at or after REV3-010 (verdicts from comments, no vote key). Pass when (a) the non-pool holder cases show `not-startable` at once, (b) any identity disagreement has a cause in the table, and (c) at least one issue shows a visible red-with-edit with claim and verdict, so authorship is tested. See [`pipeline-v2-p4-acceptance-rerun.md`](./pipeline-v2-p4-acceptance-rerun.md) when the re-run lands.
 

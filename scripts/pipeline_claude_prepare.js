@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * First step of pipeline-claude-run.yml: derive run secret, export PIPELINE_* env, build prompt.
+ * First step of pipeline-claude-run.yml: read the dispatch nonce, export PIPELINE_* env, build prompt.
  */
 
 const fs = require('fs');
