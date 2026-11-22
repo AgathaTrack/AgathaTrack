@@ -9,7 +9,7 @@
 const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/github-project-lib');
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
-const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
+const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
@@ -35,6 +35,7 @@ const {
 const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
 const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
+const { planRounds } = require('./issue_pipeline_v2_round_plan');
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
 
@@ -178,11 +179,9 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
   const editors = await resolveEditors({ comments, config, token, io });
   const engineLogins = config.engine.logins;
   const bodyHash = bodySha(entry.issue.body);
-  const voteKey = process.env.PIPELINE_VOTE_KEY || '';
   const verdictCtx = {
     issueNumber: entry.number,
     bodyHash,
-    voteKey,
     limits: config.limits,
     now,
   };
@@ -232,6 +231,19 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
     ...verdictCtx,
   });
   const merged = { ...facts, ...derived };
+  // The round model's input (PIPE-V2-D-REV3-007). A failure here is not caught: the issue errors on this
+  // tick, rather than the engine deciding on a guess.
+  merged.roundPlan = planRounds({
+    comments,
+    config,
+    engineLogins,
+    editors,
+    bodyHash,
+    issueNumber: entry.number,
+    limits: config.limits,
+    now,
+  });
+  merged.rounds = merged.roundPlan.derived;
   if (merged.review?.assignedTo && runMode === 'on') {
     merged.review.ringFailed = await doorbellRingFailed({
       comments,
@@ -374,6 +386,11 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
+      if (facts.roundPlan) {
+        console.log(
+          JSON.stringify({ event: 'pipeline_v2_round_plan', mode: runMode, issue: entry.number, plan: facts.roundPlan, live: action.row || action.type }),
+        );
+      }
       if (inScope && action.agent) {
         roundRobinAfter = action.agent;
       }
@@ -398,19 +415,14 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           restFn: io.restFn,
           launchFn:
             io.launchFn ||
-            (({ agent, method, stage, purpose = 'delivery', nonce, runSecret, mergeSha, scopeRelaunchSha }) => {
+            (({ agent, method, stage, purpose = 'delivery', nonce, mergeSha, scopeRelaunchSha }) => {
               const launchNonce = nonce || (purpose === 'delivery' ? randomNonceHex() : undefined);
-              const voteKey = process.env.PIPELINE_VOTE_KEY || '';
-              const secret =
-                runSecret ||
-                (voteKey && launchNonce ? deriveRunSecret(voteKey, entry.number, agent, stage || 'Ready', launchNonce) : '');
               return launchIssue({
                 agent,
                 method,
                 stage,
                 purpose,
                 nonce: launchNonce,
-                runSecret: secret,
                 config,
                 mergeSha,
                 scopeRelaunchSha,

@@ -1,7 +1,7 @@
 name: Pipeline Claude run
 
 # Pipeline v2 doorbell for claude-a (#2428 P3). Dispatched by the engine only; inputs hold
-# public run metadata — never the prompt body, run secret, or vote key.
+# public run metadata — never the prompt body or doorbell nonce (the nonce is not a step input).
 on:
   workflow_dispatch:
     inputs:
@@ -22,11 +22,15 @@ on:
         required: true
         type: string
       nonce:
-        description: Doorbell nonce (must match v2:launch record)
+        description: Doorbell nonce. Secret until the run's verdict; never used in names or step env (PIPE-V2-D-REV3-011)
+        required: true
+        type: string
+      run_ref:
+        description: Public reference for the run name and status lookup (not the nonce)
         required: true
         type: string
 
-run-name: pipeline-claude-${{ inputs.nonce }}
+run-name: pipeline-claude-${{ inputs.run_ref }}
 
 permissions:
   contents: read
@@ -50,12 +54,10 @@ jobs:
       - name: Prepare PIPELINE_* env and prompt
         id: prep
         env:
-          PIPELINE_VOTE_KEY: ${{ secrets.PIPELINE_VOTE_KEY }}
           INPUT_ISSUE: ${{ inputs.issue }}
           INPUT_STAGE: ${{ inputs.stage }}
           INPUT_AGENT_ID: ${{ inputs.agent_id }}
           INPUT_METHOD: ${{ inputs.method }}
-          INPUT_NONCE: ${{ inputs.nonce }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
         run: node scripts/pipeline_claude_prepare.js
@@ -63,7 +65,6 @@ jobs:
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         env:
-          PIPELINE_RUN_SECRET: ${{ env.PIPELINE_RUN_SECRET }}
           PIPELINE_AGENT_ID: ${{ env.PIPELINE_AGENT_ID }}
           PIPELINE_RUN_NONCE: ${{ env.PIPELINE_RUN_NONCE }}
           PIPELINE_ISSUE: ${{ env.PIPELINE_ISSUE }}

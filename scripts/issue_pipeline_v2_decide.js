@@ -31,17 +31,9 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
-const {
-  agentLogins,
-  agentActsAs,
-  launchableAgents,
-  resolveAgent,
-  nextInLine,
-  startableIds,
-  entryId,
-  entryActsAs,
-} = require('./issue_pipeline_v2_config');
+const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
 const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
+const { decideRound } = require('./issue_pipeline_v2_rounds');
 
 const STAGES = [
   'Backlog',
@@ -75,7 +67,8 @@ function canonicalStage(raw) {
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  const startable = startableIds(config);
+  // Only spec and review pickup is tier-a-only. Blocked delivery and intent-review wakes keep every startable id.
+  const startable = stage === 'To do' || stage === 'In analysis' ? reviewPoolIds(config) : startableIds(config);
   if (holder && startable.includes(holder)) {
     return holder;
   }
@@ -108,10 +101,11 @@ function timedOutSet(state, now, timeoutMs) {
 }
 
 /** Retry a doorbell deferred at Claude runner cap; never over an active `busy` hold. */
-function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, requestedAt }) {
+function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, requestedAt, allowed }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
   const labels = facts.labels || [];
-  const startable = new Set(startableIds(config));
+  // `allowed` is the caller's pool: the tier-a review pool for spec and review, every startable id for intent review.
+  const startable = new Set(allowed);
   const withinPickupTimeout = requestedAt && facts.now - requestedAt < timeoutMs;
   if (
     labels.includes('queued') &&
@@ -133,7 +127,7 @@ function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, reques
 /** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
-  const startable = new Set(startableIds(config));
+  const startable = new Set(reviewPoolIds(config));
   const queuedRetry = runnerQueuedRetry({
     facts,
     config,
@@ -141,6 +135,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     rowPrefix,
     assignedTo: state.assignedTo,
     requestedAt: state.requestedAt,
+    allowed: startable,
   });
   if (queuedRetry) {
     return queuedRetry;
@@ -157,6 +152,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
       stage,
       agent: next,
       attempts: timedOut.size,
+      failureClass: 'ring-failed',
       row: `${rowPrefix}.reassign`,
     };
   }
@@ -177,7 +173,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
       type: 'reassign',
       stage,
       agent: next,
-      ...(held ? { attempts: skipped.size } : {}),
+      ...(held ? { attempts: skipped.size, failureClass: 'not-startable' } : {}),
       row: held ? `${rowPrefix}.reassign` : `${rowPrefix}.assign`,
     };
   }
@@ -200,6 +196,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     stage,
     agent: pickAgent(remaining, facts),
     attempts: timedOut.size,
+    failureClass: 'timeout',
     row: `${rowPrefix}.reassign`,
   };
 }
@@ -209,7 +206,7 @@ function decideToDo(facts, config) {
   if (spec.passedBy) {
     return setStage('In analysis', 'todo.dor-pass', { evidence: { passedBy: spec.passedBy } });
   }
-  const logins = startableIds(config);
+  const logins = reviewPoolIds(config);
   if (!spec.requestedAt) {
     return {
       type: 'request-spec',
@@ -227,93 +224,90 @@ function decideToDo(facts, config) {
   });
 }
 
-function voterKey(vote, config) {
-  if (vote.agentId) {
-    return vote.agentId;
-  }
-  const matches = (config.agents || []).filter((agent) => entryActsAs(agent) === vote.login);
-  return matches.length === 1 ? entryId(matches[0]) : vote.login;
+/**
+ * The board's round-robin cursor as recency: the next id after `roundRobinAfter` is the least recent,
+ * so least-recently-used picks it first, as `nextInLine` did. Ids further on the ring are more recent.
+ */
+function cursorLastUsed(facts, config) {
+  const order = facts.roundRobinOrder || startableIds(config);
+  const after = facts.roundRobinAfter ? order.indexOf(facts.roundRobinAfter) : -1;
+  if (after < 0) return {};
+  const n = order.length;
+  const used = {};
+  order.forEach((id, i) => {
+    const ahead = (i - after + n) % n; // 0 = the cursor itself, 1 = next in line
+    used[id] = ahead === 0 ? 0 : -(n - ahead);
+  });
+  return used;
 }
 
-function approvalsOnCurrentHash(facts, config) {
-  const editor = facts.lastBodyEditor || null;
-  const logins = new Set(agentLogins(config));
-  const voters = new Set();
-  const voted = new Set();
-  for (const vote of facts.review?.votes || []) {
-    if (vote.hash !== facts.bodyHash || !logins.has(vote.login)) {
-      continue;
+/** Translate a round-model action into the action the apply path writes. */
+function toLiveAction(plan, facts) {
+  if (plan.type === 'request-round') {
+    const round = { round: plan.round, tier: plan.tier, fallback: plan.fallback };
+    if (plan.attempt === 1) {
+      return { type: 'request-review', hash: plan.hash, agent: plan.agent, row: plan.row, ...round };
     }
-    const key = voterKey(vote, config);
-    voted.add(key);
-    if (vote.vote === 'up') {
-      if (vote.agentId) {
-        if (!facts.editorAgentId || vote.agentId !== facts.editorAgentId) {
-          voters.add(key);
-        }
-      } else if (vote.login !== editor) {
-        voters.add(key);
-      }
-    }
+    return {
+      type: 'reassign',
+      stage: 'In analysis',
+      agent: plan.agent,
+      attempts: plan.attempt - 1,
+      failureClass: plan.failureClass,
+      row: plan.row,
+      ...round,
+    };
   }
-  // D16 (#2428): an edit by a login that several ids share is an agent edit only when a verified
-  // `edit` claim names the id. Unclaimed, nobody can tell which run edited, so it is treated as a
-  // human edit and two distinct ids must approve. Otherwise a run could approve its own edit with a
-  // signed review (soak-1, #2480).
-  const sharedLogin = (config.agents || []).filter((agent) => entryActsAs(agent) === editor).length > 1;
-  const editorIsAgent = logins.has(editor) && (!sharedLogin || Boolean(facts.editorAgentId));
-  return { editor, editorIsAgent, up: voters, voted };
+  if (plan.type === 'set-stage') {
+    return setStage(plan.to, plan.row, { evidence: plan.evidence });
+  }
+  if (plan.type === 'set-blocked') {
+    return setBlocked(plan.reason, plan.row);
+  }
+  return none(plan.reason);
+}
+
+/**
+ * In analysis is decided by the round model (PIPE-V2-D-REV3-002 to 005). The live action is the plan,
+ * so a verified green from another run converges, and a silent or failed holder is reassigned.
+ */
+/**
+ * A doorbell deferred at the runner cap (`queued`) has not started, so it is not a failed attempt: the same
+ * holder is rung again while the pickup is inside its timeout. `busy` means a run is already in flight.
+ */
+function queuedRetry(facts, config, timeoutMs) {
+  const review = facts.review || {};
+  const labels = facts.labels || [];
+  const pool = new Set(reviewPoolIds(config));
+  const inside = review.requestedAt && facts.now - review.requestedAt < timeoutMs;
+  if (
+    labels.includes('queued') &&
+    !labels.includes('busy') &&
+    review.assignedTo &&
+    pool.has(review.assignedTo) &&
+    review.requestedHash === facts.bodyHash &&
+    inside
+  ) {
+    return { type: 'ring-doorbell', agent: review.assignedTo, stage: 'In analysis', row: 'analysis.runner-queued' };
+  }
+  return null;
 }
 
 function decideInAnalysis(facts, config) {
-  const review = facts.review || {};
-  const { editor, editorIsAgent, up, voted } = approvalsOnCurrentHash(facts, config);
-
-  // Convergence is checked before the vote cap, so the sixth vote can still converge.
-  const converged = editorIsAgent ? up.size >= 1 : up.size >= 2;
-  if (converged) {
-    return setStage('Ready', 'analysis.converged', {
-      evidence: { hash: facts.bodyHash, editor, approvedBy: [...up] },
-    });
-  }
-  if ((facts.totalVotes || 0) >= config.limits.noConvergenceVotes) {
-    return setBlocked('no-convergence', 'analysis.no-convergence');
-  }
-
-  const ids = startableIds(config);
-  const sharedEditor = editorIsAgent && editor;
-  let eligible = ids.filter((id) => {
-    if (voted.has(id)) {
-      return false;
-    }
-    if (!sharedEditor || agentActsAs(config, id) !== editor) {
-      return true;
-    }
-    const sharers = ids.filter((candidate) => agentActsAs(config, candidate) === editor);
-    return sharers.length > 1;
-  });
-  if (eligible.length === 0 && editorIsAgent) {
-    const editorId = resolveAgent(config, editor)?.id;
-    if (editorId && ids.includes(editorId)) {
-      eligible = [editorId];
-    }
-  }
-  if (review.requestedHash !== facts.bodyHash) {
-    return {
-      type: 'request-review',
-      hash: facts.bodyHash,
-      agent: pickAgent(eligible, facts),
-      row: 'analysis.request',
-    };
-  }
-  return pickupTimeout({
-    state: review,
-    eligible,
-    facts,
+  const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  const retry = queuedRetry(facts, config, timeoutMs);
+  if (retry) return retry;
+  const plan = decideRound({
+    bodyHash: facts.bodyHash,
+    rounds: facts.rounds || [],
+    now: facts.now,
+    lastUsed: cursorLastUsed(facts, config),
     config,
-    stage: 'In analysis',
-    rowPrefix: 'analysis',
+    // A doorbell marked busy is still working: its silence window is doubled (soak-6, #2485).
+    silenceMs: (facts.labels || []).includes('busy') ? BUSY_HOLD_TIMEOUTS * timeoutMs : timeoutMs,
+    holderFailed: Boolean(facts.review?.ringFailed),
   });
+  return toLiveAction(plan, facts);
 }
 
 function backoffDelayMs(failures, config) {
@@ -421,6 +415,7 @@ function decideInMain(facts, config) {
       rowPrefix: 'main.intent',
       assignedTo: facts.intentReview.agent,
       requestedAt: facts.intentReview.requestedAt,
+      allowed: startableIds(config),
     });
     if (intentRetry) {
       return intentRetry;

@@ -1,5 +1,7 @@
 'use strict';
 
+const { roundsFromReview } = require('./issue_pipeline_v2_round_fixtures');
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { applyWipOverride, loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
@@ -29,7 +31,7 @@ const legacyConfig = validateConfig({
 });
 
 function facts(over = {}) {
-  return {
+  const base = {
     mode: 'dry-run',
     now: NOW,
     onBoard: true,
@@ -41,6 +43,11 @@ function facts(over = {}) {
     wip: 0,
     ...over,
   };
+  // In analysis reads round records (PIPE-V2-D-REV3-007); build them from the legacy review shape.
+  if (base.stage === 'In analysis' && base.rounds === undefined) {
+    base.rounds = roundsFromReview(base.review, base.bodyHash);
+  }
+  return base;
 }
 
 const rowOf = (over) => decide(facts(over), legacyConfig);
@@ -184,7 +191,8 @@ test('queued does not ring-doorbell while busy holds the active run', () => {
     stage: 'In analysis',
     review: { requestedHash: 'h1', requestedAt: NOW - 5 * MIN, assignedTo: 'claude-a' },
   }), config);
-  assert.equal(action.reason, 'analysis.waiting');
+  // busy doubles the silence window, so the round is still waiting (soak-6 hold).
+  assert.equal(action.reason, 'analysis.round-waiting');
 });
 
 test('In Main retries queued intent-review doorbell before waiting on UAT', () => {
@@ -253,40 +261,6 @@ test('To do: no history starts at the first agent; the next assignment is the ne
 
 const vote = (login, v, hash = 'h1') => ({ login, vote: v, hash });
 
-test('In analysis: spec draft by an agent plus one other agent converges', () => {
-  const action = rowOf({
-    stage: 'In analysis',
-    lastBodyEditor: 'pawpet-claude',
-    review: { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'pawpet-bot', votes: [vote('pawpet-bot', 'up')] },
-  });
-  assert.equal(action.to, 'Ready');
-});
-
-test('In analysis: after a human edit two agents are needed; the editor cannot approve itself', () => {
-  const one = rowOf({
-    stage: 'In analysis',
-    lastBodyEditor: 'KanopeeKa',
-    review: { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'pawpet-claude', votes: [vote('pawpet-bot', 'up')] },
-  });
-  assert.deepEqual([one.type, one.reason], ['set-blocked', 'stalled'], 'the only startable agent has already voted');
-  const two = rowOf({
-    stage: 'In analysis',
-    lastBodyEditor: 'KanopeeKa',
-    review: {
-      requestedHash: 'h1',
-      requestedAt: NOW,
-      votes: [vote('pawpet-bot', 'up'), vote('pawpet-claude', 'up')],
-    },
-  });
-  assert.equal(two.to, 'Ready');
-  const self = rowOf({
-    stage: 'In analysis',
-    lastBodyEditor: 'pawpet-bot',
-    review: { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'pawpet-claude', votes: [vote('pawpet-bot', 'up')] },
-  });
-  assert.deepEqual([self.type, self.agent], ['reassign', 'pawpet-bot'], 'the startable editor is asked at once');
-});
-
 test('In analysis: votes on an older hash and thumbs-down do not approve', () => {
   const action = rowOf({
     stage: 'In analysis',
@@ -299,58 +273,6 @@ test('In analysis: votes on an older hash and thumbs-down do not approve', () =>
     },
   });
   assert.equal(action.type, 'none');
-});
-
-test('In analysis: convergence wins over the vote cap; the cap blocks otherwise', () => {
-  const converging = rowOf({
-    stage: 'In analysis',
-    totalVotes: 6,
-    lastBodyEditor: 'pawpet-claude',
-    review: { requestedHash: 'h1', requestedAt: NOW, votes: [vote('pawpet-bot', 'up')] },
-  });
-  assert.equal(converging.to, 'Ready');
-  const stuck = rowOf({
-    stage: 'In analysis',
-    totalVotes: 6,
-    lastBodyEditor: 'pawpet-claude',
-    review: { requestedHash: 'h1', requestedAt: NOW, votes: [vote('pawpet-bot', 'down')] },
-  });
-  assert.deepEqual([stuck.type, stuck.reason], ['set-blocked', 'no-convergence']);
-  assert.equal(rowOf({ stage: 'In analysis', totalVotes: 5, lastBodyEditor: 'pawpet-claude' }).type, 'request-review');
-});
-
-test('In analysis: a new hash gets a new request, excluding the last editor', () => {
-  const action = rowOf({
-    stage: 'In analysis',
-    bodyHash: 'h2',
-    lastBodyEditor: 'pawpet-claude',
-    review: { requestedHash: 'h1', requestedAt: NOW - 60 * MIN, assignedTo: 'pawpet-bot' },
-  });
-  assert.deepEqual([action.type, action.hash, action.agent], ['request-review', 'h2', 'pawpet-bot']);
-});
-
-test('In analysis: nobody else eligible after a thumbs-down, the editor revises', () => {
-  const action = rowOfBoth({
-    stage: 'In analysis',
-    lastBodyEditor: 'pawpet-claude',
-    review: { requestedHash: 'h1', requestedAt: NOW, votes: [vote('pawpet-bot', 'down')] },
-  });
-  assert.deepEqual([action.type, action.agent], ['reassign', 'pawpet-claude']);
-});
-
-test('In analysis: timeout reassigns, then stalls once every eligible agent timed out', () => {
-  const late = rowOfBoth({
-    stage: 'In analysis',
-    lastBodyEditor: null,
-    review: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-bot' },
-  });
-  assert.deepEqual([late.type, late.agent], ['reassign', 'pawpet-claude']);
-  const stalled = rowOfBoth({
-    stage: 'In analysis',
-    lastBodyEditor: null,
-    review: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'pawpet-claude', timedOut: ['pawpet-bot'] },
-  });
-  assert.deepEqual([stalled.type, stalled.reason], ['set-blocked', 'stalled']);
 });
 
 test('WIP_LIMIT=off lifts the Ready queue cap; any other value keeps it', () => {

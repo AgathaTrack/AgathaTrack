@@ -241,8 +241,8 @@ test('runner: pickup walks one ring across issues, and a scope label limits wher
     await run('');
     assert.deepEqual(
       seen.map((s) => s[1]),
-      ['claude-a', 'claude-b', 'cursor-a'],
-      'newest launch is cursor-b, then each in-scope assignment takes the next identity around the four-identity ring',
+      ['claude-a', 'cursor-a', 'claude-a'],
+      'newest launch is cursor-b; the normal pool is tier a only (claude-b and cursor-b wait for the challenge tier), so the ring alternates cursor-a and claude-a',
     );
     assert.deepEqual(seen.map((s) => s[2]), [false, false, false]);
     seen.length = 0;

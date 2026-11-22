@@ -2,13 +2,12 @@
 'use strict';
 
 /**
- * First step of pipeline-claude-run.yml: derive run secret, export PIPELINE_* env, build prompt.
+ * First step of pipeline-claude-run.yml: read the dispatch nonce, export PIPELINE_* env, build prompt.
  */
 
 const fs = require('fs');
 const { parseRepo } = require('../.github/scripts/github-project-lib');
 const { loadConfig, resolveAgent } = require('./issue_pipeline_v2_config');
-const { deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 const { METHOD_PROMPTS, STAGE_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
 const { listIssueComments } = require('./issue_pipeline_v2_comments');
 const { findRequestComment, reactionHint, buildClaudeArgs } = require('./pipeline_claude_run_lib');
@@ -31,15 +30,27 @@ function setOutput(name, value) {
   fs.appendFileSync(path, `${name}<<${delimiter}\n${value}\n${delimiter}\n`);
 }
 
+function readDispatchNonce() {
+  const path = process.env.GITHUB_EVENT_PATH;
+  if (!path) return '';
+  try {
+    return String(JSON.parse(require('node:fs').readFileSync(path, 'utf8'))?.inputs?.nonce || '');
+  } catch {
+    return '';
+  }
+}
+
 async function main() {
   const issueNumber = Number(process.env.INPUT_ISSUE);
   const stage = process.env.INPUT_STAGE;
   const agentId = process.env.INPUT_AGENT_ID;
   const method = process.env.INPUT_METHOD || 'PR';
-  const nonce = process.env.INPUT_NONCE;
-  const voteKey = process.env.PIPELINE_VOTE_KEY;
+  // Read from the event payload, not a step env (step env is printed in public logs), and mask it
+  // before anything else can print it. It stays secret until the run posts its verdict.
+  const nonce = readDispatchNonce();
+  if (nonce) console.log(`::add-mask::${nonce}`);
   const token = process.env.GH_TOKEN;
-  if (!voteKey || !token || !nonce || !agentId || !issueNumber) {
+  if (!token || !nonce || !agentId || !issueNumber) {
     throw new Error('missing required pipeline claude prepare inputs');
   }
   const { owner, repo } = parseRepo(process.env.GITHUB_REPOSITORY || '');
@@ -48,9 +59,6 @@ async function main() {
   if (!agent) {
     throw new Error(`unknown agent ${agentId}`);
   }
-  const runSecret = deriveRunSecret(voteKey, issueNumber, agentId, stage, nonce);
-  console.log(`::add-mask::${runSecret}`);
-  appendEnv('PIPELINE_RUN_SECRET', runSecret);
   appendEnv('PIPELINE_AGENT_ID', agentId);
   appendEnv('PIPELINE_RUN_NONCE', nonce);
   appendEnv('PIPELINE_ISSUE', String(issueNumber));

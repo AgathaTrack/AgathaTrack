@@ -44,42 +44,6 @@ const signed = (agentId, v = 'up') => ({ login: config.agents.find((a) => a.id =
 
 // --- soak-1 (#2480): a shared-login run approved the body it had edited -------------------------
 
-test('#2480: an unclaimed edit by a shared login is a human edit; one signed approval does not converge', () => {
-  const review = { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'cursor-a', votes: [signed('cursor-a')] };
-  const one = decide(facts({ stage: 'In analysis', lastBodyEditor: 'pawpet-bot', review }), config);
-  assert.notEqual(one.type, 'set-stage', 'the approver may be the run that edited');
-  const two = decide(
-    facts({ stage: 'In analysis', lastBodyEditor: 'pawpet-bot', review: { ...review, votes: [signed('cursor-a'), signed('claude-a')] } }),
-    config,
-  );
-  assert.deepEqual([two.type, two.to], ['set-stage', 'Ready'], 'two distinct ids converge');
-});
-
-test('#2480: with a verified edit claim the editor id is known; another id converges, the editor does not', () => {
-  const base = { stage: 'In analysis', lastBodyEditor: 'pawpet-bot', editorAgentId: 'cursor-b' };
-  const review = { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'cursor-a' };
-  const other = decide(facts({ ...base, review: { ...review, votes: [signed('cursor-a')] } }), config);
-  assert.deepEqual([other.type, other.to], ['set-stage', 'Ready']);
-  const self = decide(facts({ ...base, review: { ...review, votes: [signed('cursor-b')] } }), config);
-  assert.notEqual(self.type, 'set-stage');
-});
-
-test('#2480: a login with one pool id keeps the single-approval rule', () => {
-  const solo = validateConfig({
-    agents: [
-      { id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'], tier: 'a' },
-      { id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'], tier: 'a' },
-    ],
-    engine: { logins: ['pawpet-engine'] },
-    launchRunners: ['cursor', 'claude'],
-    limits: config.limits,
-    aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
-  });
-  const review = { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'cursor-a', votes: [signed('cursor-a')] };
-  const action = decide(facts({ stage: 'In analysis', lastBodyEditor: 'pawpet-claude', review }), solo);
-  assert.deepEqual([action.type, action.to], ['set-stage', 'Ready']);
-});
-
 test('P2: the Claude pair shares a login, so one approval on an unclaimed claude edit does not converge', () => {
   const review = { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'claude-a', votes: [signed('claude-a')] };
   const action = decide(facts({ stage: 'In analysis', lastBodyEditor: 'pawpet-claude', review }), config);
@@ -262,7 +226,7 @@ test('#2484: one ring: the newest launch sets the start, then each issue takes t
   const { result } = await runTick(io);
   const agentOf = (n) => result.actions.find((a) => a.issue === n).action.agent;
   assert.equal(agentOf(1), 'claude-a', 'newest launch on the board is cursor-b');
-  assert.equal(agentOf(2), 'claude-b', 'the assignment on issue 1 advanced the ring to the next identity');
+  assert.equal(agentOf(2), 'cursor-a', 'the assignment on issue 1 advanced the tier-a ring to the next identity; claude-b is tier b, not in the review pool');
 });
 
 // --- Claude runner (#2485) -----------------------------------------------------------------------

@@ -104,56 +104,6 @@ test('facts: last editor is the newest editor, else the issue author; edits befo
   assert.deepEqual(facts([], {}, []).review, {});
 });
 
-test('scenario: an agent drafted the spec and one other agent approves → Ready', () => {
-  const req = request('h1');
-  const f = facts([req], { [req.id]: [reaction('pawpet-bot', '+1')] }, [edit('pawpet-claude', '2026-11-16T10:30:00Z')]);
-  const action = verdict(f);
-  assert.deepEqual([action.type, action.to, action.evidence.approvedBy], ['set-stage', 'Ready', ['pawpet-bot']]);
-});
-
-test('scenario: after a human edit two agents are needed', () => {
-  const req = request('h1', { assigned: 'pawpet-bot', at: '2026-11-16T11:50:00Z' });
-  const humanEdit = [edit('KanopeeKa', '2026-11-16T11:40:00Z')];
-  const at = '2026-11-16T11:55:00Z';
-  const one = facts([req], { [req.id]: [reaction('pawpet-claude', '+1', at)] }, humanEdit);
-  assert.equal(verdict(one).type, 'none');
-  const two = facts([req], { [req.id]: [reaction('pawpet-claude', '+1', at), reaction('pawpet-bot', '+1', at)] }, humanEdit);
-  assert.equal(verdict(two).to, 'Ready');
-});
-
-test('scenario: a vote on an older hash does not approve the new one, and the new hash is requested', () => {
-  const old = request('h0', { at: '2026-11-16T10:00:00Z' });
-  const f = facts([old], { [old.id]: [reaction('pawpet-bot', '+1', '2026-11-16T10:10:00Z')] }, [edit('pawpet-claude', '2026-11-16T10:30:00Z')], { bodyHash: 'h1' });
-  const action = verdict(f);
-  assert.deepEqual([action.type, action.hash, action.agent], ['request-review', 'h1', 'pawpet-bot']);
-});
-
-test('scenario: six votes and agent edits without convergence → Blocked no-convergence', () => {
-  const r1 = request('h1', { at: '2026-11-16T08:00:00Z' });
-  const r2 = request('h2', { at: '2026-11-16T09:00:00Z' });
-  const f = facts(
-    [r1, r2],
-    {
-      [r1.id]: [reaction('pawpet-bot', '-1', '2026-11-16T08:10:00Z'), reaction('pawpet-claude', '-1', '2026-11-16T08:20:00Z')],
-      [r2.id]: [reaction('pawpet-bot', '-1', '2026-11-16T09:10:00Z')],
-    },
-    [edit('pawpet-claude', '2026-11-16T08:30:00Z'), edit('pawpet-bot', '2026-11-16T08:40:00Z'), edit('KanopeeKa', '2026-11-16T08:50:00Z'), edit('pawpet-claude', '2026-11-16T09:30:00Z')],
-    { bodyHash: 'h2' },
-  );
-  assert.equal(f.totalVotes, 6, '3 down votes + 3 agent edits; the human edit is not a vote');
-  const action = verdict(f);
-  assert.deepEqual([action.type, action.reason], ['set-blocked', 'no-convergence']);
-});
-
-test('scenario: no vote, every eligible agent timed out → Blocked stalled; one left → reassigned', () => {
-  const stale = request('h1', { at: '2026-11-16T10:00:00Z', assigned: 'pawpet-bot', history: [] });
-  const oneLeft = verdictBoth(facts([stale], {}, [edit('KanopeeKa', '2026-11-16T09:50:00Z')]));
-  assert.deepEqual([oneLeft.type, oneLeft.agent], ['reassign', 'pawpet-claude']);
-  const both = request('h1', { at: '2026-11-16T10:00:00Z', assigned: 'pawpet-claude', history: ['pawpet-bot'] });
-  const stalled = verdictBoth(facts([both], {}, [edit('KanopeeKa', '2026-11-16T09:50:00Z')]));
-  assert.deepEqual([stalled.type, stalled.reason], ['set-blocked', 'stalled']);
-});
-
 test('graphql readers: request shape, ordering, author fallback and unedited comments', async () => {
   const seen = [];
   const graphqlFn = async (token, query, vars) => {
@@ -177,7 +127,7 @@ test('graphql readers: request shape, ordering, author fallback and unedited com
   assert.equal(await fetchCommentEditor({ nodeId: '', token: 't', graphqlFn }), null);
 });
 
-test('runner: an In analysis issue reads requests, reactions, edit history and editors', async () => {
+test('runner: an In analysis issue reads requests, reactions, edit history and editors (reactions are not votes)', async () => {
   const prior = process.env.ISSUE_PIPELINE_V2;
   process.env.ISSUE_PIPELINE_V2 = 'dry-run';
   const body = 'the body';
@@ -206,7 +156,8 @@ test('runner: an In analysis issue reads requests, reactions, edit history and e
     });
     assert.deepEqual(calls, [['editor', req.node_id], ['reactions', req.id]]);
     const entry = result.actions[0];
-    assert.deepEqual([entry.action.type, entry.action.to], ['set-stage', 'Ready']);
+    // A reaction from a shared login is not a vote (PIPE-V2-D-P2-001), so this silent round is retried.
+    assert.equal(entry.action.type, 'reassign', 'a shared-login reaction does not converge the body');
     assert.equal(entry.counters, undefined, 'there is no Total N counter any more');
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;

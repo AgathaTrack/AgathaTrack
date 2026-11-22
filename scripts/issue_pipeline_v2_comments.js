@@ -75,7 +75,6 @@ function deriveSpecFacts({
   editors,
   issueNumber,
   bodyHash,
-  voteKey,
   limits,
   now,
 }) {
@@ -90,20 +89,20 @@ function deriveSpecFacts({
   const assignedEntry = resolveAgent(config, request.assigned);
   const assignedActsAs = assignedEntry ? entryActsAs(assignedEntry) : request.assigned;
   const assigneeNeedsSigned = isSharedActsAs(config, assignedActsAs);
-  if (assigneeNeedsSigned && !voteKey) {
-    passedBy = null;
-  } else if (assigneeNeedsSigned && voteKey && bodyHash && issueNumber) {
-    const specUp = findVerifiedVerdicts({
-      comments,
-      config,
-      engineLogins,
-      issueNumber,
-      bodyHash,
-      voteKey,
-      limits,
-      kinds: ['spec'],
-      sinceMs: since,
-    }).filter((verdict) => verdict.value === 'up');
+  if (assigneeNeedsSigned) {
+    // A shared login's spec pass is a signed verdict only; a reaction from that login is not a vote.
+    const specUp = !bodyHash || !issueNumber
+      ? []
+      : findVerifiedVerdicts({
+          comments,
+          config,
+          engineLogins,
+          issueNumber,
+          bodyHash,
+          limits,
+          kinds: ['spec'],
+          sinceMs: since,
+        }).filter((verdict) => verdict.value === 'up');
     if (specUp.length > 0) {
       passedBy = specUp.at(-1).actsAs;
     }
