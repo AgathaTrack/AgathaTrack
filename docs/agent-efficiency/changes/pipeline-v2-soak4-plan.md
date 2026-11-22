@@ -3,6 +3,8 @@ title: Pipeline v2 soak4 plan
 owner: Agent efficiency
 audience: owner
 status: proposed
+status_since: 2026-11-22
+folds_into: docs/agent-efficiency/github-issue-workflow.md
 last_updated: 2026-11-22
 tags: [agent, pipeline, soak]
 ---
@@ -41,7 +43,7 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 - `ISSUE_PIPELINE_V2=dry-run`, one tick.
 - **Exit:** no `writes:true`; every In analysis issue has `pipeline_v2_round_plan`; `plan.error` absent; live action row recorded; live action agrees with plan (disagreement = finding only).
 - **Run:** [Actions 45050530011](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45050530011) (`workflow_dispatch`, `main`). Log: [`soak4-phase-0-log.jsonl`](./soak4-phase-0-log.jsonl).
-- **Result:** **pass** — no `writes:true`; no `pipeline_v2_error`; 5 In analysis issues, 5 `pipeline_v2_round_plan` lines; plan `row` matches live on all five (#1673, #2056, #2301, #2302, #2405). #2539 ticked as `stage-backlog` (not on Pawpet yet).
+- **Result: not passed — re-run required.** No `writes:true`; no `pipeline_v2_error`; 5 In analysis issues, 5 `pipeline_v2_round_plan` lines. The **row** matched live on all five (#1673, #2056, #2301, #2302, #2405), but the **identity did not**: the logged plan picked `cursor-a` and the live action picked `claude-a` on every one. That was the logged plan using per-issue recency, fixed in `f6334d6d` (PR #2542). The run predates that fix, so it does not show agreement. #2539 ticked as `stage-backlog` (not on Pawpet yet).
 
 ### Phase 1 — one spec, nothing else
 

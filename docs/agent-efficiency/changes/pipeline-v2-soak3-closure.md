@@ -2,7 +2,9 @@
 title: Pipeline v2 soak3 closure record
 owner: Agent efficiency
 audience: owner
-status: archived
+status: proposed
+status_since: 2026-11-22
+folds_into: docs/agent-efficiency/github-issue-workflow.md
 last_updated: 2026-11-22
 tags: [agent, pipeline, soak]
 ---
