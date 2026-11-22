@@ -1,5 +1,5 @@
 ---
-title: Autonomous Pr Policy
+title: Autonomous PR Policy
 owner: Documentation Team
 audience: both
 status: active
