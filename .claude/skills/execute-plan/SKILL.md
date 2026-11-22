@@ -11,6 +11,10 @@ Read and follow `.cursor/skills/execute-plan/SKILL.md` (v2 loop). Contract: `AGE
 
 Each command may run in a fresh shell, so prefix every `tick` with `env -u`; `unset` does not carry over.
 
+**Cloud sessions:** GitHub GraphQL is blocked here. The runtime client detects `CLAUDE_CODE_REMOTE=true` and reads
+review threads and sets auto-merge through the CCR routes, so `tick` runs unchanged. A thread-read error is never "no
+threads" ([`execute-plan-v2.md`](../../../docs/agent-efficiency/plans/execute-plan-v2.md) decision log 2026-11-22).
+
 **Planning:** `init <plan_id>` on branch `cursor/<plan_id>-init`; end with the printed approval line.
 
 **CI wait:** `watch-ci` / subscribe — never `sleep`.

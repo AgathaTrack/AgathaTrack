@@ -46,7 +46,7 @@ function fakeClient(name, { status = baseStatus(), pulls = {}, enableError = nul
     createRef: rec('createRef'),
     getPull: async (n) => pulls[n],
     getBranch: async (b) => (/-(sync|remedial)-\d+$/.test(b) ? null : { commit: { sha: `sha-of-${b}` } }),
-    enableAutoMerge: async (id, method) => { calls.push(['enableAutoMerge', id, method]); if (enableError) throw enableError; },
+    enableAutoMerge: async (id, method, opts) => { calls.push(['enableAutoMerge', id, method, opts]); if (enableError) throw enableError; },
     disableAutoMerge: rec('disableAutoMerge'),
     mergePull: rec('mergePull'),
     updateBranch: rec('updateBranch'),
@@ -133,10 +133,10 @@ test('create-phase-branch uses the bot token at from_sha', async () => {
   assert.deepEqual(h.read.calls, []);
 });
 
-test('arm-auto-merge enables auto-merge with the pull node id', async () => {
-  const h = harness({ pulls: { 5: { node_id: 'PR_5' } } }, driverAction('arm-auto-merge', { pr: 5, method: 'squash' }));
+test('arm-auto-merge enables auto-merge with the pull node id and number (CCR route needs the number)', async () => {
+  const h = harness({ pulls: { 5: { number: 5, node_id: 'PR_5' } } }, driverAction('arm-auto-merge', { pr: 5, method: 'squash' }));
   await drive(h);
-  assert.deepEqual(h.bot.calls, [['enableAutoMerge', 'PR_5', 'squash']]);
+  assert.deepEqual(h.bot.calls, [['enableAutoMerge', 'PR_5', 'squash', { number: 5 }]]);
 });
 
 test('arm-auto-merge: clean status falls back to merging with the same method', async () => {
@@ -170,7 +170,7 @@ test('merge blocked records stop and needs-owner', async () => {
 });
 
 const HEAD = 'd'.repeat(40);
-const scopePull = { node_id: 'PR_5', head: { sha: HEAD, ref: 'cursor/p-p1', repo: { full_name: 'o/r' } }, base: { ref: 'cursor/p-integration-x' } };
+const scopePull = { number: 5, node_id: 'PR_5', head: { sha: HEAD, ref: 'cursor/p-p1', repo: { full_name: 'o/r' } }, base: { ref: 'cursor/p-integration-x' } };
 const expected = (name) => new GitHubError(405, `PUT /repos/o/r/pulls/5/merge failed with 405: Repository rule violations found\n\nRequired status check "${name}" is expected.\n\n`);
 const refusing = (h, err) => { h.bot.mergePull = async (...a) => { h.bot.calls.push(['mergePull', ...a]); throw err; }; };
 
@@ -218,7 +218,7 @@ test('merge refused again after a republish, or for another check: STOP check-mi
   assert.match(res.outcome, /check missing/);
   assert.equal(again.bot.statusNow().stop.reason, 'check-missing');
   assert.deepEqual(again.bot.calls.filter((c) => c[0] === 'addLabels'), [['addLabels', 9, ['needs-owner']]]);
-  assert.deepEqual(again.bot.calls.filter((c) => c[0] === 'disableAutoMerge'), [['disableAutoMerge', 'PR_5']]);
+  assert.deepEqual(again.bot.calls.filter((c) => c[0] === 'disableAutoMerge'), [['disableAutoMerge', 'PR_5', { number: 5 }]]);
   assert.deepEqual(again.seen.scope.map((s) => [s.client, s.headSha, s.conclusion, s.title]), [['read', HEAD, 'failure', 'plan-stopped']]);
   assert.equal(again.seen.scope[0].summary, 'plan stopped: check-missing');
 
@@ -255,12 +255,12 @@ test('update-branch uses the bot token', async () => {
 
 test('enforce-stop disables auto-merge and publishes plan-stopped on each head', async () => {
   const pulls = {
-    3: { node_id: 'PR_3', auto_merge: { merge_method: 'squash' }, head: { sha: 's3', ref: `cursor/${PLAN_ID}-p1` }, base: { ref: SNAP.integration_branch } },
-    4: { node_id: 'PR_4', auto_merge: null, head: { sha: 's4', ref: `cursor/${PLAN_ID}-p2` }, base: { ref: SNAP.integration_branch } },
+    3: { number: 3, node_id: 'PR_3', auto_merge: { merge_method: 'squash' }, head: { sha: 's3', ref: `cursor/${PLAN_ID}-p1` }, base: { ref: SNAP.integration_branch } },
+    4: { number: 4, node_id: 'PR_4', auto_merge: null, head: { sha: 's4', ref: `cursor/${PLAN_ID}-p2` }, base: { ref: SNAP.integration_branch } },
   };
   const h = harness({ pulls }, { ...driverAction('enforce-stop', { prs: [3, 4] }), stop: { reason: 'revoked', detail: 'd' } });
   await drive(h);
-  assert.deepEqual(h.bot.calls.filter((c) => c[0] === 'disableAutoMerge'), [['disableAutoMerge', 'PR_3']]);
+  assert.deepEqual(h.bot.calls.filter((c) => c[0] === 'disableAutoMerge'), [['disableAutoMerge', 'PR_3', { number: 3 }]]);
   assert.deepEqual(h.seen.scope.map((s) => [s.client, s.headSha, s.conclusion, s.title]), [
     ['read', 's3', 'failure', 'plan-stopped'],
     ['read', 's4', 'failure', 'plan-stopped'],

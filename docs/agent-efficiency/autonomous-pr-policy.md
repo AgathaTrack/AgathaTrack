@@ -76,7 +76,7 @@ The **babysit skill family** is every agent entry that opens, updates, or merges
 | `/light-plan` light merge | Yes — `gate --pr` before `gh pr merge` on phase/sync PRs |
 | `/dependabot-batch` | Yes — Phase 3 babysit+ (wait, reply+resolve, `gate`) + Phase 5 `/babysit-uat` |
 | `/execute-plan` workers (`triage-review`) | Yes — reply and resolve every listed conversation; `tick` relaunches while any stay unresolved |
-| `/execute-plan` driver | Yes — `tick` PR-ladder 5 blocks on GraphQL `unresolved_threads`; ladder 9 waits for Copilot on young PRs to **`main` only**; driver arms auto-merge when the ladder passes (does **not** invoke `babysit_pr_reviews.js`; workers + ruleset enforce resolve-all) |
+| `/execute-plan` driver | Yes — `tick` PR-ladder 5 blocks on `unresolved_threads` (GraphQL; CCR route in Claude Code cloud sessions); ladder 9 waits for Copilot on young PRs to **`main` only**; driver arms auto-merge when the ladder passes (does **not** invoke `babysit_pr_reviews.js`; workers + ruleset enforce resolve-all) |
 | `.cursor/rules/pr-hygiene.mdc` | Points agents at §Babysit skill family and §Automatic reviews |
 | Claude **steward** skill | Same pointers for Claude-driven PRs |
 

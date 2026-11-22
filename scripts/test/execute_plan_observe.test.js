@@ -92,7 +92,7 @@ function routes(over = {}) {
 function setup(over) {
   const fake = createFakeFetch(routes(over));
   const sleeps = [];
-  const client = createGitHubClient({ repo: 'o/r', token: 't', fetchImpl: fake, sleep: async () => {} });
+  const client = createGitHubClient({ repo: 'o/r', token: 't', fetchImpl: fake, sleep: async () => {}, ccr: false });
   return { fake, client, sleeps, sleep: async (ms) => { sleeps.push(ms); } };
 }
 const PR_OPTS = { requiredChecks: CONFIG.required_checks.integration, epoch: EPOCH, owners: CONFIG.owners };

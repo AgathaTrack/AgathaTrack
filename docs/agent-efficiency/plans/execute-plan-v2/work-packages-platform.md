@@ -3,7 +3,7 @@ title: Execute-plan v2 — platform work packages WP6–WP8 and workflows
 owner: Kanopee
 audience: agent
 status: active
-last_updated: 2026-10-28
+last_updated: 2026-11-22
 tags: [agent, execute-plan, autonomy, github-actions]
 ---
 # Execute-plan v2 — platform work packages WP6–WP8 and workflows
@@ -239,8 +239,8 @@ status from GitHub Actions, required on `main` and integration branches after WP
 1. `lease` = status `lease` present ? `{ ...status.lease, status: await getAgentRunStatus(...) }` : `null`.
 2. `decision = await tick(botClient, { planId, actor: 'driver', lease, now, dryRun: killSwitch === 'dry-run' })`.
 3. Execute `decision.action` (skipped in dry-run; logged in the job summary):
-   `create-phase-branch` (bot, `createRef` at `from_sha`); `arm-auto-merge` (bot, GraphQL; if the
-   error says the PR is in clean status → `mergePull` with the same method); `update-branch` (bot);
+   `create-phase-branch` (bot, `createRef` at `from_sha`); `arm-auto-merge` (bot, GraphQL, or the CCR
+   auto-merge route in a Claude Code cloud session; if the error says the PR is in clean status → `mergePull` with the same method); `update-branch` (bot);
    `open-sync-pr` (bot, title `execute-plan sync: main → <integration>`, marker
    `<!-- execute-plan-sync:<id> -->`); `open-release-pr` (bot, title `Release: <title> (<plan_id>)`,
    body = phase table, `## Docs` listing every `docs/**` file in `compare(main...integration)` or

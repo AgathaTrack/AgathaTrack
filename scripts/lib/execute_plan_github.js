@@ -4,7 +4,14 @@
  * Execute-plan v2 GitHub client (REST + GraphQL), Node built-ins only.
  * The only path for GitHub access in v2 code — no `gh`. Tests inject `fetchImpl`
  * (scripts/test/helpers/execute_plan_fake_fetch.js) and `sleep`.
+ *
+ * Claude Code cloud sessions (`CLAUDE_CODE_REMOTE=true`, or `opts.ccr`) cannot reach GraphQL.
+ * There the three GraphQL methods use the CCR routes instead: review threads from
+ * `GET …/pulls/{n}/ccr/review_threads` joined to the REST review comments (fails closed, see
+ * scripts/lib/ccr_gh_shim_lib.js), auto-merge via `PUT` / `DELETE …/pulls/{n}/ccr/auto_merge`.
  */
+
+const { ShimError, buildReviewThreadsResponse } = require('./ccr_gh_shim_lib');
 
 const DEFAULT_BASE_URL = 'https://api.github.com';
 const RETRY_DELAYS_MS = [2000, 4000, 8000];
@@ -59,6 +66,11 @@ function resolveToken(explicit, env = process.env) {
   );
 }
 
+/** Claude Code cloud session: the session proxy blocks GitHub GraphQL. */
+function isClaudeCodeSession(env = process.env) {
+  return env.CLAUDE_CODE_REMOTE === 'true';
+}
+
 function parseNextLink(header) {
   if (!header) return null;
   for (const part of header.split(',')) {
@@ -109,7 +121,8 @@ async function readBody(res) {
 }
 
 /**
- * @param {{ repo: string, token?: string, fetchImpl?: typeof fetch, baseUrl?: string, sleep?: (ms:number)=>Promise<void> }} opts
+ * @param {{ repo: string, token?: string, fetchImpl?: typeof fetch, baseUrl?: string, sleep?: (ms:number)=>Promise<void>, ccr?: boolean }} opts
+ *   `ccr` — use the CCR routes instead of GraphQL (default: on in a Claude Code cloud session).
  */
 function createGitHubClient(opts) {
   const { repo, token: explicitToken } = opts || {};
@@ -117,6 +130,7 @@ function createGitHubClient(opts) {
     throw new Error(`createGitHubClient: repo must be 'owner/name' (got ${JSON.stringify(repo)})`);
   }
   const [owner, name] = repo.split('/');
+  const ccr = opts.ccr ?? isClaudeCodeSession();
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
   const baseUrl = (opts.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const sleep = opts.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -204,8 +218,55 @@ function createGitHubClient(opts) {
 
   const enc = encodeURIComponent;
 
+  /** GraphQL-shaped thread nodes from the CCR route (every thread in one response; it ignores paging). */
+  async function ccrReviewThreads(n) {
+    const route = `/pulls/${Number(n)}/ccr/review_threads`;
+    const threads = await rest('GET', route);
+    const comments = await paginate(`/pulls/${Number(n)}/comments`);
+    try {
+      return buildReviewThreadsResponse({ threads, comments }).data.repository.pullRequest.reviewThreads.nodes.map((t) => ({
+        isResolved: t.isResolved,
+        path: t.comments.nodes[0].path,
+        comments: { nodes: t.comments.nodes.slice(0, 1) },
+      }));
+    } catch (e) {
+      if (e instanceof ShimError) throw new GitHubError(422, `GET ${repoPath}${route}: ${e.message}`);
+      throw e;
+    }
+  }
+
+  async function graphqlReviewThreads(n) {
+    const nodes = [];
+    let after = null;
+    for (let page = 0; ; page += 1) {
+      if (page >= REVIEW_THREAD_PAGE_CAP) {
+        throw new GitHubError(422, `POST /graphql: PR #${n} has more than ${REVIEW_THREAD_PAGE_CAP * 100} review threads`);
+      }
+      const data = await graphql(
+        `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved path comments(first:1){nodes{url author{login}}}}}}}}`,
+        { owner, name, number: Number(n), after },
+      );
+      const pr = data && data.repository && data.repository.pullRequest;
+      if (!pr) throw new GitHubError(404, `POST /graphql: pull request #${n} not found`);
+      nodes.push(...pr.reviewThreads.nodes);
+      const info = pr.reviewThreads.pageInfo;
+      if (!info || !info.hasNextPage) return nodes;
+      after = info.endCursor;
+    }
+  }
+
+  /** The CCR auto-merge route is keyed by PR number; GraphQL by node id. */
+  function ccrPullNumber(caller, number) {
+    if (!Number.isInteger(Number(number)) || Number(number) <= 0) {
+      throw new Error(`${caller}: { number } is required in a Claude Code cloud session (CCR route)`);
+    }
+    return Number(number);
+  }
+
   return {
     repo,
+    /** True when GraphQL calls go to the CCR routes. */
+    usesCcrRoutes: ccr,
 
     /** The account the token belongs to (`GET /user`). */
     getAuthenticatedUser: async () => (await send('GET', '/user')).data,
@@ -273,25 +334,12 @@ function createGitHubClient(opts) {
       rest('PUT', `/pulls/${n}/merge`, { body: { merge_method: method } }),
     updateBranch: (n) => rest('PUT', `/pulls/${n}/update-branch`, { body: {} }),
 
-    /** Every page: an unresolved thread past the first 100 must still block merge (fails closed past the cap). */
+    /**
+     * Every thread: an unresolved thread past the first 100 must still block merge (GraphQL fails closed
+     * past the cap; the CCR route fails closed when any review comment belongs to no thread).
+     */
     async listUnresolvedThreads(n) {
-      const nodes = [];
-      let after = null;
-      for (let page = 0; ; page += 1) {
-        if (page >= REVIEW_THREAD_PAGE_CAP) {
-          throw new GitHubError(422, `POST /graphql: PR #${n} has more than ${REVIEW_THREAD_PAGE_CAP * 100} review threads`);
-        }
-        const data = await graphql(
-          `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){pageInfo{hasNextPage endCursor} nodes{isResolved path comments(first:1){nodes{url author{login}}}}}}}}`,
-          { owner, name, number: Number(n), after },
-        );
-        const pr = data && data.repository && data.repository.pullRequest;
-        if (!pr) throw new GitHubError(404, `POST /graphql: pull request #${n} not found`);
-        nodes.push(...pr.reviewThreads.nodes);
-        const info = pr.reviewThreads.pageInfo;
-        if (!info || !info.hasNextPage) break;
-        after = info.endCursor;
-      }
+      const nodes = ccr ? await ccrReviewThreads(n) : await graphqlReviewThreads(n);
       return nodes
         .filter((t) => !t.isResolved)
         .map((t) => {
@@ -299,21 +347,28 @@ function createGitHubClient(opts) {
           return { url: first.url || null, path: t.path || null, author: (first.author && first.author.login) || null };
         });
     },
-    async enableAutoMerge(nodeId, method = 'SQUASH') {
+    /** `number` is required on the CCR route; GraphQL uses `nodeId`. */
+    async enableAutoMerge(nodeId, method = 'SQUASH', { number } = {}) {
       const mergeMethod = String(method).toUpperCase();
       if (mergeMethod !== 'SQUASH' && mergeMethod !== 'MERGE') {
         throw new Error(`enableAutoMerge: method must be SQUASH or MERGE (got ${method})`);
+      }
+      if (ccr) {
+        const n = ccrPullNumber('enableAutoMerge', number);
+        return rest('PUT', `/pulls/${n}/ccr/auto_merge`, { body: { merge_method: mergeMethod.toLowerCase() } });
       }
       return graphql(
         `mutation($id:ID!,$method:PullRequestMergeMethod!){enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$method}){clientMutationId}}`,
         { id: nodeId, method: mergeMethod },
       );
     },
-    disableAutoMerge: (nodeId) =>
-      graphql(
+    async disableAutoMerge(nodeId, { number } = {}) {
+      if (ccr) return rest('DELETE', `/pulls/${ccrPullNumber('disableAutoMerge', number)}/ccr/auto_merge`);
+      return graphql(
         `mutation($id:ID!){disablePullRequestAutoMerge(input:{pullRequestId:$id}){clientMutationId}}`,
         { id: nodeId },
-      ),
+      );
+    },
 
     // Checks
     listCheckRuns: (sha, { pages } = {}) =>
@@ -414,6 +469,7 @@ module.exports = {
   PullFilesOverflow,
   GitHubError,
   resolveToken,
+  isClaudeCodeSession,
   parseNextLink,
   DEFAULT_BASE_URL,
   RETRY_DELAYS_MS,
