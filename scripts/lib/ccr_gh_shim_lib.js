@@ -12,6 +12,7 @@
  * Fails closed: an unknown query shape, a malformed thread, or a review comment that no thread
  * accounts for exits 1 — the scripts read that as an error, never as "no threads".
  * Policy: docs/agent-efficiency/autonomous-pr-policy.md §Automatic reviews.
+ * `buildReviewThreadsResponse` is also the execute-plan runtime's CCR join (scripts/lib/execute_plan_github.js).
  * @module scripts/lib/ccr_gh_shim_lib
  */
 

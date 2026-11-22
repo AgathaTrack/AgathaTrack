@@ -169,7 +169,7 @@ run_governance() {
   node --test scripts/execute_plan_runtime.test.js
   node --test scripts/test/execute_plan_scope.test.js
   node --test scripts/test/execute_plan_launch.test.js
-  node --test scripts/test/execute_plan_github.test.js
+  node --test scripts/test/execute_plan_github.test.js scripts/test/execute_plan_github_ccr.test.js
   node --test scripts/test/execute_plan_approval.test.js
   node --test scripts/test/execute_plan_ack.test.js
   node --test scripts/test/execute_plan_snapshot_v2.test.js

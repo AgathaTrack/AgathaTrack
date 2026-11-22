@@ -3,7 +3,7 @@ title: Execute-plan v2 — runtime work packages WP1–WP3
 owner: Kanopee
 audience: agent
 status: active
-last_updated: 2026-10-15
+last_updated: 2026-11-22
 tags: [agent, execute-plan, autonomy]
 ---
 # Execute-plan v2 — runtime work packages WP1–WP3
@@ -56,8 +56,8 @@ Client methods (all `async`; list methods follow `Link: rel="next"` until exhaus
 | `getPull(n)`, `listPullCommits(n)`, `listPullReviews(n)` | `/pulls/{n}`, `/pulls/{n}/commits`, `/pulls/{n}/reviews` |
 | `listPullFiles(n)` | `/pulls/{n}/files`; throws `PullFilesOverflow` when more than 3000 files |
 | `createPull({ title, head, base, body, draft })`, `mergePull(n, { method })`, `updateBranch(n)` | `POST /pulls`, `PUT /pulls/{n}/merge`, `PUT /pulls/{n}/update-branch` |
-| `listUnresolvedThreads(n)` | GraphQL `repository.pullRequest(number).reviewThreads(first:100){nodes{isResolved path comments(first:1){nodes{url author{login}}}}}` → `[{ url, path, author }]` for unresolved |
-| `enableAutoMerge(nodeId, method)` / `disableAutoMerge(nodeId)` | GraphQL `enablePullRequestAutoMerge(input:{pullRequestId, mergeMethod: SQUASH\|MERGE})` / `disablePullRequestAutoMerge` |
+| `listUnresolvedThreads(n)` | GraphQL `repository.pullRequest(number).reviewThreads(first:100){nodes{isResolved path comments(first:1){nodes{url author{login}}}}}` → `[{ url, path, author }]` for unresolved. CCR (rule 6): `GET /pulls/{n}/ccr/review_threads` joined to `GET /pulls/{n}/comments` (`scripts/lib/ccr_gh_shim_lib.js`), fails closed with `GitHubError` 422 |
+| `enableAutoMerge(nodeId, method, { number })` / `disableAutoMerge(nodeId, { number })` | GraphQL `enablePullRequestAutoMerge(input:{pullRequestId, mergeMethod: SQUASH\|MERGE})` / `disablePullRequestAutoMerge`. CCR (rule 6): `PUT` / `DELETE /pulls/{number}/ccr/auto_merge` (`{ merge_method: squash\|merge }`); `number` required |
 | `listCheckRuns(sha)` | `GET /commits/{sha}/check-runs?per_page=100` |
 | `listCommitStatuses(sha)`, `createCommitStatus(sha, { state, context, description, target_url })` | `GET /commits/{sha}/statuses?per_page=100`, `POST /statuses/{sha}` |
 | `compare(base, head)` | `GET /compare/{base}...{head}` → `{ status, ahead_by, behind_by, files: [{ filename, status }] }` |
@@ -78,6 +78,9 @@ Client methods (all `async`; list methods follow `Link: rel="next"` until exhaus
    `RateLimited` (resetAt from `x-ratelimit-reset`). Never loop without a limit.
 4. Other non-2xx → `GitHubError(status, message)`; 404 → `null` only where the table says so.
 5. Never print tokens; errors include method and path only.
+6. CCR routes: in a Claude Code cloud session (`CLAUDE_CODE_REMOTE=true`) GitHub GraphQL is blocked, so the three
+   GraphQL methods use the CCR routes above. `opts.ccr` overrides the default; `usesCcrRoutes` reports it.
+   Tests of the GraphQL path pass `ccr: false` (`scripts/test/execute_plan_github_ccr.test.js` covers CCR).
 
 **Fake fetch — `scripts/test/helpers/execute_plan_fake_fetch.js`**
 `createFakeFetch(routes)` returns a `fetch`-compatible function. `routes` maps keys

@@ -24,6 +24,7 @@ function client(routes, extra = {}) {
     sleep: async (ms) => {
       sleeps.push(ms);
     },
+    ccr: false, // GraphQL path; the CCR path is in execute_plan_github_ccr.test.js
     ...extra,
   });
   return { gh, fake, sleeps };

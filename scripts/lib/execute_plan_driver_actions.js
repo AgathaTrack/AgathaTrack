@@ -171,7 +171,7 @@ async function enforceStop(clients, ctx, decision, now) {
   const done = [];
   for (const number of decision.action.args.prs || []) {
     const pull = await bot.getPull(number);
-    if (pull.auto_merge) await bot.disableAutoMerge(pull.node_id);
+    if (pull.auto_merge) await bot.disableAutoMerge(pull.node_id, { number: pull.number });
     const headRef = (pull.head && pull.head.ref) || pull.head_ref || '';
     const baseRef = (pull.base && pull.base.ref) || pull.base_ref || '';
     const { category } = snapshot
@@ -322,7 +322,7 @@ async function executeDriverAction(clients, ctx, decision, now) {
     case 'arm-auto-merge': {
       const pull = await bot.getPull(a.pr);
       try {
-        await bot.enableAutoMerge(pull.node_id, a.method);
+        await bot.enableAutoMerge(pull.node_id, a.method, { number: pull.number });
         return `auto-merge armed on #${a.pr} (${a.method})`;
       } catch (e) {
         if (!(e instanceof GitHubError && /clean status/i.test(e.message))) throw e;
