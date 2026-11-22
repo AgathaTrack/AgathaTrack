@@ -75,7 +75,7 @@ One green on the current body hash converges the issue when the green comes from
 - Attribution of a body edit to a run uses the nonce in a verified `edit` claim. Spec and review runs must post that claim when they edit. Without it the edit cannot be tied to a run, and convergence waits for the engine to see one.
 - A round that edits the body changes the hash, so a later round's vote applies to the new hash only.
 - The two-approval rule for unknown authors and the six-vote cap are superseded for In analysis (PIPE-V2-D-REV3-003), so they do not apply after P4.
-- Authorship comes from the open round the engine started, matched on login within tier a (REV3-003). An `edit` claim is audit only. Challenge-tier attribution is an open decision (REV3-003).
+- Authorship comes from the round record: the type and nonce of the run that produced the hash (REV3-006). Login is never used. An `edit` claim is audit only (REV3-003).
 
 ## 6. Normal tier (a)
 
@@ -161,7 +161,7 @@ Each phase is a separate PR, reviewable on its own. Each one updates the canonic
 | P1 | `tier` on identities; `claude-a` runs `claude-haiku-5-5` via `claude_args --model` (effort stored in config, CLI wiring after live proof) — **#2520** | P0 | live dispatch shows haiku in logs; cost recorded |
 | P2 | shared-login signed verdicts; **claude-b** added; review-path reactions fixed for shared logins — **#2521** | P1 | both Claude ids sign verdicts the engine accepts (T4 live) |
 | P3 | failure classes in markers | P1 | a forced failure produces a marker with the correct class |
-| P4 | assignment, down state, convergence and the normal and challenge sequences in the pure decision function, with table tests; dry-run only | P2, P3 | table tests pass; dry-run over beta issues shows the expected rounds |
+| P4 | assignment, down state, convergence and the normal and challenge sequences in the pure decision function, with table tests; dry-run only | P2, P3 | **Pure function and table tests shipped** (`scripts/issue_pipeline_v2_rounds.js`, `issue_pipeline_v2_rounds.test.js`). **Not wired** into the tick: the dry-run needs P3 round markers, which are not shipped. Acceptance (dry-run over beta issues) is open |
 | P5 | round watchers, event triggers, the cron backstop, and the Claude completion dispatch | P4 | a round completes under 5 minutes excluding agent time; a silent round fires its watcher on time |
 | P6 | soak: dry-run for a day, then on for beta issues, including a forced fallback and a forced challenge | P5 | a beta issue reaches **Ready** through the new flow, with its fallback logged |
 
