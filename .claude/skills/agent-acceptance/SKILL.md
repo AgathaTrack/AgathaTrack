@@ -15,7 +15,7 @@ Read and follow `.cursor/skills/agent-acceptance/SKILL.md`. That file is the pro
 | Engine-launched mode ("follow `.cursor/skills/agent-acceptance/SKILL.md`", non-interactive) | Not wired in Claude Code. Run it in standalone mode on the issue the owner names. Standalone mode rules apply. |
 | Identity of the verdict comment | The comment and labels are posted under the token you export. Before a verdict gates `In Main`, confirm with the owner that this identity is the one the pipeline expects. |
 | §Phase 0 token: `GH_TOKEN` (Cursor Cloud) | Export `PAWPET_CLAUDE_TOKEN` or `GH_TOKEN` before any `aat-*` command. Do not rely on `GITHUB_TOKEN`. |
-| §Model: `composer-2.5` orchestration; `computerUse` for UI | Ignore the model rule. For UI flows, use Playwright on the preinstalled Chromium against `http://localhost:3000/`, or the `run` skill to launch the app. Screenshots at `deviceScaleFactor: 2`. |
+| §Model: `composer-2.5` orchestration; `computerUse` for UI | Ignore the model rule. To launch the app, use the Bash commands in the source's §Phase 3 step 3 (PostgreSQL, schema, `node bin/start.js`), not a separate skill. For UI flows, use Playwright on the preinstalled Chromium against `http://localhost:3000/`. Screenshots at `deviceScaleFactor: 2`. |
 | §Phase 3 step 6: evidence under `/opt/cursor/artifacts/` | Save under the session scratchpad. In the issue comment, describe each flow as text and link this Claude Code session. |
 | Verdict template line `**Cursor run:** <url>` | Use `**Claude Code run:** <session URL>`. The engine reads only the marker line. |
 | §Phase 3 step 2: Flutter web build | Use the Flutter on PATH. If it is missing or the stack cannot start after reasonable repair, the verdict is INCONCLUSIVE, not FAIL. |

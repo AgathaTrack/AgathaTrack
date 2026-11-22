@@ -12,7 +12,7 @@ Read and follow `.cursor/skills/add-bdd-playwright-scenario/SKILL.md`. That file
 | In the Cursor source | In Claude Code |
 |----------------------|----------------|
 | §Steps 10: run `/ui-check` on affected screens | Apply the accessibility quick pass, `.cursor/agent-kernel/protocols/accessibility.md` §Quick pass. `/ui-check` is superseded. |
-| Local Playwright runs (`./e2e/scripts/run-local.sh`) | Chromium is preinstalled. Do not run `playwright install`. Add `--trace off` unless a trace is needed. |
+| Local Playwright runs (`./e2e/scripts/run-local.sh`) | The script runs `npx playwright install chromium --with-deps` itself. Let it run as written; this PR does not change it. If the install fails here, use the preinstalled `/opt/pw-browsers/chromium`. Add `--trace off` unless a trace is needed. |
 | Frontmatter `paths:` (`e2e/**`, `flutter_app/test/bdd/**`) | Cursor-only. The description is what triggers this skill here. |
 | §Parallel sprint rules: `/spawn-sprint-agents` | Not used. One agent in this session, unless you ask for subagents. |
 
