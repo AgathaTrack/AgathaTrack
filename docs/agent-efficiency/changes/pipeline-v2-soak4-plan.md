@@ -15,17 +15,17 @@ Validates the **live** In analysis action (round plan, PIPE-V2-D-REV3-012). Uses
 
 | ID | Requirement | Status | Answer / record |
 |----|-------------|--------|-----------------|
-| **A** | How `on` ticks run branch code: workflow checks out `main`. Owner chooses **merged** (main has new engine) or **run locally with engine identity**. | **Pending owner** | PR #2537 merged to `main` at `e8e2f824` (2026-11-22). Confirm **merged** before Phase 0/1 workflow ticks, or specify local tick procedure. |
-| **B** | Label `soak4` exists | **Pending** | Not present at plan write; create before first fixture/tick. |
-| **C** | Fixture issues created on GitHub | **Pending owner go-ahead** | Proposed list below — do not create until approved. |
+| **A** | How `on` ticks run branch code: workflow checks out `main`. Owner chooses **merged** (main has new engine) or **run locally with engine identity`. | **Done** | **merged** — workflow `issue-pipeline-v2.yml` on `main` (`e8e2f824`, #2537). |
+| **B** | Label `soak4` exists | **Done** | Created 2026-11-22 UTC (blue). Repo variable `ISSUE_PIPELINE_V2_LABEL` set to `soak4` (was `pipeline-beta`). |
+| **C** | Fixture issues created on GitHub | **Partial** | **#2539** soak4-01 created; soak4-02/03 deferred. |
 
-### Proposed fixtures (not created yet)
+### Fixtures
 
 Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, Definition of Done, Priority, Affected Area, Security or Sensitive Area: No, Delivery plan (phase 1 stops at Ready). Labels: `task`, `soak4`. Titles: `[sandbox] soak4-NN …`.
 
 | NN | Purpose | Phases | Initial Stage (operator) |
 |----|---------|--------|--------------------------|
-| 01 | Happy path: one spec pass → In analysis → converge to Ready | 0–2, 4 | To do |
+| 01 | Happy path: one spec pass → In analysis → converge to Ready (**#2539**) | 0–2, 4 | To do — **operator: add to Pawpet + `Stage=To do`** |
 | 02 | Red with edit (optional) | 3 | To do — **only if owner agrees at Phase 3 pause** |
 | 03 | Second parallel fixture | 5 | To do |
 
@@ -40,6 +40,8 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 - `ISSUE_PIPELINE_V2=dry-run`, one tick.
 - **Exit:** no `writes:true`; every In analysis issue has `pipeline_v2_round_plan`; `plan.error` absent; live action row recorded; live action agrees with plan (disagreement = finding only).
+- **Run:** [Actions 45050530011](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45050530011) (`workflow_dispatch`, `main`). Log: [`soak4-phase-0-log.jsonl`](./soak4-phase-0-log.jsonl).
+- **Result:** **pass** — no `writes:true`; no `pipeline_v2_error`; 5 In analysis issues, 5 `pipeline_v2_round_plan` lines; plan `row` matches live on all five (#1673, #2056, #2301, #2302, #2405). #2539 ticked as `stage-backlog` (not on Pawpet yet).
 
 ### Phase 1 — one spec, nothing else
 
@@ -84,4 +86,5 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 | Phase | Date (UTC) | Result | Owner decision |
 |-------|------------|--------|----------------|
-| — | — | Plan proposed; Part 1 soak3 tidy complete | Await Precondition A + fixture go-ahead |
+| — | 2026-11-22 | Plan proposed; soak3 tidy | — |
+| 0 | 2026-11-22 | **pass** (preflight) | **continue** → Phase 1 after #2539 on board |
