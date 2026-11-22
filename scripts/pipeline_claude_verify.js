@@ -9,11 +9,11 @@
  */
 
 const { parseRepo } = require('../.github/scripts/github-project-lib');
-const { loadConfig, resolveAgent } = require('./issue_pipeline_v2_config');
+const { loadConfig, resolveAgent, isSharedActsAs } = require('./issue_pipeline_v2_config');
 const { listIssueComments, listCommentReactions } = require('./issue_pipeline_v2_comments');
 const { findRequestComment, runEvidence } = require('./pipeline_claude_run_lib');
 
-async function verify({ owner, repo, issueNumber, stage, agentId, sinceMs, token, deps = {} }) {
+async function verify({ owner, repo, issueNumber, stage, agentId, nonce, sinceMs, token, deps = {} }) {
   const config = deps.config || loadConfig();
   const agent = resolveAgent(config, agentId);
   if (!agent) {
@@ -23,8 +23,10 @@ async function verify({ owner, repo, issueNumber, stage, agentId, sinceMs, token
   const listReactions = deps.listCommentReactions || listCommentReactions;
   const comments = await listComments({ owner, repo, issueNumber, token });
   const request = findRequestComment({ comments, stage, engineLogins: config.engine.logins });
-  const reactions = request ? await listReactions({ owner, repo, commentId: request.id, token }) : [];
-  return runEvidence({ comments, reactions, actsAs: agent.actsAs, sinceMs });
+  const shared = isSharedActsAs(config, agent.actsAs);
+  // A shared login's reactions cannot name the run, so they are not read at all.
+  const reactions = request && !shared ? await listReactions({ owner, repo, commentId: request.id, token }) : [];
+  return runEvidence({ comments, reactions, actsAs: agent.actsAs, agentId, nonce, shared, sinceMs });
 }
 
 async function main() {
@@ -41,12 +43,13 @@ async function main() {
     issueNumber,
     stage: process.env.PIPELINE_STAGE,
     agentId: process.env.PIPELINE_AGENT_ID,
+    nonce: process.env.PIPELINE_RUN_NONCE,
     sinceMs,
     token,
   });
   if (!result.ok) {
     console.error(
-      `::error::The Claude run left no comment and no reaction on #${issueNumber}. Failing the job so the engine reassigns the pickup.`,
+      `::error::The Claude run left no trace on #${issueNumber}${result.reason ? ` (${result.reason})` : ''}. Failing the job so the engine reassigns the pickup.`,
     );
     process.exitCode = 1;
     return;

@@ -7,7 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadConfig } = require('./issue_pipeline_v2_config');
+const { loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
 const { decide } = require('./issue_pipeline_v2_decide');
 const { tick } = require('./issue_pipeline_v2');
 const {
@@ -65,9 +65,25 @@ test('#2480: with a verified edit claim the editor id is known; another id conve
 });
 
 test('#2480: a login with one pool id keeps the single-approval rule', () => {
+  const solo = validateConfig({
+    agents: [
+      { id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'], tier: 'a' },
+      { id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'], tier: 'a' },
+    ],
+    engine: { logins: ['pawpet-engine'] },
+    launchRunners: ['cursor', 'claude'],
+    limits: config.limits,
+    aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
+  });
   const review = { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'cursor-a', votes: [signed('cursor-a')] };
-  const action = decide(facts({ stage: 'In analysis', lastBodyEditor: 'pawpet-claude', review }), config);
+  const action = decide(facts({ stage: 'In analysis', lastBodyEditor: 'pawpet-claude', review }), solo);
   assert.deepEqual([action.type, action.to], ['set-stage', 'Ready']);
+});
+
+test('P2: the Claude pair shares a login, so one approval on an unclaimed claude edit does not converge', () => {
+  const review = { requestedHash: 'h1', requestedAt: NOW, assignedTo: 'claude-a', votes: [signed('claude-a')] };
+  const action = decide(facts({ stage: 'In analysis', lastBodyEditor: 'pawpet-claude', review }), config);
+  assert.notEqual(action.to, 'Ready', 'a shared-login edit needs two distinct identities');
 });
 
 // --- soak-6 (#2485): a silent doorbell held `busy` forever ---------------------------------------
@@ -246,7 +262,7 @@ test('#2484: one ring: the newest launch sets the start, then each issue takes t
   const { result } = await runTick(io);
   const agentOf = (n) => result.actions.find((a) => a.issue === n).action.agent;
   assert.equal(agentOf(1), 'claude-a', 'newest launch on the board is cursor-b');
-  assert.equal(agentOf(2), 'cursor-a', 'the assignment on issue 1 advanced the ring');
+  assert.equal(agentOf(2), 'claude-b', 'the assignment on issue 1 advanced the ring to the next identity');
 });
 
 // --- Claude runner (#2485) -----------------------------------------------------------------------
@@ -288,11 +304,13 @@ test('#2485: run evidence is a comment or a vote by the run login after it start
 });
 
 test('#2485: verify reads the issue as the run would and fails a silent run', async () => {
+  // claude-a and claude-b share pawpet-claude, so the run is identified by its verdict, not a reaction.
+  const NONCE = 'ab'.repeat(16);
   const request = engineComment(7, '<!-- v2:spec-request assigned=claude-a history= -->', NOW - MIN);
-  const args = { owner: 'o', repo: 'r', issueNumber: 2485, stage: 'To do', agentId: 'claude-a', sinceMs: NOW, token: 't' };
+  const args = { owner: 'o', repo: 'r', issueNumber: 2485, stage: 'To do', agentId: 'claude-a', nonce: NONCE, sinceMs: NOW, token: 't' };
   const silent = await verify({ ...args, deps: { config, listIssueComments: async () => [request], listCommentReactions: async () => [] } });
   assert.equal(silent.ok, false);
-  const voted = await verify({
+  const reacted = await verify({
     ...args,
     deps: {
       config,
@@ -300,5 +318,9 @@ test('#2485: verify reads the issue as the run would and fails a silent run', as
       listCommentReactions: async ({ commentId }) => (commentId === 7 ? [{ user: { login: 'pawpet-claude' }, content: '+1', created_at: iso(NOW + MIN) }] : []),
     },
   });
-  assert.equal(voted.ok, true);
+  assert.equal(reacted.ok, false, 'a shared-login reaction is not evidence of this run');
+  const verdict = engineComment(8, `<!-- v2:verdict agent=claude-a nonce=${NONCE} kind=spec hash=h1 value=up sig=x -->`, NOW + MIN);
+  verdict.user = { login: 'pawpet-claude' };
+  const signed = await verify({ ...args, deps: { config, listIssueComments: async () => [request, verdict], listCommentReactions: async () => [] } });
+  assert.equal(signed.ok, true);
 });

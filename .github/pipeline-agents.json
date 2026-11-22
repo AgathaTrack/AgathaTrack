@@ -34,6 +34,18 @@
       "tier": "a",
       "model": "claude-haiku-5-5",
       "effort": "high"
+    },
+    {
+      "id": "claude-b",
+      "actsAs": "pawpet-claude",
+      "runner": "claude",
+      "methods": [
+        "PR",
+        "light-plan"
+      ],
+      "tier": "b",
+      "model": "claude-opus-5-5",
+      "effort": "medium"
     }
   ],
   "engine": {

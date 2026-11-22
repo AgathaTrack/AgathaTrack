@@ -241,8 +241,8 @@ test('runner: pickup walks one ring across issues, and a scope label limits wher
     await run('');
     assert.deepEqual(
       seen.map((s) => s[1]),
-      ['claude-a', 'cursor-a', 'cursor-b'],
-      'newest launch is cursor-b, then each in-scope assignment takes the next agent',
+      ['claude-a', 'claude-b', 'cursor-a'],
+      'newest launch is cursor-b, then each in-scope assignment takes the next identity around the four-identity ring',
     );
     assert.deepEqual(seen.map((s) => s[2]), [false, false, false]);
     seen.length = 0;

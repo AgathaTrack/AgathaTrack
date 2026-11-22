@@ -49,7 +49,8 @@ const bothStartable = { ...legacyConfig, launchRunners: ['cursor', 'claude'] };
 const rowOfBoth = (over) => decide(facts(over), bothStartable);
 
 test('config: the committed file is valid; bad edits are reported together', () => {
-  assert.equal(config.agents.length, 3);
+  assert.equal(config.agents.length, 4);
+  assert.equal(config.agents[3].id, 'claude-b', 'P2 adds claude-b after the existing three');
   assert.equal(config.agents[0].id, 'cursor-a');
   assert.equal(config.agents[0].actsAs, 'pawpet-bot');
   assert.equal(config.agents[1].model, 'grok-4.7-medium');
