@@ -3,9 +3,10 @@ title: Pipeline v2 review process v3
 owner: Agent efficiency
 audience: owner
 status: proposed
-last_updated: 2026-11-21
+status_since: 2026-11-21
+folds_into: docs/agent-efficiency/github-issue-workflow.md
+last_updated: 2026-11-22
 tags: [agent, pipeline, review]
-related_prs: [2519]
 ---
 
 # Pipeline v2: review process v3 (spec, revision 3)
@@ -29,14 +30,18 @@ Canonical pointer while proposed: [`github-issue-workflow.md`](../github-issue-w
 
 ## 2. Config
 
-Each agent has an id, a brand, a model, an effort level, a tier, a login and its methods. Current entries:
+Each agent has an id, a brand, a model, an effort level, a tier, a login and its methods.
 
-| Identity | Tier | Login | Notes |
-|----------|------|-------|--------|
-| cursor-a | a | pawpet-bot | executor-capable |
-| claude-a | a | pawpet-claude | |
-| cursor-b | b | pawpet-bot | |
-| claude-b | b | pawpet-claude | |
+**On `main` today (pre-P1):** three identities in `.github/pipeline-agents.json`, no `tier` field, no `claude-b`.
+
+**Target entries (after P1–P2 land):**
+
+| Identity | Tier | Login | Notes | Lands in |
+|----------|------|-------|--------|----------|
+| cursor-a | a | pawpet-bot | executor-capable | P1 (`tier`); model unchanged |
+| claude-a | a | pawpet-claude | `claude-haiku-5-5`, effort stored not yet on CLI | P1 |
+| cursor-b | b | pawpet-bot | | P1 |
+| claude-b | b | pawpet-claude | `claude-opus-5-5`, effort stored; signed verdicts required | P2 (not P1: two ids on one login before P2) |
 
 Shared logins are allowed. **Identity**, not login, is the unit of independence.
 
@@ -50,6 +55,10 @@ For each round, given its tier and the previous round's author:
 4. **No candidate:** the issue becomes `Blocked=stalled`.
 
 With no history, least recently used falls back to config order.
+
+**Relationship to shipped pickup (until P4):** adversarial pickup still uses the **board-wide round robin** in [`PIPE-V2-D-SOAK-006`](../github-issue-workflow.md) (newest `v2:launch` on the board). Per-issue LRU was rejected in soak ([`PIPE-V2-D-SOAK-002`](../github-issue-workflow.md), superseded).
+
+**From P4:** this spec **replaces** open adversarial review with fixed rounds. **Least recently used** for round assignment is still **board-wide**, derived from round markers and launch records on the board (same cursor idea as SOAK-006, scoped to the tier's candidate set). It does not store a separate LRU field and does not use per-issue rotation.
 
 ## 4. Down state
 
@@ -107,8 +116,9 @@ The writer is the least recently used tier-a identity. The spec pass moves the i
 
 - **Round watcher:** when a doorbell starts, a short job starts too. It sleeps until the round deadline. On waking, it checks for a result. If there is one, it exits. If not, it writes a failure marker and runs assignment again. Watchers are idempotent: a repeat wake for the same round does nothing.
 - **Deadline:** starts at `reviewTimeoutMin` (30 minutes), which is measured and then lowered.
-- **Event triggers:** verdict comments, human comments, and workflow completion for doorbell runs. Each one runs the engine for that issue only, in a concurrency group keyed by the issue.
-- **Backstop:** the existing cron (:11, :41) runs all open rounds. It is there for missed events and watchers, not as the primary timer.
+- **Event triggers:** verdict comments, human comments, and workflow completion for doorbell runs. Each one requests a tick for that issue only.
+- **Per-issue serialization:** every engine entry point (verdict or comment events, watcher timeout, cron backstop, manual dispatch) must acquire the same **per-issue lease** (or equivalent compare-and-set on the active round marker) before assignment or stage writes. Only one tick may advance a round at a time; idempotent watcher wakes that lose the lease exit without side effects.
+- **Backstop:** the existing cron (:11, :41) runs all open rounds. It is there for missed events and watchers, not as the primary timer. Cron uses the same per-issue lease as events and watchers.
 - Engine comments don't trigger the engine.
 - **Latency:**
   - event handoffs: target under 5 minutes, excluding agent run time;
@@ -148,8 +158,8 @@ Each phase is a separate PR, reviewable on its own. Each one updates the canonic
 | Phase | Content | Depends on | Acceptance |
 |-------|---------|------------|------------|
 | P0 | owner decisions | — | recorded in the decision log |
-| P1 | claude-a haiku-high and claude-b opus-medium, wired through `pipeline-claude-run.yml` with model and effort inputs; config gains tier | P0 | a haiku run and an opus run show the expected model in their logs; cost per run recorded |
-| P2 | signed-verdict prompt for the shared Claude login, plus verified edit claims | P1 | both Claude identities post signed verdicts the engine accepts |
+| P1 | `tier` on identities; `claude-a` runs `claude-haiku-5-5` via `claude_args --model` (effort stored in config, CLI wiring after live proof) — **#2520** | P0 | live dispatch shows haiku in logs; cost recorded |
+| P2 | shared-login signed verdicts; **claude-b** added; review-path reactions fixed for shared logins — **#2521** | P1 | both Claude ids sign verdicts the engine accepts (T4 live) |
 | P3 | failure classes in markers | P1 | a forced failure produces a marker with the correct class |
 | P4 | assignment, down state, convergence and the normal and challenge sequences in the pure decision function, with table tests; dry-run only | P2, P3 | table tests pass; dry-run over beta issues shows the expected rounds |
 | P5 | round watchers, event triggers, the cron backstop, and the Claude completion dispatch | P4 | a round completes under 5 minutes excluding agent time; a silent round fires its watcher on time |
@@ -177,3 +187,13 @@ Required before P6:
 
 - The deadline value. It stays at 30 minutes until P1 to P3 give measured run times.
 - Whether the projects trigger fires for To do moves. This is tested in P5. Until then, To do intake waits for the backstop cron.
+- **`--effort` on Claude Code action:** not wired until a live run confirms the flag (P1 records effort in config only).
+
+## 16. Shipped deviations (recorded)
+
+| Item | Spec | Delivered | Notes |
+|------|------|-----------|--------|
+| P1 claude-b | Both Claude models in P1 | claude-b in **P2** | Two identities on `pawpet-claude` need signed verdicts first ([#2520](https://github.com/AgathaTrack/AgathaTrack/pull/2520), [#2521](https://github.com/AgathaTrack/AgathaTrack/pull/2521)). |
+| Effort CLI | model + effort on wire | model only | `--model` via `claude_args` is documented; `--effort` unverified in official action docs. |
+| claude-b in pool before P4 | implied P4 tier pools | **P2** adds claude-b to general ring | Beta issues only; paused soak fixtures unaffected. Documented in #2521. |
+| Review reactions (pre-P4) | explicit greens in v3 | **#2521** ignores shared-login reactions on review path | Aligns shipped code with canonical doc; Cursor pair already on signed path. |
