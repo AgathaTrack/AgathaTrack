@@ -61,7 +61,7 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, voteKey
   }));
   const rounds = deriveRoundRecords({ spec, requests: requestsIn, verdicts, launches, bodyHash });
   const plan = decideRound({ bodyHash, rounds, now, lastUsed, config });
-  return { plan, rounds: rounds.length };
+  return { plan, rounds: rounds.length, reviews: rounds.filter((r) => r.kind === 'review').length, derived: rounds };
 }
 
 module.exports = { planRounds };

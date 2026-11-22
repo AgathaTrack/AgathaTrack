@@ -18,6 +18,8 @@ const { buildLaunchAcked, buildLaunchFailed, buildLaunchPending, buildLaunchReco
 const { buildAatLaunch, buildAatRelaunch, buildAatReset, buildAatWaive } = require('./issue_pipeline_v2_acceptance');
 const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 const { isRunnerQueuedError } = require('./pipeline_runners/claude');
+const { buildRoundMarker, roundFor } = require('./issue_pipeline_v2_round_markers');
+const { authorOf } = require('./issue_pipeline_v2_rounds');
 
 /**
  * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
@@ -79,6 +81,22 @@ async function applyAction({ action: decided, ctx }) {
   };
   const base = issuePath(ctx);
   const applied = [];
+  // P3 round markers: the round context comes from the same derivation as the P4 plan. With no plan
+  // (its derivation failed), a marker still records the event but leaves the round label out.
+  const plan = ctx.facts?.roundPlan && !ctx.facts.roundPlan.error ? ctx.facts.roundPlan : null;
+  const reviewsSoFar = plan ? plan.reviews : null;
+  const authorLabel = (hash) => {
+    if (!plan) return 'none';
+    const author = authorOf(plan.derived, hash);
+    return author.human ? 'human' : author.type;
+  };
+  const brandOf = (id) => resolveAgent(ctx.config, id)?.runner || null;
+  // A review number `k` gives its label; a null `k` (no plan) gives no label.
+  const currentRound = (k) => (k === null || k === undefined ? null : roundFor(k));
+  const roundCtx = (k, attempt, hash, author) => {
+    const label = currentRound(k);
+    return { round: label?.round ?? null, tier: label?.tier ?? null, attempt, hash, author };
+  };
   const isGithubNotFound = (error) => /failed \(404\)/.test(String(error?.message ?? ''));
   const deleteBusyLabel = async () => {
     try {
@@ -108,6 +126,7 @@ async function applyAction({ action: decided, ctx }) {
       await request('POST', `${base}/comments`, { body });
       applied.push(label);
     };
+    const writeMarker = (fields) => comment(buildRoundMarker(fields), `comment:round-${fields.event}`);
     const editComment = async (id, body, label) => {
       await request('PATCH', `/repos/${encodeURIComponent(ctx.owner)}/${encodeURIComponent(ctx.repo)}/issues/comments/${id}`, { body });
       applied.push(label);
@@ -115,11 +134,12 @@ async function applyAction({ action: decided, ctx }) {
 
     // Doorbell: an agent the engine can start is also launched for the spec or review it was asked to do.
     // A failed ring never fails the tick; the pickup timeout reassigns if nobody answers.
-    const ring = async (agent, stage) => {
+    const ring = async (agent, stage, round = null) => {
       const entry = resolveAgent(ctx.config, agent);
       if (!entry || !(ctx.config.launchRunners || []).includes(entry.runner) || !['To do', 'In analysis', 'In Main'].includes(stage)) {
         return;
       }
+      const markerBase = round ? { ...round, identity: agent, brand: entry.runner } : null;
       const nonce = randomNonceHex();
       const voteKey = process.env.PIPELINE_VOTE_KEY || '';
       const runSecret = voteKey ? deriveRunSecret(voteKey, ctx.issueNumber, agent, stage, nonce) : '';
@@ -154,17 +174,26 @@ async function applyAction({ action: decided, ctx }) {
           'comment:doorbell-launch',
         );
         applied.push(`doorbell:${agent}`);
+        if (markerBase) {
+          await writeMarker({ ...markerBase, event: 'start', runId, nonce });
+        }
         await deleteQueuedLabel();
         applied.push('labels:queued-removed');
       } catch (error) {
         if (isRunnerQueuedError(error)) {
           await request('POST', `${base}/labels`, { labels: ['queued'] });
           applied.push(`runner-queued:${agent}`);
+          if (markerBase) {
+            await writeMarker({ ...markerBase, event: 'queued' });
+          }
           return;
         }
         await deleteQueuedLabel();
         applied.push('labels:queued-removed');
         applied.push(`doorbell-failed:${agent}:${String(error?.message ?? error).slice(0, 120)}`);
+        if (markerBase) {
+          await writeMarker({ ...markerBase, event: 'fail', failure: 'ring-failed' });
+        }
       }
     };
 
@@ -172,7 +201,7 @@ async function applyAction({ action: decided, ctx }) {
       case 'request-spec':
         await comment(buildSpecRequest({ assigned: action.agent, config: ctx.config }), 'comment:spec-request');
         await assign(action.agent);
-        await ring(action.agent, 'To do');
+        await ring(action.agent, 'To do', { round: 'R1', tier: 'a', attempt: 1, hash: ctx.facts.bodyHash, author: 'none' });
         break;
       case 'request-review':
         await comment(
@@ -180,7 +209,7 @@ async function applyAction({ action: decided, ctx }) {
           'comment:review-request',
         );
         await assign(action.agent);
-        await ring(action.agent, 'In analysis');
+        await ring(action.agent, 'In analysis', roundCtx(reviewsSoFar === null ? null : reviewsSoFar + 1, 1, action.hash, authorLabel(action.hash)));
         break;
       case 'reassign': {
         const inReview = action.stage === 'In analysis';
@@ -194,9 +223,32 @@ async function applyAction({ action: decided, ctx }) {
               config: ctx.config,
             })
           : buildSpecRequest({ assigned: action.agent, history, config: ctx.config });
+        const failedId = held?.assignedTo || null;
+        const failure = action.failureClass;
+        // A ring failure is marked where it happens (in ring), so it is not marked twice here.
+        if (failedId && failure && failure !== 'ring-failed') {
+          await writeMarker({
+            event: 'fail',
+            round: inReview ? currentRound(reviewsSoFar)?.round : 'R1',
+            tier: inReview ? currentRound(reviewsSoFar)?.tier : 'a',
+            identity: failedId,
+            brand: brandOf(failedId),
+            attempt: action.attempts ?? 1,
+            hash: inReview ? ctx.facts.review?.requestedHash : ctx.facts.bodyHash,
+            failure,
+          });
+        }
         await editComment(held.commentId, body, `edit:${inReview ? 'review' : 'spec'}-request`);
         await assign(action.agent);
-        await ring(action.agent, action.stage);
+        const retryHash = inReview ? ctx.facts.review?.requestedHash : ctx.facts.bodyHash;
+        const retryRound = inReview ? currentRound(reviewsSoFar) : { round: 'R1', tier: 'a' };
+        await ring(action.agent, action.stage, {
+          round: retryRound?.round ?? null,
+          tier: retryRound?.tier ?? null,
+          attempt: (action.attempts ?? 0) + 1,
+          hash: retryHash,
+          author: inReview ? authorLabel(retryHash) : 'none',
+        });
         break;
       }
       case 'wake-stage-agent':
@@ -207,9 +259,18 @@ async function applyAction({ action: decided, ctx }) {
         await assign(action.agent);
         await ring(action.agent, ctx.facts.stage);
         break;
-      case 'ring-doorbell':
-        await ring(action.agent, action.stage);
+      case 'ring-doorbell': {
+        const inReview = action.stage === 'In analysis';
+        const current = inReview ? currentRound(reviewsSoFar) : { round: 'R1', tier: 'a' };
+        await ring(action.agent, action.stage, {
+          round: current?.round ?? null,
+          tier: current?.tier ?? null,
+          attempt: ((inReview ? ctx.facts.review?.timedOut : ctx.facts.spec?.timedOut)?.length ?? 0) + 1,
+          hash: inReview ? ctx.facts.review?.requestedHash : ctx.facts.bodyHash,
+          author: inReview ? authorLabel(ctx.facts.review?.requestedHash) : 'none',
+        });
         break;
+      }
       case 'launch': {
         let attempts = action.attempts;
         let run = null;
@@ -344,14 +405,49 @@ async function applyAction({ action: decided, ctx }) {
           await deleteBusyLabel();
           applied.push('labels:busy-removed');
         }
+        if (action.row === 'todo.dor-pass') {
+          await writeMarker({
+            event: 'close',
+            round: 'R1',
+            tier: 'a',
+            identity: ctx.facts.spec?.assignedTo || null,
+            brand: brandOf(ctx.facts.spec?.assignedTo),
+            attempt: 1,
+            hash: ctx.facts.bodyHash,
+            verdict: 'spec',
+          });
+        }
+        if (action.row === 'analysis.converged') {
+          const current = currentRound(reviewsSoFar);
+          await writeMarker({
+            event: 'close',
+            round: current?.round,
+            tier: current?.tier,
+            identity: action.evidence?.approvedBy?.[0] || null,
+            brand: brandOf(action.evidence?.approvedBy?.[0]),
+            hash: action.evidence?.hash,
+            verdict: 'converged',
+          });
+        }
         if (action.to === 'In progress' && action.row === 'ready.launched' && ctx.facts.launch?.runId) {
           await comment(buildLaunchAcked({ runId: ctx.facts.launch.runId }), 'comment:launch-acked');
         }
         break;
-      case 'set-blocked':
+      case 'set-blocked': {
         await deleteBusyLabel();
         applied.push('labels:busy-removed');
+        if (ctx.facts.stage === 'In analysis' && ctx.facts.review?.requestedHash) {
+          const current = currentRound(reviewsSoFar);
+          await writeMarker({
+            event: 'close',
+            round: current?.round,
+            tier: current?.tier,
+            hash: ctx.facts.review.requestedHash,
+            verdict: action.reason,
+          });
+        }
         break;
+      }
       case 'none':
         break;
       default:

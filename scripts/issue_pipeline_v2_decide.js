@@ -161,6 +161,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
       stage,
       agent: next,
       attempts: timedOut.size,
+      failureClass: 'ring-failed',
       row: `${rowPrefix}.reassign`,
     };
   }
@@ -181,7 +182,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
       type: 'reassign',
       stage,
       agent: next,
-      ...(held ? { attempts: skipped.size } : {}),
+      ...(held ? { attempts: skipped.size, failureClass: 'not-startable' } : {}),
       row: held ? `${rowPrefix}.reassign` : `${rowPrefix}.assign`,
     };
   }
@@ -204,6 +205,7 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     stage,
     agent: pickAgent(remaining, facts),
     attempts: timedOut.size,
+    failureClass: 'timeout',
     row: `${rowPrefix}.reassign`,
   };
 }
