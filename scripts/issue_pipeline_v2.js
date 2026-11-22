@@ -139,7 +139,7 @@ const deploys = {
  * Facts that need comments, reactions or edit history. Only read for the stages that use them,
  * so a board of mostly Backlog and Done issues costs no extra calls.
  */
-async function buildCommentFacts({ owner, repo, entry, config, token, io, runMode, now = Date.now() }) {
+async function buildCommentFacts({ owner, repo, entry, config, token, io, runMode, now = Date.now(), roundRobinAfter, roundRobinOrder }) {
   if (entry.labels.includes('manual-only') || entry.closed) {
     return {}; // decide() ignores it (or reads only the issue itself), so spend no calls on it
   }
@@ -242,6 +242,8 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
     issueNumber: entry.number,
     limits: config.limits,
     now,
+    roundRobinAfter,
+    roundRobinOrder,
   });
   merged.rounds = merged.roundPlan.derived;
   if (merged.review?.assignedTo && runMode === 'on') {
@@ -374,7 +376,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         roundRobinOrder,
         aatFieldsPresent,
         isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
-        ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io: tickIo, runMode, now })),
+        ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io: tickIo, runMode, now, roundRobinAfter, roundRobinOrder })),
       };
       if (entry.closed) {
         const comments = await commentsOf(entry);

@@ -9,15 +9,15 @@
 const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 const { parseLaunchComment } = require('./issue_pipeline_v2_launch');
 const { deriveSpecFacts } = require('./issue_pipeline_v2_comments');
-const { resolveAgent } = require('./issue_pipeline_v2_config');
 const { findReviewRequests } = require('./issue_pipeline_v2_review');
 const { deriveRoundRecords } = require('./issue_pipeline_v2_round_facts');
-const { decideRound } = require('./issue_pipeline_v2_rounds');
+const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
+const { resolveAgent, startableIds } = require('./issue_pipeline_v2_config');
 
 /**
  * @returns {{plan: object, rounds: number}|null} null when there is nothing to plan yet (no spec pass)
  */
-function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNumber, limits, now }) {
+function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNumber, limits, now, roundRobinAfter, roundRobinOrder }) {
   const requests = findReviewRequests(comments, engineLogins, editors);
   const idOf = (value) => (value ? resolveAgent(config, value)?.id || value : null);
 
@@ -46,11 +46,8 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNu
   const launches = doorbells
     .filter((r) => r.stage === 'In analysis')
     .map((r) => ({ agentId: idOf(r.agent), nonce: r.nonce, at: r.at }));
-  const lastUsed = {};
-  for (const r of doorbells) {
-    const id = idOf(r.agent);
-    lastUsed[id] = Math.max(lastUsed[id] ?? -Infinity, r.at);
-  }
+  // The same recency the live action uses: the board's round-robin cursor (PIPE-V2-D-SOAK-006).
+  const lastUsed = cursorLastUsed(roundRobinOrder || startableIds(config), roundRobinAfter);
 
   const requestsIn = requests.map((request) => ({
     hash: request.parsed.hash,
