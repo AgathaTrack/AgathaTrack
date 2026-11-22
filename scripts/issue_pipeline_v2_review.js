@@ -2,7 +2,7 @@
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
 const { agentLogins, resolveAgent, entryId, entryActsAs, isSharedActsAs } = require('./issue_pipeline_v2_config');
-const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
+const { findVerifiedVerdicts, findConfirmedClaims } = require('./issue_pipeline_v2_verdict');
 
 const REVIEW_REQUEST = 'v2:review-request';
 
@@ -138,21 +138,14 @@ function deriveReviewFacts({
   }
   let editorAgentId = null;
   if (bodyHash && issueNumber) {
-    const editClaims = findVerifiedVerdicts({
-      comments,
-      config,
-      engineLogins,
-      issueNumber,
-      bodyHash,
-      limits,
-      kinds: ['edit'],
-    }).filter(
-      // D16: the claim must follow the newest edit, and that edit must be by the id's login.
-      (verdict) =>
-        verdict.value === 'up' &&
+    // D16: a claim on the current hash, confirmed by its run's verdict, following the newest edit by
+    // the identity's login.
+    const editClaims = findConfirmedClaims({ comments, config, engineLogins, limits }).filter(
+      (claim) =>
+        claim.hash === bodyHash &&
         lastEdit &&
-        String(lastEdit.editor || '').toLowerCase() === String(verdict.actsAs).toLowerCase() &&
-        verdict.at >= Date.parse(lastEdit.editedAt),
+        String(lastEdit.editor || '').toLowerCase() === String(claim.actsAs).toLowerCase() &&
+        claim.at >= Date.parse(lastEdit.editedAt),
     );
     if (editClaims.length > 0) {
       editorAgentId = editClaims.at(-1).agentId;

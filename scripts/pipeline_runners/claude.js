@@ -1,5 +1,6 @@
 'use strict';
 
+const { randomBytes } = require('node:crypto');
 const { rest } = require('../../.github/scripts/github-project-lib');
 
 const WORKFLOW_FILE = 'pipeline-claude-run.yml';
@@ -20,6 +21,7 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
   }
   const token = deps.dispatchToken || process.env.GH_PROJECTS_PAT;
   const restFn = deps.restFn || rest;
+  const runRef = (deps.randomRef || (() => randomBytes(8).toString('hex')))();
   const active = await countActiveClaudeRuns({ owner, repo, deps });
   const cap = config?.limits?.runnerWip?.claude ?? 3;
   if (active >= cap) {
@@ -35,9 +37,11 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
       agent_id: agent.id,
       method: method || 'PR',
       nonce,
+      // The run name and the run id use this public reference, never the nonce (PIPE-V2-D-REV3-011).
+      run_ref: runRef,
     },
   });
-  return { runId: `claude:${nonce}`, agentUrl: null };
+  return { runId: `claude:${runRef}`, agentUrl: null };
 }
 
 async function listWorkflowRuns({ owner, repo, deps }) {
@@ -55,15 +59,14 @@ async function countActiveClaudeRuns({ owner, repo, deps }) {
 /**
  * @returns {'running' | 'finished' | 'failed'}
  */
-async function status({ nonce, owner, repo, deps = {} }) {
-  if (!nonce) {
+async function status({ runId, owner, repo, deps = {} }) {
+  const runRef = String(runId || '').startsWith('claude:') ? String(runId).slice('claude:'.length) : '';
+  if (!runRef) {
     return 'running';
   }
   const runs = await listWorkflowRuns({ owner, repo, deps });
-  const expectedName = `pipeline-claude-${nonce}`;
-  const hit =
-    runs.find((run) => run.name === expectedName) ||
-    runs.find((run) => String(run.display_title || '').includes(nonce));
+  const expectedName = `pipeline-claude-${runRef}`;
+  const hit = runs.find((run) => run.name === expectedName || run.display_title === expectedName);
   if (!hit) {
     return 'running';
   }

@@ -2,7 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
+const { findVerifiedVerdicts, findConfirmedClaims } = require('./issue_pipeline_v2_verdict');
+const { commitOf } = require('./issue_pipeline_v2_secrets');
 const { buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 const { buildReviewRequest, deriveReviewFacts } = require('./issue_pipeline_v2_review');
 const { loadConfig } = require('./issue_pipeline_v2_config');
@@ -62,11 +63,47 @@ test('kind must fit the launch stage', () => {
 
 test('no kind counts under a launch stage outside To do / In analysis', () => {
   assert.equal(find([verdict({ stage: 'In Main' })], { stage: 'In Main' }).length, 0);
-  assert.equal(find([verdict({ kind: 'edit', stage: 'In Main' })], { stage: 'In Main' }).length, 0);
 });
 
-test('only the first verdict of a kind on a hash counts', () => {
-  assert.equal(find([verdict({ id: 2, at: 10 }), verdict({ id: 3, at: 11 })]).length, 1);
+test('a nonce is revealed once: a second verdict with the same nonce never counts, whatever it says', () => {
+  const out = find([verdict({ id: 2, at: 10, value: 'down' }), verdict({ id: 3, at: 11, value: 'up' })]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].value, 'down', 'the first reveal wins');
+});
+
+const claim = ({ id = 7, author = 'pawpet-bot', at = 8, commit = commitOf(NONCE), hash = HASH } = {}) => ({
+  id,
+  user: { login: author },
+  created_at: iso(at),
+  body: `<!-- v2:claim agent=cursor-b kind=edit hash=${hash} commit=${commit} -->`,
+});
+const claims = (comments) =>
+  findConfirmedClaims({ comments: [launch(), ...comments], config, engineLogins: ENGINE, limits: config.limits });
+
+test('the launch record publishes the commit, never the nonce (PIPE-V2-D-REV3-011)', () => {
+  assert.match(launch().body, new RegExp(`commit=${commitOf(NONCE)}`));
+  assert.equal(launch().body.includes(NONCE), false);
+});
+
+test('a claim is not confirmed until its run reveals the nonce', () => {
+  assert.equal(claims([claim()]).length, 0, 'no verdict yet: the claim is only a promise');
+  assert.equal(claims([claim(), verdict({ at: 10 })]).length, 1, 'the reveal confirms it');
+});
+
+test('a claim naming a commit nobody revealed, or from another login, is never confirmed', () => {
+  assert.equal(claims([claim({ commit: 'f'.repeat(64) }), verdict({ at: 10 })]).length, 0);
+  assert.equal(claims([claim({ author: 'pawpet-claude' }), verdict({ at: 10 })]).length, 0);
+});
+
+test('a launch recorded before REV3-011 with a plain nonce still verifies', () => {
+  const legacy = {
+    id: 1,
+    user: { login: 'pawpet-engine' },
+    created_at: iso(0),
+    body: `<!-- v2:launch run=r agent=cursor-b purpose=doorbell stage=In analysis nonce=${NONCE} -->`,
+  };
+  const out = findVerifiedVerdicts({ comments: [legacy, verdict({ at: 10 })], config, engineLogins: ENGINE, bodyHash: HASH, limits: config.limits });
+  assert.equal(out.length, 1);
 });
 
 function reviewFacts(edits, claimAt) {
@@ -78,7 +115,7 @@ function reviewFacts(edits, claimAt) {
     body: buildReviewRequest({ hash: HASH, assigned: 'cursor-b', config }),
   };
   return deriveReviewFacts({
-    comments: [request, launch(), verdict({ kind: 'edit', at: claimAt })],
+    comments: [request, launch(), claim({ at: claimAt }), verdict({ at: claimAt + 1 })],
     reactionsByComment: {},
     edits,
     bodyAuthor: 'human',

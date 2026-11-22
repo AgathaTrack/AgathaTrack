@@ -22,11 +22,15 @@ on:
         required: true
         type: string
       nonce:
-        description: Doorbell nonce (must match v2:launch record)
+        description: Doorbell nonce. Secret until the run's verdict; never used in names or step env (PIPE-V2-D-REV3-011)
+        required: true
+        type: string
+      run_ref:
+        description: Public reference for the run name and status lookup (not the nonce)
         required: true
         type: string
 
-run-name: pipeline-claude-${{ inputs.nonce }}
+run-name: pipeline-claude-${{ inputs.run_ref }}
 
 permissions:
   contents: read
@@ -54,7 +58,6 @@ jobs:
           INPUT_STAGE: ${{ inputs.stage }}
           INPUT_AGENT_ID: ${{ inputs.agent_id }}
           INPUT_METHOD: ${{ inputs.method }}
-          INPUT_NONCE: ${{ inputs.nonce }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
         run: node scripts/pipeline_claude_prepare.js

@@ -30,12 +30,25 @@ function setOutput(name, value) {
   fs.appendFileSync(path, `${name}<<${delimiter}\n${value}\n${delimiter}\n`);
 }
 
+function readDispatchNonce() {
+  const path = process.env.GITHUB_EVENT_PATH;
+  if (!path) return '';
+  try {
+    return String(JSON.parse(require('node:fs').readFileSync(path, 'utf8'))?.inputs?.nonce || '');
+  } catch {
+    return '';
+  }
+}
+
 async function main() {
   const issueNumber = Number(process.env.INPUT_ISSUE);
   const stage = process.env.INPUT_STAGE;
   const agentId = process.env.INPUT_AGENT_ID;
   const method = process.env.INPUT_METHOD || 'PR';
-  const nonce = process.env.INPUT_NONCE;
+  // Read from the event payload, not a step env (step env is printed in public logs), and mask it
+  // before anything else can print it. It stays secret until the run posts its verdict.
+  const nonce = readDispatchNonce();
+  if (nonce) console.log(`::add-mask::${nonce}`);
   const token = process.env.GH_TOKEN;
   if (!token || !nonce || !agentId || !issueNumber) {
     throw new Error('missing required pipeline claude prepare inputs');

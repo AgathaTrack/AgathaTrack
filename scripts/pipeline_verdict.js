@@ -2,138 +2,90 @@
 'use strict';
 
 /**
- * Pipeline v2 verdict CLI (#2428). Reads PIPELINE_AGENT_ID and PIPELINE_RUN_NONCE from the run's environment. Unsigned since PIPE-V2-D-REV3-010.
+ * Pipeline v2 verdict CLI (#2428, PIPE-V2-D-REV3-010, -011). Reads PIPELINE_AGENT_ID and
+ * PIPELINE_RUN_NONCE from the run's environment; the agent never types the nonce.
+ *
+ *   read                          print `hash=<h>` and the issue body
+ *   edit --from <h> --file <p>    replace the body, then post a claim with the run's commit
+ *   spec up --hash <h>            post the spec verdict: reveals the nonce (do this last)
+ *   review up|down --hash <h>     post the review verdict: reveals the nonce (do this last)
+ *
+ * One verdict per run: the nonce is revealed once, and only the first reveal counts.
  */
 
 const fs = require('node:fs');
 const { bodySha } = require('./issue_pipeline_v2_hash');
 const { rest, parseRepo } = require('../.github/scripts/github-project-lib');
-const { resolveAgent, loadConfig } = require('./issue_pipeline_v2_config');
+const { commitOf } = require('./issue_pipeline_v2_secrets');
 
 function requireEnv(name) {
   const value = process.env[name];
-  if (!value) {
-    throw new Error(`missing ${name}`);
-  }
+  if (!value) throw new Error(`missing ${name}`);
   return value;
 }
 
-function parseArgs(argv) {
-  const flags = {};
-  const positional = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--hash' && argv[i + 1]) {
-      flags.hash = argv[++i];
-    } else if (argv[i] === '--from' && argv[i + 1]) {
-      flags.from = argv[++i];
-    } else if (argv[i] === '--file' && argv[i + 1]) {
-      flags.file = argv[++i];
-    } else if (!argv[i].startsWith('-')) {
-      positional.push(argv[i]);
-    }
-  }
-  return { positional, flags };
-}
-
-async function fetchIssueBody({ owner, repo, number, token }) {
-  const issue = await rest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${number}`, token);
-  return issue.body || '';
-}
-
-async function cmdRead({ repo, number, token }) {
-  const { owner, repo: name } = parseRepo(repo);
-  const body = await fetchIssueBody({ owner, repo: name, number, token });
-  const hash = bodySha(body);
-  process.stdout.write(`hash=${hash}\n\n${body}`);
+function buildClaimComment({ agentId, commit, hash }) {
+  return [`<!-- v2:claim agent=${agentId} kind=edit hash=${hash} commit=${commit} -->`, `Edited the body to \`${hash}\`.`].join('\n');
 }
 
 function buildVerdictComment({ agentId, nonce, kind, hash, value }) {
   return [
     `<!-- v2:verdict agent=${agentId} nonce=${nonce} kind=${kind} hash=${hash} value=${value} -->`,
-    `Signed \`${kind}\` \`${value}\` for hash \`${hash}\`.`,
+    `\`${kind}\` \`${value}\` for hash \`${hash}\`.`,
   ].join('\n');
 }
 
-async function cmdEdit({ flags, repo, number, token }) {
-  const fromHash = flags.from;
-  const file = flags.file;
-  if (!fromHash || !file) {
-    throw new Error('edit requires --from <hash> and --file <path>');
-  }
+function issueApi(repo, number) {
   const { owner, repo: name } = parseRepo(repo);
-  const body = await fetchIssueBody({ owner, repo: name, number, token });
-  if (bodySha(body) !== fromHash) {
-    throw new Error('body hash mismatch; run read again');
-  }
-  const next = fs.readFileSync(file, 'utf8');
-  if (bodySha(next) === fromHash) {
-    throw new Error('file body matches current hash; nothing to edit');
-  }
-  await rest('PATCH', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}`, token, {
-    body: next,
-  });
-  const newBody = await fetchIssueBody({ owner, repo: name, number, token });
-  const newHash = bodySha(newBody);
-  if (newHash !== bodySha(next)) {
-    throw new Error('body changed after write; no edit claim posted');
-  }
-  const agentId = requireEnv('PIPELINE_AGENT_ID');
-  const nonce = requireEnv('PIPELINE_RUN_NONCE');
-  const comment = buildVerdictComment({ agentId, nonce, kind: 'edit', hash: newHash, value: 'up' });
-  await rest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}/comments`, token, {
-    body: comment,
-  });
-}
-
-async function cmdSign({ kind, value, flags, repo, number, token }) {
-  const agentId = requireEnv('PIPELINE_AGENT_ID');
-  const nonce = requireEnv('PIPELINE_RUN_NONCE');
-  const hash = flags.hash;
-  if (!hash) {
-    throw new Error('--hash is required');
-  }
-  const { owner, repo: name } = parseRepo(repo);
-  const body = await fetchIssueBody({ owner, repo: name, number, token });
-  if (bodySha(body) !== hash) {
-    throw new Error('body changed since you read it; run read again');
-  }
-  const config = loadConfig();
-  const agent = resolveAgent(config, agentId);
-  if (!agent) {
-    throw new Error(`unknown agent ${agentId}`);
-  }
-  const comment = buildVerdictComment({ agentId, nonce, kind, hash, value });
-  await rest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}/comments`, token, {
-    body: comment,
-  });
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}`;
+  return {
+    body: async (token) => (await rest('GET', base, token)).body || '',
+    setBody: (token, body) => rest('PATCH', base, token, { body }),
+    comment: (token, body) => rest('POST', `${base}/comments`, token, { body }),
+  };
 }
 
 async function main() {
-  const { positional, flags } = parseArgs(process.argv.slice(2));
-  const [cmd, sub, repoArg, issueArg] = positional;
-  const repo = repoArg || process.env.GITHUB_REPOSITORY;
-  const number = Number(issueArg || process.env.PIPELINE_ISSUE || process.env.ISSUE_NUMBER);
+  const args = process.argv.slice(2);
+  const flag = (name) => {
+    const i = args.indexOf(`--${name}`);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const [cmd, sub] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
+  const repo = process.env.GITHUB_REPOSITORY;
+  const number = Number(process.env.PIPELINE_ISSUE || process.env.ISSUE_NUMBER);
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-  if (!repo || !number || !token) {
-    throw new Error('usage: pipeline_verdict.js read <owner/repo> <n> | spec|review up|down --hash <h>');
-  }
+  if (!repo || !number || !token) throw new Error('needs GITHUB_REPOSITORY, PIPELINE_ISSUE and a token');
+  const api = issueApi(repo, number);
+
   if (cmd === 'read') {
-    await cmdRead({ repo, number, token });
+    const body = await api.body(token);
+    process.stdout.write(`hash=${bodySha(body)}\n\n${body}`);
     return;
   }
+  const agentId = requireEnv('PIPELINE_AGENT_ID');
+  const nonce = requireEnv('PIPELINE_RUN_NONCE');
+
   if (cmd === 'edit') {
-    await cmdEdit({ flags, repo, number, token });
+    const from = flag('from');
+    const file = flag('file');
+    if (!from || !file) throw new Error('edit requires --from <hash> and --file <path>');
+    if (bodySha(await api.body(token)) !== from) throw new Error('body changed since you read it; run read again');
+    const next = fs.readFileSync(file, 'utf8');
+    if (bodySha(next) === from) throw new Error('the file matches the current body; nothing to edit');
+    await api.setBody(token, next);
+    const hash = bodySha(await api.body(token));
+    if (hash !== bodySha(next)) throw new Error('body changed after the write; no claim posted');
+    await api.comment(token, buildClaimComment({ agentId, commit: commitOf(nonce), hash }));
     return;
   }
-  if (cmd === 'spec' && sub === 'up') {
-    await cmdSign({ kind: 'spec', value: 'up', flags, repo, number, token });
-    return;
-  }
-  if (cmd === 'review' && (sub === 'up' || sub === 'down')) {
-    await cmdSign({ kind: 'review', value: sub, flags, repo, number, token });
-    return;
-  }
-  throw new Error(`unknown command ${cmd}`);
+
+  const kinds = { spec: ['up'], review: ['up', 'down'] };
+  if (!kinds[cmd]?.includes(sub)) throw new Error(`unknown command: ${cmd} ${sub || ''}`.trim());
+  const hash = flag('hash');
+  if (!hash) throw new Error('--hash is required');
+  if (bodySha(await api.body(token)) !== hash) throw new Error('body changed since you read it; run read again');
+  await api.comment(token, buildVerdictComment({ agentId, nonce, kind: cmd, hash, value: sub }));
 }
 
 if (require.main === module) {
@@ -143,4 +95,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildVerdictComment };
+module.exports = { buildVerdictComment, buildClaimComment };

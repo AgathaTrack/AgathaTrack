@@ -25,6 +25,7 @@ test('claude runner dispatches pipeline-claude-run with public inputs only', asy
         return {};
       },
       dispatchToken: 'pat',
+      randomRef: () => 'ref1',
     },
   });
   assert.equal(calls.length, 1);
@@ -36,7 +37,19 @@ test('claude runner dispatches pipeline-claude-run with public inputs only', asy
     agent_id: 'claude-a',
     method: 'PR',
     nonce: 'abc123',
+    run_ref: 'ref1',
   });
+});
+
+test('the run id and the run name use the public reference, never the nonce (PIPE-V2-D-REV3-011)', async () => {
+  const config = { limits: { runnerWip: { claude: 3 } } };
+  const out = await launch({
+    agent: { id: 'claude-a' }, issue: { number: 1 }, owner: 'o', repo: 'r', stage: 'To do', method: 'PR',
+    nonce: 'secretnonce', config,
+    deps: { restFn: async (m, path) => (path.includes('/runs?') ? { workflow_runs: [] } : {}), dispatchToken: 't', randomRef: () => 'ref9' },
+  });
+  assert.equal(out.runId, 'claude:ref9');
+  assert.equal(out.runId.includes('secretnonce'), false);
 });
 
 test('launch at runner WIP cap throws RUNNER_QUEUED', async () => {
@@ -66,14 +79,15 @@ test('launch at runner WIP cap throws RUNNER_QUEUED', async () => {
 test('claude status maps workflow conclusion', async () => {
   const runs = {
     workflow_runs: [
-      { name: 'pipeline-claude-nonce1', status: 'completed', conclusion: 'failure' },
-      { name: 'pipeline-claude-nonce2', status: 'completed', conclusion: 'success' },
-      { name: 'pipeline-claude-nonce3', status: 'in_progress', conclusion: null },
+      { name: 'pipeline-claude-ref1', status: 'completed', conclusion: 'failure' },
+      { name: 'pipeline-claude-ref2', status: 'completed', conclusion: 'success' },
+      { name: 'pipeline-claude-ref3', status: 'in_progress', conclusion: null },
     ],
   };
   const restFn = async () => runs;
-  assert.equal(await status({ nonce: 'nonce1', owner: 'o', repo: 'r', deps: { restFn } }), 'failed');
-  assert.equal(await status({ nonce: 'nonce2', owner: 'o', repo: 'r', deps: { restFn } }), 'finished');
-  assert.equal(await status({ nonce: 'nonce3', owner: 'o', repo: 'r', deps: { restFn } }), 'running');
+  assert.equal(await status({ runId: 'claude:ref1', owner: 'o', repo: 'r', deps: { restFn } }), 'failed');
+  assert.equal(await status({ runId: 'claude:ref2', owner: 'o', repo: 'r', deps: { restFn } }), 'finished');
+  assert.equal(await status({ runId: 'claude:ref3', owner: 'o', repo: 'r', deps: { restFn } }), 'running');
+  assert.equal(await status({ runId: 'cursor-run', owner: 'o', repo: 'r', deps: { restFn } }), 'running', 'not a Claude run id');
   assert.equal(await countActiveClaudeRuns({ owner: 'o', repo: 'r', deps: { restFn } }), 1);
 });

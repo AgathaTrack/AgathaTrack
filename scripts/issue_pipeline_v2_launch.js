@@ -14,6 +14,7 @@
 
 const METHODS = ['PR', 'light-plan', 'execute-plan'];
 const { resolveAgent } = require('./issue_pipeline_v2_config');
+const { commitOf } = require('./issue_pipeline_v2_secrets');
 
 const DEFAULT_RUNNERS = () => ({
   cursor: require('./pipeline_runners/cursor'),
@@ -29,7 +30,8 @@ function buildLaunchRecord({ runId, agent, agentUrl, purpose = 'delivery', stage
     attrs.push(`stage=${stage}`);
   }
   if (nonce) {
-    attrs.push(`nonce=${nonce}`);
+    // A promise, not the nonce: the run reveals the nonce only in its verdict (PIPE-V2-D-REV3-011).
+    attrs.push(`commit=${commitOf(nonce)}`);
   }
   const label = purpose === 'doorbell' ? 'Doorbell' : 'Delivery';
   return [
@@ -62,7 +64,7 @@ const RECORD = new RegExp(
   '<!--\\s*v2:(launch|launch-pending|launch-failed|launch-acked)' +
     '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell))?' +
     '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done))?' +
-    '(?:\\s+nonce=([a-f0-9]+))?\\s*-->',
+    '(?:\\s+nonce=([a-f0-9]+))?(?:\\s+commit=([a-f0-9]{64}))?\\s*-->',
   'i',
 );
 
@@ -82,7 +84,8 @@ function parseLaunchComment(comment) {
     agent: match[3] || null,
     purpose,
     stage: match[5] ? match[5].trim() : null,
-    nonce: match[6] || null,
+    nonce: match[6] || null, // legacy records only
+    commit: match[7] ? match[7].toLowerCase() : null,
     at: Date.parse(comment.created_at),
     comment,
   };
@@ -131,7 +134,7 @@ async function doorbellRingFailed({ comments, engineLogins, config, agentId, sta
         record.at >= sinceMs,
     )
     .at(-1);
-  if (!latest?.nonce) {
+  if (!latest?.runId) {
     return false;
   }
   const runnerName = resolveAgent(config, agentId)?.runner;
@@ -142,7 +145,7 @@ async function doorbellRingFailed({ comments, engineLogins, config, agentId, sta
   }
   try {
     const state = await runner.status({
-      nonce: latest.nonce,
+      runId: latest.runId,
       owner,
       repo,
       deps: { dispatchToken: token, restFn: io.restFn },
@@ -256,13 +259,13 @@ const STAGE_PROMPTS_SIGNED = {
   'To do':
     STAGE_PROMPTS['To do'].replace(
       "Then react 👍 on the engine's latest `v2:spec-request` comment to mark the spec ready;",
-      'Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, and record `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. The CLI reads your run nonce from `PIPELINE_RUN_NONCE`; do not type it yourself;',
+      'Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, and, as your last action, record `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. Post one verdict only: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it;',
     ),
   'In analysis':
     STAGE_PROMPTS['In analysis'].replace(
       'If it is sound, react 👍 on the engine\'s latest `v2:review-request` comment; if not, react 👎 with a comment explaining why.',
       'If it is sound, run `node scripts/pipeline_verdict.js read`, then `node scripts/pipeline_verdict.js review up|down --hash <hash>`. ' +
-        'If you change the body, use `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` only. The CLI reads your run nonce from `PIPELINE_RUN_NONCE`; do not type it yourself;',
+        'If you change the body, use `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` only, before your verdict. Post exactly one verdict, as your last action: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it;',
     ),
 };
 
