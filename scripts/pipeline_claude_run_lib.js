@@ -84,9 +84,34 @@ function reactionHint({ owner, repo, stage, commentId }) {
  * Did the run leave something the engine (or a human) can act on? A comment by the run's login,
  * or a reaction by it on the request comment, posted after the run started.
  */
-function runEvidence({ comments, reactions, actsAs, sinceMs }) {
+function escapeToken(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Did this run leave a trace on the issue since it started?
+ *
+ * - Unique login (`shared` false): a comment or a 👍/👎 by that login after the start.
+ * - Shared login (`shared` true, e.g. the Claude pair on pawpet-claude): only a signed verdict
+ *   that names this run, `agent=<agentId>` and `nonce=<nonce>`. A sibling identity's comment or
+ *   reaction on the same login is not evidence of this run.
+ */
+function runEvidence({ comments, reactions, actsAs, agentId, nonce, shared = false, sinceMs }) {
   const login = String(actsAs || '').toLowerCase();
   const after = (iso) => Date.parse(iso) >= sinceMs - SKEW_MS;
+  if (shared) {
+    if (!agentId || !nonce) {
+      return { ok: false, evidence: null, reason: 'shared login: run identity and nonce are required' };
+    }
+    const named = new RegExp(`agent=${escapeToken(agentId)}\\s+nonce=${escapeToken(nonce)}(\\s|-->)`);
+    const verdict = (comments || []).find(
+      (entry) =>
+        String(entry.user?.login || '').toLowerCase() === login && after(entry.created_at) && named.test(entry.body || ''),
+    );
+    return verdict
+      ? { ok: true, evidence: `verdict ${verdict.id}` }
+      : { ok: false, evidence: null, reason: 'no verdict naming this run' };
+  }
   const comment = (comments || []).find(
     (entry) => String(entry.user?.login || '').toLowerCase() === login && after(entry.created_at),
   );

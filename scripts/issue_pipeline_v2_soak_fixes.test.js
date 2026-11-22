@@ -304,11 +304,13 @@ test('#2485: run evidence is a comment or a vote by the run login after it start
 });
 
 test('#2485: verify reads the issue as the run would and fails a silent run', async () => {
+  // claude-a and claude-b share pawpet-claude, so the run is identified by its verdict, not a reaction.
+  const NONCE = 'ab'.repeat(16);
   const request = engineComment(7, '<!-- v2:spec-request assigned=claude-a history= -->', NOW - MIN);
-  const args = { owner: 'o', repo: 'r', issueNumber: 2485, stage: 'To do', agentId: 'claude-a', sinceMs: NOW, token: 't' };
+  const args = { owner: 'o', repo: 'r', issueNumber: 2485, stage: 'To do', agentId: 'claude-a', nonce: NONCE, sinceMs: NOW, token: 't' };
   const silent = await verify({ ...args, deps: { config, listIssueComments: async () => [request], listCommentReactions: async () => [] } });
   assert.equal(silent.ok, false);
-  const voted = await verify({
+  const reacted = await verify({
     ...args,
     deps: {
       config,
@@ -316,5 +318,9 @@ test('#2485: verify reads the issue as the run would and fails a silent run', as
       listCommentReactions: async ({ commentId }) => (commentId === 7 ? [{ user: { login: 'pawpet-claude' }, content: '+1', created_at: iso(NOW + MIN) }] : []),
     },
   });
-  assert.equal(voted.ok, true);
+  assert.equal(reacted.ok, false, 'a shared-login reaction is not evidence of this run');
+  const verdict = engineComment(8, `<!-- v2:verdict agent=claude-a nonce=${NONCE} kind=spec hash=h1 value=up sig=x -->`, NOW + MIN);
+  verdict.user = { login: 'pawpet-claude' };
+  const signed = await verify({ ...args, deps: { config, listIssueComments: async () => [request, verdict], listCommentReactions: async () => [] } });
+  assert.equal(signed.ok, true);
 });
