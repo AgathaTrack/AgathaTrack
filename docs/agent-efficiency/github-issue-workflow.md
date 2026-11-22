@@ -138,7 +138,7 @@ clears it.
 - **Doorbell run:** when the engine posts, reassigns or wakes a spec, review or intent-review request for an agent whose
   runner is in `launchRunners` (`cursor` and/or `claude`), it also starts a run with the stage's task (Cursor via the
   Agents API; Claude via `pipeline-claude-run.yml` workflow dispatch with `run-name: pipeline-claude-<nonce>`). Spec pass in To do,
-  adversarial review in In analysis, intent review in In Main). The run is not a delivery (no PR) and skips the legacy
+  adversarial review in In analysis, intent review in In Main; the run is not a delivery (no PR) and skips the legacy
   launch preflight; the launcher sets `busy` like a delivery handoff (except the non-interactive **acceptance** doorbell).
   The engine removes `busy` when the stage advances (spec → In analysis, review → Ready) or when it sets `Blocked`.
   A `busy` doorbell holds a timed-out pickup for one more `reviewTimeoutMin` at most, then the pickup moves on, so a run
