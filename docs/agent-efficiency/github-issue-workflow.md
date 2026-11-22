@@ -218,12 +218,14 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   (from the board column, else Backlog) and a `Blocked` reason from the legacy `question` / `needs-owner` labels.
 - **Soak:** `dry-run` for a day; then `on` with `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`, taking one sandbox issue
   To do → Done and sending one to each `Blocked` reason; then `on` for the board (clear the label variable).
-- **Soak2 (2026-11-21 – 2026-11-22):** live tick bursts on `main`; sign-off and fix list:
-  [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md). Shipped **#2510** (round robin), **#2511** (SOAK-007/008 skills),
-  **#2512** (Claude runner WIP / `queued`), **#2517** (preflight Out-of-scope exclusion). Fixtures **#2493–#2508** retired 2026-11-22; soak3
-  uses a fresh matrix. **Operator:** after a linked PR merges, check **Definition of Done** on the issue, then `finish-work`; otherwise
-  **`Blocked=stalled`** is likely. **`dry-run`** reviews apply on the next **`on`** tick (PIPE-V2-D-SOAK-007). For drain-only soaks,
-  `WIP_LIMIT=off` is acceptable briefly (see repo variable table).
+- **Soak playbook (operators and agents):**
+  - **`progress.finished` (In progress → In Main)** needs a merged PR that `Refs` the issue, no open linked PRs, every **Definition of Done** item checked `[x]`, and no `busy` label. After merge, check DoD on the issue body, then `finish-work` (or let the delivery agent do both). **`finish-work` without a complete DoD** after a resume tends to set **`Blocked=stalled`** — that is expected, not an engine bug.
+  - **`ready.queued`:** with default `limits.wip`, Ready issues wait for free slots. Likely explanation: **PIPE-V2-D-SOAK-003** (**Proposed**) — WIP counts only **In progress** issues that have an engine launch record. For drain-only soak windows, set repo variable **`WIP_LIMIT=off`** (workflow passes it into the tick; see `applyWipOverride` in `issue_pipeline_v2_config.js`), then remove the variable when done.
+  - **Live vs dry-run:** signed reviews and merges between ticks apply on the **next** `on` tick (**PIPE-V2-D-SOAK-007**).
+  - **Teardown:** close sandbox issues only when no delivery PR is open and the row’s pass criteria are met or explicitly abandoned; closing early can orphan agent runs ([soak2 sign-off](./changes/pipeline-v2-soak2-findings.md) documents premature close of **#2498** / **#2501** with open PRs).
+- **Soak2 (2026-11-21 – 2026-11-22):** sign-off
+  [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) — **To do → Done not proven**; shipped **#2510**, **#2511**, **#2512**, **#2517**. Fixtures **#2493–#2508** closed 2026-11-22. **Soak3:** new fixtures and a new proposal under `changes/`; proposed gates are listed in the findings doc until accepted here.
+- **Preflight:** in-scope sections (including **Acceptance criteria**) still participate in `detectRiskyScope` (**#2517** only excludes **`### Out of scope`**). Soak2 **#2506** showed operator body reword to launch — agents must not do that (**SOAK-008**); treat in-scope keyword trips as an **open finding** until soak3 or a scan change.
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.

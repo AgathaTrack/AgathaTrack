@@ -2,15 +2,15 @@
 title: Pipeline v2 soak2 findings (sign-off)
 owner: Agent efficiency
 audience: owner
-status: complete
+status: archived
 last_updated: 2026-11-22
 tags: [agent, pipeline, soak]
-related_prs: [2510, 2511, 2512, 2517, 2518]
+related_prs: [2510, 2511, 2512, 2517, 2525]
 ---
 
 # Soak2 sign-off — findings and recommended fixes (2026-11-22)
 
-Soak2 exercised the **pipeline-beta** fixture set (**#2493–#2508**) under live ticks. This document is the wrap-up; canonical decisions live in [`github-issue-workflow.md`](../github-issue-workflow.md) (PIPE-V2-D-SOAK-006–008, PIPE-V2-D-PREFLIGHT-001, PIPE-V2-D-RUNNER-001). **All soak2 fixtures were closed on 2026-11-22** so a fresh matrix can be filed for soak3.
+Soak2 exercised **pipeline-beta** fixtures **#2493–#2508** under live ticks. Canonical decisions: [`github-issue-workflow.md`](../github-issue-workflow.md) (PIPE-V2-D-SOAK-006–008, PIPE-V2-D-PREFLIGHT-001, PIPE-V2-D-RUNNER-001, and **Proposed** SOAK-003–005). There is **no** `pipeline-v2-soak2-matrix.md` on `main` (matrix lived only on unmerged **PR #2509**).
 
 ---
 
@@ -18,12 +18,13 @@ Soak2 exercised the **pipeline-beta** fixture set (**#2493–#2508**) under live
 
 | Area | Result |
 |------|--------|
-| **Production defect (preflight)** | **Fixed #2517** — keywords under `### Out of scope` no longer trip `detectRiskyScope`. Validated on live ticks after merge. |
-| **Runner / WIP** | **Fixed #2510–#2512** — board round robin, Claude runner WIP + `queued` label behaviour observed as designed. |
-| **Engine semantics** | Mostly **correct**; gaps were **operator/fixture** (DoD checkboxes, `finish-work`) or **agent discipline** (#2495 escalation), not tick bugs. |
-| **Matrix completion** | **Partial** — WIP cap and parallel deliveries meant several Ready fixtures never reached `launch:` in this round; not enough evidence to block cutover decisions. |
+| **Preflight (Out of scope)** | **Fixed #2517** — validated on post-merge ticks. |
+| **Runner / queue** | **#2510–#2512** shipped; round robin and Claude **`queued`** observed. |
+| **Happy path To do → Done** | **Not proven.** Best case **#2493** reached **In Main** ([#2522](https://github.com/AgathaTrack/AgathaTrack/pull/2522) merged); **In UAT / Done never exercised.** |
+| **Matrix row completion** | **Partial.** Many Ready issues sat in **`ready.queued`** (WIP cap). Several deliveries were **in flight when fixtures were closed** (see [Teardown](#teardown-2026-11-22)). |
+| **Open product findings** | **#2506-class** in-scope acceptance keywords still **`launch-failed`**; **#2495** escalation delivery **unproven** on a clean fixture. |
 
-**Recommendation:** Ship preflight and runner fixes on `main`; treat soak3 as a **clean fixture set** with explicit pass/fail per row, shorter WIP contention (merge fillers first or `WIP_LIMIT=off` during drain-only windows).
+**Recommendation:** Merge engine fixes on `main`. Run **soak3** on a **small, new fixture set** (new matrix proposal under `changes/` only until accepted). See [§Soak playbook](../github-issue-workflow.md#pipeline-v2-the-stage-machine) in the canonical doc.
 
 ---
 
@@ -41,86 +42,109 @@ Repo left in **`dry-run`** after each burst.
 
 ---
 
-## Outcome matrix (final)
+## Outcome matrix (honest final)
 
-| # | Fixture | Expected | Observed (final) | Root cause | Suggested fix |
-|---|---------|----------|------------------|------------|---------------|
-| #2493 | E2E happy path | To do → **Done** | **In Main** after [#2522](https://github.com/AgathaTrack/AgathaTrack/pull/2522); intent/UAT/Done **not completed** in this round | WIP contention + operator had to check DoD / `finish-work` for `progress.finished` | **Soak3:** single E2E fixture with `WIP_LIMIT=off` or no parallel fillers; document operator step in soak playbook |
-| #2494 | Question / no DoD | Skip / block | **`blocked`** (question path) | — | **Pass** — keep as soak3 control |
-| #2495 | SOAK-008 decision | Delivery → **`Blocked=decision`**, no PR | Analysis converged to **Ready** with **Security: Yes** intact (good). Delivery **`Blocked=decision`** **not observed** (stuck behind WIP) | Engine does not infer `Blocked=decision`; delivery agent must set it | **No engine change.** **Soak3:** dedicate one tick with WIP free; reinforce **#2511** spec/review skills. Optional: triage doc note for operators |
-| #2496 | Paused | Skip | **`blocked.paused`** | — | **Pass** |
-| #2497 | Claude runner | claude-a delivery | **In Main** after DoD + merged [#2515](https://github.com/AgathaTrack/AgathaTrack/pull/2515) | Earlier **`progress.stalled`** when `busy` cleared without DoD | **Soak playbook:** merge + check DoD before `finish-work` |
-| #2498 | Rotation B + docs | Launch after #2517 | **In progress** (delivery running); PR not merged in round | WIP + agent latency | **Soak3** re-run |
-| #2499 | Rotation C | Launch | **In progress** (cursor-a acked) | Queued until WIP freed | **Pass** queue semantics |
-| #2500 | No-convergence | Adversarial review path | **`analysis.reassign`** (in flight) | — | **Soak3** re-run |
-| #2501/#2502 | WIP fillers | Queue when cap=2 | **#2501 In progress**; **#2502** queued | Cap works | **Pass**; soak3 use 0–1 filler issues |
-| #2503 | manual-only | No engine writes | **`manual-only`** skip | — | **Pass** |
-| #2504 | Forbidden path | Refuse launch | **`launch-failed`** (secrets + Security **Yes**) | Intentional | **Pass** |
-| #2505 | Feature DoR | Delivery | **In Main** after [#2516](https://github.com/AgathaTrack/AgathaTrack/pull/2516) + DoD | Same stall lesson as #2497 | **Soak playbook** |
-| #2506 | Bug DoR | Docs PR | **`launch-failed`** (auth/billing in **Acceptance criteria** prose) | Keywords in **in-scope** text | **Fixture:** move negation examples to **Out of scope** or reword. **Optional product:** narrow risky sections (lower priority than #2517) |
-| #2507/#2508 | Post-#2517 launch | Docs PR | **`ready.queued`** until 2026-11-22; never got a dedicated launch row in logs | WIP full (**#2493/2498/2499/2501**) | **Soak3:** first-class rows; confirm **`launch:`** without `launch-failed` (preflight regression guard) |
-| — | Round robin | Spread agents | **Pass** after **#2510** | — | **Shipped** |
-| — | Claude `queued` | Backoff + label | **Pass** after **#2512** | — | **Shipped** |
-| — | Preflight OOS | Ignore Out of scope keywords | **Pass** after **#2517** on tick 44959762695+ | Whole-body scan bug | **Shipped** |
+Legend: **Pass** = expectation met in soak2. **Open** = gap or workaround. **Unproven** = not observed. **N/A** = retired before completion.
+
+| # | Fixture | Expected | Observed (at teardown) | Verdict | Notes / suggested fix |
+|---|---------|----------|------------------------|---------|------------------------|
+| #2493 | E2E → **Done** | Full stage path | **In Main** only ([#2522](https://github.com/AgathaTrack/AgathaTrack/pull/2522)); closed before UAT/Done | **Unproven** | Soak3: one E2E row, minimal parallelism, prove **In UAT → Done** |
+| #2494 | Question / no DoD | Block | **`blocked`** (question) | **Pass** | Reuse as soak3 control |
+| #2495 | SOAK-008 escalation | Delivery → **`Blocked=decision`**, no PR, truthful Security | Analysis converged **Ready** with **Security: Yes**; delivery escalation **not run**. Body **operator-reset** during soak | **Unproven** | **Fresh soak3 fixture** only. Gate: agent sets **`Blocked=decision`** + comment; **no** body edit to evade preflight; **no** delivery launch until owner clears |
+| #2496 | Paused | Skip | **`blocked.paused`** | **Pass** | SOAK-005 still **Proposed** — confirm paused-not-woken in soak3 |
+| #2497 | Claude runner | Docs delivery | **In Main** after [#2515](https://github.com/AgathaTrack/AgathaTrack/pull/2515) merged + DoD + operator `finish-work` | **Pass** (delivery) | Earlier **`progress.stalled`** without DoD — see canonical soak playbook |
+| #2498 | Docs + rotation | Launch, merge | **In progress** at close; open [#2523](https://github.com/AgathaTrack/AgathaTrack/pull/2523) | **N/A** | Teardown closed issue before merge; PR may complete without pipeline advance |
+| #2499 | Rotation C | Launch | **In progress** at close; **no open PR** found | **N/A** | Incomplete |
+| #2500 | No-convergence | Owner path | **`analysis.reassign`** | **Unproven** | Soak3 row |
+| #2501 | WIP filler A | Queue / deliver | **In progress** at close; open [#2524](https://github.com/AgathaTrack/AgathaTrack/pull/2524) | **N/A** | Orphan delivery like #2498 |
+| #2502 | WIP filler B | Queue | **`ready.queued`** pattern | **Pass** (queue) | Tied to **PIPE-V2-D-SOAK-003** (**Proposed**) |
+| #2503 | manual-only | No writes | skip | **Pass** | |
+| #2504 | Forbidden | Refuse launch | **`launch-failed`** | **Pass** | |
+| #2505 | Feature DoR | Delivery | **In Main** after [#2516](https://github.com/AgathaTrack/AgathaTrack/pull/2516) + DoD | **Pass** (delivery) | |
+| #2506 | Bug DoR | Docs PR | **`launch-failed`** (auth/billing in **Acceptance criteria**); operator **reworded body** to launch | **Open** | **Not an engine pass.** Operator workaround parallels forbidden agent body edits (SOAK-008). **Open finding:** in-scope acceptance prose still trips preflight — product scan change or fixture-only negation under **Out of scope** |
+| #2507 / #2508 | Post-#2517 launch | Docs PR | **`ready.queued`**; no dedicated **`launch:`** log before close | **Unproven** | Soak3 regression guard for preflight |
+| — | Round robin | Spread agents | After **#2510** | **Pass** | |
+| — | Claude **`queued`** | Cap behaviour | After **#2512** | **Pass** | |
+| — | Preflight OOS | Ignore OOS keywords | After **#2517** | **Pass** | |
 
 ---
 
-## Recommended fixes (prioritized)
+## Open findings (need soak3 or product work)
 
-### Shipped on `main` (no further code required)
+| ID | Finding | Suggested fix |
+|----|---------|---------------|
+| SOAK2-F-001 | **E2E To do → Done** never completed | Soak3 gate on a single fixture; see playbook (DoD, intent, AAT) |
+| SOAK2-F-002 | **In-scope acceptance keywords** (`#2506`) | Engine still scans acceptance criteria; operator reword is not a pass — accept as limitation or extend preflight section rules (lower priority than **#2517**) |
+| SOAK2-F-003 | **Escalation delivery** (`Blocked=decision`) | New fixture; concrete pass criteria in [Soak3 gates](#soak3-gates-proposed) |
+| SOAK2-F-004 | **Premature fixture teardown** | Closed issues while [#2523](https://github.com/AgathaTrack/AgathaTrack/pull/2523) / [#2524](https://github.com/AgathaTrack/AgathaTrack/pull/2524) open; do not repeat — drain or `WIP_LIMIT=off`, then close |
+
+---
+
+## Shipped on `main` (soak2 motivation)
 
 | PR | Outcome |
 |----|---------|
 | **#2510** | Board-wide round robin (PIPE-V2-D-SOAK-006) |
-| **#2511** | SOAK-007/008 docs + spec/review agent gates |
-| **#2512** | Claude runner WIP + `queued` label (PIPE-V2-D-RUNNER-001) |
-| **#2517** | Out-of-scope excluded from preflight keyword scan (PIPE-V2-D-PREFLIGHT-001) |
-
-### Process / soak playbook (no PR unless you want a skill)
-
-1. **`progress.finished` requires** merged linked PR, open PR count 0, DoD all `[x]`, and no `busy`. **`finish-work` without DoD** → **`Blocked=stalled`** after resume — treat as operator error, not engine bug.
-2. **Live ticks vs `dry-run`:** signed reviews and merges between ticks apply on the **next `on`** tick (PIPE-V2-D-SOAK-007) — plan soak windows accordingly.
-3. **WIP=2** with many Ready fixtures produces long **`ready.queued`** — use **`WIP_LIMIT=off`** only for controlled drain/soak slices, or serialize fillers.
-4. **#2495 / escalation:** delivery agent must **`Blocked=decision`** + recommendation comment; engine will not set it from the plan alone.
-
-### Optional follow-ups (product / debt)
-
-| Item | Suggestion |
-|------|------------|
-| **#2506-class false positives** | Keep scanning in-scope acceptance text; write soak bodies with risky words only under **Out of scope** or use neutral wording |
-| **#2509 matrix doc** | Merge or replace when soak3 matrix is written (proposed matrix was never on `main`) |
-| **#2513 / #2514** | Runner/preflight debt called out during soak — triage separately if still open |
-| **Operator doc** | One paragraph in §Soak of `github-issue-workflow.md` (added 2026-11-22) for DoD + WIP drain |
-
-### Not recommended
-
-- **Inferring `Blocked=decision` in the engine** from Security **Yes** alone — would bypass deliberate agent escalation workflow.
-- **More live ticking on closed #2493–#2508** — fixtures retired; use soak3.
+| **#2511** | SOAK-007/008 docs + spec/review skills |
+| **#2512** | Claude runner WIP + **`queued`** (PIPE-V2-D-RUNNER-001) |
+| **#2517** | Out-of-scope excluded from preflight (PIPE-V2-D-PREFLIGHT-001) |
 
 ---
 
-## SOAK-008 (#2495) note
+## Decision log rows still **Proposed** (not validated in soak2)
 
-Spec/review agents must **not** edit **Security or Sensitive Area** or scope to evade preflight. This round **passed** at analysis (converged **Ready** with **Security: Yes**). End-to-end **delivery → `Blocked=decision`** remains **unproven** and should be the **first soak3 gate** on a single issue.
+| ID | Claim | Soak2 evidence | Soak3 |
+|----|-------|----------------|-------|
+| **PIPE-V2-D-SOAK-003** | WIP counts only **In progress** with an engine launch record (hand-driven **In progress** does not consume cap) | **`ready.queued`** when cap full; plausible match — **not formally proven** | Design test: hand-driven vs engine **In progress** on cap |
+| **PIPE-V2-D-SOAK-004** | `busy` doorbell gets one extra timeout before reassign | **Untested** | Optional doorbell timeout fixture |
+| **PIPE-V2-D-SOAK-005** | **`Blocked=paused`** never woken by comment | **#2496** skip only — wake path **untested** | Paused + comment tick |
+
+Accepted soak2 rows: **SOAK-006**, **SOAK-007**, **SOAK-008** (analysis discipline), **PREFLIGHT-001**, **RUNNER-001** — see canonical decision log.
+
+---
+
+## SOAK-008 and #2495
+
+- **Analysis:** converged **Ready** without agents falsifying **Security or Sensitive Area** (post-**#2511**).
+- **Delivery:** **`Blocked=decision`** without PR **not observed**.
+- **Fixture integrity:** operator body/`Blocked` reset during soak — **do not reuse #2495** for soak3.
 
 ---
 
 ## Teardown (2026-11-22)
 
-Closed as **soak2 complete / fixtures retired** (not product delivery):
+Issues **#2493–#2508** were **closed** with a sign-off comment so the board could reset for soak3.
 
-**#2493 #2494 #2495 #2496 #2497 #2498 #2499 #2500 #2501 #2502 #2503 #2504 #2505 #2506 #2507 #2508**
+**Caveat:** Teardown happened while some deliveries were still active:
 
-Soak1 sandbox issues (**#2480–#2487**) were already closed. Tracking issue **#2385** remains open.
+| Issue | Delivery state at close | Linked PR |
+|-------|-------------------------|-----------|
+| #2493 | **In Main** only; never **Done** | #2522 merged |
+| #2497 / #2505 | Deliveries had merged (**#2515**, **#2516**) | — |
+| #2498 / #2501 | **In progress** | **#2523**, **#2524** **open** |
 
-**Starting soak3:** new issues, new `pipeline-beta` label set, updated matrix under `docs/agent-efficiency/changes/` when ready; keep `ISSUE_PIPELINE_V2=dry-run` until the matrix is reviewed.
+Closing parent issues does not cancel agent runs; merged PRs on closed issues may not advance **Stage**. Treat **#2523** / **#2524** as orphan soak2 deliveries unless manually reconciled.
+
+Soak1 (**#2480–#2487**) was already closed. **#2385** remains the pipeline v2 tracking issue.
 
 ---
 
-## Unvalidated in soak2 (carry to soak3)
+## Soak3 gates (proposed)
 
-- **#2493** → **In UAT** → **Done** (intent doorbell + AAT if enabled).
-- **#2507 / #2508** — post-#2517 **`launch:`** success.
-- **#2495** — delivery **`Blocked=decision`** without PR.
-- **#2500** — **`no-convergence`** owner path.
-- Round-robin spot-check with three concurrent spec pickups on clean issues.
+Move to canonical §Soak when the owner accepts; until then this list is the proposal:
+
+1. **E2E Done** — one sandbox issue **To do → Done** (intent + AAT if enabled).
+2. **Preflight launch** — one docs issue whose risky words live only under **Out of scope** → **`launch:`** without `launch-failed` (**#2507/#2508** class).
+3. **Escalation** — **new** issue, **Security: Yes**, AGENTS escalation: delivery sets **`Blocked=decision`**, removes **`busy`**, **no PR**, body unchanged.
+4. **#2506 class** — either prove **`launch-failed`** on in-scope keywords (**Open**) or ship a scan change and re-test.
+5. **SOAK-003** — optional WIP cap experiment (engine vs hand **In progress**).
+6. **SOAK-004 / SOAK-005** — optional unless prioritised.
+
+New fixtures only; new matrix file under `docs/agent-efficiency/changes/` as **proposal** until folded into `github-issue-workflow.md`.
+
+---
+
+## Not recommended
+
+- Inferring **`Blocked=decision`** in the engine from **Security: Yes** alone.
+- Reopening soak2 issues — use soak3 fixtures instead.
