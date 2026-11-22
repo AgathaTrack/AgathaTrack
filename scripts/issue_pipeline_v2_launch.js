@@ -351,6 +351,7 @@ async function launchIssue({
 }
 
 module.exports = {
+  parseLaunchComment,
   METHODS,
   METHOD_PROMPTS,
   STAGE_PROMPTS,

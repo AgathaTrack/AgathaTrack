@@ -53,6 +53,7 @@ function tierOf(config, id) {
 function attemptState(round, attempt, now, timeoutMs) {
   if (attempt.result === 'spec') return 'spec';
   if (attempt.result === 'green') return 'green';
+  if (attempt.result === 'silent') return 'silent';
   const expired = now - attempt.startedAt >= timeoutMs;
   if (attempt.result === 'red') {
     if (attempt.hashOut && attempt.hashOut !== round.hashIn) return 'red-edit';
@@ -68,6 +69,8 @@ function authorOf(rounds, bodyHash) {
     const attempts = rounds[r].attempts;
     for (let a = attempts.length - 1; a >= 0; a -= 1) {
       if (attempts[a].hashOut && attempts[a].hashOut === bodyHash) {
+        // A spec pass with no known writer (type null) is a human author.
+        if (!attempts[a].type) return { human: true, type: null, nonce: null, brand: null };
         return { human: false, type: attempts[a].type, nonce: attempts[a].nonce, brand: null };
       }
     }
@@ -130,7 +133,8 @@ function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
 
   // 1. Convergence: one green on the current hash, from a run other than the one that wrote it.
   if (last.kind === 'review' && state === 'green' && last.hashIn === bodyHash) {
-    if (!author.human && lastAttempt.nonce === author.nonce) {
+    // Only compare nonces that are known; an unknown nonce cannot prove the same run.
+    if (!author.human && lastAttempt.nonce && author.nonce && lastAttempt.nonce === author.nonce) {
       return { type: 'none', reason: 'analysis.green-by-author-ignored' };
     }
     return {

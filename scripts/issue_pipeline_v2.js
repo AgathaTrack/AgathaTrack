@@ -35,6 +35,7 @@ const {
 const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
 const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
+const { planRounds } = require('./issue_pipeline_v2_round_plan');
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
 
@@ -232,6 +233,22 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
     ...verdictCtx,
   });
   const merged = { ...facts, ...derived };
+  // P4 dry-run: the round model's answer, logged beside the live action. It never writes.
+  try {
+    merged.roundPlan = planRounds({
+      comments,
+      config,
+      engineLogins,
+      editors,
+      bodyHash,
+      voteKey,
+      issueNumber: entry.number,
+      limits: config.limits,
+      now,
+    });
+  } catch (error) {
+    merged.roundPlan = { error: String(error?.message ?? error).slice(0, 200) };
+  }
   if (merged.review?.assignedTo && runMode === 'on') {
     merged.review.ringFailed = await doorbellRingFailed({
       comments,
@@ -374,6 +391,11 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
+      if (facts.roundPlan) {
+        console.log(
+          JSON.stringify({ event: 'pipeline_v2_round_plan', mode: runMode, issue: entry.number, plan: facts.roundPlan, live: action.row || action.type }),
+        );
+      }
       if (inScope && action.agent) {
         roundRobinAfter = action.agent;
       }
