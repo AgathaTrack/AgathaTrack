@@ -76,7 +76,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
           prompt: ${{ steps.prep.outputs.prompt }}
-          claude_args: '--allowedTools Bash,Edit,Write,Read,Glob,Grep'
+          claude_args: ${{ steps.prep.outputs.claude_args }}
 
       # A run that ends `success` with no vote, question or comment would otherwise read as
       # `finished` and hold the pickup behind `busy`. Failing here makes the runner status

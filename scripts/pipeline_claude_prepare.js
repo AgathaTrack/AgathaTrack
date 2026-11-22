@@ -11,7 +11,7 @@ const { loadConfig, resolveAgent } = require('./issue_pipeline_v2_config');
 const { deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 const { METHOD_PROMPTS, STAGE_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
 const { listIssueComments } = require('./issue_pipeline_v2_comments');
-const { findRequestComment, reactionHint } = require('./pipeline_claude_run_lib');
+const { findRequestComment, reactionHint, buildClaudeArgs } = require('./pipeline_claude_run_lib');
 
 function appendEnv(name, value) {
   const path = process.env.GITHUB_ENV;
@@ -83,6 +83,7 @@ async function main() {
     .filter(Boolean)
     .join('\n\n');
   setOutput('prompt', prompt);
+  setOutput('claude_args', buildClaudeArgs(agent));
 }
 
 main().catch((error) => {

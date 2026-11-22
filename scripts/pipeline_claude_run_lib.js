@@ -105,4 +105,29 @@ function runEvidence({ comments, reactions, actsAs, sinceMs }) {
   return { ok: false, evidence: null };
 }
 
-module.exports = { REQUEST_MARKERS, SKEW_MS, bodyHasRequestMarker, findRequestComment, reactionHint, runEvidence };
+/**
+ * `claude_args` for claude-code-action: the allowed tools, plus `--model` when the identity names a
+ * model. The model comes from the reviewed config and was validated by loadConfig; it is never read
+ * from the dispatch inputs.
+ */
+function buildClaudeArgs(agent) {
+  const base = '--allowedTools Bash,Edit,Write,Read,Glob,Grep';
+  const model = agent && typeof agent.model === 'string' ? agent.model : '';
+  if (!model) {
+    return base;
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(model)) {
+    throw new Error(`refusing unsafe model name for claude_args: ${model}`);
+  }
+  return `${base} --model ${model}`;
+}
+
+module.exports = {
+  REQUEST_MARKERS,
+  SKEW_MS,
+  bodyHasRequestMarker,
+  findRequestComment,
+  reactionHint,
+  runEvidence,
+  buildClaudeArgs,
+};
