@@ -38,6 +38,7 @@ const {
   resolveAgent,
   nextInLine,
   startableIds,
+  reviewPoolIds,
   entryId,
   entryActsAs,
 } = require('./issue_pipeline_v2_config');
@@ -75,7 +76,7 @@ function canonicalStage(raw) {
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  const startable = startableIds(config);
+  const startable = reviewPoolIds(config);
   if (holder && startable.includes(holder)) {
     return holder;
   }
@@ -133,7 +134,7 @@ function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, reques
 /** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
-  const startable = new Set(startableIds(config));
+  const startable = new Set(reviewPoolIds(config));
   const queuedRetry = runnerQueuedRetry({
     facts,
     config,
@@ -209,7 +210,7 @@ function decideToDo(facts, config) {
   if (spec.passedBy) {
     return setStage('In analysis', 'todo.dor-pass', { evidence: { passedBy: spec.passedBy } });
   }
-  const logins = startableIds(config);
+  const logins = reviewPoolIds(config);
   if (!spec.requestedAt) {
     return {
       type: 'request-spec',
@@ -280,7 +281,7 @@ function decideInAnalysis(facts, config) {
     return setBlocked('no-convergence', 'analysis.no-convergence');
   }
 
-  const ids = startableIds(config);
+  const ids = reviewPoolIds(config);
   const sharedEditor = editorIsAgent && editor;
   let eligible = ids.filter((id) => {
     if (voted.has(id)) {

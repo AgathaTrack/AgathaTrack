@@ -19,7 +19,8 @@ Canonical pointer while proposed: [`github-issue-workflow.md`](../github-issue-w
 
 ## 1. Terms
 
-- **Identity:** a config entry: `cursor-a`, `claude-a`, `cursor-b`, `claude-b`.
+- **Identity (type):** a config entry: `cursor-a`, `claude-a`, `cursor-b`, `claude-b`. A type names who is called; it is not one agent that keeps voting.
+- **Run:** one doorbell, which starts a new agent of a type. The run is the unit of independence. The same type called again is a different agent, and that stays true when it wrote an earlier round.
 - **Brand:** the runner type, `cursor` or `claude`. Brand is a property of an identity.
 - **Tier:** `a` (normal review) or `b` (challenge). Each identity has one tier in config.
 - **Runner:** one doorbell run. Every doorbell starts a fresh runner, so no agent remembers earlier rounds.
@@ -43,7 +44,7 @@ Each agent has an id, a brand, a model, an effort level, a tier, a login and its
 | cursor-b | b | pawpet-bot | | P1 |
 | claude-b | b | pawpet-claude | `claude-opus-5-5`, effort stored; signed verdicts required | P2 (not P1: two ids on one login before P2) |
 
-Shared logins are allowed. **Identity**, not login, is the unit of independence.
+Shared logins are allowed. The **run** is the unit of independence, not the type and not the login. Type is used only to choose who is called next. Only tier-a types are called before the challenge tier starts (§7).
 
 ## 3. Assignment
 
@@ -69,14 +70,11 @@ With no history, least recently used falls back to config order.
 
 ## 5. Convergence
 
-A green vote on the current body hash converges the issue if:
+One green on the current body hash converges the issue when the green comes from a run other than the run that wrote that hash. The green is agreement with the body the previous round left behind. A second green is not required.
 
-- the voter's identity differs from the last body author's identity; or
-- the identities are the same and the round is `fallback=true`. This is the accepted identity repeat.
-
-If the last body author is **unknown** (shared login, no verified edit claim), **two distinct identities** must approve the same hash. Convergence is never reached with one approval in that case.
-
-A round that edits the body changes the hash, so the vote of a later round applies to the new hash only.
+- Attribution of a body edit to a run uses the nonce in a verified `edit` claim. Spec and review runs must post that claim when they edit. Without it the edit cannot be tied to a run, and convergence waits for the engine to see one.
+- A round that edits the body changes the hash, so a later round's vote applies to the new hash only.
+- The two-approval rule for unknown authors and the six-vote cap are superseded for In analysis (PIPE-V2-D-REV3-003), so they do not apply after P4.
 
 ## 6. Normal tier (a)
 
@@ -92,6 +90,7 @@ The writer is the least recently used tier-a identity. The spec pass moves the i
 - **Budget:** three reviews after the spec (R2, R3, R4).
 - **Fast path:** R2 green converges immediately.
 - **Implicit approval:** removed. Every convergence is an explicit green on the current hash.
+- **Red:** a red must edit the body with its reasons. A red that does not edit is a failed attempt; the other brand takes the same hash on that tick and the deviation is logged (PIPE-V2-D-REV3-005).
 
 ## 7. Challenge tier (b)
 

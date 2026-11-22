@@ -71,3 +71,41 @@ test('claude args: a model name that is not a plain token is refused, never pass
   assert.throws(() => buildClaudeArgs({ model: '--dangerously-skip-permissions' }), /refusing unsafe model name/);
   assert.throws(() => buildClaudeArgs({ model: 'a b' }), /refusing unsafe model name/);
 });
+
+// --- Review pool is tier a until the challenge tier exists (review process v3 §7, P4) -----------
+
+const { reviewPoolIds } = require('./issue_pipeline_v2_config');
+const { decide } = require('./issue_pipeline_v2_decide');
+
+test('pool: spec and review pickup never draw from tier b before the challenge tier', () => {
+  const cfg = loadConfig();
+  assert.deepEqual(reviewPoolIds(cfg).sort(), ['claude-a', 'cursor-a']);
+  const order = cfg.agents.map((a) => a.id);
+  const now = Date.parse('2026-11-22T10:00:00Z');
+  const picks = new Set();
+  for (const after of [undefined, ...order]) {
+    const spec = decide(
+      { mode: 'on', now, onBoard: true, labels: ['pipeline-beta'], stage: 'To do', blocked: '', bodyHash: 'h1', totalVotes: 0, wip: 0,
+        roundRobinAfter: after, roundRobinOrder: order },
+      cfg,
+    );
+    assert.equal(spec.type, 'request-spec');
+    picks.add(spec.agent);
+  }
+  assert.deepEqual([...picks].sort(), ['claude-a', 'cursor-a'], 'the spec ring visits only the tier-a types');
+});
+
+test('pool: a tier-b assignee on an open review is reassigned, not waited for', () => {
+  const cfg = loadConfig();
+  const now = Date.parse('2026-11-22T10:00:00Z');
+  const requestedAt = now - 1000; // well inside reviewTimeoutMin
+  const d = decide(
+    { mode: 'on', now, onBoard: true, labels: ['pipeline-beta'], stage: 'In analysis', blocked: '', bodyHash: 'h1', totalVotes: 0, wip: 0,
+      lastBodyEditor: 'pawpet-bot', editorAgentId: 'cursor-a',
+      review: { requestedHash: 'h1', requestedAt, assignedTo: 'cursor-b', timedOut: [], votes: [] } },
+    cfg,
+  );
+  assert.notEqual(d.agent, 'cursor-b');
+  assert.notEqual(d.agent, 'claude-b');
+  assert.equal(d.type, 'reassign', 'a held tier-b assignee is not in the pool, so it is replaced at once');
+});

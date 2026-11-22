@@ -241,6 +241,19 @@ function startableIds(config) {
     .map((agent) => entryId(agent));
 }
 
+/**
+ * Ids in the normal review pool (tier a): the startable set minus challenge identities. Spec and
+ * In analysis pickup draw only from here. Tier b (`cursor-b`, `claude-b`) is called only in the
+ * challenge tier, which is not wired yet (review process v3 §7, P4), so before then a `-b` id is
+ * never a spec writer or reviewer. A missing tier counts as `a`.
+ */
+function reviewPoolIds(config) {
+  return (config.agents || [])
+    .filter((agent) => agent.runner && (config.launchRunners || []).includes(agent.runner))
+    .filter((agent) => (agent.tier || 'a') === 'a')
+    .map((agent) => entryId(agent));
+}
+
 /** @deprecated use startableIds */
 function selfStartingLogins(config) {
   return startableIds(config);
@@ -304,6 +317,7 @@ module.exports = {
   launchableAgents,
   nextInLine,
   startableIds,
+  reviewPoolIds,
   selfStartingLogins,
   sharedActsAs,
   isSharedActsAs,

@@ -262,7 +262,7 @@ test('#2484: one ring: the newest launch sets the start, then each issue takes t
   const { result } = await runTick(io);
   const agentOf = (n) => result.actions.find((a) => a.issue === n).action.agent;
   assert.equal(agentOf(1), 'claude-a', 'newest launch on the board is cursor-b');
-  assert.equal(agentOf(2), 'claude-b', 'the assignment on issue 1 advanced the ring to the next identity');
+  assert.equal(agentOf(2), 'cursor-a', 'the assignment on issue 1 advanced the tier-a ring to the next identity; claude-b is tier b, not in the review pool');
 });
 
 // --- Claude runner (#2485) -----------------------------------------------------------------------
