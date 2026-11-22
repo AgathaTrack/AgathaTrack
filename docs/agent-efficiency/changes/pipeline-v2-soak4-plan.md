@@ -59,8 +59,10 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 - Same fixture, **In analysis**.
 - **Preamble (2026-11-22):** before owner **continue**, tick 4 of the Phase 1 budget already dispatched **R2 `request-review` cursor-a** — logged in [`soak4-phase-2-log.jsonl`](./soak4-phase-2-log.jsonl).
-- `on` ticks until converge or **6 ticks**.
+- `on` ticks until converge or **6 ticks**. **Stop dispatches as soon as exit is met** — further `on` ticks after `Ready` can launch delivery (`ready.launch` → **In progress**), which violates soak4 stop conditions.
 - **Exit:** first `request-review` to other brand than spec writer; verified pool green → `set-stage Ready` with `analysis.converged`; close marker `verdict converged` + approving identity; nonce-free launch + verdict evidence (`commit=` in launch, nonce in verdict only).
+- **Run (pass + over-tick finding):** owner **continue** 2026-11-22 — [45081397986](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45081397986) (`set-stage` **Ready**, `analysis.converged`, nonce `98cf1f59…`); preamble review verdict **cursor-a** `up` on hash `d292c9b699490ef6`; round close **`verdict=converged`**. Agent ran **5 extra** dispatches ([45081491722](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45081491722) … [45081886520](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45081886520)) after exit — tick 3 **launched delivery** (`cursor-b`) and set **In progress** (**stop-condition breach** on fixture). `ISSUE_PIPELINE_V2` restored **`dry-run`** after. Log: [`soak4-phase-2-log.jsonl`](./soak4-phase-2-log.jsonl).
+- **Result:** **pass** on Phase 2 exit criteria at first post-continue tick; **finding** — soak operator must halt `on` ticks at Ready (fixture #2539 may need Stage rolled back and delivery run cancelled before Phase 3+).
 
 ### Phase 3 — red with edit (optional)
 
@@ -96,3 +98,4 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 | — | 2026-11-22 | Plan proposed; soak3 tidy | — |
 | 0 | 2026-11-22 | **pass** (post-#2542, `025a33ed`) | — |
 | 1 | 2026-11-22 | **pass** (#2539 → In analysis, tick 3) | **continue** → Phase 2 |
+| 2 | 2026-11-22 | **pass** (converge → Ready); **finding** (over-tick → In progress) | **pause** — fix fixture before Phase 3 |
