@@ -41,6 +41,15 @@ test('config: tier, effort and model are validated; a typo is reported, not igno
   );
 });
 
+test('config: non-string tier, effort or model fails at load instead of being dropped', () => {
+  const cfg = base();
+  cfg.agents[1].model = 123;
+  assert.throws(() => validateConfig(cfg), /model must be a string/);
+  cfg.agents[1].model = 'claude-haiku-5-5';
+  cfg.agents[1].tier = 1;
+  assert.throws(() => validateConfig(cfg), /tier must be a string/);
+});
+
 test('config: fields are optional, so existing entries without them stay valid', () => {
   const cfg = base();
   for (const agent of cfg.agents) {

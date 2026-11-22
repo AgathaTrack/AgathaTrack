@@ -63,6 +63,16 @@ function validateConfig(config) {
       problems.push('every agent needs a login or an id');
       continue;
     }
+    const label = raw.id || raw.login || '(agent)';
+    if (raw.model != null && typeof raw.model !== 'string') {
+      problems.push(`${label}: model must be a string`);
+    }
+    if (raw.tier != null && typeof raw.tier !== 'string') {
+      problems.push(`${label}: tier must be a string`);
+    }
+    if (raw.effort != null && typeof raw.effort !== 'string') {
+      problems.push(`${label}: effort must be a string`);
+    }
     const agent = normalizeAgentEntry(raw);
     if (!agent.id || !ID_PATTERN.test(agent.id)) {
       problems.push(`${agent.id || '(missing)'}: id must match [A-Za-z0-9-]+`);
