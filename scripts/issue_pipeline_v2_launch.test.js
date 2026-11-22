@@ -279,7 +279,12 @@ test('runner: one failing issue does not stop the board, and two Ready issues re
   const origError = console.error;
   console.error = () => {};
   try {
-    const ready = (number) => ({ number, body: '', labels: [], issue_field_values: [{ field_id: 1, single_select_option: { name: 'Ready' } }] });
+    const ready = (number) => ({
+      number,
+      body: '',
+      labels: [{ name: 'pipeline-beta' }],
+      issue_field_values: [{ field_id: 1, single_select_option: { name: 'Ready' } }],
+    });
     const board = [1, 2, 3, 4].map((number) => ({ issue: { number, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } }));
     const result = await tick({
       owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
