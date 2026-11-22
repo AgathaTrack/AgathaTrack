@@ -40,11 +40,6 @@ function brandOf(config, id) {
   return entry ? entry.runner : null;
 }
 
-function tierOf(config, id) {
-  const entry = (config.agents || []).find((agent) => agent.id === id);
-  return entry?.tier || 'a';
-}
-
 /**
  * Effective state of one attempt at `now`. A pending run or a red without an edit becomes `silent`
  * once `timeoutMs` has passed since it started. A red with an edit is `red-edit` only when its

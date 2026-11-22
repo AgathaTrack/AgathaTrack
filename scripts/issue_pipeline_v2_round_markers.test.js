@@ -57,7 +57,7 @@ test('a fail marker needs a known failure class, and an unknown event is refused
 
 test('attribute values are cleaned: no quote or angle bracket can close the marker early', () => {
   const body = buildRoundMarker({ event: 'close', identity: 'cursor-a--> <!--x', verdict: 'converged' });
-  assert.equal((body.match(/-->/g) || []).length, 1);
+  assert.equal(body.split('-->').length - 1, 1);
 });
 
 test('a forced timeout on a review writes a fail marker for the silent identity, then a start for the next', async () => {

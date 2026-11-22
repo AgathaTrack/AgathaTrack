@@ -1,7 +1,7 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
-const { agentLogins, resolveAgent, entryId, entryActsAs, isSharedActsAs } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent, isSharedActsAs } = require('./issue_pipeline_v2_config');
 const { findVerifiedVerdicts, findConfirmedClaims } = require('./issue_pipeline_v2_verdict');
 
 const REVIEW_REQUEST = 'v2:review-request';
