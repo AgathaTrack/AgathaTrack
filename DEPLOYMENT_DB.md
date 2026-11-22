@@ -97,7 +97,7 @@ Migration files live in `db/migrations/`:
 
 | Profile | What you get | Command |
 |---------|----------------|---------|
-| **clean** | Migration head, empty app data | `e2e/scripts/bootstrap-db.sh` on an empty database |
+| **clean** | Migration head, empty app data | `APP_ENV=development e2e/scripts/bootstrap-db.sh` on an empty database |
 | **uat-demo** | clean + synthetic personas | `scripts/db/uat-reset.sh` (drop DB) or `scripts/db/uat-refresh-demo.sh` (re-seed only) |
 
 There is a single generated schema file (`db/schema/canonical.sql`). Demo data lives in `server/db/seeds/` and is applied with `node server/scripts/seed.js` — not a second canonical SQL file.

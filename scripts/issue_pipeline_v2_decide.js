@@ -18,7 +18,8 @@
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
  *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
- *   agentLastUsed   { id: epoch ms } for least-recently-used pickup (this issue's own launch records)
+ *   roundRobinAfter id last assigned on the board (newest v2:launch, then earlier picks this tick)
+ *   roundRobinOrder startable ids in config order; the ring the cursor walks
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
  *   review          { requestedHash, requestedAt, assignedTo, timedOut[], votes[{login,vote,hash}] }
  *   wip             In progress issues the engine launched (hand-driven and manual-only excluded)
@@ -35,6 +36,7 @@ const {
   agentActsAs,
   launchableAgents,
   resolveAgent,
+  nextInLine,
   startableIds,
   entryId,
   entryActsAs,
@@ -68,7 +70,7 @@ function canonicalStage(raw) {
 
 /**
  * The agent a wake rings. The holder is used only when the engine can start them. Otherwise the
- * least recently used startable agent, or null when none is startable.
+ * next startable agent in the round robin, or null when none is startable.
  */
 function wakeAgent(facts, stage, config) {
   const holder =
@@ -92,16 +94,9 @@ function setBlocked(reason, row) {
   return { type: 'set-blocked', reason, row };
 }
 
-/** Least recently used first; ties keep the order in the config file. */
+/** Next startable id after the board cursor. Candidates stay in config order. */
 function pickAgent(candidates, facts) {
-  const used = facts.agentLastUsed || {};
-  let best = null;
-  for (const login of candidates) {
-    if (best === null || (used[login] || 0) < (used[best] || 0)) {
-      best = login;
-    }
-  }
-  return best;
+  return nextInLine(candidates, facts.roundRobinAfter, facts.roundRobinOrder || candidates);
 }
 
 function timedOutSet(state, now, timeoutMs) {
@@ -112,9 +107,44 @@ function timedOutSet(state, now, timeoutMs) {
   return set;
 }
 
+/** Retry a doorbell deferred at Claude runner cap; never over an active `busy` hold. */
+function runnerQueuedRetry({ facts, config, stage, rowPrefix, assignedTo, requestedAt }) {
+  const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  const labels = facts.labels || [];
+  const startable = new Set(startableIds(config));
+  const withinPickupTimeout = requestedAt && facts.now - requestedAt < timeoutMs;
+  if (
+    labels.includes('queued') &&
+    !labels.includes('busy') &&
+    assignedTo &&
+    startable.has(assignedTo) &&
+    withinPickupTimeout
+  ) {
+    return {
+      type: 'ring-doorbell',
+      agent: assignedTo,
+      stage,
+      row: `${rowPrefix}.runner-queued`,
+    };
+  }
+  return null;
+}
+
 /** Shared timeout step for spec and review pickup. `eligible` is the startable pool for this request. */
 function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
   const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  const startable = new Set(startableIds(config));
+  const queuedRetry = runnerQueuedRetry({
+    facts,
+    config,
+    stage,
+    rowPrefix,
+    assignedTo: state.assignedTo,
+    requestedAt: state.requestedAt,
+  });
+  if (queuedRetry) {
+    return queuedRetry;
+  }
   if (state.ringFailed && state.assignedTo) {
     const timedOut = new Set([...(state.timedOut || []), state.assignedTo]);
     const remaining = eligible.filter((login) => !timedOut.has(login));
@@ -131,7 +161,6 @@ function pickupTimeout({ state, eligible, facts, config, stage, rowPrefix }) {
     };
   }
   const held = state.assignedTo;
-  const startable = new Set(startableIds(config));
   // No assignee yet, or the assignee is not one the engine can start: pick now. Waiting out
   // reviewTimeoutMin for pawpet-claude is the churn this interim fix exists to stop.
   // `eligible` is who may be asked next, which is narrower than startable (it drops the editor
@@ -384,6 +413,18 @@ function decideInMain(facts, config) {
       return { type: 'request-intent-review', agent: pickAgent(pool, facts), row: 'main.intent-request' };
     }
     // Intent review is non-gating; still evaluate UAT when nobody is startable for a ring.
+  } else {
+    const intentRetry = runnerQueuedRetry({
+      facts,
+      config,
+      stage: 'In Main',
+      rowPrefix: 'main.intent',
+      assignedTo: facts.intentReview.agent,
+      requestedAt: facts.intentReview.requestedAt,
+    });
+    if (intentRetry) {
+      return intentRetry;
+    }
   }
   if (facts.uatContainsLatestMerge) {
     return setStage('In UAT', 'main.uat');

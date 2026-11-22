@@ -56,7 +56,8 @@ function votesOnRequest({ request, reactions, config }) {
   const latest = new Map();
   for (const reaction of reactions || []) {
     const login = reaction.user?.login;
-    if (!agents.has(login) || !['+1', '-1'].includes(reaction.content)) {
+    // A shared login cannot name its voter: its reactions are not votes, only signed verdicts are.
+    if (!agents.has(login) || isSharedActsAs(config, login) || !['+1', '-1'].includes(reaction.content)) {
       continue;
     }
     const at = Date.parse(reaction.created_at);

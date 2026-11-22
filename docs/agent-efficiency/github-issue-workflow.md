@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-18
+last_updated: 2026-11-22
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -92,7 +92,7 @@ One action per issue per tick; every transition is a field write.
 
 | Stage | Condition | Result |
 |-------|-----------|--------|
-| To do | spec requested from a listed agent (least recently used); the agent drafts the sections and the Definition of Ready passes (a 👍 on the request) | → In analysis |
+| To do | spec requested from the next startable agent in the round robin; the agent drafts the sections and the Definition of Ready passes (a 👍 on the request) | → In analysis |
 | To do | no spec result after every agent timed out once (30 min each) | stays, `Blocked=stalled` |
 | In analysis | the last body editor (if an agent) plus one other agent 👍 the current body hash; two agents if a human edited last. An edit by a login several ids share counts as an agent edit only with a verified `edit` claim; unclaimed, it is a human edit and needs two distinct ids | → Ready |
 | In analysis | 6 votes (👍, 👎, agent body edits) without convergence | stays, `Blocked=no-convergence` |
@@ -118,6 +118,8 @@ clears it.
 
 ### Review: votes and the markers
 
+**Proposed replacement (not active):** [Review process v3](./changes/pipeline-v2-review-process-v3.md) (`status: proposed`) replaces In analysis pickup/convergence from [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385) and review lanes from [#2428](https://github.com/AgathaTrack/AgathaTrack/issues/2428) once delivered (P1–P6). Shipped behaviour below stays in force until then.
+
 - **Spec and review requests** are engine comments with a hidden marker: `v2:spec-request` and `v2:review-request hash=<hash>`
   store the assigned agent **id** and who timed out; the visible line `@mentions` the agent's **`actsAs`** login. A reassignment edits the comment in place. A review request is posted on
   entering In analysis and on each new body hash. Intent review markers store `agent=<id>` the same way.
@@ -138,7 +140,7 @@ clears it.
 - **Doorbell run:** when the engine posts, reassigns or wakes a spec, review or intent-review request for an agent whose
   runner is in `launchRunners` (`cursor` and/or `claude`), it also starts a run with the stage's task (Cursor via the
   Agents API; Claude via `pipeline-claude-run.yml` workflow dispatch with `run-name: pipeline-claude-<nonce>`). Spec pass in To do,
-  adversarial review in In analysis, intent review in In Main). The run is not a delivery (no PR) and skips the legacy
+  adversarial review in In analysis, intent review in In Main; the run is not a delivery (no PR) and skips the legacy
   launch preflight; the launcher sets `busy` like a delivery handoff (except the non-interactive **acceptance** doorbell).
   The engine removes `busy` when the stage advances (spec → In analysis, review → Ready) or when it sets `Blocked`.
   A `busy` doorbell holds a timed-out pickup for one more `reviewTimeoutMin` at most, then the pickup moves on, so a run
@@ -151,10 +153,13 @@ clears it.
   asks its question in a comment and sets `Blocked=question`; with enough it writes the full spec (delivery plan, paths,
   Definition of Done) and signs spec pass (`pipeline_verdict.js spec up`, or 👍 on the request when `actsAs` logins are
   unique), so the engine moves the issue to In analysis. A failed start is only logged;
-  the pickup timeout reassigns. Agents on other runners (`claude`) are not assigned. Every pickup (spec, review, intent review, wake, and the last editor asked to revise) goes only to agents whose runner is in `launchRunners`. An assignee outside that set is reassigned on the next tick, without waiting out the timeout; a wake rings the holder only when that holder is startable, and does nothing when no startable agent is left. When none is left for a new request, To do and In analysis set `Blocked=stalled` and intent review is skipped. Rotation is per issue: the startable agent least recently started **on that issue** is picked, read each tick from the issue's own `v2:launch` records (no other store). Picks on other issues, in the same tick or earlier, do not count. Agents never started on the issue tie, and ties keep config order, so an issue's first pickup goes to the first startable agent in the config and later pickups on it move to agents it has not used yet. The full `agents` list still counts for votes and convergence.
+  the pickup timeout reassigns. Delivery launches do not use the `claude` runner (doorbell only). Every pickup (spec, review, intent review, wake, and the last editor asked to revise) goes only to agents whose runner is in `launchRunners`. An assignee outside that set is reassigned on the next tick, without waiting out the timeout; a wake rings the holder only when that holder is startable, and does nothing when no startable agent is left. When none is left for a new request, To do and In analysis set `Blocked=stalled` and intent review is skipped. Assignment is one round robin over those startable agents, in config order. With no engine launch on the board yet, the first assignment is the first startable agent. Every later assignment — the next pickup on that issue, or the first pickup on another issue — is the next agent in the ring, wrapping. The cursor is the newest engine `v2:launch` on the board. Assignments already chosen earlier in the same tick move it, and only an in-scope decision does, so several fresh issues in one tick do not all land on the same agent. A timeout reassignment takes the next agent who is still eligible. Nothing new is stored. The full `agents` list still counts for votes and convergence.
 - **Launch preflight:** a delivery launch (Ready, and the one resume) still runs the legacy safety preflight
   (`.github/scripts/agent-safety-lib.js`): the risky-scope and blocking-label (`busy`, `manual-only`, `blocked`) checks
-  stand; an issue waiting on a human has `Blocked` set, which the engine never launches. Its `agent-approved` and `human-reviewed` label requirements are retired under v2, where a
+  stand; an issue waiting on a human has `Blocked` set, which the engine never launches. Keyword risk scanning
+  (`detectRiskyScope` in `.github/scripts/triage-lib.js`) scans the title and in-scope sections only — text under
+  **`### Out of scope`** (or `Out-of-scope`) is excluded so exclusion lists do not trip preflight (PIPE-V2-D-PREFLIGHT-001).
+  **Security or Sensitive Area: Yes** and in-scope sensitive work are still refused. Its `agent-approved` and `human-reviewed` label requirements are retired under v2, where a
   converged review and Ready are the approval, so the engine supplies those two labels to the check itself. A refusal
   records `v2:launch-failed` with the reason and counts as a failed start.
 - **Tick log:** each tick logs `pipeline_v2_action` before applying an action and `pipeline_v2_applied` after, with what
@@ -213,6 +218,10 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   (from the board column, else Backlog) and a `Blocked` reason from the legacy `question` / `needs-owner` labels.
 - **Soak:** `dry-run` for a day; then `on` with `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`, taking one sandbox issue
   To do → Done and sending one to each `Blocked` reason; then `on` for the board (clear the label variable).
+- **Soak2 (2026-11-21):** three live ticks on `main` at `133d037` (~16:44–17:00 UTC); see decision log PIPE-V2-D-SOAK-006–008.
+  Fixture matrix (proposed): [pipeline-v2-soak2-matrix.md](./changes/pipeline-v2-soak2-matrix.md) (**PR #2509**). Tick outcome table
+  (in delivery): [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) (**PR #2511**). Round robin fix shipped **#2510**
+  (not soak-covered until a later `on` window). Owner: re-tick **`pipeline-beta`** issues stuck **In analysis** after reviews landed in `dry-run`.
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
@@ -222,6 +231,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 | Label | Meaning |
 |-------|---------|
 | `busy` | a delivery agent is working on the issue; do not start a second run |
+| `queued` | the engine could not start the assigned runner (Claude WIP cap); retry on the next tick; spec/review agents clear it via `clear-queued` at session start (keeps `busy`); `finish-work` clears both when ending work |
 | `manual-only` | hand-driven; the engine and autonomous implementation never touch it |
 | `needs-owner` | only on execute-plan control issues, where the runtime reads it; not an issue-pipeline state |
 | `in-prod` | added by the engine when an issue reaches Done |
@@ -255,10 +265,18 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-AAT-D-007 | `Manual` is bound to one merge and cleared on a newer merge. `Skipped` persists: a new sha gets its own skipped waive even when an older sha already has one. A bound `Manual` or `Skipped` is not overwritten by a pass write or a newer fail | Accepted |
 | PIPE-AAT-D-008 | The production-deploy guard is not part of this issue | Accepted |
 | PIPE-V2-D-SOAK-001 | An unclaimed body edit by a login that several pool ids share is a human edit (two distinct ids approve). Soak-1 #2480 converged on one signed review from the run that had edited | Proposed (#2385 soak, owner merge) |
-| PIPE-V2-D-SOAK-002 | Pickup is least recently used **per issue**, across ticks, read from that issue's own `v2:launch` records; other issues do not count. Amends #2428 D3 (no persisted LRU): nothing new is stored. Soak-5/6 #2484/#2485 showed config order every tick starves the third agent | Accepted (owner, 2026-11-20: per issue, not across issues) |
+| PIPE-V2-D-SOAK-002 | Pickup is least recently used **per issue**, across ticks, read from that issue's own `v2:launch` records; other issues do not count. Amends #2428 D3 (no persisted LRU): nothing new is stored. Soak-5/6 #2484/#2485 showed config order every tick starves the third agent | Superseded by PIPE-V2-D-SOAK-006 |
+| PIPE-V2-D-SOAK-006 | One board-wide round robin. No launch yet → first startable agent. Every later assignment is the next startable agent, wrapping, including the next pickup on the same issue and the first pickup on the next issue. Cursor is the newest `v2:launch`; in-scope picks in the same tick advance it. Owner 2026-11-21: spread assignments; the start is wherever the ring is, then round robin | Accepted (owner, 2026-11-21) |
 | PIPE-V2-D-SOAK-003 | WIP counts only In progress issues with an engine launch record. Five hand-driven issues held the cap of 2 and kept #2480 in Ready | Proposed |
 | PIPE-V2-D-SOAK-004 | A `busy` doorbell holds a timed-out pickup for one extra timeout at most; the Claude workflow fails a run that left no comment or reaction | Proposed |
 | PIPE-V2-D-SOAK-005 | `Blocked=paused` is never woken by a comment. Dry-run, no-identity and out-of-scope actions log `pipeline_v2_planned`, not `pipeline_v2_applied` | Proposed |
+| PIPE-V2-D-SOAK-007 | **In analysis → Ready** and `busy` removal apply on a tick while `ISSUE_PIPELINE_V2=on`. Signed reviews that land after the repo returns to `dry-run`, or between ticks, do not move `Stage` until the next live tick (soak2 #2507/#2508). Agents must not open delivery PRs until **Ready** | Accepted (soak2, 2026-11-21) |
+| PIPE-V2-D-SOAK-008 | Spec and review agents must not edit the issue body to evade launch safety (`detectRiskyScope` in `.github/scripts/triage-lib.js`, `preflightIssue` in `agent-safety-lib.js`): e.g. rewording **Security or Sensitive Area** to `No` while the plan still describes security/crypto escalation. Use **`Blocked=decision`** and leave the body truthful. Soak2 #2495: spec passed, then review edited the body to drop keyword tripwires | Accepted (soak2, 2026-11-21) |
+| PIPE-V2-D-PREFLIGHT-001 | Delivery preflight keyword scan ignores bodies under **`### Out of scope`** / `Out-of-scope`; title, preamble, and all other sections still count. **Security or Sensitive Area: Yes** is unchanged. Soak2 #2507/#2499/#2498/#2508 launch-failed on exclusion-list keywords in whole-body scan | Accepted (soak2, 2026-11-21) |
+| PIPE-V2-D-RUNNER-001 | Claude runner WIP (`limits.runnerWip.claude`, default **3** when unset): counts active `pipeline-claude-run.yml` jobs. On cap, defer with label **`queued`** and `ring-doorbell` while pickup is within `reviewTimeoutMin`; after that, normal timeout/reassign (e.g. Cursor). Real doorbell failures clear **`queued`** so `ringFailed` can reassign. Cursor runners have no repo-side cap. Owner agreed **3** concurrent Claude runs (2026-11-21). Agents remove `queued` via `clear-queued` at doorbell start or `finish-work` when done | Accepted (2026-11-21) |
+| PIPE-V2-D-REV3-001 | Review process v3 (revision 3): proposal in [`changes/pipeline-v2-review-process-v3.md`](./changes/pipeline-v2-review-process-v3.md). When accepted and delivered (P1–P6), replaces In analysis adversarial pickup/convergence (#2385) and review lanes (#2428); identity-based convergence, tier-a/tier-b rounds, challenge label, watchers and event triggers per that doc. Until then, §Review (shipped) and `decideInAnalysis` behaviour remain authoritative | Proposed |
+| PIPE-V2-D-P1-001 | Identities carry an optional `tier` (a or b), validated by `loadConfig`. `claude-a` runs `claude-haiku-5-5` through `claude_args --model` (the official input), built from the reviewed config. Effort (`high`) is recorded in config and validated, but not yet passed to the CLI: the flag is not confirmed in the action docs. claude-b is not added until the signed-verdict path (P2) exists, because two identities on one login make Claude reactions ineligible | Proposed (P1 of [review process v3](./changes/pipeline-v2-review-process-v3.md)) |
+| PIPE-V2-D-P2-001 | Shared-login Claude identities (claude-a, claude-b on `pawpet-claude`) vote only by signed verdict, like the Cursor pair. A reaction from a shared login is not a vote on either the spec path or the review path (the review path had counted it; fixed in P2). The verify step applies the same rule: a shared-login run counts as having acted only when a signed verdict names its agent id and nonce, so a sibling identity on the same login cannot stand in for it. claude-b is tier b on `claude-opus-5-5`, effort medium. Until P4 the tier is recorded but not used: claude-b joins the general pool, so it can take spec and review rings on live beta issues | Proposed (P2 of [review process v3](./changes/pipeline-v2-review-process-v3.md)) |
 | PIPE-AAT-D-009 | Inconclusive and timeout share `maxInconclusive`, then `Blocked=stalled`. Product fails are not a two-strike `Blocked=decision` cap. This supersedes #2424 owner decision 3 for the In Main gate | Accepted for this issue |
 
 ## Live workflow (legacy, until `ISSUE_PIPELINE=on`)
@@ -315,7 +333,7 @@ GitHub remains the source of truth. Cursor Cloud Agents are workers that impleme
 
 An issue is dispatched when **all** are true:
 
-- Project status **Ready** (when project secrets configured; otherwise label-only fallback)
+- Project status **Ready** (when project secrets are configured; otherwise label-only fallback)
 - Labels: `agent-approved`
 - Labels **not** present: `busy`, `manual-only`, `blocked`
 - Labels **required**: `human-reviewed` (workflow pause when removed)

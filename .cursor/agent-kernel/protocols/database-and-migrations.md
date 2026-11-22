@@ -2,7 +2,7 @@
 
 **When:** Schema change, migration, backfill, constraints, indexes, persisted semantics.
 
-**Scripts:** empty database → `./e2e/scripts/bootstrap-db.sh` (canonical snapshot + migration ledger); existing
+**Scripts:** empty database → `APP_ENV=development ./e2e/scripts/bootstrap-db.sh` (canonical snapshot + migration ledger; refuses in production); existing
 database → `cd server && node scripts/migrate.js up`. Never run `migrate.js up` on an empty database (AGENTS.md
 §PostgreSQL).
 
@@ -26,7 +26,7 @@ database → `cd server && node scripts/migrate.js up`. Never run `migrate.js up
 ## 3. Tests
 
 - Fresh schema path: regenerate `db/schema/canonical.sql` (`scripts/db/regenerate-canonical.sh`), then
-  `./e2e/scripts/bootstrap-db.sh` on an empty database ([db-schema-bootstrap-plan](../../../docs/pipelines/db-schema-bootstrap-plan.md))
+  `APP_ENV=development ./e2e/scripts/bootstrap-db.sh` on an empty database ([db-schema-bootstrap-plan](../../../docs/pipelines/db-schema-bootstrap-plan.md))
 - Upgrade path from previous schema state
 - Failure/rollback consideration documented in PR
 
@@ -37,7 +37,7 @@ Destructive migration, large production data rewrite → autonomous-pr-policy §
 ## 5. Verification
 
 ```bash
-cd server && node scripts/migrate.js up       # existing database; an empty one takes ./e2e/scripts/bootstrap-db.sh
+cd server && node scripts/migrate.js up       # existing database; an empty one takes APP_ENV=development ./e2e/scripts/bootstrap-db.sh
 cd server && npx jest --env=node --forceExit  # domain tests
 ```
 

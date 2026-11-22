@@ -196,8 +196,10 @@ npm ci
 #   PGUSER / PGPASSWORD / PGHOST / PGPORT / PGDATABASE  (or a single DATABASE_URL)
 #   JWT_SECRET  — required in production; a dev fallback is used otherwise
 # Apply the schema, then start the API (serves the Flutter web build + API on
-# the same origin at http://localhost:3000):
-node scripts/migrate.js up
+# the same origin at http://localhost:3000). An empty database takes the
+# canonical snapshot + migration ledger; never run `migrate.js up` on it.
+# bootstrap-db.sh refuses unless APP_ENV is a non-production value:
+APP_ENV=development ../e2e/scripts/bootstrap-db.sh  # first run (empty DB); later: node scripts/migrate.js up
 node bin/start.js               # note: `npm start` only exports the app; use bin/start.js
 ```
 
@@ -239,7 +241,8 @@ lib/
 
 The backend lives in `server/`. Node.js / Express serves the API and the Flutter web build.
 
-Database schema is managed by `server/scripts/migrate.js`:
+A new (empty) database is created with `APP_ENV=development e2e/scripts/bootstrap-db.sh` (canonical snapshot + migration ledger; it refuses when `APP_ENV` is production). After
+that, and on UAT/production, the schema is upgraded by `server/scripts/migrate.js`:
 
 ```bash
 cd server

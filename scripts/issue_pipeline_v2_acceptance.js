@@ -9,7 +9,7 @@
  * `v2:aat-launch` for that sha, and a fail names reason=scope|implementation|quality.
  */
 
-const { agentActsAs, launchableAgents, startableIds } = require('./issue_pipeline_v2_config');
+const { agentActsAs, launchableAgents, nextInLine, startableIds } = require('./issue_pipeline_v2_config');
 
 const FAIL_REASONS = new Set(['scope', 'implementation', 'quality']);
 const MIN = 60 * 1000;
@@ -137,12 +137,7 @@ function waiveBinds(state, sha, acceptance) {
 }
 
 function pickAgent(candidates, facts) {
-  const used = facts.agentLastUsed || {};
-  let best = null;
-  for (const login of candidates) {
-    if (best === null || (used[login] || 0) < (used[best] || 0)) best = login;
-  }
-  return best;
+  return nextInLine(candidates, facts.roundRobinAfter, facts.roundRobinOrder || candidates);
 }
 
 function acceptancePool(facts, config) {

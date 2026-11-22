@@ -8,9 +8,9 @@
  * - `countEngineWip`: issues In progress that the engine itself started. Hand-driven work
  *   (In progress without an engine launch record) never takes a pipeline slot, as #2385 says
  *   ("hand-driven programmes do not take pipeline slots"); `manual-only` is still excluded.
- * - `lastUsedOnIssue`: when each pool id was last started on that issue, from the engine's own
- *   `v2:launch` records in its comments. Pickup is least recently used per issue, across ticks,
- *   not config order every tick (soak-5 and soak-6, #2484 / #2485). No new store.
+ * - `lastUsedOnIssue`: when each pool id was last started on that issue. Kept for readers.
+ * - `lastAssignedAgent`: the pool id on the newest engine `v2:launch` across the board. That id
+ *   is who went last in the round robin. No new store.
  */
 
 const { canonicalStage } = require('./issue_pipeline_v2_decide');
@@ -51,6 +51,21 @@ function readsComments(entry) {
   return COMMENT_STAGES.has(canonicalStage(entry.stage)) || Boolean(entry.parsed?.blocked);
 }
 
+/**
+ * Whether `v2:launch` on this board row counts toward board-wide round robin.
+ * Closed rows are included when the tick keeps them for delivery columns (`issue_pipeline_v2.js`);
+ * per-issue facts still use `readsComments` only.
+ */
+function includeInBoardLaunchHistory(entry) {
+  if (entry.labels.includes('manual-only')) {
+    return false;
+  }
+  if (entry.closed) {
+    return COMMENT_STAGES.has(canonicalStage(entry.stage));
+  }
+  return readsComments(entry);
+}
+
 async function countEngineWip({ entries, commentsOf, engineLogins }) {
   const engine = new Set(engineLogins || []);
   let wip = 0;
@@ -67,9 +82,33 @@ async function countEngineWip({ entries, commentsOf, engineLogins }) {
 }
 
 /**
- * When each pool id was last started on this one issue, from the engine's `v2:launch` records in
- * its comments. Pickup is per issue: the agent least recently used on this issue goes next, across
- * ticks; picks on other issues do not count. Ids never started here tie, and ties keep config order.
+ * Pool id on the newest engine launch on the board, or null when nothing has been started.
+ * That is the round-robin cursor: the next assignment is the following startable agent.
+ */
+async function lastAssignedAgent({ entries, commentsOf, config }) {
+  let best = null;
+  let bestAt = -1;
+  for (const entry of entries) {
+    if (!includeInBoardLaunchHistory(entry)) {
+      continue;
+    }
+    const comments = await safeComments(commentsOf, entry);
+    for (const record of listLaunchRecords({ comments, engineLogins: config.engine.logins })) {
+      if (record.kind !== 'launch' || !Number.isFinite(record.at) || record.at < bestAt) {
+        continue;
+      }
+      const id = resolveAgent(config, record.agent)?.id;
+      if (id) {
+        bestAt = record.at;
+        best = id;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * When each pool id was last started on this one issue, from the engine's `v2:launch` records.
  */
 async function lastUsedOnIssue({ entry, commentsOf, config }) {
   const lastUsed = {};
@@ -89,4 +128,12 @@ async function lastUsedOnIssue({ entry, commentsOf, config }) {
   return lastUsed;
 }
 
-module.exports = { memoComments, readsComments, countEngineWip, lastUsedOnIssue, COMMENT_STAGES };
+module.exports = {
+  memoComments,
+  readsComments,
+  includeInBoardLaunchHistory,
+  countEngineWip,
+  lastAssignedAgent,
+  lastUsedOnIssue,
+  COMMENT_STAGES,
+};

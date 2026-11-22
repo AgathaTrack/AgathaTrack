@@ -6,6 +6,10 @@ const path = require('path');
 const DEFAULT_CONFIG_PATH = path.join(__dirname, '..', '.github', 'pipeline-agents.json');
 const KNOWN_METHODS = new Set(['PR', 'light-plan', 'execute-plan']);
 const ID_PATTERN = /^[A-Za-z0-9-]+$/;
+const TIERS = new Set(['a', 'b']);
+const EFFORTS = new Set(['low', 'medium', 'high']);
+// Model names reach the Claude CLI as an argv token: keep them to a safe character set.
+const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const LIMIT_KEYS = [
   'wip',
   'reviewTimeoutMin',
@@ -27,6 +31,12 @@ function normalizeAgentEntry(raw) {
   };
   if (typeof raw?.model === 'string' && raw.model.length > 0) {
     normalized.model = raw.model;
+  }
+  if (typeof raw?.tier === 'string') {
+    normalized.tier = raw.tier;
+  }
+  if (typeof raw?.effort === 'string') {
+    normalized.effort = raw.effort;
   }
   if (login) {
     normalized.login = login;
@@ -53,6 +63,16 @@ function validateConfig(config) {
       problems.push('every agent needs a login or an id');
       continue;
     }
+    const label = raw.id || raw.login || '(agent)';
+    if (raw.model != null && typeof raw.model !== 'string') {
+      problems.push(`${label}: model must be a string`);
+    }
+    if (raw.tier != null && typeof raw.tier !== 'string') {
+      problems.push(`${label}: tier must be a string`);
+    }
+    if (raw.effort != null && typeof raw.effort !== 'string') {
+      problems.push(`${label}: effort must be a string`);
+    }
     const agent = normalizeAgentEntry(raw);
     if (!agent.id || !ID_PATTERN.test(agent.id)) {
       problems.push(`${agent.id || '(missing)'}: id must match [A-Za-z0-9-]+`);
@@ -74,6 +94,15 @@ function validateConfig(config) {
       if (!KNOWN_METHODS.has(method)) {
         problems.push(`${agent.id}: unknown method ${method}`);
       }
+    }
+    if (agent.tier !== undefined && !TIERS.has(agent.tier)) {
+      problems.push(`${agent.id}: tier must be a or b`);
+    }
+    if (agent.effort !== undefined && !EFFORTS.has(agent.effort)) {
+      problems.push(`${agent.id}: effort must be low, medium or high`);
+    }
+    if (agent.model !== undefined && !MODEL_PATTERN.test(agent.model)) {
+      problems.push(`${agent.id}: model must contain only letters, digits, dot, underscore or dash`);
     }
     normalized.push(agent);
   }
@@ -181,6 +210,29 @@ function agentLogins(config) {
 }
 
 /**
+ * Next id after `afterId` in `order`, limited to `candidates`. No previous assignment (or one
+ * outside the ring) starts at the first candidate. The ring wraps.
+ */
+function nextInLine(candidates, afterId, order) {
+  const pool = candidates || [];
+  if (pool.length === 0) {
+    return null;
+  }
+  const ring = order && order.length ? order : pool;
+  const afterIndex = afterId ? ring.indexOf(afterId) : -1;
+  if (afterIndex < 0) {
+    return pool[0];
+  }
+  for (let step = 1; step <= ring.length; step += 1) {
+    const id = ring[(afterIndex + step) % ring.length];
+    if (pool.includes(id)) {
+      return id;
+    }
+  }
+  return pool[0];
+}
+
+/**
  * Ids whose runner the engine can start (the doorbell set). Pickup rotation draws only from these.
  */
 function startableIds(config) {
@@ -250,6 +302,7 @@ module.exports = {
   agentIds,
   agentLogins,
   launchableAgents,
+  nextInLine,
   startableIds,
   selfStartingLogins,
   sharedActsAs,

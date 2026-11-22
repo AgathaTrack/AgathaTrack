@@ -44,12 +44,13 @@ function facts(over = {}) {
 }
 
 const rowOf = (over) => decide(facts(over), legacyConfig);
-// Both runners startable: exercises LRU rotation across every listed agent.
+// Both runners startable: the ring includes every startable agent.
 const bothStartable = { ...legacyConfig, launchRunners: ['cursor', 'claude'] };
 const rowOfBoth = (over) => decide(facts(over), bothStartable);
 
 test('config: the committed file is valid; bad edits are reported together', () => {
-  assert.equal(config.agents.length, 3);
+  assert.equal(config.agents.length, 4);
+  assert.equal(config.agents[3].id, 'claude-b', 'P2 adds claude-b after the existing three');
   assert.equal(config.agents[0].id, 'cursor-a');
   assert.equal(config.agents[0].actsAs, 'pawpet-bot');
   assert.equal(config.agents[1].model, 'grok-4.7-medium');
@@ -109,7 +110,7 @@ test('guards: a Blocked issue only wakes on a human comment and is never cleared
   assert.equal(rowOf({ blocked: 'question' }).reason, 'blocked');
   const wake = rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7 });
   assert.deepEqual([wake.type, wake.stage, wake.row, wake.commentId], ['wake-stage-agent', 'To do', 'blocked.wake', 7]);
-  assert.equal(wake.agent, 'pawpet-bot', 'with no request holder the least recently used agent is rung');
+  assert.equal(wake.agent, 'pawpet-bot', 'with no request holder the ring starts at the first startable agent');
   assert.equal(
     rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 7, spec: { assignedTo: 'pawpet-claude' } }).agent,
     'pawpet-bot',
@@ -168,6 +169,58 @@ test('pickup rotation only draws from agents the engine can start (launchRunners
   }
 });
 
+test('queued label retries the doorbell for the held assignee', () => {
+  const action = decide(facts({
+    labels: ['queued'],
+    stage: 'In analysis',
+    review: { requestedHash: 'h1', requestedAt: NOW - 5 * MIN, assignedTo: 'claude-a' },
+  }), config);
+  assert.deepEqual([action.type, action.agent, action.row], ['ring-doorbell', 'claude-a', 'analysis.runner-queued']);
+});
+
+test('queued does not ring-doorbell while busy holds the active run', () => {
+  const action = decide(facts({
+    labels: ['queued', 'busy'],
+    stage: 'In analysis',
+    review: { requestedHash: 'h1', requestedAt: NOW - 5 * MIN, assignedTo: 'claude-a' },
+  }), config);
+  assert.equal(action.reason, 'analysis.waiting');
+});
+
+test('In Main retries queued intent-review doorbell before waiting on UAT', () => {
+  const action = decide(facts({
+    labels: ['queued'],
+    stage: 'In Main',
+    delivery: { lastMergeSha: 'a'.repeat(40) },
+    intentReview: { requested: true, agent: 'claude-a', requestedAt: NOW - 5 * MIN },
+    uatContainsLatestMerge: false,
+  }), config);
+  assert.deepEqual([action.type, action.agent, action.stage], ['ring-doorbell', 'claude-a', 'In Main']);
+});
+
+test('queued label past pickup timeout reassigns instead of endless ring-doorbell', () => {
+  const action = decide(facts({
+    labels: ['queued'],
+    stage: 'In analysis',
+    review: { requestedHash: 'h1', requestedAt: NOW - 31 * MIN, assignedTo: 'claude-a' },
+  }), config);
+  assert.equal(action.type, 'reassign', action.row);
+});
+
+test('queued with ringFailed reassigns once queued is cleared on a real doorbell failure', () => {
+  const action = decide(facts({
+    labels: [],
+    stage: 'In analysis',
+    review: {
+      requestedHash: 'h1',
+      requestedAt: NOW - 10 * MIN,
+      assignedTo: 'claude-a',
+      ringFailed: true,
+    },
+  }), config);
+  assert.equal(action.type, 'reassign', action.row);
+});
+
 test('To do: request, wait, reassign, stall, pass', () => {
   assert.equal(rowOfBoth({}).type, 'request-spec');
   const base = { spec: { requestedAt: NOW - 5 * MIN, assignedTo: 'pawpet-bot' } };
@@ -189,8 +242,12 @@ test('To do: request, wait, reassign, stall, pass', () => {
   assert.equal(rowOfBoth({ spec: { passedBy: 'pawpet-bot' } }).to, 'In analysis');
 });
 
-test('To do: the least recently used agent is picked', () => {
-  const action = rowOfBoth({ agentLastUsed: { 'pawpet-bot': NOW - MIN, 'pawpet-claude': NOW - 99 * MIN } });
+test('To do: no history starts at the first agent; the next assignment is the next in the ring', () => {
+  assert.equal(rowOfBoth({}).agent, 'pawpet-bot');
+  const action = rowOfBoth({
+    roundRobinAfter: 'pawpet-bot',
+    roundRobinOrder: ['pawpet-bot', 'pawpet-claude'],
+  });
   assert.equal(action.agent, 'pawpet-claude');
 });
 

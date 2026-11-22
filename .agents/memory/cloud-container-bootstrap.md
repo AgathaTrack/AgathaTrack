@@ -17,7 +17,7 @@ unknown state. Meanwhile the failing checks (197 DB integration tests) were unre
 
 - Before a gate run, check every prerequisite in one read-only pass: `flutter`/`dart` version, `server/node_modules`,
   `shellcheck`, `pg_lsclusters`, the `user` role, `agatha_db`, and its `_migrations` count.
-- Empty database: `./e2e/scripts/bootstrap-db.sh`. Only an existing database takes `migrate.js up`.
+- Empty database: `APP_ENV=development ./e2e/scripts/bootstrap-db.sh` (it refuses unless `APP_ENV` is non-production; CI and Cursor set it, a Claude session does not). Only an existing database takes `migrate.js up`.
 - Never put a destructive step (drop, reset, `rm -rf`) in the same command as a long run. Run it alone, check the result,
   then start the run.
 - If a check cannot run in the container and the change does not touch what it covers, report it (PR body: which check,

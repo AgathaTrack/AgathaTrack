@@ -79,15 +79,35 @@ function dodComplete(body) {
 }
 
 /** An intent review counts only for the merge it was requested for (a later merge needs a new one). */
+function deriveIntentReviewFacts(comments, engineLogins, mergeSha) {
+  if (!mergeSha) {
+    return { requested: false };
+  }
+  const engine = new Set(engineLogins || []);
+  let latest = null;
+  const marker = new RegExp(`<!--\\s*${INTENT_REVIEW}\\b[^>]*\\bmerge=${mergeSha}\\b`);
+  for (const comment of comments || []) {
+    if (!engine.has(comment.user?.login)) {
+      continue;
+    }
+    const body = comment.body || '';
+    if (!marker.test(body)) {
+      continue;
+    }
+    const at = Date.parse(comment.created_at);
+    if (!Number.isFinite(at)) {
+      continue;
+    }
+    const agentMatch = body.match(/\bagent=([^\s>]+)/);
+    if (!latest || at > latest.requestedAt) {
+      latest = { requested: true, agent: agentMatch?.[1] || null, requestedAt: at };
+    }
+  }
+  return latest || { requested: false };
+}
+
 function intentReviewRequested(comments, engine, mergeSha) {
-  return (
-    Boolean(mergeSha) &&
-    (comments || []).some(
-      (comment) =>
-        engine.has(comment.user?.login) &&
-        new RegExp(`<!--\\s*${INTENT_REVIEW}\\b[^>]*\\bmerge=${mergeSha}\\b`).test(comment.body || ''),
-    )
-  );
+  return deriveIntentReviewFacts(comments, [...engine], mergeSha).requested;
 }
 
 function markerNote(comment, engine, marker) {
@@ -136,7 +156,7 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
       // Only a run the engine started is the engine's to resume; a hand-driven issue has no record.
       engineLaunched: (comments || []).some((c) => engineStartedRun(c, engine)),
     },
-    intentReview: { requested: intentReviewRequested(comments, engine, merges.at(-1)?.mergeSha) },
+    intentReview: deriveIntentReviewFacts(comments, engineLogins, merges.at(-1)?.mergeSha),
     prAuthors: [...new Set(prs.filter((pr) => pr.merged).map((pr) => pr.author).filter(Boolean))],
   };
 }

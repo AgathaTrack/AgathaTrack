@@ -8,6 +8,7 @@
  *   node scripts/github_issue_workflow.js comment --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js start-work --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js finish-work --issue <n>
+ *   node scripts/github_issue_workflow.js clear-queued --issue <n>
  *   node scripts/github_issue_workflow.js aat-start --issue <n>
  *   node scripts/github_issue_workflow.js aat-pass --issue <n> --body-file <path> [--merge <sha>]
  *   node scripts/github_issue_workflow.js aat-fail --issue <n> --body-file <path> --reason scope|implementation|quality [--merge <sha>]
@@ -41,6 +42,7 @@ function usage() {
   node scripts/github_issue_workflow.js comment --issue <n> [--body text | --body-file path]
   node scripts/github_issue_workflow.js start-work --issue <n> [--body text | --body-file path]
   node scripts/github_issue_workflow.js finish-work --issue <n>
+  node scripts/github_issue_workflow.js clear-queued --issue <n>
   node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
   aat-start --issue <n>
@@ -130,7 +132,14 @@ async function main() {
 
     case 'finish-work': {
       const client = makeWorkflowClient();
-      const labelResult = await editIssueLabels(client, issueNumber, { remove: ['busy'] });
+      const labelResult = await editIssueLabels(client, issueNumber, { remove: ['busy', 'queued'] });
+      printJson({ labels: labelResult });
+      break;
+    }
+
+    case 'clear-queued': {
+      const client = makeWorkflowClient();
+      const labelResult = await editIssueLabels(client, issueNumber, { remove: ['queued'] });
       printJson({ labels: labelResult });
       break;
     }

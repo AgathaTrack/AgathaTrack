@@ -10,9 +10,9 @@ You were asked to review **one version** of an issue body, identified by the has
 
 ## Procedure
 
-1. Read the issue body, its comments and the request comment. Check the hash still matches the body you are reading; if the body changed, wait for the new request.
+1. Read the issue body, its comments and the request comment. Run `node scripts/github_issue_workflow.js clear-queued --issue <n>` first when the issue still has `queued` from a runner cap (does not clear `busy`). Check the hash still matches the body you are reading; if the body changed, wait for the new request.
 2. **Review against the code, not only the text.** Open the files, workflows and docs the issue names. Confirm the facts it states, the paths it plans to touch, and that its Definition of Done is testable. The delivery plan (method, planned work, `agent-paths`, Definition of Done) is part of what you approve.
-3. **Fix what you can yourself** by editing the body. An edit creates a new hash, counts as your approval of that new version, and a new review request follows; the other agent then reviews it.
+3. **Fix what you can yourself** by editing the body. An edit creates a new hash, counts as your approval of that new version, and a new review request follows; the other agent then reviews it. **Do not** edit to evade launch safety: never reword **Security or Sensitive Area**, titles, or scope text so `detectRiskyScope` / `preflightIssue` would pass while the plan still needs AGENTS.md §Escalation (soak2 #2495). Use **`Blocked=decision`** and keep the body truthful (PIPE-V2-D-SOAK-008).
 4. Otherwise **vote on the request comment**:
    - 👍 when the version is ready to deliver as written;
    - 👎 when it is not. A 👎 must name the concrete change you want, in a normal comment next to your vote.
@@ -22,5 +22,6 @@ You were asked to review **one version** of an issue body, identified by the has
 
 - Never write `Stage` (the engine does, or the owner during bootstrap). You may edit the body, vote and write `Blocked`.
 - Only listed agents' reactions are votes. Never vote on a version you edited; your edit already counts.
-- Hit an item on the AGENTS.md escalation list (security, breaking API, production migration, CI gate, product or legal call)? Set `Blocked=decision` with your recommendation instead of voting.
+- Hit an item on the AGENTS.md escalation list (security, breaking API, production migration, CI gate, product or legal call)? Set `Blocked=decision` with your recommendation instead of voting — preserve current `Stage` and `Attempts` in the same org-field patch, then `node scripts/github_issue_workflow.js finish-work --issue <n>`.
+- Body edits whose main purpose is clearing risky-scope keyword checks are forbidden (same as spec-agent SOAK-008).
 - After 6 votes (👍, 👎 and agent body edits) without convergence the engine blocks the issue for the owner (`no-convergence`), so prefer fixing over bouncing.
