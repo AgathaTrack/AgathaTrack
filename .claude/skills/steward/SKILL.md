@@ -35,7 +35,8 @@ A PR for an issue says `Refs #n`, never `Closes` / `Fixes` / `Resolves`
 
 - Triage and debt conventions: `docs/agent-efficiency/autonomous-pr-policy.md` (§Babysit skill family · §Automatic reviews:
   wait for Copilot, triage, reply + resolve every review conversation, re-check after each push,
-  `node scripts/babysit_pr_reviews.js gate --pr <url>` before merge).
+  `node scripts/babysit_pr_reviews.js gate --pr <url>` before merge). In cloud sessions run the babysit scripts
+  through the `gh` wrapper in the `babysit` wrapper §Babysit scripts.
 - Cursor-only mechanics do not apply to Claude Code (see `CLAUDE.md` §Claude Code mechanics).
 - Merging: [`AGENTS.md`](../../../AGENTS.md) §Autonomy and merging, then
   [`autonomous-pr-policy.md`](../../../docs/agent-efficiency/autonomous-pr-policy.md) §Merge gates.

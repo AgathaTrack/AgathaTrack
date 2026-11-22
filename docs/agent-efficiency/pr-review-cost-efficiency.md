@@ -118,6 +118,7 @@ Copilot credits and Actions minutes are separate meters. Levers: batch pushes, i
 | AEC-D-002 | Trim triggers, push batching, Pre-UAT cancel-in-progress, PR E2E max 2 legs | Live |
 | AEC-D-003 | Babysit skills wait for Copilot before triage, re-check reviews after every push and gate merge on `babysit_pr_reviews.js gate` (PR #2017 merged 1 s before Copilot's 3 threads; `collect` also failed under the `repo`-only bot token) | Live |
 | AEC-D-004 | Agent-authored PRs: request Copilot with the owner's token, fall back to a review-only `composer-2.5` Cursor agent when Copilot does not start within 8 min (§Agent-authored PRs). Cursor Bugbot rejected (separate subscription, no review-only fallback trigger) | Live |
+| AEC-D-005 | Claude Code cloud sessions (GraphQL blocked by the session proxy) run the babysit scripts unchanged through `scripts/ccr-bin/gh`. It answers their review-thread query from the CCR `review_threads` route joined to REST review comments, and `gh pr view` base/head from REST. It fails closed when any comment is unaccounted for. Chosen over porting the scripts so the review-gate logic stays single-path (owner, 2026-11-22) | Live |
 
 ---
 
