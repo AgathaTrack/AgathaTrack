@@ -61,8 +61,41 @@ Pre-run test gate: **1 failing test** in the mandated suite (unchanged by this r
 ## Raw log
 
 [`p4-acceptance-rerun.jsonl`](./p4-acceptance-rerun.jsonl)
-## Review addendum (Claude, after the re-run)
+## Re-run at `ce3fd72b` (non-pool green fix)
 
-- **#2533 converged on a non-pool green.** The green was from `claude-b`, a tier-b identity, on a tier-a round. REV3-004 says tier b does not take tier-a rounds, so this was not agreement. `decideRound` now refuses to converge on a green from outside the round's pool and retries the same round with a pool identity (`reason: not-startable`, test added in `issue_pipeline_v2_rounds.test.js`). This run's #2533 result predates that fix and must be re-evaluated on a new dry-run.
-- **Test gate.** On `59d323c1` the full pipeline suite passes (332 pass, 0 fail). The single launch-test failure reported in the run did not reproduce: `runner: one failing issue…` passed in 15 of 15 targeted runs. Cursor's log for the failing run is needed to chase it.
-- **Verdict.** NOT ACCEPTED stands. Acceptance needs a dry-run on the commit with the fix above, showing (a) `not-startable` at once, (b) every disagreement explained, (c) at least one visible red-with-edit with its `v2:claim` and `v2:verdict`.
+| Field | Value |
+|-------|--------|
+| Commit | `ce3fd72bdbf4a0d2b94c673eccd8f3247666b99c` |
+| Date (UTC) | 2026-11-22 |
+| Tests before run | 332 pass, 1 fail (launch test; same as prior) |
+| Raw log | [`p4-acceptance-rerun-ce3fd72b.jsonl`](./p4-acceptance-rerun-ce3fd72b.jsonl) |
+| `writes: true` | **none** |
+
+| Issue | Live row | Plan row | Agreement | Cause |
+|------:|----------|----------|-----------|-------|
+| 2527 | `analysis.reassign` (`claude-a`) | `analysis.converged` | disagree (type) | Pool `cursor-a` green on hash; plan converges; live still legacy reassign. |
+| 2530 | `analysis.reassign` (`cursor-a`) | `analysis.round-retry` R3 `cursor-a` | **agree** | R3 red/silent; same agent on retry. |
+| 2531 | `analysis.reassign` (`cursor-a`) | `analysis.converged` | disagree (type) | Pool green; plan converges; live reassign. |
+| 2532 | `analysis.reassign` (`claude-a`) | `analysis.converged` | disagree (type) | Pool green; plan converges; live reassign. |
+| **2533** | `analysis.reassign` (`cursor-a`, not-startable) | **`analysis.round-retry` R2 `cursor-a`, `reason: not-startable`** | **agree** | **`claude-b` green on tier-a round — no converge (`holderOut`); retry pool identity `cursor-a`, matches live.** |
+| 2534 | `analysis.reassign` (`claude-a`, not-startable) | `analysis.round-retry` R3 `cursor-a`, `not-startable` | disagree (identity) | Plan R3 retry `cursor-a`; live reassign `claude-a` (LRU vs non-pool retry rule). |
+
+**#2533 (fix under test):** Before `ce3fd72b` the plan wrongly `analysis.converged` on `claude-b`'s green. After the fix the plan is `request-round` R2 attempt 2 with `reason: not-startable` and `cursor-a`, matching live `analysis.reassign` / `cursor-a`.
+
+### Checks a–d at `ce3fd72b`
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| **(a)** | **pass** | #2533 and #2534: `reason: not-startable`; no spurious converge on #2533 non-pool green. |
+| **(b)** | **pass** | Table above. |
+| **(c)** | **n.a.** | Still no `v2:claim` on the six issues. |
+| **(d)** | **pass** | No `plan.error`. |
+
+### Verdict at `ce3fd72b`
+
+**NOT ACCEPTED** for full P4 (REV3-007) — live `decide()` still does not converge on #2527/#2531/#2532 while the plan does; criterion **(c)** unmet. **The non-pool green bug is fixed and verified on #2533.**
+
+## Review addendum (Claude, after the first re-run)
+
+- **#2533 converged on a non-pool green** in the `f8017311` run — superseded by the `ce3fd72b` re-run above.
+- **Test gate.** Launch test may still fail intermittently on Cloud (332/333 on this VM).

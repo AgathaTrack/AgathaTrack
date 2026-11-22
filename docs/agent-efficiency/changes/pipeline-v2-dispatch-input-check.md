@@ -54,13 +54,29 @@ Steps that could expose the nonce in **public job logs**:
 
 ## Owner checklist (logged-out browser)
 
-1. Open GitHub → `AgathaTrack/AgathaTrack` → **Actions** → workflow **Pipeline Claude run**.
-2. Open any recent completed run (for example one whose title is `pipeline-claude-<run_ref>`).
-3. On the run summary page, find the **workflow dispatch inputs** section (GitHub shows inputs used for `workflow_dispatch` runs).
-4. Record whether the **`nonce`** input value is visible to a user who is **not** signed in (incognito / logged-out).
-5. Record **yes** or **no** in the P4 / REV3-011 acceptance notes or this doc when known.
+Do this once on **main** (today’s runs may still use the nonce in the run **title**) and again after **REV3-011** merges (title should be `pipeline-claude-<run_ref>` only).
 
-Until step 4 is done, treat dispatch-input visibility as **unknown** (the REST API does not expose dispatch inputs to this agent).
+### A. Is the dispatch **`nonce` input** visible on the run page?
+
+1. Open a **private/incognito** window (not signed in to GitHub). Optional: use a second browser profile with no GitHub cookies.
+2. Navigate to: `https://github.com/AgathaTrack/AgathaTrack/actions/workflows/pipeline-claude-run.yml`
+   - If GitHub shows a sign-in wall and hides workflow runs, the repo’s Actions visibility for anonymous users is already limited — note that and skip to section B.
+3. In the run list, open a **completed** run (green check). Example URL shape: `https://github.com/AgathaTrack/AgathaTrack/actions/runs/<run-id>`.
+4. On the run summary page, scroll to **“Workflow dispatch inputs”** (or **“Inputs”** / **“This workflow was manually triggered”** with a key–value list). GitHub often shows: `issue`, `stage`, `agent_id`, `method`, `nonce`, `run_ref` (after REV3-011).
+5. Check the row for **`nonce`**. If you can read the full hex value without signing in, record **inputs visible: yes**. If the section is missing or values are hidden, record **inputs visible: no** or **inputs section absent**.
+6. Add the result and run URL to this doc or a comment on PR **#2537**.
+
+### B. Is the nonce exposed without opening inputs? (run title on current main)
+
+1. Still logged out, on the same run page, read the **page title / h1** (top heading).
+2. If it reads `pipeline-claude-<32-char-hex>` and matches a doorbell nonce, the nonce is **already public in the run name** on the workflow version on **main** (known pre–REV3-011 behaviour). After merge of `run_ref`, repeat: the title should **not** equal the nonce.
+
+### C. What the API showed (Cursor, owner token)
+
+- Authenticated REST **does not** return dispatch input values on the run object.
+- **Public** fetch of run `45017702070` showed title `pipeline-claude-dfd96c2c1a68e396cfc13a6b83ce6da2` (nonce in name on main).
+
+Until A is done, treat **inputs-panel** visibility as **unknown**.
 
 ## If the nonce input is visible on the public run page (owner options — not implemented)
 
