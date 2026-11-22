@@ -158,7 +158,7 @@ Copilot does not start (threads marked `cursor-pr-review`, reported as `reviewer
 
 **Model (Cursor):** [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) §Cloud Agent model policy.
 
-`scripts/babysit_pr_reviews.js` (REST + review-thread GraphQL; works with the `repo`-scoped bot token):
+`scripts/babysit_pr_reviews.js` (REST + review-thread GraphQL; works with the `repo`-scoped bot token). In Claude Code cloud sessions, where GraphQL is blocked, it and `babysit_sync_base.sh` run unchanged through `scripts/ccr-bin/gh`. That wrapper serves the same thread data from REST and the CCR review-thread route and fails closed. Same exit codes, same gate. Mechanics are in the Claude `babysit` wrapper (`.claude/skills/babysit/SKILL.md` §Babysit scripts).
 
 | Command | Use | Exit |
 |---------|-----|------|

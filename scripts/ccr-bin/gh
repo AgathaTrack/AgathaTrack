@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+'use strict';
+// Claude Code cloud sessions: `gh` wrapper for the babysit scripts (GraphQL is blocked there).
+// Logic and contract: scripts/lib/ccr_gh_shim_lib.js.
+process.exitCode = require('../lib/ccr_gh_shim_lib').main(process.argv.slice(2), { selfPath: __filename });
