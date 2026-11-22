@@ -41,18 +41,18 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 ### Phase 0 — preflight, no writes
 
 - `ISSUE_PIPELINE_V2=dry-run`, one tick.
-- **Exit:** no `writes:true`; every In analysis issue has `pipeline_v2_round_plan`; `plan.error` absent; live action row recorded; **plan and live agree on row, type, and agent identity** (disagreement = finding only).
+- **Exit:** no `writes:true`; every In analysis issue has `pipeline_v2_round_plan`; `plan.error` absent; live action row recorded; **plan and live agree on row, agent identity, and mapped action** (`plan.type: request-round` ↔ live `request-review` / `request-spec` via round rows — not byte-equal `type` strings). Disagreement = finding only.
 - **Run (pre-#2542):** [45050530011](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45050530011) — pre-fix; identity disagreed on all five In analysis issues.
 - **Run (post-#2542):** [45054154765](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054154765) (`main` at `025a33ed`, merge #2542). Log: [`soak4-phase-0-log.jsonl`](./soak4-phase-0-log.jsonl).
-- **Result (post-#2542):** **pass** — no `writes:true`; no `pipeline_v2_error`; 5 In analysis issues with `pipeline_v2_round_plan`; plan and live **agree on agent** (`claude-a`) and row on #1673, #2056, #2301, #2302, #2405. #2539: `stage-backlog` (issue exists on GitHub only; **not on Pawpet**).
+- **Result (post-#2542):** **pass** — no `writes:true`; no `pipeline_v2_error`; 5 In analysis issues with `pipeline_v2_round_plan`; plan and live **agree on agent** (`claude-a`), **row**, and mapped action on #1673, #2056, #2301, #2302, #2405. #2539 was outside this exit (not In analysis).
 
 ### Phase 1 — one spec, nothing else
 
-- Fixture **soak4-01** (**#2539**) only, **`Stage=To do` on Pawpet**, labels **`soak4`** (+ `task`) only. The fixture can exist on GitHub before it is on the board; until Pawpet has the issue, the engine sees `stage-backlog` and does not spec.
+- Fixture **soak4-01** (**#2539**) only, **`Stage=To do` on Pawpet**, labels **`soak4`** (+ `task`) only. Issues absent from the Pawpet project are **`not-on-board`** and are not ticked. A Pawpet row with **no org `Stage` or `Stage=Backlog`** yields `stage-backlog` and does not spec — operator sets **`Stage=To do`**.
 - `on` ticks until spec moves issue to In analysis or **4 ticks** spent.
 - **Exit:** `request-spec` to tier-a (`cursor-a` or `claude-a`) on first tick; spec round close (`verdict spec`); no `request-review` to tier-b.
 - **Run:** `ISSUE_PIPELINE_V2=on`, label scope `soak4` — runs [45054287493](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054287493), [45054367168](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054367168), [45054443295](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054443295), [45054529172](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054529172). Log: [`soak4-phase-1-log.jsonl`](./soak4-phase-1-log.jsonl). `ISSUE_PIPELINE_V2` restored to `dry-run` after.
-- **Result:** **not reached** — #2539 still **off Pawpet** (`onBoard: false`). Four ticks logged `none` / `stage-backlog` only; no `request-spec`. No tier-b on #2539.
+- **Result:** **not reached** — four ticks logged **`none` / `stage-backlog`** for #2539 (not **To do**); no `request-spec`; no tier-b. **Operator:** confirm Pawpet membership and set **`Stage=To do`** before retry.
 
 ### Phase 2 — one green converges
 
