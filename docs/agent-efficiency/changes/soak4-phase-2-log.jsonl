@@ -53,3 +53,13 @@
 {"event":"pipeline_v2_action","mode":"on","writes":false,"issue":2513,"action":{"type":"none","reason":"stage-backlog"}}
 {"event":"pipeline_v2_action","mode":"on","writes":false,"issue":2545,"action":{"type":"none","reason":"stage-backlog"}}
 {"event":"pipeline_v2_tick","mode":"on","issueCount":40,"wip":1,"actions":40,"errors":[]}
+{"event":"pipeline_v2_round_plan","mode":"on","issue":2539,"plan":{"plan":{"type":"set-stage","to":"Ready","row":"analysis.converged","evidence":{"hash":"d292c9b699490ef6","approvedBy":"cursor-a","nonce":"98cf1f59a2b1ecec33a1c9fa6aea3e71"}},"rounds":2,"reviews":1,"derived":[{"tier":"a","kind":"spec","hashIn":null,"attempts":[{"type":"claude-a","nonce":null,"startedAt":null,"result":"spec","hashOut":"d292c9b699490ef6"}]},{"tier":"a","kind":"review","hashIn":"d292c9b699490ef6","attempts":[{"type":"cursor-a","nonce":"98cf1f59a2b1ecec33a1c9fa6aea3e71","startedAt":1795387946000,"result":"green","hashOut":null}]}]},"live":"analysis.converged"}
+{"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2539,"action":{"type":"set-stage","to":"Ready","row":"analysis.converged","evidence":{"hash":"d292c9b699490ef6","approvedBy":"cursor-a","nonce":"98cf1f59a2b1ecec33a1c9fa6aea3e71"}}}
+{"event":"pipeline_v2_applied","issue":2539,"applied":["labels:busy-removed","comment:round-close","fields:stage,attempts"]}
+{"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2539,"action":{"type":"launch","agent":"cursor-b","method":"PR","attempts":0,"row":"ready.launch"}}
+{"event":"pipeline_v2_applied","issue":2539,"applied":["launch:cursor-b","comment:launch-pending","comment:launch"]}
+{"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2539,"action":{"type":"set-stage","to":"In progress","row":"ready.launched","evidence":{"runId":"run-bbc6ca5e-b111-4543-93d0-55edefbaab54"}}}
+{"event":"pipeline_v2_applied","issue":2539,"applied":["comment:launch-acked","fields:stage,attempts"]}
+{"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2539,"action":{"type":"none","reason":"progress.working"}}
+{"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2539,"action":{"type":"none","reason":"progress.working"}}
+{"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2539,"action":{"type":"none","reason":"progress.working"}}
