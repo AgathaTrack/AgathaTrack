@@ -42,14 +42,17 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 - `ISSUE_PIPELINE_V2=dry-run`, one tick.
 - **Exit:** no `writes:true`; every In analysis issue has `pipeline_v2_round_plan`; `plan.error` absent; live action row recorded; **plan and live agree on row, type, and agent identity** (disagreement = finding only).
-- **Run (pre-#2542):** [Actions 45050530011](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45050530011) (`workflow_dispatch`, `main` at `e8e2f824`). Log: [`soak4-phase-0-log.jsonl`](./soak4-phase-0-log.jsonl) — **pre-fix evidence**; do not use for identity pass/fail.
-- **Result (pre-#2542):** **not passed — re-run required.** No `writes:true`; no `pipeline_v2_error`; 5 In analysis issues, 5 `pipeline_v2_round_plan` lines. The **row** matched live on all five (#1673, #2056, #2301, #2302, #2405), but the **identity did not**: plan `cursor-a`, live `claude-a` on every one (planner cursor bug, fixed in `f6334d6d` / PR #2542). #2539 ticked as `stage-backlog` (not on Pawpet yet).
+- **Run (pre-#2542):** [45050530011](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45050530011) — pre-fix; identity disagreed on all five In analysis issues.
+- **Run (post-#2542):** [45054154765](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054154765) (`main` at `025a33ed`, merge #2542). Log: [`soak4-phase-0-log.jsonl`](./soak4-phase-0-log.jsonl).
+- **Result (post-#2542):** **pass** — no `writes:true`; no `pipeline_v2_error`; 5 In analysis issues with `pipeline_v2_round_plan`; plan and live **agree on agent** (`claude-a`) and row on #1673, #2056, #2301, #2302, #2405. #2539: `stage-backlog` (issue exists on GitHub only; **not on Pawpet**).
 
 ### Phase 1 — one spec, nothing else
 
-- Fixture **soak4-01** only, **To do**, label `soak4` only.
+- Fixture **soak4-01** (**#2539**) only, **`Stage=To do` on Pawpet**, labels **`soak4`** (+ `task`) only. The fixture can exist on GitHub before it is on the board; until Pawpet has the issue, the engine sees `stage-backlog` and does not spec.
 - `on` ticks until spec moves issue to In analysis or **4 ticks** spent.
 - **Exit:** `request-spec` to tier-a (`cursor-a` or `claude-a`) on first tick; spec round close (`verdict spec`); no `request-review` to tier-b.
+- **Run:** `ISSUE_PIPELINE_V2=on`, label scope `soak4` — runs [45054287493](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054287493), [45054367168](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054367168), [45054443295](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054443295), [45054529172](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054529172). Log: [`soak4-phase-1-log.jsonl`](./soak4-phase-1-log.jsonl). `ISSUE_PIPELINE_V2` restored to `dry-run` after.
+- **Result:** **not reached** — #2539 still **off Pawpet** (`onBoard: false`). Four ticks logged `none` / `stage-backlog` only; no `request-spec`. No tier-b on #2539.
 
 ### Phase 2 — one green converges
 
@@ -89,4 +92,5 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 | Phase | Date (UTC) | Result | Owner decision |
 |-------|------------|--------|----------------|
 | — | 2026-11-22 | Plan proposed; soak3 tidy | — |
-| 0 | 2026-11-22 | **pass w/ finding** (pre-#2542 identity) | Re-run after **#2542** merge |
+| 0 | 2026-11-22 | **pass** (post-#2542, `025a33ed`) | — |
+| 1 | 2026-11-22 | **not reached** (#2539 not on Pawpet) | Add #2539 to Pawpet, **`Stage=To do`**, then **continue** |
