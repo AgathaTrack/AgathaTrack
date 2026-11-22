@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadConfig, validateConfig, isSharedActsAs } = require('./issue_pipeline_v2_config');
 const { votesOnRequest } = require('./issue_pipeline_v2_review');
+const { deriveSpecFacts, buildSpecRequest } = require('./issue_pipeline_v2_comments');
 const { STAGE_PROMPTS, STAGE_PROMPTS_SIGNED, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
 
 const config = loadConfig();
@@ -50,9 +51,8 @@ test('P2: a 👍 from a login with one identity still counts', () => {
   assert.deepEqual(votes.map((v) => [v.login, v.vote]), [['pawpet-claude', 'up']]);
 });
 
-test('P2: a reaction older than the request is not a vote, on either path', () => {
-  const old = { user: { login: 'pawpet-claude' }, content: '+1', created_at: '2026-11-22T09:00:00Z' };
-  const solo = validateConfig({
+const soloClaudePool = () =>
+  validateConfig({
     agents: [
       { id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'], tier: 'a' },
       { id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'], tier: 'a' },
@@ -62,7 +62,29 @@ test('P2: a reaction older than the request is not a vote, on either path', () =
     limits: config.limits,
     aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
   });
-  assert.deepEqual(votesOnRequest({ request, reactions: [old], config: solo }), []);
+
+test('P2 review path: a reaction older than the request is not a vote', () => {
+  const old = { user: { login: 'pawpet-claude' }, content: '+1', created_at: '2026-11-22T09:00:00Z' };
+  assert.deepEqual(votesOnRequest({ request, reactions: [old], config: soloClaudePool() }), []);
+});
+
+test('P2 spec path: a reaction older than the request is not a DoR pass', () => {
+  const solo = soloClaudePool();
+  const comment = {
+    id: 1,
+    user: { login: 'pawpet-engine' },
+    created_at: CREATED,
+    updated_at: CREATED,
+    body: buildSpecRequest({ assigned: 'claude-a', history: [], config: solo }),
+  };
+  const old = { user: { login: 'pawpet-claude' }, content: '+1', created_at: '2026-11-22T09:00:00Z' };
+  const facts = deriveSpecFacts({
+    comments: [comment],
+    reactions: [old],
+    config: solo,
+    engineLogins: solo.engine.logins,
+  });
+  assert.equal(facts.passedBy, null);
 });
 
 // --- verify step: a shared login must not let a sibling identity stand in for this run ---------
