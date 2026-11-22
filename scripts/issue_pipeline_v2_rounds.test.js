@@ -239,7 +239,7 @@ test('a holder outside the tier pool is reassigned at once, not after the timeou
   const out = decideRound({ bodyHash: 'h0', rounds: [spec('h0'), held], now: NOW, config });
   assert.equal(out.type, 'request-round');
   assert.equal(out.row, 'analysis.round-retry');
-  assert.equal(out.reason, 'not-startable');
+  assert.equal(out.failureClass, 'not-startable');
   assert.equal(out.agent, 'claude-a', 'the other brand from cursor-a, the spec writer');
   assert.equal(out.attempt, 2);
 });
@@ -252,5 +252,5 @@ test('a green from outside the tier pool does not converge; the round is retried
   assert.equal(out.type, 'request-round');
   assert.equal(out.round, 'R2', 'the same round, retried');
   assert.equal(out.agent, 'claude-a', 'a pool identity, the other brand from cursor-a');
-  assert.equal(out.reason, 'not-startable');
+  assert.equal(out.failureClass, 'not-startable');
 });

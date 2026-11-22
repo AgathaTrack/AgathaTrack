@@ -19,11 +19,11 @@ const { decideRound } = require('./issue_pipeline_v2_rounds');
  */
 function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNumber, limits, now }) {
   const requests = findReviewRequests(comments, engineLogins, editors);
-  if (requests.length === 0) return null;
   const idOf = (value) => (value ? resolveAgent(config, value)?.id || value : null);
 
   const specProbe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, issueNumber, bodyHash, limits, now });
-  const spec = { author: idOf(specProbe.assignedTo), hash: requests[0].parsed.hash };
+  // Before the first review request the spec pass is the body the first review will read.
+  const spec = { author: idOf(specProbe.assignedTo), hash: requests[0]?.parsed.hash ?? bodyHash };
 
   // Verified verdicts for each request hash. The verifier only accepts a verdict on the hash it is given.
   const verdicts = [];

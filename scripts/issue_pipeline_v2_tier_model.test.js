@@ -75,6 +75,7 @@ test('claude args: a model name that is not a plain token is refused, never pass
 // --- Review pool is tier a until the challenge tier exists (review process v3 §7, P4) -----------
 
 const { reviewPoolIds } = require('./issue_pipeline_v2_config');
+const { roundsFromReview } = require('./issue_pipeline_v2_round_fixtures');
 const { decide } = require('./issue_pipeline_v2_decide');
 
 test('pool: spec and review pickup never draw from tier b before the challenge tier', () => {
@@ -102,7 +103,8 @@ test('pool: a tier-b assignee on an open review is reassigned, not waited for', 
   const d = decide(
     { mode: 'on', now, onBoard: true, labels: ['pipeline-beta'], stage: 'In analysis', blocked: '', bodyHash: 'h1', totalVotes: 0, wip: 0,
       lastBodyEditor: 'pawpet-bot', editorAgentId: 'cursor-a',
-      review: { requestedHash: 'h1', requestedAt, assignedTo: 'cursor-b', timedOut: [], votes: [] } },
+      review: { requestedHash: 'h1', requestedAt, assignedTo: 'cursor-b', timedOut: [], votes: [] },
+      rounds: roundsFromReview({ requestedHash: 'h1', requestedAt, assignedTo: 'cursor-b', timedOut: [] }, 'h1') },
     cfg,
   );
   assert.notEqual(d.agent, 'cursor-b');
@@ -124,7 +126,7 @@ test('pool: a queued tier-b review assignee is reassigned, not rung again', () =
     ctxFacts({
       labels: ['pipeline-beta', 'queued'],
       lastBodyEditor: 'pawpet-bot', editorAgentId: 'cursor-a',
-      review: { requestedHash: 'h1', requestedAt: NOW_T - 1000, assignedTo: 'cursor-b', timedOut: [], votes: [] },
+      review: { requestedHash: 'h1', requestedAt: NOW_T - 1000, assignedTo: 'cursor-b', timedOut: [], votes: [] }, rounds: roundsFromReview({ requestedHash: 'h1', requestedAt: NOW_T - 1000, assignedTo: 'cursor-b', timedOut: [] }, 'h1'),
     }),
     cfg,
   );

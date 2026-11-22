@@ -231,21 +231,19 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
     ...verdictCtx,
   });
   const merged = { ...facts, ...derived };
-  // P4 dry-run: the round model's answer, logged beside the live action. It never writes.
-  try {
-    merged.roundPlan = planRounds({
-      comments,
-      config,
-      engineLogins,
-      editors,
-      bodyHash,
-      issueNumber: entry.number,
-      limits: config.limits,
-      now,
-    });
-  } catch (error) {
-    merged.roundPlan = { error: String(error?.message ?? error).slice(0, 200) };
-  }
+  // The round model's input (PIPE-V2-D-REV3-007). A failure here is not caught: the issue errors on this
+  // tick, rather than the engine deciding on a guess.
+  merged.roundPlan = planRounds({
+    comments,
+    config,
+    engineLogins,
+    editors,
+    bodyHash,
+    issueNumber: entry.number,
+    limits: config.limits,
+    now,
+  });
+  merged.rounds = merged.roundPlan.derived;
   if (merged.review?.assignedTo && runMode === 'on') {
     merged.review.ringFailed = await doorbellRingFailed({
       comments,

@@ -18,8 +18,11 @@ const requestComment = (id, hash, assigned, at, history = []) => ({
   body: buildReviewRequest({ hash, assigned, history, config }),
 });
 
-test('no review request yet: no plan', () => {
-  assert.equal(planRounds({ comments: [], config, engineLogins: ENGINE, editors: {}, bodyHash: 'h0', issueNumber: 1, limits: config.limits, now: NOW }), null);
+test('no review request yet: the first review is planned from the spec pass', () => {
+  const out = planRounds({ comments: [], config, engineLogins: ENGINE, editors: {}, bodyHash: 'h0', issueNumber: 1, limits: config.limits, now: NOW });
+  assert.equal(out.plan.type, 'request-round');
+  assert.equal(out.plan.round, 'R2');
+  assert.equal(out.plan.attempt, 1);
 });
 
 test('a fresh review request with no verdict: the plan waits, and the dry-run says so', () => {

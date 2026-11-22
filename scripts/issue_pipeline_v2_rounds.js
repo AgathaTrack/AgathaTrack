@@ -124,8 +124,12 @@ function selectType({ config, tier, prevBrand, excluded, rounds, lastUsed, now, 
   return pick(leastRecent(pool), true);
 }
 
-function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
-  const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+/**
+ * `silenceMs` is how long the holder may stay silent (default reviewTimeoutMin; the live caller doubles
+ * it while `busy`, as soak-6 did). `holderFailed` means the holder's doorbell did not start.
+ */
+function decideRound({ bodyHash, rounds, now, lastUsed = {}, config, silenceMs, holderFailed = false }) {
+  const timeoutMs = silenceMs ?? config.limits.reviewTimeoutMin * MIN;
   if (!rounds || rounds.length === 0) {
     return { type: 'none', reason: 'analysis.no-spec' };
   }
@@ -137,7 +141,7 @@ function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
 
   // A holder outside the round's tier pool (a tier-b id on a tier-a round, or one that cannot be
   // started) is not waited for and its verdict does not count: it is reassigned at once (REV3-004).
-  const holderOut = Boolean(lastAttempt.type) && !tierPool(config, last.tier).includes(lastAttempt.type);
+  const holderOut = holderFailed || (Boolean(lastAttempt.type) && !tierPool(config, last.tier).includes(lastAttempt.type));
 
   // 1. Convergence: one green on the current hash, from a run other than the one that wrote it,
   //    and from a pool identity.
@@ -174,7 +178,7 @@ function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
         attempt: last.attempts.length + 1,
         ...next,
         row: 'analysis.round-retry',
-        ...(holderOut ? { reason: 'not-startable' } : {}),
+        failureClass: holderFailed ? 'ring-failed' : holderOut ? 'not-startable' : 'timeout',
       };
     }
     return { type: 'set-blocked', reason: 'stalled', row: 'analysis.round-failed' };
