@@ -51,8 +51,9 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 - Fixture **soak4-01** (**#2539**) only, **`Stage=To do` on Pawpet**, labels **`soak4`** (+ `task`) only. Issues absent from the Pawpet project are **`not-on-board`** and are not ticked. A Pawpet row with **no org `Stage` or `Stage=Backlog`** yields `stage-backlog` and does not spec — operator sets **`Stage=To do`**.
 - `on` ticks until spec moves issue to In analysis or **4 ticks** spent.
 - **Exit:** `request-spec` to tier-a (`cursor-a` or `claude-a`) on first tick; spec round close (`verdict spec`); no `request-review` to tier-b.
-- **Run:** `ISSUE_PIPELINE_V2=on`, label scope `soak4` — runs [45054287493](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054287493), [45054367168](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054367168), [45054443295](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054443295), [45054529172](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45054529172). Log: [`soak4-phase-1-log.jsonl`](./soak4-phase-1-log.jsonl). `ISSUE_PIPELINE_V2` restored to `dry-run` after.
-- **Result:** **not reached** — four ticks logged **`none` / `stage-backlog`** for #2539 (not **To do**); no `request-spec`; no tier-b. **Operator:** confirm Pawpet membership and set **`Stage=To do`** before retry.
+- **Run (blocked):** earlier attempt while **To do** was not set — see prior log archive in git history.
+- **Run (pass):** `ISSUE_PIPELINE_V2=on`, scope `soak4` — [45079799282](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45079799282), [45079886356](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45079886356), [45079972407](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45079972407), [45080061083](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45080061083). Log: [`soak4-phase-1-log.jsonl`](./soak4-phase-1-log.jsonl). Restored `dry-run` after.
+- **Result:** **pass** — tick 1 `request-spec` → **claude-a** (`todo.request`); tick 2 `todo.waiting`; tick 3 **`Stage=In analysis`** (`todo.dor-pass`, `v2:round` close applied); tick 4 **`request-review` cursor-a** (tier-a R2 — within 4-tick budget, not tier-b). No `pipeline_v2_error`. #2539 now **In analysis**.
 
 ### Phase 2 — one green converges
 
@@ -93,4 +94,4 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 |-------|------------|--------|----------------|
 | — | 2026-11-22 | Plan proposed; soak3 tidy | — |
 | 0 | 2026-11-22 | **pass** (post-#2542, `025a33ed`) | — |
-| 1 | 2026-11-22 | **not reached** (#2539 not on Pawpet) | Add #2539 to Pawpet, **`Stage=To do`**, then **continue** |
+| 1 | 2026-11-22 | **pass** (#2539 → In analysis, tick 3) | **continue** → Phase 2 |
