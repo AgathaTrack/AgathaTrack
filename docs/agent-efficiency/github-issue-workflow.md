@@ -218,10 +218,11 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   (from the board column, else Backlog) and a `Blocked` reason from the legacy `question` / `needs-owner` labels.
 - **Soak:** `dry-run` for a day; then `on` with `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`, taking one sandbox issue
   To do → Done and sending one to each `Blocked` reason; then `on` for the board (clear the label variable).
-- **Soak2 (2026-11-21):** three live ticks on `main` at `133d037` (~16:44–17:00 UTC); see decision log PIPE-V2-D-SOAK-006–008.
-  Fixture matrix (proposed): [pipeline-v2-soak2-matrix.md](./changes/pipeline-v2-soak2-matrix.md) (**PR #2509**). Tick outcome table
-  (in delivery): [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) (**PR #2511**). Round robin fix shipped **#2510**
-  (not soak-covered until a later `on` window). Owner: re-tick **`pipeline-beta`** issues stuck **In analysis** after reviews landed in `dry-run`.
+- **Soak2 (2026-11-21 – 2026-11-22):** sign-off [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md); fixtures **#2493–#2508** closed.
+- **Soak3 phase 1 (2026-11-22, proposed):** **To do → Ready** only — no delivery launches. Matrix:
+  [pipeline-v2-soak3-matrix.md](./changes/pipeline-v2-soak3-matrix.md). Fixtures **#2527–#2535** (`pipeline-beta`; **#2535** also
+  `manual-only`). Bootstrap: `./scripts/bootstrap_soak3_phase1_issues.sh`. Before ticks: set org **`Stage=To do`** on each fixture;
+  for **#2529** set **`Blocked=paused`**. Pause phase 1 when every row reaches **Ready** (or expected `blocked`) before phase 2.
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
