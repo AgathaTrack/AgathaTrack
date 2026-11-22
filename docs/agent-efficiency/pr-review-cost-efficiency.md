@@ -1,5 +1,5 @@
 ---
-title: Pr Review Cost Efficiency
+title: PR Review Cost Efficiency
 owner: Documentation Team
 audience: both
 status: active
