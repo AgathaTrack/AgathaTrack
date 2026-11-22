@@ -1,5 +1,5 @@
 ---
-title: Github Labels
+title: GitHub Labels
 owner: Documentation Team
 audience: both
 status: active
