@@ -232,3 +232,14 @@ test('least recently used decides when the author is a human (no brand to altern
   assert.equal(out.fallback, false);
   assert.equal(out.round, 'R2');
 });
+
+test('a holder outside the tier pool is reassigned at once, not after the timeout', () => {
+  // claude-b (tier b) holds an open tier-a round: it is not waited for.
+  const held = { tier: 'a', kind: 'review', hashIn: 'h0', attempts: [{ type: 'claude-b', nonce: 'n2', startedAt: FRESH, result: null, hashOut: null }] };
+  const out = decideRound({ bodyHash: 'h0', rounds: [spec('h0'), held], now: NOW, config });
+  assert.equal(out.type, 'request-round');
+  assert.equal(out.row, 'analysis.round-retry');
+  assert.equal(out.reason, 'not-startable');
+  assert.equal(out.agent, 'claude-a', 'the other brand from cursor-a, the spec writer');
+  assert.equal(out.attempt, 2);
+});

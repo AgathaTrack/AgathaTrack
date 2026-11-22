@@ -65,10 +65,23 @@ Second identical tick ([stability check G](#3-checks-a-h)) wrote `/tmp/p4-accept
 
 ## 5. Verdict
 
-**P4 acceptance: PASS WITH DISAGREEMENTS**
+**P4 acceptance (first dry-run, as written above): PASS WITH DISAGREEMENTS. Superseded by the review in §7: not accepted; re-run required.**
 
 The round planner covers every beta In analysis issue that has review requests, produces consistent tier-a R2/R3 retries with no plan errors, and is stable across repeated ticks. One expected identity disagreement (#2534) shows where live `decide()` has not yet adopted P4 reassign semantics. `PIPELINE_VOTE_KEY` was absent; verdict-driven branches were not exercised (documented limit, not a run failure).
 
 ## 6. Raw log
 
 Committed at [`docs/agent-efficiency/changes/p4-acceptance-dry-run.jsonl`](./p4-acceptance-dry-run.jsonl) (13 404 bytes).
+
+## 7. Review of this run (Claude)
+
+**Verdict: not accepted. Re-run required.** The run is useful, but three things in §2 to §5 do not hold as written.
+
+1. **Five agreements overstate the result.** Without `PIPELINE_VOTE_KEY`, no verdict is visible, so a body that a red edit produced is attributed to a human. With a human author the plan's alternation has no brand to avoid and falls back to least-recently-used. That happens to match the live round robin on #2527, #2530, #2532 and #2533. These are coincidences, not evidence that the round rule agrees with the live engine.
+2. **A real bug in `decideRound`, found in §2.** A round holder outside the tier pool (a tier-b id on a tier-a round, or one that cannot be started) was waited on until `reviewTimeoutMin`. REV3-004 says it is reassigned at once, and the live engine does that (`failureClass: not-startable`). #2533 and #2534 hit this path. **Fixed in the code that follows this review:** a holder outside the tier pool is a silent attempt at once, with `reason: not-startable`. A test covers it. The suite is at 244 passing.
+3. **The #2534 cause is not "live has not adopted P4".** The plan saw R2 (`cursor-b`) and R3 (`claude-b`) with no verdicts, so it could not see the red that moved the body from `da18…` to `a5a2…`. It then treated the body as human-authored and fell back to least-recently-used (`cursor-a`). The live engine reassigned the non-pool holder to `claude-a`. The first is a derivation gap without the key; the second is the bug in point 2. The policy difference left is least-recently-used per issue (plan) against the board-wide round robin (live). That difference is listed as a known limit in REV3-007.
+
+**What holds:** coverage of the six issues, no errors, no `writes: true`, tier-a discipline, round labels for R2 and R3, retry excludes the silent holder, and `fallback: true` on #2531. Stability was checked on one repeat tick.
+
+**To accept P4:** re-run this acceptance with `PIPELINE_VOTE_KEY` set and the branch at or after the fix. Pass when (a) the non-pool holder cases show `not-startable` at once, (b) any identity disagreement has a cause in the table, and (c) at least one issue shows a visible red-with-edit, so the author attribution is tested with a real verdict. Until then P4 stays open (REV3-007).
+

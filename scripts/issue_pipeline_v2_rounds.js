@@ -63,6 +63,15 @@ function attemptState(round, attempt, now, timeoutMs) {
   return expired ? 'silent' : 'pending';
 }
 
+/** Startable ids in a tier: the pool a round can draw from. */
+function tierPool(config, tier) {
+  const startable = new Set(config.launchRunners || []);
+  return (config.agents || [])
+    .filter((agent) => agent.runner && startable.has(agent.runner))
+    .filter((agent) => (agent.tier || 'a') === tier)
+    .map((agent) => agent.id);
+}
+
 /** Author of the current body: the run that produced `bodyHash`, or a human when none did. */
 function authorOf(rounds, bodyHash) {
   for (let r = rounds.length - 1; r >= 0; r -= 1) {
@@ -146,9 +155,13 @@ function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
   }
 
   // 2. The last round is still open on the current hash.
-  const open = last.hashIn === bodyHash && ['pending', 'red-hold', 'silent'].includes(state);
+  // A holder outside the round's tier pool (a tier-b id on a tier-a round, or one that cannot be
+  // started) is not waited for: it is reassigned at once, as REV3-004 requires.
+  const holderOut = Boolean(lastAttempt.type) && !tierPool(config, last.tier).includes(lastAttempt.type);
+  const effective = holderOut && (state === 'pending' || state === 'red-hold') ? 'silent' : state;
+  const open = last.hashIn === bodyHash && ['pending', 'red-hold', 'silent'].includes(effective);
   if (open) {
-    if (state === 'pending' || state === 'red-hold') {
+    if (effective === 'pending' || effective === 'red-hold') {
       return { type: 'none', reason: 'analysis.round-waiting' };
     }
     // silent: retry the same round once, with a type that has not tried it yet.
@@ -164,6 +177,7 @@ function decideRound({ bodyHash, rounds, now, lastUsed = {}, config }) {
         attempt: last.attempts.length + 1,
         ...next,
         row: 'analysis.round-retry',
+        ...(holderOut ? { reason: 'not-startable' } : {}),
       };
     }
     return { type: 'set-blocked', reason: 'stalled', row: 'analysis.round-failed' };
