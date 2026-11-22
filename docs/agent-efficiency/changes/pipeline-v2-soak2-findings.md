@@ -2,7 +2,9 @@
 title: Pipeline v2 soak2 findings (sign-off)
 owner: Agent efficiency
 audience: owner
-status: archived
+status: in-delivery
+status_since: 2026-11-22
+folds_into: docs/agent-efficiency/github-issue-workflow.md
 last_updated: 2026-11-22
 tags: [agent, pipeline, soak]
 related_prs: [2510, 2511, 2512, 2517, 2525]
