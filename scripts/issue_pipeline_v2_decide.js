@@ -33,7 +33,7 @@
 
 const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
 const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
-const { decideRound } = require('./issue_pipeline_v2_rounds');
+const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
 
 const STAGES = [
   'Backlog',
@@ -224,23 +224,6 @@ function decideToDo(facts, config) {
   });
 }
 
-/**
- * The board's round-robin cursor as recency: the next id after `roundRobinAfter` is the least recent,
- * so least-recently-used picks it first, as `nextInLine` did. Ids further on the ring are more recent.
- */
-function cursorLastUsed(facts, config) {
-  const order = facts.roundRobinOrder || startableIds(config);
-  const after = facts.roundRobinAfter ? order.indexOf(facts.roundRobinAfter) : -1;
-  if (after < 0) return {};
-  const n = order.length;
-  const used = {};
-  order.forEach((id, i) => {
-    const ahead = (i - after + n) % n; // 0 = the cursor itself, 1 = next in line
-    used[id] = ahead === 0 ? 0 : -(n - ahead);
-  });
-  return used;
-}
-
 /** Translate a round-model action into the action the apply path writes. */
 function toLiveAction(plan, facts) {
   if (plan.type === 'request-round') {
@@ -301,7 +284,7 @@ function decideInAnalysis(facts, config) {
     bodyHash: facts.bodyHash,
     rounds: facts.rounds || [],
     now: facts.now,
-    lastUsed: cursorLastUsed(facts, config),
+    lastUsed: cursorLastUsed(facts.roundRobinOrder || startableIds(config), facts.roundRobinAfter),
     config,
     // A doorbell marked busy is still working: its silence window is doubled (soak-6, #2485).
     silenceMs: (facts.labels || []).includes('busy') ? BUSY_HOLD_TIMEOUTS * timeoutMs : timeoutMs,

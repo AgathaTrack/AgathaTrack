@@ -40,3 +40,17 @@ test('a request that went silent is retried on another identity in the plan', ()
   assert.equal(out.plan.attempt, 2);
   assert.equal(out.plan.agent, 'cursor-a');
 });
+
+test('the logged plan and the live action name the same identity for the same board cursor', () => {
+  const { decide } = require('./issue_pipeline_v2_decide');
+  const order = config.agents.map((a) => a.id);
+  // The board last assigned cursor-a: the next tier-a pick is claude-a, in both paths.
+  const logged = planRounds({ comments: [], config, engineLogins: ENGINE, editors: {}, bodyHash: 'h0', issueNumber: 1, limits: config.limits, now: NOW, roundRobinAfter: 'cursor-a', roundRobinOrder: order });
+  const live = decide({
+    mode: 'on', now: NOW, onBoard: true, labels: ['pipeline-beta'], stage: 'In analysis', blocked: '', bodyHash: 'h0', wip: 0, totalVotes: 0,
+    roundRobinAfter: 'cursor-a', roundRobinOrder: order,
+    rounds: [{ tier: 'a', kind: 'spec', hashIn: null, attempts: [{ type: null, nonce: null, startedAt: null, result: 'spec', hashOut: 'h0' }] }],
+  }, config);
+  assert.equal(logged.plan.agent, live.agent);
+  assert.equal(live.agent, 'claude-a');
+});

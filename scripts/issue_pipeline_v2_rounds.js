@@ -214,4 +214,20 @@ function roundLabel(rounds, tier) {
   return tier === 'a' ? `R${reviews + 2}` : `C${reviews + 1}`;
 }
 
-module.exports = { decideRound, attemptState, authorOf, isDown, selectType, roundLabel };
+/**
+ * The board's round-robin cursor as recency: the next id after `after` is the least recent, so
+ * least-recently-used picks it first, as `nextInLine` did. Ids further on the ring are more recent.
+ */
+function cursorLastUsed(order, after) {
+  const at = after ? order.indexOf(after) : -1;
+  if (at < 0) return {};
+  const n = order.length;
+  const used = {};
+  order.forEach((id, i) => {
+    const ahead = (i - at + n) % n; // 0 = the cursor itself, 1 = next in line
+    used[id] = ahead === 0 ? 0 : -(n - ahead);
+  });
+  return used;
+}
+
+module.exports = { decideRound, attemptState, authorOf, isDown, selectType, roundLabel, cursorLastUsed };
