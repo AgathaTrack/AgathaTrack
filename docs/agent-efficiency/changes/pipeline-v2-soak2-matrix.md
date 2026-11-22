@@ -2,14 +2,15 @@
 title: Pipeline v2 soak2 live matrix
 owner: Agent efficiency
 audience: owner
-status: active
-last_updated: 2026-11-21
+status: in-delivery
+last_updated: 2026-11-22
 tags: [agent, pipeline, soak]
+related_prs: [2509, 2511]
 ---
 
 # Pipeline v2 soak2 — live test matrix
 
-Canonical copy for owner review (replaces ephemeral agent artifacts). Issues **#2493–#2508**, label **`pipeline-beta`**, org **`Stage` = To do** (pre-set **`Blocked`** on #2496 `paused`, #2507 `stalled`). Supersedes **#2480–#2487** (closed).
+Change-doc record for owner review. Results are as of the dry-run tick of 2026-11-21; the outcomes and fixes are in the findings record, which lives on `main` ([pipeline-v2-soak2-findings.md](pipeline-v2-soak2-findings.md)). Issues **#2493–#2508**, label **`pipeline-beta`**, org **`Stage` = To do** (pre-set **`Blocked`** on #2496 `paused`, #2507 `stalled`). Supersedes **#2480–#2487** (closed).
 
 Config checked against `.github/pipeline-agents.json`: WIP **2**, `runnerWip.claude` **1**, `aat.enabled` **true**, agents `cursor-a` / `cursor-b` (`pawpet-bot`) + `claude-a` (`pawpet-claude`).
 
