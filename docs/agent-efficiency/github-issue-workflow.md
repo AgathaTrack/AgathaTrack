@@ -218,10 +218,12 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   (from the board column, else Backlog) and a `Blocked` reason from the legacy `question` / `needs-owner` labels.
 - **Soak:** `dry-run` for a day; then `on` with `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`, taking one sandbox issue
   To do → Done and sending one to each `Blocked` reason; then `on` for the board (clear the label variable).
-- **Soak2 (2026-11-21):** three live ticks on `main` at `133d037` (~16:44–17:00 UTC); see decision log PIPE-V2-D-SOAK-006–008.
-  Fixture matrix (proposed): [pipeline-v2-soak2-matrix.md](./changes/pipeline-v2-soak2-matrix.md) (**PR #2509**). Tick outcome table
-  (in delivery): [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) (**PR #2511**). Round robin fix shipped **#2510**
-  (not soak-covered until a later `on` window). Owner: re-tick **`pipeline-beta`** issues stuck **In analysis** after reviews landed in `dry-run`.
+- **Soak2 (2026-11-21 – 2026-11-22):** live tick bursts on `main`; sign-off and fix list:
+  [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md). Shipped **#2510** (round robin), **#2511** (SOAK-007/008 skills),
+  **#2512** (Claude runner WIP / `queued`), **#2517** (preflight Out-of-scope exclusion). Fixtures **#2493–#2508** retired 2026-11-22; soak3
+  uses a fresh matrix. **Operator:** after a linked PR merges, check **Definition of Done** on the issue, then `finish-work`; otherwise
+  **`Blocked=stalled`** is likely. **`dry-run`** reviews apply on the next **`on`** tick (PIPE-V2-D-SOAK-007). For drain-only soaks,
+  `WIP_LIMIT=off` is acceptable briefly (see repo variable table).
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
