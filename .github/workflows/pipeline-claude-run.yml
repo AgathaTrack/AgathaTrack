@@ -50,7 +50,6 @@ jobs:
       - name: Prepare PIPELINE_* env and prompt
         id: prep
         env:
-          PIPELINE_VOTE_KEY: ${{ secrets.PIPELINE_VOTE_KEY }}
           INPUT_ISSUE: ${{ inputs.issue }}
           INPUT_STAGE: ${{ inputs.stage }}
           INPUT_AGENT_ID: ${{ inputs.agent_id }}
@@ -63,7 +62,6 @@ jobs:
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         env:
-          PIPELINE_RUN_SECRET: ${{ env.PIPELINE_RUN_SECRET }}
           PIPELINE_AGENT_ID: ${{ env.PIPELINE_AGENT_ID }}
           PIPELINE_RUN_NONCE: ${{ env.PIPELINE_RUN_NONCE }}
           PIPELINE_ISSUE: ${{ env.PIPELINE_ISSUE }}

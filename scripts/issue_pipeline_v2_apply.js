@@ -16,7 +16,7 @@ const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
 const { buildReopened, buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchPending, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 const { buildAatLaunch, buildAatRelaunch, buildAatReset, buildAatWaive } = require('./issue_pipeline_v2_acceptance');
-const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
+const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { isRunnerQueuedError } = require('./pipeline_runners/claude');
 const { buildRoundMarker, roundFor } = require('./issue_pipeline_v2_round_markers');
 const { authorOf } = require('./issue_pipeline_v2_rounds');
@@ -141,8 +141,6 @@ async function applyAction({ action: decided, ctx }) {
       }
       const markerBase = round ? { ...round, identity: agent, brand: entry.runner } : null;
       const nonce = randomNonceHex();
-      const voteKey = process.env.PIPELINE_VOTE_KEY || '';
-      const runSecret = voteKey ? deriveRunSecret(voteKey, ctx.issueNumber, agent, stage, nonce) : '';
       try {
         let runId = 'dry-run';
         if (!ctx.dryRun) {
@@ -151,7 +149,6 @@ async function applyAction({ action: decided, ctx }) {
             stage,
             purpose: 'doorbell',
             nonce,
-            runSecret,
             config: ctx.config,
           });
           runId = run?.runId;

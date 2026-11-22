@@ -1,11 +1,11 @@
 'use strict';
 
 const { resolveAgent, sharedActsAs } = require('./issue_pipeline_v2_config');
-const { deriveRunSecret, verdictSignature, timingSafeEqualHex } = require('./issue_pipeline_v2_secrets');
 const { listLaunchRecords } = require('./issue_pipeline_v2_launch');
 
+// No signature: the nonce is the run's identity (PIPE-V2-D-REV3-010). A legacy `sig=` is accepted and ignored.
 const VERDICT =
-  /<!--\s*v2:verdict\s+agent=(\S+)\s+nonce=([a-f0-9]+)\s+kind=(spec|review|edit)\s+hash=(\S+)\s+value=(\S+)\s+sig=([a-f0-9]+)\s*-->/i;
+  /<!--\s*v2:verdict\s+agent=(\S+)\s+nonce=([a-f0-9]+)\s+kind=(spec|review|edit)\s+hash=(\S+)\s+value=(\S+)(?:\s+sig=[a-f0-9]+)?\s*-->/i;
 
 /** Launch stage each signed kind is allowed under (§3.6). Any other stage's doorbell cannot sign. */
 const VERDICT_STAGE = { spec: 'To do', review: 'In analysis', edit: 'In analysis' };
@@ -21,7 +21,6 @@ function parseVerdict(body) {
     kind: match[3],
     hash: match[4],
     value: match[5],
-    sig: match[6].toLowerCase(),
   };
 }
 
@@ -36,9 +35,7 @@ function verifyVerdictParsed({
   agent,
   comments,
   engineLogins,
-  issueNumber,
   bodyHash,
-  voteKey,
   timeoutMin,
   postedAt,
   author,
@@ -63,11 +60,6 @@ function verifyVerdictParsed({
   if (parsed.hash !== bodyHash) {
     return { ok: false, reason: 'hash-mismatch' };
   }
-  const runSecret = deriveRunSecret(voteKey, issueNumber, agent.id, launch.stage || 'To do', parsed.nonce);
-  const expected = verdictSignature(runSecret, issueNumber, agent.id, parsed.nonce, parsed.kind, parsed.hash, parsed.value);
-  if (!timingSafeEqualHex(expected, parsed.sig)) {
-    return { ok: false, reason: 'bad-sig' };
-  }
   return { ok: true, parsed: { ...parsed, agentId: agent.id, actsAs: agent.actsAs } };
 }
 
@@ -84,12 +76,11 @@ function findVerifiedVerdicts({
   engineLogins,
   issueNumber,
   bodyHash,
-  voteKey,
   limits,
   kinds,
   sinceMs,
 }) {
-  if (!voteKey || !bodyHash) {
+  if (!bodyHash) {
     return [];
   }
   const timeoutMin = limits?.reviewTimeoutMin || 30;
@@ -116,7 +107,6 @@ function findVerifiedVerdicts({
       engineLogins,
       issueNumber,
       bodyHash,
-      voteKey,
       timeoutMin,
       postedAt: at,
       author: comment.user?.login,

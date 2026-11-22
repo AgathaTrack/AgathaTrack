@@ -17,12 +17,12 @@ const { decideRound } = require('./issue_pipeline_v2_rounds');
 /**
  * @returns {{plan: object, rounds: number}|null} null when there is nothing to plan yet (no spec pass)
  */
-function planRounds({ comments, config, engineLogins, editors, bodyHash, voteKey, issueNumber, limits, now }) {
+function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNumber, limits, now }) {
   const requests = findReviewRequests(comments, engineLogins, editors);
   if (requests.length === 0) return null;
   const idOf = (value) => (value ? resolveAgent(config, value)?.id || value : null);
 
-  const specProbe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, issueNumber, bodyHash, voteKey, limits, now });
+  const specProbe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, issueNumber, bodyHash, limits, now });
   const spec = { author: idOf(specProbe.assignedTo), hash: requests[0].parsed.hash };
 
   // Verified verdicts for each request hash. The verifier only accepts a verdict on the hash it is given.
@@ -34,7 +34,6 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, voteKey
       engineLogins,
       issueNumber,
       bodyHash: request.parsed.hash,
-      voteKey,
       limits,
       kinds: ['review'],
     })) {

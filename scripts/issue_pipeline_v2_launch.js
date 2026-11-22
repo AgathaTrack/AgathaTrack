@@ -256,13 +256,13 @@ const STAGE_PROMPTS_SIGNED = {
   'To do':
     STAGE_PROMPTS['To do'].replace(
       "Then react 👍 on the engine's latest `v2:spec-request` comment to mark the spec ready;",
-      'Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, and sign `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. Never print `PIPELINE_RUN_SECRET` or the nonce;',
+      'Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, and record `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. The CLI reads your run nonce from `PIPELINE_RUN_NONCE`; do not type it yourself;',
     ),
   'In analysis':
     STAGE_PROMPTS['In analysis'].replace(
       'If it is sound, react 👍 on the engine\'s latest `v2:review-request` comment; if not, react 👎 with a comment explaining why.',
       'If it is sound, run `node scripts/pipeline_verdict.js read`, then `node scripts/pipeline_verdict.js review up|down --hash <hash>`. ' +
-        'If you change the body, use `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` only. Never print `PIPELINE_RUN_SECRET` or the nonce;',
+        'If you change the body, use `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` only. The CLI reads your run nonce from `PIPELINE_RUN_NONCE`; do not type it yourself;',
     ),
 };
 
@@ -293,7 +293,6 @@ async function launchIssue({
   stage,
   purpose = 'delivery',
   nonce,
-  runSecret,
   config,
   mergeSha,
   scopeRelaunchSha,
@@ -335,7 +334,6 @@ async function launchIssue({
       stage,
       method,
       nonce,
-      runSecret,
       purpose,
       apiKey,
       config,

@@ -8,7 +8,6 @@
 const fs = require('fs');
 const { parseRepo } = require('../.github/scripts/github-project-lib');
 const { loadConfig, resolveAgent } = require('./issue_pipeline_v2_config');
-const { deriveRunSecret } = require('./issue_pipeline_v2_secrets');
 const { METHOD_PROMPTS, STAGE_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
 const { listIssueComments } = require('./issue_pipeline_v2_comments');
 const { findRequestComment, reactionHint, buildClaudeArgs } = require('./pipeline_claude_run_lib');
@@ -37,9 +36,8 @@ async function main() {
   const agentId = process.env.INPUT_AGENT_ID;
   const method = process.env.INPUT_METHOD || 'PR';
   const nonce = process.env.INPUT_NONCE;
-  const voteKey = process.env.PIPELINE_VOTE_KEY;
   const token = process.env.GH_TOKEN;
-  if (!voteKey || !token || !nonce || !agentId || !issueNumber) {
+  if (!token || !nonce || !agentId || !issueNumber) {
     throw new Error('missing required pipeline claude prepare inputs');
   }
   const { owner, repo } = parseRepo(process.env.GITHUB_REPOSITORY || '');
@@ -48,9 +46,6 @@ async function main() {
   if (!agent) {
     throw new Error(`unknown agent ${agentId}`);
   }
-  const runSecret = deriveRunSecret(voteKey, issueNumber, agentId, stage, nonce);
-  console.log(`::add-mask::${runSecret}`);
-  appendEnv('PIPELINE_RUN_SECRET', runSecret);
   appendEnv('PIPELINE_AGENT_ID', agentId);
   appendEnv('PIPELINE_RUN_NONCE', nonce);
   appendEnv('PIPELINE_ISSUE', String(issueNumber));

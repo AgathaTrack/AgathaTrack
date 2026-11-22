@@ -9,7 +9,7 @@
 const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/github-project-lib');
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
-const { randomNonceHex, deriveRunSecret } = require('./issue_pipeline_v2_secrets');
+const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
@@ -179,11 +179,9 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
   const editors = await resolveEditors({ comments, config, token, io });
   const engineLogins = config.engine.logins;
   const bodyHash = bodySha(entry.issue.body);
-  const voteKey = process.env.PIPELINE_VOTE_KEY || '';
   const verdictCtx = {
     issueNumber: entry.number,
     bodyHash,
-    voteKey,
     limits: config.limits,
     now,
   };
@@ -241,7 +239,6 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
       engineLogins,
       editors,
       bodyHash,
-      voteKey,
       issueNumber: entry.number,
       limits: config.limits,
       now,
@@ -420,19 +417,14 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           restFn: io.restFn,
           launchFn:
             io.launchFn ||
-            (({ agent, method, stage, purpose = 'delivery', nonce, runSecret, mergeSha, scopeRelaunchSha }) => {
+            (({ agent, method, stage, purpose = 'delivery', nonce, mergeSha, scopeRelaunchSha }) => {
               const launchNonce = nonce || (purpose === 'delivery' ? randomNonceHex() : undefined);
-              const voteKey = process.env.PIPELINE_VOTE_KEY || '';
-              const secret =
-                runSecret ||
-                (voteKey && launchNonce ? deriveRunSecret(voteKey, entry.number, agent, stage || 'Ready', launchNonce) : '');
               return launchIssue({
                 agent,
                 method,
                 stage,
                 purpose,
                 nonce: launchNonce,
-                runSecret: secret,
                 config,
                 mergeSha,
                 scopeRelaunchSha,

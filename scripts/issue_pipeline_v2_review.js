@@ -1,7 +1,7 @@
 'use strict';
 
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
-const { agentLogins, resolveAgent, entryId, entryActsAs, sharedActsAs, isSharedActsAs } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent, entryId, entryActsAs, isSharedActsAs } = require('./issue_pipeline_v2_config');
 const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const REVIEW_REQUEST = 'v2:review-request';
@@ -89,7 +89,6 @@ function deriveReviewFacts({
   editors,
   issueNumber,
   bodyHash,
-  voteKey,
   limits,
   now,
 }) {
@@ -101,23 +100,22 @@ function deriveReviewFacts({
     return { review: {}, lastBodyEditor, totalVotes: 0 };
   }
   const votes = [];
-  const sharedLogins = new Set(sharedActsAs(config));
   const enteredAt = Date.parse(requests[0].comment.created_at);
   for (const request of requests) {
     votes.push(
       ...votesOnRequest({ request, reactions: reactionsByComment?.[request.comment.id], config }).filter(
-        (vote) => !(isSharedActsAs(config, vote.login) || (sharedLogins.has(vote.login) && !voteKey)),
+        // A shared login cannot name its voter, so its reactions are never votes (PIPE-V2-D-P2-001).
+        (vote) => !isSharedActsAs(config, vote.login),
       ),
     );
   }
-  if (voteKey && bodyHash && issueNumber) {
+  if (bodyHash && issueNumber) {
     for (const verdict of findVerifiedVerdicts({
       comments,
       config,
       engineLogins,
       issueNumber,
       bodyHash,
-      voteKey,
       limits,
       kinds: ['review'],
       sinceMs: enteredAt,
@@ -139,14 +137,13 @@ function deriveReviewFacts({
     }
   }
   let editorAgentId = null;
-  if (voteKey && bodyHash && issueNumber) {
+  if (bodyHash && issueNumber) {
     const editClaims = findVerifiedVerdicts({
       comments,
       config,
       engineLogins,
       issueNumber,
       bodyHash,
-      voteKey,
       limits,
       kinds: ['edit'],
     }).filter(

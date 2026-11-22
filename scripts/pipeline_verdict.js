@@ -2,12 +2,11 @@
 'use strict';
 
 /**
- * Pipeline v2 signed verdict CLI (#2428). Uses PIPELINE_RUN_SECRET and public PIPELINE_* env only.
+ * Pipeline v2 verdict CLI (#2428). Reads PIPELINE_AGENT_ID and PIPELINE_RUN_NONCE from the run's environment. Unsigned since PIPE-V2-D-REV3-010.
  */
 
 const fs = require('node:fs');
 const { bodySha } = require('./issue_pipeline_v2_hash');
-const { verdictSignature } = require('./issue_pipeline_v2_secrets');
 const { rest, parseRepo } = require('../.github/scripts/github-project-lib');
 const { resolveAgent, loadConfig } = require('./issue_pipeline_v2_config');
 
@@ -48,9 +47,9 @@ async function cmdRead({ repo, number, token }) {
   process.stdout.write(`hash=${hash}\n\n${body}`);
 }
 
-function buildVerdictComment({ agentId, nonce, kind, hash, value, sig }) {
+function buildVerdictComment({ agentId, nonce, kind, hash, value }) {
   return [
-    `<!-- v2:verdict agent=${agentId} nonce=${nonce} kind=${kind} hash=${hash} value=${value} sig=${sig} -->`,
+    `<!-- v2:verdict agent=${agentId} nonce=${nonce} kind=${kind} hash=${hash} value=${value} -->`,
     `Signed \`${kind}\` \`${value}\` for hash \`${hash}\`.`,
   ].join('\n');
 }
@@ -80,9 +79,7 @@ async function cmdEdit({ flags, repo, number, token }) {
   }
   const agentId = requireEnv('PIPELINE_AGENT_ID');
   const nonce = requireEnv('PIPELINE_RUN_NONCE');
-  const runSecret = requireEnv('PIPELINE_RUN_SECRET');
-  const sig = verdictSignature(runSecret, number, agentId, nonce, 'edit', newHash, 'up');
-  const comment = buildVerdictComment({ agentId, nonce, kind: 'edit', hash: newHash, value: 'up', sig });
+  const comment = buildVerdictComment({ agentId, nonce, kind: 'edit', hash: newHash, value: 'up' });
   await rest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}/comments`, token, {
     body: comment,
   });
@@ -91,7 +88,6 @@ async function cmdEdit({ flags, repo, number, token }) {
 async function cmdSign({ kind, value, flags, repo, number, token }) {
   const agentId = requireEnv('PIPELINE_AGENT_ID');
   const nonce = requireEnv('PIPELINE_RUN_NONCE');
-  const runSecret = requireEnv('PIPELINE_RUN_SECRET');
   const hash = flags.hash;
   if (!hash) {
     throw new Error('--hash is required');
@@ -106,8 +102,7 @@ async function cmdSign({ kind, value, flags, repo, number, token }) {
   if (!agent) {
     throw new Error(`unknown agent ${agentId}`);
   }
-  const sig = verdictSignature(runSecret, number, agentId, nonce, kind, hash, value);
-  const comment = buildVerdictComment({ agentId, nonce, kind, hash, value, sig });
+  const comment = buildVerdictComment({ agentId, nonce, kind, hash, value });
   await rest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}/comments`, token, {
     body: comment,
   });

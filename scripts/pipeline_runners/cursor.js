@@ -9,12 +9,11 @@ const PUBLIC_RUN_ENV = [
   'PIPELINE_ISSUE',
 ];
 
-function pipelineRunEnvVars({ issueNumber, agentId, stage, nonce, runSecret, botToken }) {
+function pipelineRunEnvVars({ issueNumber, agentId, stage, nonce, botToken }) {
   const vars = {
     PIPELINE_AGENT_ID: String(agentId),
     PIPELINE_ISSUE: String(issueNumber),
     PIPELINE_RUN_NONCE: String(nonce),
-    PIPELINE_RUN_SECRET: String(runSecret),
   };
   if (stage) {
     vars.PIPELINE_STAGE = String(stage);
@@ -35,7 +34,6 @@ async function launch({
   stage,
   method,
   nonce,
-  runSecret,
   purpose,
   apiKey,
   config,
@@ -71,7 +69,6 @@ async function launch({
       agentId: agent.id,
       stage: stage || 'In progress',
       nonce,
-      runSecret,
     }),
     autoCreatePR: purpose !== 'doorbell',
   });
