@@ -35,7 +35,7 @@ test('round labels: R2 to R4 in tier a, C1 to C4 in tier b, none for an unknown 
 test('a marker round-trips through the parser with every field', () => {
   const body = buildRoundMarker({
     event: 'fail', round: 'R3', tier: 'a', identity: 'cursor-a', brand: 'cursor', attempt: 2,
-    fallback: true, hash: 'abc123', author: 'claude-a', failure: 'timeout', runId: 'run-9', nonce: 'ff00',
+    fallback: true, hash: 'abc123', author: 'claude-a', failure: 'timeout', runId: 'run-9',
   });
   const parsed = parseRoundMarker(body);
   assert.equal(parsed.event, 'fail');
@@ -45,6 +45,7 @@ test('a marker round-trips through the parser with every field', () => {
   assert.equal(parsed.fallback, true);
   assert.equal(parsed.failure, 'timeout');
   assert.equal(parsed.runId, 'run-9');
+  assert.equal(parsed.nonce, undefined, 'a marker never carries the nonce');
   assert.match(body, /Round R3, attempt 2: attempt failed: timeout, cursor-a \(cursor\)\./);
 });
 
@@ -110,7 +111,7 @@ test('a forced ring failure writes a ring-failed marker at the ring, and no star
   assert.ok(result.applied.some((a) => a.startsWith('doorbell-failed:claude-a')));
 });
 
-test('a ring that starts a run writes a start marker with the run id and the nonce', async () => {
+test('a ring that starts a run writes a start marker with the run id and no nonce', async () => {
   const facts = { stage: 'To do', bodyHash: 'h0' };
   const result = await applyAction({
     action: { type: 'request-spec', agent: 'cursor-a' },
@@ -121,7 +122,7 @@ test('a ring that starts a run writes a start marker with the run id and the non
   assert.equal(start.identity, 'cursor-a');
   assert.equal(start.attempt, 1);
   assert.equal(start.runId, 'dry-run');
-  assert.ok(start.nonce && /^[a-f0-9]+$/.test(start.nonce), 'the run nonce is recorded for audit');
+  assert.equal(start.nonce, undefined, 'the nonce is never published in a marker (PIPE-V2-D-REV3-010)');
 });
 
 test('convergence closes the current round with the approving identity', async () => {

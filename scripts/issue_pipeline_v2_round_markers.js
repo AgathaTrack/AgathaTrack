@@ -7,10 +7,11 @@
  * Record (engine-authored, hidden marker plus one visible line):
  *   <!-- v2:round event=<start|queued|fail|close> round=<R1|R2..R4|C1..C4> tier=<a|b>
  *        identity=<type> brand=<cursor|claude> attempt=<n> fallback=<true|false> hash=<hash>
- *        author=<type|human|none> [failure=<class>] [verdict=<value>] [runid=<id>] [nonce=<hex>] -->
+ *        author=<type|human|none> [failure=<class>] [verdict=<value>] [runid=<id>] -->
  *
  * Events:
- *   start   a doorbell run was started for this identity (runid and nonce are audit data)
+ *   start   a doorbell run was started for this identity (runid is audit data; the nonce is never
+ *           written to a marker, because it would publish the run's identity at launch)
  *   queued  the runner cap deferred the doorbell; no attempt has started yet
  *   fail    an attempt failed; `failure` is one of FAILURE_CLASSES
  *   close   the round ended: `verdict` is converged, spec, stalled, no-convergence, or a green/red
@@ -22,7 +23,7 @@
 const FAILURE_CLASSES = new Set(['timeout', 'ring-failed', 'not-startable']);
 const EVENTS = new Set(['start', 'queued', 'fail', 'close']);
 const MARKER = /<!--\s*v2:round\s+([^>]*?)\s*-->/;
-const KEYS = ['event', 'round', 'tier', 'identity', 'brand', 'attempt', 'fallback', 'hash', 'author', 'failure', 'verdict', 'runid', 'nonce'];
+const KEYS = ['event', 'round', 'tier', 'identity', 'brand', 'attempt', 'fallback', 'hash', 'author', 'failure', 'verdict', 'runid'];
 
 /**
  * The round label for review number `k` (1 = the first review after the spec): R2 to R4 in tier a,
@@ -59,7 +60,6 @@ function buildRoundMarker(fields) {
     failure: clean(fields.failure),
     verdict: clean(fields.verdict),
     runid: clean(fields.runId),
-    nonce: clean(fields.nonce),
   };
   const attrs = KEYS.filter((key) => values[key] !== null).map((key) => `${key}=${values[key]}`);
   const who = values.identity ? `${values.identity}${values.brand ? ` (${values.brand})` : ''}` : 'no identity';

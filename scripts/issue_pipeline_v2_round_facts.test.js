@@ -69,7 +69,8 @@ test('attempts that went silent appear as silent before the current one', () => 
   });
   const attempts = rounds[1].attempts;
   assert.deepEqual(attempts.map((a) => [a.type, a.result]), [['cursor-a', 'silent'], ['claude-a', null]]);
-  assert.equal(attempts[1].nonce, 'n9', 'the current run is identified by its launch record');
+  assert.equal(attempts[1].nonce, null, 'no verdict yet, so the nonce is not known to the derivation');
+  assert.equal(attempts[1].startedAt, T0 + 10, 'the start time comes from the launch record');
 });
 
 test('a human edit with no verdict makes the open round stale: the next round starts with no brand', () => {

@@ -172,7 +172,8 @@ async function applyAction({ action: decided, ctx }) {
         );
         applied.push(`doorbell:${agent}`);
         if (markerBase) {
-          await writeMarker({ ...markerBase, event: 'start', runId, nonce });
+          // The run id is audit data. The nonce is never written to a marker (PIPE-V2-D-REV3-010).
+          await writeMarker({ ...markerBase, event: 'start', runId });
         }
         await deleteQueuedLabel();
         applied.push('labels:queued-removed');

@@ -12,8 +12,7 @@
  *     current one;
  *   - verified signed review verdicts (`up` / `down`) on that request's hash: they carry the run's
  *     nonce and identity;
- *   - the engine's doorbell launch records: when the current attempt started, and its nonce if no
- *     verdict has arrived.
+ *   - the engine's doorbell launch records: when the current attempt started (not the nonce).
  *
  * Rules from PIPE-V2-D-REV3-005 and -006:
  *   - a `down` that is followed by a new request on a new hash is a red with an edit: that
@@ -68,7 +67,9 @@ function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [],
         .sort((a, b) => b.at - a.at)[0];
       const attempt = {
         type: request.assigned,
-        nonce: verdict?.nonce ?? launch?.nonce ?? null,
+        // The nonce comes only from a verdict. Before one, the launch record is not used: the nonce is
+        // the run's identity and is not published until the run votes.
+        nonce: verdict?.nonce ?? null,
         startedAt: launch?.at ?? request.at,
         result: null,
         hashOut: null,
