@@ -147,11 +147,18 @@ test('findRealGh skips the wrapper itself on PATH', () => {
 // End to end: the unchanged babysit_pr_reviews.js, with scripts/ccr-bin first on PATH and a fake "real" gh.
 const FAKE_GH = `#!/usr/bin/env node
 const routes = JSON.parse(require('fs').readFileSync(process.env.FAKE_GH_ROUTES, 'utf8'));
-const key = process.argv.slice(2).join(' ');
+const args = process.argv.slice(2);
+const jqAt = args.indexOf('--jq');
+const key = (jqAt >= 0 ? args.slice(0, jqAt) : args).join(' ');
 if (key === '--version') { console.log('gh version 0.0.0'); process.exit(0); }
-if (key.startsWith('api graphql')) { console.error('HTTP 403: GitHub GraphQL is not available'); process.exit(1); }
+if (key.startsWith('api graphql') || key.startsWith('pr ')) { console.error('HTTP 403: GitHub GraphQL is not available'); process.exit(1); }
 if (!(key in routes)) { console.error('unrecorded: ' + key); process.exit(1); }
-process.stdout.write(JSON.stringify(routes[key]));
+if (jqAt < 0) { process.stdout.write(JSON.stringify(routes[key])); process.exit(0); }
+// Like gh --jq: evaluate with jq, raw string output.
+const jq = require('child_process').spawnSync('jq', ['-r', args[jqAt + 1]], { input: JSON.stringify(routes[key]), encoding: 'utf8' });
+process.stderr.write(jq.stderr || '');
+process.stdout.write(jq.stdout || '');
+process.exit(jq.status ?? 1);
 `;
 
 function runReviews(cmd, routes) {
@@ -215,4 +222,56 @@ test('e2e: other GraphQL calls still reach the real gh and fail', () => {
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /GraphQL is not available/);
+});
+
+// End to end: the unchanged babysit_sync_base.sh --pr, copied into a scratch repo with a local origin.
+function syncBaseRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-gh-sync-'));
+  const git = (cwd, ...args) => {
+    const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], { cwd, encoding: 'utf8' });
+    assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
+  };
+  const origin = path.join(dir, 'origin.git');
+  const work = path.join(dir, 'work');
+  git(dir, 'init', '-q', '--bare', '-b', 'main', origin);
+  git(dir, 'clone', '-q', origin, work);
+  fs.mkdirSync(path.join(work, 'scripts'));
+  fs.copyFileSync(path.join(ROOT, 'scripts/babysit_sync_base.sh'), path.join(work, 'scripts/babysit_sync_base.sh'));
+  fs.chmodSync(path.join(work, 'scripts/babysit_sync_base.sh'), 0o755);
+  git(work, 'add', '.');
+  git(work, 'commit', '-q', '-m', 'base');
+  git(work, 'push', '-q', 'origin', 'HEAD:main', 'HEAD:release');
+  git(work, 'checkout', '-q', '-b', 'feature');
+  git(work, 'commit', '-q', '--allow-empty', '-m', 'feature work');
+  git(work, 'checkout', '-q', 'main');
+  git(work, 'commit', '-q', '--allow-empty', '-m', 'main moves on');
+  git(work, 'push', '-q', 'origin', 'main');
+  git(work, 'checkout', '-q', 'feature');
+  return { dir, work };
+}
+
+function runSyncBase(baseRef) {
+  const { dir, work } = syncBaseRepo();
+  const fake = path.join(dir, 'fake-gh');
+  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ 'api repos/o/r/pulls/7': { base: { ref: baseRef }, head: { ref: 'feature' } } }));
+  return spawnSync('bash', ['scripts/babysit_sync_base.sh', '--pr', 'https://github.com/o/r/pull/7', '--check'], {
+    cwd: work,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${BIN_DIR}${path.delimiter}${process.env.PATH}`, REAL_GH: fake, FAKE_GH_ROUTES: path.join(dir, 'routes.json') },
+  });
+}
+
+const hasJq = spawnSync('jq', ['--version']).status === 0;
+
+test('e2e: unchanged babysit_sync_base.sh --pr reads the PR base through the wrapper (behind main → exit 1)', { skip: !hasJq && 'jq not installed' }, () => {
+  const result = runSyncBase('main');
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /behind origin\/main by 1 commit\(s\) \(1 ahead\)/);
+});
+
+test('e2e: babysit_sync_base.sh --pr uses the base the PR names, not main (up to date with release → exit 0)', { skip: !hasJq && 'jq not installed' }, () => {
+  const result = runSyncBase('release');
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /up to date with origin\/release \(1 commit\(s\) ahead\)/);
 });
