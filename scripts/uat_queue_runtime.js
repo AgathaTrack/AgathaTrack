@@ -27,7 +27,6 @@ const {
   acquireWatcher,
   barrierCheck,
   clearPromoteHold,
-  entryHasState,
   findEntryByMergeSha,
   headEntryNeedingAttention,
   isWatcherLeaseActive,

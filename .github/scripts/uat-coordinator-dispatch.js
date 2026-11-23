@@ -12,7 +12,6 @@ const {
 const {
   acquireWatcher,
   findEntryByMergeSha,
-  entryHasState,
   headEntryNeedingAttention,
   isWatcherLeaseActive,
   markEntryRemedial,
