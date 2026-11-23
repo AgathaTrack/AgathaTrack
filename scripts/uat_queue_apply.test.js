@@ -8,6 +8,8 @@ const {
   enqueueEntry,
   findActiveEntryByPr,
   applyDeployResult,
+  markEntryRemedial,
+  remedialFreezeApplied,
   UatQueueError,
 } = require('./lib/uat_queue_lib');
 const { enqueueMutation } = require('./lib/uat_queue_apply');
@@ -133,4 +135,20 @@ test('write: false previews the mutation without saving', async () => {
   assert.equal(outcome.written, false);
   assert.equal(log.saves, 0);
   assert.equal(current().entries.length, 0);
+});
+
+test('remedialFreezeApplied is false while a later entry is still pending', () => {
+  const state = createEmptyState();
+  enqueueEntry(state, { mergeSha: SHA_A, prNumber: 107, enqueuedBy: 'pr-107' });
+  state.entries[0].state = 'failed';
+  markEntryRemedial(state, { mergeSha: SHA_A });
+  const remedialSeq = state.entries[0].seq;
+  // A later enqueue on a remedial state is frozen, so the freeze is present.
+  enqueueEntry(state, { mergeSha: SHA_B, prNumber: 108, enqueuedBy: 'pr-108' });
+  assert.equal(state.entries[1].state, 'frozen');
+  assert.equal(remedialFreezeApplied(state, remedialSeq), true);
+
+  // A later entry that landed unfrozen (overlapping writer) makes the freeze count as missing.
+  state.entries[1].state = 'pending';
+  assert.equal(remedialFreezeApplied(state, remedialSeq), false);
 });

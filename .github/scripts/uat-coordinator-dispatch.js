@@ -18,6 +18,7 @@ const {
   markEntryRemedial,
   parseUatTag,
   pruneExpiredWatcher,
+  remedialFreezeApplied,
   releaseWatcher,
   setPromoteHold,
 } = require('../../scripts/lib/uat_queue_lib');
@@ -106,27 +107,49 @@ function applyDispatchTransition(state, { holder, force, head, workflowRunId, sk
   return { skipped: false, entry };
 }
 
-function dispatchEffectPresent(state, { holder, head }) {
+function dispatchEffectPresent(state, { holder, seq, needsRemedial, skipPromoteHold, workflowRunId }) {
   if (state.active_watcher?.holder !== holder) {
     return false;
   }
-  return head.state !== 'failed' || entryHasState(state, head.seq, { state: 'remedial' });
+  if (needsRemedial && !remedialFreezeApplied(state, seq)) {
+    return false;
+  }
+  if (!skipPromoteHold) {
+    return (
+      state.promote_hold === true
+      && state.promote_hold_reason === `deploy-uat failure run ${workflowRunId}`
+    );
+  }
+  return true;
 }
 
 /**
  * updateQueueState mutation for the dispatch ledger save. Re-runs the stale-holder
- * release and the transition on a fresh load, then verifies the lease and remedial mark.
+ * release and the transition on a fresh load. The head is re-targeted from the fresh
+ * state (an overlapping writer may have moved it), and the verified effect covers the
+ * lease, the remedial freeze and the promote hold.
  */
 function dispatchMutation(transitionOptions, { owner, repo, token }) {
   return async (state) => {
     await releaseWatcherIfHolderRunFinished(state, owner, repo, token);
-    const transition = applyDispatchTransition(state, transitionOptions);
+    const freshHead = findEntryByMergeSha(state, transitionOptions.head.merge_sha);
+    if (!freshHead || !['failed', 'remedial'].includes(freshHead.state)) {
+      return { result: { skipped: true, reason: 'head_changed' }, verify: null };
+    }
+    const options = { ...transitionOptions, head: freshHead };
+    const seq = freshHead.seq;
+    const needsRemedial = freshHead.state === 'failed';
+    const transition = applyDispatchTransition(state, options);
     if (transition.skipped) {
       return { result: transition, verify: null };
     }
     return {
       result: transition,
-      verify: (loaded) => dispatchEffectPresent(loaded.state, transitionOptions),
+      verify: (loaded) => dispatchEffectPresent(loaded.state, {
+        ...options,
+        seq,
+        needsRemedial,
+      }),
     };
   };
 }

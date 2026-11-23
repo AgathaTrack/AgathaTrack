@@ -97,10 +97,9 @@ async function main() {
   const [owner, repo] = repository.split('/');
   const { state, issueNumber } = await loadStateFromIssue(coordinationIssue, token);
   const watcherRecovery = await recoverStaleWatcher(state, owner, repo, token);
-  const hold = queueHeadHold(state);
-  const head = headEntryNeedingAttention(state);
 
   let saved = false;
+  let current = state;
   if (write && watcherRecovery.changed) {
     const outcome = await updateQueueState(
       issueNumber,
@@ -108,13 +107,17 @@ async function main() {
       { token },
     );
     saved = outcome.written;
+    current = outcome.state;
   }
 
+  // Decide from the converged state: another writer may have changed the lease or head.
+  const hold = queueHeadHold(current);
+  const head = headEntryNeedingAttention(current);
   const needsCoordinator =
     head
     && ['failed', 'remedial'].includes(head.state)
     && head.deploy_run_id
-    && !isWatcherLeaseActive(state);
+    && !isWatcherLeaseActive(current);
 
   const result = {
     ok: !hold.hold,

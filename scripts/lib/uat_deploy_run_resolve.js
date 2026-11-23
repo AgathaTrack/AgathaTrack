@@ -167,6 +167,7 @@ async function reconcileFailedPreUatLedger({
             state: 'failed',
             result: 'failure',
             deploy_run_id: String(workflowRunId),
+            gate_summary_ref: workflowUrl,
           }),
       };
     },

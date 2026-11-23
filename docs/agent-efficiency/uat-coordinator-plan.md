@@ -256,7 +256,7 @@ Writers routed through the helper:
 
 No workflow file under `.github/workflows/` is changed. Enqueue stays idempotent on `mergeSha`, so a duplicate event returns `created: false` with no write.
 
-**Residual risk (not closed by this design):** GitHub has no conditional (ETag or revision) PATCH for issue comments. The helper narrows the lost-update window to the gap between one writer's read-back and another writer's PATCH; it cannot close that gap. A hard guarantee needs a different queue store (for example append-only entries) or a serialisation design. A shared workflow `concurrency` group does not help: with `cancel-in-progress: false`, GitHub keeps one pending run per group and cancels earlier pending ones, which drops an enqueue run instead of losing a write.
+**Residual risk (not closed by this design):** GitHub has no conditional (ETag or revision) PATCH for issue comments. The helper narrows the lost-update window to the gap between one writer's read-back and another writer's PATCH; it cannot close that gap. The same gap applies to bootstrap marker creation: if another writer creates the marker between the bootstrap's load and its save, the empty save can overwrite that writer's entry, and no verification can see an entry the bootstrap never loaded. Bootstrap is a manual, one-time step. A hard guarantee needs a different queue store (for example append-only entries) or a serialisation design. A shared workflow `concurrency` group does not help: with `cancel-in-progress: false`, GitHub keeps one pending run per group and cancels earlier pending ones, which drops an enqueue run instead of losing a write.
 
 ### 4. UAT coordinator agent (Phase 3)
 

@@ -34,6 +34,7 @@ const {
   markEntryRemedial,
   queueHeadHold,
   releaseWatcher,
+  remedialFreezeApplied,
   setBarrier,
   setPromoteHold,
 } = require('./lib/uat_queue_lib');
@@ -364,9 +365,11 @@ async function runCommand(cmd, flags) {
       const reason = optionalStringFlag(flags, 'reason');
       const outcome = await mutateIssueState(flags, (state) => {
         setPromoteHold(state, { reason });
+        const holdReason = state.promote_hold_reason;
         return {
-          result: { promote_hold: state.promote_hold, promote_hold_reason: state.promote_hold_reason },
-          verify: (loaded) => loaded.state.promote_hold === true,
+          result: { promote_hold: state.promote_hold, promote_hold_reason: holdReason },
+          verify: (loaded) =>
+            loaded.state.promote_hold === true && loaded.state.promote_hold_reason === holdReason,
         };
       });
       printJson({
@@ -394,7 +397,7 @@ async function runCommand(cmd, flags) {
         const { seq } = result.entry;
         return {
           result,
-          verify: (loaded) => entryHasState(loaded.state, seq, { state: 'remedial' }),
+          verify: (loaded) => remedialFreezeApplied(loaded.state, seq),
         };
       });
       printJson({

@@ -198,11 +198,22 @@ async function syncDeployResult({
       if (result.skipped) {
         return { result, verify: null };
       }
-      const { seq, state: entryState, result: entryResult } = result.entry;
+      const {
+        seq,
+        state: entryState,
+        result: entryResult,
+        deploy_run_id: deployRunIdValue,
+        gate_summary_ref: gateSummaryValue,
+      } = result.entry;
       return {
         result,
         verify: (loaded) =>
-          entryHasState(loaded.state, seq, { state: entryState, result: entryResult }),
+          entryHasState(loaded.state, seq, {
+            state: entryState,
+            result: entryResult,
+            deploy_run_id: deployRunIdValue,
+            gate_summary_ref: gateSummaryValue,
+          }),
       };
     },
     { token, write },

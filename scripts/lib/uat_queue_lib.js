@@ -121,7 +121,20 @@ function hasActiveEntryForSha(state, mergeSha) {
 function entryHasState(state, seq, expected) {
   const entry = state.entries.find((e) => e.seq === seq);
   if (!entry) return false;
-  return Object.entries(expected).every(([key, value]) => entry[key] === value);
+  return Object.entries(expected).every(
+    ([key, value]) => (entry[key] ?? null) === (value ?? null),
+  );
+}
+
+/**
+ * True when the entry at `seq` is remedial and no later entry is still pending or
+ * deploying, i.e. the remedial freeze (applyRemedialFreeze) is present.
+ */
+function remedialFreezeApplied(state, seq) {
+  return (
+    entryHasState(state, seq, { state: 'remedial' })
+    && !state.entries.some((e) => e.seq > seq && ['pending', 'deploying'].includes(e.state))
+  );
 }
 
 function expectedUatTag(prNumber, date = new Date()) {
@@ -462,6 +475,7 @@ module.exports = {
   pruneExpiredWatcher,
   queueHeadHold,
   releaseWatcher,
+  remedialFreezeApplied,
   resolveRemediatedHeadEntries,
   renderStateCommentBody,
   setBarrier,
