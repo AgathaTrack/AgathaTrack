@@ -10,9 +10,9 @@ tags: [pet_care, care_item, pet_profile, delivery, ui]
 # Care Item Model & Pet Profile Care Surface — Delivery Plan
 
 **Roadmap plan:** `.agents/plans/pet-care-item-model.md`
-**Canonical product behaviour:** [care-progression.md](../features/care-progression.md) · [care-entitlements.md](../features/care-entitlements.md)
-**Terminology authority:** [docs/design/terminology.md](../../../design/terminology.md)
-**Design system:** [docs/design/system.md](../../../design/system.md) · [docs/design/copy-tone.md](../../../design/copy-tone.md)
+**Canonical product behaviour:** [care-progression.md](/docs/domains/pet_care/features/care-progression.md) · [care-entitlements.md](/docs/domains/pet_care/features/care-entitlements.md)
+**Terminology authority:** [terminology.md](/docs/design/terminology.md)
+**Design system:** [system.md](/docs/design/system.md) · [copy-tone.md](/docs/design/copy-tone.md)
 
 ---
 

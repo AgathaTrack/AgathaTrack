@@ -102,7 +102,8 @@ These scripts integrate with Agatha Track's existing agent infrastructure:
 ### Validation Script (`validate_docs.sh`)
 
 Checks:
-- ✅ Broken markdown links (including anchor links)
+- ✅ Broken markdown links via `scripts/lib/validate_markdown_links.mjs` (ordinary `[label](path)`; repo-root `/…`; `./` / `../` relative paths; links inside fenced examples; skipped inline `` `example` `` links)
+- ✅ Heading fragment anchors (`#section`) checked against GitHub-style ATX heading slugs in the target file (with em-dash and loose match normalization)
 - ✅ Missing YAML frontmatter headers
 - ✅ Duplicate content patterns
 - ✅ References to archived documentation
@@ -342,7 +343,7 @@ Part of Agatha Track - MIT License
 
 ## See Also
 
-- [Agent Efficiency Docs](docs/agent-efficiency/)
-- [Autonomous PR Policy](docs/agent-efficiency/autonomous-pr-policy.md)
-- [Babysit Plus Skill](.cursor/skills/babysit-plus/SKILL.md)
-- [Execute Plan Skill](.cursor/skills/execute-plan/SKILL.md)
+- [Agent Efficiency Docs](/docs/agent-efficiency/)
+- [Autonomous PR Policy](/docs/agent-efficiency/autonomous-pr-policy.md)
+- [Babysit Plus Skill](/.cursor/skills/babysit-plus/SKILL.md)
+- [Execute Plan Skill](/.cursor/skills/execute-plan/SKILL.md)
