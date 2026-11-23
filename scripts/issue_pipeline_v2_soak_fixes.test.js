@@ -65,6 +65,7 @@ test('#2485: busy holds a timed-out pickup for one extra timeout, then the picku
 test('#2482: a human comment does not wake a paused issue; other Blocked reasons still wake', () => {
   const woken = { humanCommentSinceBlock: true, humanCommentId: 9, spec: { assignedTo: 'cursor-a' } };
   assert.equal(decide(facts({ blocked: 'paused', ...woken }), config).reason, 'blocked.paused');
+  assert.equal(decide(facts({ blocked: 'sensitive', ...woken }), config).reason, 'blocked.sensitive');
   assert.equal(decide(facts({ blocked: 'question', ...woken }), config).type, 'wake-stage-agent');
 });
 

@@ -72,6 +72,11 @@ function preflightIssue(issue) {
     return { ok: false, reason: 'issue has blocking label (busy, manual-only, question, blocked)' };
   }
 
+  const ownerApprovedDelivery = labels.map((l) => l.toLowerCase()).includes('owner-approved-delivery');
+  if (ownerApprovedDelivery) {
+    return { ok: true };
+  }
+
   const sections = parseSections(body);
   const risks = detectRiskyScope(title, body, sections);
   if (risks.length > 0) {

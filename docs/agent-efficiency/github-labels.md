@@ -58,6 +58,7 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 | `owner-programme` | Owner-applied only. A standing programme issue (for example `light-plan:` #2342) whose phase/release PRs may use `/run-as-me` when the session opts in. Bots never add this label. Confirm the `labeled` event actor is an owner in `.github/execute-plan.config.json` → `owners` before relying on it — see [run-as-me skill](../../.cursor/skills/run-as-me/SKILL.md). |
 | `light-plan` | Sequential programme; tracking issue uses a `light-plan:` title and phase checklist |
 | `pipeline-beta` | Soak sandbox while building lanes; optional after cutover (`ISSUE_PIPELINE=on` processes all Pawpet issues — `isPipelineIssue` in `issue_pipeline_gate.js`). Open issues titled `[sandbox] soak2-*` that carry the `pipeline-beta` label are pipeline v2 soak fixtures that exercise the stage machine and are not product backlog. |
+| `owner-approved-delivery` | Owner only. Ready delivery: bypasses `detectRiskyScope` in launch preflight after the owner clears `Blocked=sensitive` (PIPE-V2-D-PREFLIGHT-002). Does not waive other safety checks (blocking labels, forbidden paths in agent scope). |
 | `queued` | Pipeline v2: Claude doorbell deferred at runner WIP cap; `ring-doorbell` retries until pickup timeout, then reassign; cleared on successful launch, doorbell failure, or `finish-work` |
 | `todo` | Owner shortcut → **To do** + assign `pawpet-claude` via `issue-pipeline-todo.yml` |
 
