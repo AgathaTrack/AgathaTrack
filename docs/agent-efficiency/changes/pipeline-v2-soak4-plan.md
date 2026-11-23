@@ -19,7 +19,7 @@ Validates the **live** In analysis action (round plan, PIPE-V2-D-REV3-012). Uses
 |----|-------------|--------|-----------------|
 | **A** | How `on` ticks run branch code: workflow checks out `main`. Owner chooses **merged** (main has new engine) or **run locally with engine identity`. | **Done** | **merged** — workflow `issue-pipeline-v2.yml` on `main` (`e8e2f824`, #2537). |
 | **B** | Label `soak4` exists | **Done** | Created 2026-11-22 UTC (blue). Repo variable `ISSUE_PIPELINE_V2_LABEL` set to `soak4` (was `pipeline-beta`). |
-| **C** | Fixture issues created on GitHub | **Partial** | **#2539** soak4-01 (label `soak4` removed after phases 0–2); **#2549** soak4-02; soak4-03 deferred. |
+| **C** | Fixture issues created on GitHub | **Done** | **#2539** soak4-01, **#2549** soak4-02, **#2551** soak4-03 — `soak4` label removed on retired fixtures after each arc. |
 
 ### Fixtures
 
@@ -29,7 +29,7 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 |----|---------|--------|--------------------------|
 | 01 | Happy path: one spec pass → In analysis → converge to Ready (**#2539**) | 0–2, 4 | To do — **operator: add to Pawpet + `Stage=To do`** |
 | 02 | Red with edit (optional) | 3 | To do — **only if owner agrees at Phase 3 pause** |
-| 03 | Second parallel fixture | 5 | To do |
+| 03 | Second parallel fixture (**#2551**) | 5 | To do |
 
 ## Phase loop (each phase)
 
@@ -76,11 +76,15 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 - Watch for `timeout`, `not-startable`, `ring-failed` on soak4 fixtures; do not force.
 - **Exit:** each marker has correct failure class + reassign action; `busy` held 2× timeout — or **not reached** per class.
+- **Run:** dry-run [45149260690](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45149260690); `on` [45149433358](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45149433358) (stopped after **Ready** on **#2549**, no extra delivery ticks). Log: [`soak4-phase-4-log.jsonl`](./soak4-phase-4-log.jsonl).
+- **Result:** **not reached** for all three failure classes in this window (no `reassign` with `failureClass`, no `v2:round` `event=fail` on **#2549**). Collateral: Phase 3 carry-over — **#2549** **Ready** on edited hash (`analysis.converged`); **`soak4` label removed** after.
 
 ### Phase 5 — two fixtures
 
 - Add **soak4-03** (To do); run until each In analysis or **6 ticks**.
 - **Exit:** tier discipline on both; round-robin on first picks; no `plan.error`; no `pipeline_v2_error`.
+- **Run:** **#2551** created; dry-run [45149684819](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45149684819) (`request-spec` **cursor-a** planned); `on` [45150069484](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45150069484), [45150254731](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45150254731) — **#2551** **In analysis** tick 2 (`todo.dor-pass`, spec by **pawpet-bot**). Log: [`soak4-phase-5-log.jsonl`](./soak4-phase-5-log.jsonl). Only one scoped fixture ( **#2549** off-scope at Ready).
+- **Result:** **partial pass** — tier-a spec path and **In analysis** on **#2551**; parallel rotation across two live soak4 fixtures **not exercised** (single scoped To do).
 
 ## Out of scope without owner go-ahead
 
@@ -103,4 +107,10 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 | 1 | 2026-11-22 | **pass** (#2539 → In analysis, tick 3) | **continue** → Phase 2 |
 | 2 | 2026-11-22 | **pass** (converge → Ready); **finding** (over-tick → In progress) | **pause** — fix fixture before Phase 3 |
 | 2 repair | 2026-11-22 | **#2539** → **Ready**; scope label off | owner **continue** → Phase 3 |
+<<<<<<< HEAD
 | 3 | 2026-11-22 | **not reached** (verifier gap; comment evidence on #2549) | **pause** |
+=======
+| 3 | 2026-11-22 | **pass** (**#2549** red+edit+claim → R3 on new hash) | **pause** |
+| 4 | 2026-11-23 | **not reached** (failure classes); **#2549** → Ready | owner **continue** |
+| 5 | 2026-11-23 | **partial** (**#2551** → In analysis; one fixture scoped) | **pause** — soak4 programme complete pending owner sign-off |
+>>>>>>> 0c43554d (docs(soak4): phase 4 observation and phase 5 partial pass)
