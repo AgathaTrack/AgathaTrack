@@ -341,8 +341,15 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const listComments = memoComments(io.listIssueComments || listIssueComments);
   const tickIo = { ...io, listIssueComments: listComments };
   const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
-  // WIP counts only In progress issues the engine started: hand-driven work takes no pipeline slot.
-  let wip = await countEngineWip({ entries, commentsOf, engineLogins: config.engine.logins });
+  // WIP: In progress issues the engine started, plus Ready issues with a delivery launch in flight,
+  // each issue once. Hand-driven work takes no pipeline slot; an unreadable issue holds one.
+  let wip = await countEngineWip({
+    entries,
+    commentsOf,
+    engineLogins: config.engine.logins,
+    now: Date.now(),
+    ackWindowMs: config.limits.ackWindowMin * 60 * 1000,
+  });
   // One ring for the board. Null means nothing has been assigned yet, so the next pick is the
   // first startable agent. Each in-scope assignment this tick advances the ring.
   let roundRobinAfter = await lastAssignedAgent({ entries, commentsOf, config });
