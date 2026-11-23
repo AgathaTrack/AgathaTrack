@@ -29,7 +29,12 @@ function resolveDispatchTarget(raw) {
   if (!POSITIVE_INTEGER.test(text)) {
     return { ok: false, reason: `issue_number must be a positive integer, got "${text}"` };
   }
-  return { ok: true, only: Number(text) };
+  const only = Number(text);
+  // Digits beyond 2^53 round to a different integer, which could target the wrong issue.
+  if (!Number.isSafeInteger(only)) {
+    return { ok: false, reason: `issue_number must be a positive integer, got "${text}"` };
+  }
+  return { ok: true, only };
 }
 
 /**

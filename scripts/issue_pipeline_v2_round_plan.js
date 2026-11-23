@@ -62,7 +62,8 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNu
         limits,
         kinds: ['review'],
       })) {
-        if (v.agentId !== claim.agentId || v.at < claim.at) continue;
+        // A late verdict from the old run must not attach to this request once the next one has started.
+        if (v.agentId !== claim.agentId || v.at < claim.at || v.at >= until) continue;
         verdicts.push({ agentId: v.agentId, value: v.value, hash: v.hash, nonce: v.nonce, at: v.at, requestHash: request.parsed.hash });
       }
     }

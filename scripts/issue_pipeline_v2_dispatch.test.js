@@ -18,7 +18,7 @@ test('issue filter: empty is the whole board; a positive integer targets one iss
 });
 
 test('issue filter: text, zero, negative, decimal and mixed input are refused, never read as the whole board', () => {
-  for (const bad of ['abc', '0', '00', '-3', '1.5', '7x', '1e3', '#2553']) {
+  for (const bad of ['abc', '0', '00', '-3', '1.5', '7x', '1e3', '#2553', '9007199254740993']) {
     const result = resolveDispatchTarget(bad);
     assert.equal(result.ok, false, `${JSON.stringify(bad)} must be refused`);
     assert.match(result.reason, /positive integer/);
