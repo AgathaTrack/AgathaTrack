@@ -11,10 +11,10 @@ const { acceptedAuthorizationIds } = require('./execute_plan_ack');
 const { loadSnapshotAtRef } = require('./execute_plan_snapshot_v2');
 const { parseStatusComment, STATUS_MARKER } = require('./execute_plan_status');
 const { SCOPE_CONTEXT, scopeEntryFromStatuses, scopeFailedSince } = require('./execute_plan_scope_status');
+const { isRequiredCheckFailure } = require('./execute_plan_checks');
 
 const CONFIG_PATH = '.github/execute-plan.config.json';
 const SCOPE_CHECK = SCOPE_CONTEXT;
-const FAILED = new Set(['failure', 'timed_out', 'action_required']);
 const UNKNOWN_RETRY_MS = 3000;
 const PREUAT_ACTIVE = new Set(['queued', 'in_progress']);
 
@@ -117,7 +117,7 @@ async function failedAttempts(client, pr, names, epoch, headRuns, headStatuses, 
     const runs = sha === pr.head.sha ? headRuns : await client.listCheckRuns(sha);
     const statuses = !names.includes(SCOPE_CHECK) ? [] : sha === pr.head.sha ? headStatuses : await client.listCommitStatuses(sha);
     const failed = scopeFailedSince(statuses, epoch) || runs.some(
-      (r) => r.name !== SCOPE_CHECK && names.includes(r.name) && FAILED.has(r.conclusion) && r.completed_at && ms(r.completed_at) > ms(epoch),
+      (r) => r.name !== SCOPE_CHECK && names.includes(r.name) && isRequiredCheckFailure(r.conclusion) && r.completed_at && ms(r.completed_at) > ms(epoch),
     );
     if (failed) attempts += 1;
   }

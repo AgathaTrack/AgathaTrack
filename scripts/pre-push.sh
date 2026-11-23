@@ -28,6 +28,7 @@ node --test scripts/ci/evaluate-uat-promote-hold.test.js
 node --test scripts/ci/resolve-promote-commit-sha.test.js
 node --test scripts/ci/assert-ci-gate.test.js
 node --test scripts/ci/ci-scope.test.js
+node --test scripts/ci/public-access-smoke-lib.test.js scripts/ci/prod-post-deploy-smoke.test.js
 node --test e2e/scripts/select-affected-specs.test.mjs
 node --test scripts/babysit_uat_shard_risk.test.mjs
 node --test scripts/quality/generate-scorecard-metrics.test.mjs
@@ -39,6 +40,7 @@ node scripts/check_skill_frontmatter.js
 node --test scripts/check_babysit_skill_family.test.js
 node --test scripts/github_issue_workflow.test.js
 node --test scripts/db/normalize-schema-dump.test.js
+node --test scripts/db/regenerate-canonical.test.js
 node scripts/db/check-migration-manifest.js
 node scripts/check_occurrence_writes.js
 node e2e/scripts/check_bdd_coverage.js

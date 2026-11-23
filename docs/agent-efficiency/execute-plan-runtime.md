@@ -3,7 +3,7 @@ title: Execute Plan Runtime
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-03
+last_updated: 2026-11-23
 tags: [agent-efficiency, policy]
 ---
 # Execute-plan runtime
@@ -40,7 +40,7 @@ node scripts/validate_execute_plan_snapshot.js --drift-test
 | `init <plan_id>` | Create control issue + v2 snapshot (init branch committed diff vs `main` must be only the two plan paths; uses `--no-renames`) |
 | `tick <plan_id> [--json] [--actor agent\|driver]` | Observe → decide → persist (worker/driver) |
 | `gate <plan_id>` | Alias of `tick` (no `--labels`) |
-| `watch-ci <plan_id> --pr <n>` | Wait for required checks on a PR |
+| `watch-ci <plan_id> --pr <n>` | Wait for required checks on a PR. Succeeds only when every required check is a completed `success` (see below). |
 | `watch-preuat <plan_id>` | Wait for Pre-UAT on merged release |
 | `watch-preuat-sha <merge_sha> [--json]` | Pre-UAT watch by merge SHA (also via `babysit_uat_watch_preuat.sh`) |
 | `watch-deploy <plan_id>` | Wait for Deploy UAT proof job |
@@ -50,6 +50,21 @@ node scripts/validate_execute_plan_snapshot.js --drift-test
 Exit codes (`tick`): `0` action, `2` stop, `3` config/worker token.  
 `init` also exits `3` when the init branch has committed paths other than `.agents/plans/<plan_id>.md`
 (and the snapshot if already on the branch), or when the working tree is dirty outside those paths.
+
+### Required check conclusions
+
+`watch-ci` and the state machine (`prLadder` / `failureSignature`) share
+`classifyRequiredCheck` in `scripts/lib/execute_plan_checks.js`. A required check has one decision:
+
+| Conclusion | Decision |
+|------------|----------|
+| `success` and the check has completed | **success** — the only success |
+| `failure`, `cancelled`, `timed_out`, `action_required`, `stale` | **failure** |
+| `skipped` | **failure**. A required check that was skipped did not succeed. |
+| `neutral` | **failure**. Neutral is not success for a check this programme requires. |
+| empty conclusion, or not completed (`queued`, `in_progress`, `pending`, `missing`) | **pending** — `watch-ci` keeps polling; the state machine waits. Not a pass. |
+
+Any other completed conclusion is a failure. `watch-ci` returns `conclusion: "success"` only when every required check is a success. A cancelled, skipped, or neutral required check is a failure (the watcher reports `failure`; the state machine takes the red-check path). Pending is not reported as success.
 
 ### Legacy roadmap (schema 1 on disk)
 

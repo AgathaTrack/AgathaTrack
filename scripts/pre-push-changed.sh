@@ -196,6 +196,7 @@ run_governance() {
   node --test scripts/ci/prepush-parity.test.mjs
   node --test scripts/ci/check-ci-retry-budget-refs.test.mjs
   node --test scripts/ci/ci-scope.test.js
+  node --test scripts/ci/public-access-smoke-lib.test.js scripts/ci/prod-post-deploy-smoke.test.js
   node --test e2e/scripts/select-affected-specs.test.mjs
   node --test scripts/quality/generate-scorecard-metrics.test.mjs
   node scripts/quality/generate-scorecard-metrics.mjs --write-scorecard
@@ -244,6 +245,7 @@ run_governance() {
   node --test scripts/stage_mirror_apply.test.js
   node --test scripts/stage_mirror_fields.test.js
   node --test scripts/db/normalize-schema-dump.test.js
+  node --test scripts/db/regenerate-canonical.test.js
   bash scripts/test/require-non-prod-wrappers.test.sh
   node scripts/db/check-migration-manifest.js
   node scripts/check_migration_sql_transactions.js

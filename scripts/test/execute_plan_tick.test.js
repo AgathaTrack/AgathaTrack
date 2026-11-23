@@ -4,6 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildSnapshotFromPlan } = require('../lib/execute_plan_snapshot_v2');
 const { tick, watchCi } = require('../lib/execute_plan_tick');
+const { classifyRequiredChecks, isRequiredCheckFailure } = require('../lib/execute_plan_checks');
+const { failureSignature, prLadder } = require('../lib/execute_plan_state');
+const { buildBase, deepMerge } = require('./helpers/execute_plan_scenarios');
+const fs = require('fs');
 const { formatStatusComment, parseStatusComment } = require('../lib/execute_plan_status');
 const { ackComment, VALID_ACK_RUN } = require('./helpers/execute_plan_wp12');
 
@@ -173,6 +177,72 @@ test('watch-ci returns success on completion and failure early', async () => {
   assert.deepEqual(ok, { timedOut: false, conclusion: 'success', failing: [] });
   const bad = await watchCi(ciClient([[ck('ci', 'completed', 'failure')]]), { pr: 5, sleep });
   assert.deepEqual(bad, { timedOut: false, conclusion: 'failure', failing: ['ci'] });
+});
+
+test('failed-attempt classification matches any completed non-success conclusion', () => {
+  assert.equal(isRequiredCheckFailure('success'), false);
+  assert.equal(isRequiredCheckFailure(''), false);
+  assert.equal(isRequiredCheckFailure(null), false);
+  assert.equal(isRequiredCheckFailure('failure'), true);
+  assert.equal(isRequiredCheckFailure('cancelled'), true);
+  assert.equal(isRequiredCheckFailure('startup_failure'), true);
+});
+
+test('watch-ci and the state machine share one decision per required-check conclusion', async () => {
+  const sleep = async () => {};
+  const config = { ...CONFIG, required_checks: { integration: ['ci'], main: ['ci'] } };
+  const rows = [
+    { conclusion: 'success', status: 'completed', decision: 'success' },
+    { conclusion: 'failure', status: 'completed', decision: 'failure' },
+    { conclusion: 'cancelled', status: 'completed', decision: 'failure' },
+    { conclusion: 'skipped', status: 'completed', decision: 'failure' },
+    { conclusion: 'neutral', status: 'completed', decision: 'failure' },
+    { conclusion: 'timed_out', status: 'completed', decision: 'failure' },
+    { conclusion: 'action_required', status: 'completed', decision: 'failure' },
+    { conclusion: '', status: 'completed', decision: 'pending' },
+    { conclusion: null, status: 'in_progress', decision: 'pending' },
+  ];
+  const basePr = JSON.parse(fs.readFileSync(
+    require('path').join(__dirname, 'fixtures/execute-plan-v2/scenarios/_base.pr.json'),
+    'utf8',
+  ));
+  for (const row of rows) {
+    const check = { name: 'ci', status: row.status, conclusion: row.conclusion, reason: null };
+    const state = classifyRequiredChecks([check]);
+    const watched = await watchCi(
+      ciClient([[check]], { config }),
+      { pr: 5, timeoutMin: 1, pollSec: 60, sleep },
+    );
+    const watchDecision = watched.conclusion === 'success'
+      ? 'success'
+      : watched.conclusion === 'failure'
+        ? 'failure'
+        : 'pending';
+    assert.equal(state.decision, row.decision, `classify ${row.conclusion}`);
+    assert.equal(watchDecision, row.decision, `watch-ci ${row.conclusion}`);
+    assert.equal(watchDecision, state.decision, `shared ${row.conclusion}`);
+    const sig = failureSignature({ checks: [check] });
+    assert.equal(sig != null, row.decision === 'failure', `signature ${row.conclusion}`);
+    const built = buildBase();
+    const pr = deepMerge(basePr, {
+      auto_merge_enabled: true,
+      checks: [{ ...check, completed_at: '2026-10-16T09:00:00Z' }],
+      failed_attempts_since_epoch: 0,
+      unresolved_threads: [],
+      mergeable_state: 'clean',
+    });
+    const ladder = prLadder(pr, {
+      kind: 'phase',
+      phase: '1',
+      draftAction: { kind: 'implement', args: {} },
+      method: 'squash',
+      snapshot: built.snapshot,
+      obs: built.obs,
+      opts: built.opts,
+    });
+    const ladderFailure = ladder.action && ladder.action.kind === 'fix-ci';
+    assert.equal(ladderFailure, row.decision === 'failure', `prLadder ${row.conclusion}`);
+  }
 });
 
 test('watch-ci reads execute-plan-scope from its commit status', async () => {
