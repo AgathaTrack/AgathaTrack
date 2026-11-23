@@ -56,17 +56,34 @@ function loadOrgStageFieldFromEnv() {
  * fallback logs a warning every run: the options are then unverified. Auth, configuration, and
  * transient API errors are not eligible for that fallback (HTTP 403 only).
  */
+function orgIssueFieldsPath(org) {
+  return `/orgs/${encodeURIComponent(org)}/issue-fields`;
+}
+
+/**
+ * Re-throw a failed org issue-field read with the secret, endpoint and permission that are missing.
+ * The original `failed (<status>):` text is kept so githubRestErrorStatus still parses the status.
+ */
+function actionableOrgIssueFieldsError(err, org) {
+  const endpoint = `GET ${orgIssueFieldsPath(org)}`;
+  return new Error(
+    `${err.message}\n` +
+      `GH_PROJECTS_PAT must have read access to organisation issue fields (${endpoint}); ` +
+      `grant the organisation issue fields: read permission to the GH_PROJECTS_PAT identity, ` +
+      `or set STAGE_ISSUE_FIELD_ID so a 403 falls back to the static option list.`,
+    { cause: err },
+  );
+}
+
 async function loadOrgStageField({ org, token, warn = console.warn, getIssueFields = null }) {
   const envId = loadOrgStageFieldFromEnv()?.id ?? null;
-  const fetchFields =
-    getIssueFields ||
-    (() => rest('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token));
+  const fetchFields = getIssueFields || (() => rest('GET', orgIssueFieldsPath(org), token));
   let fields;
   try {
     fields = await fetchFields();
   } catch (err) {
     if (!envId || !isOrgIssueFieldsReadRefused(err)) {
-      throw err;
+      throw actionableOrgIssueFieldsError(err, org);
     }
     warn(
       `[warn] org Stage options not verified (${err.message}); using STAGE_ISSUE_FIELD_ID and the static option list`,
