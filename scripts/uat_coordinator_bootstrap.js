@@ -13,9 +13,10 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 const { rest } = require('../.github/scripts/github-project-lib');
 const { resolveRepository } = require('./lib/execute_plan_project');
+const { createEmptyState } = require('./lib/uat_queue_lib');
 const {
+  commitStateMutation,
   loadStateFromIssue,
-  updateQueueState,
 } = require('./lib/uat_queue_sync');
 
 const COORDINATION_TITLE = '[uat-coordinator] UAT deploy queue';
@@ -155,6 +156,15 @@ function pinIssue(issueNumber) {
   ghJson(['issue', 'pin', String(issueNumber)]);
 }
 
+function ledgerHasLiveContent(state) {
+  return Boolean(
+    (state.entries && state.entries.length > 0)
+    || state.main_barrier_sha
+    || state.promote_hold
+    || state.active_watcher,
+  );
+}
+
 async function ensureMarkerComment(issueNumber, token, write) {
   const loaded = await loadStateFromIssue(issueNumber, token);
   if (loaded.commentId) {
@@ -163,13 +173,20 @@ async function ensureMarkerComment(issueNumber, token, write) {
   if (!write) {
     return { initialized: false, comment_id: null, needs_write: true };
   }
-  // No marker yet: loaded state is empty, so the mutation only needs the marker to exist.
-  const outcome = await updateQueueState(
+  const saved = await commitStateMutation({
     issueNumber,
-    () => ({ verify: (reloaded) => Boolean(reloaded.commentId) }),
-    { token },
-  );
-  return { initialized: true, comment_id: outcome.commentId };
+    token,
+    mutate(state) {
+      if (ledgerHasLiveContent(state)) {
+        return { state, initialized: false };
+      }
+      return { state: createEmptyState(), initialized: true };
+    },
+  });
+  return {
+    initialized: saved.written === true && saved.initialized !== false,
+    comment_id: saved.commentId,
+  };
 }
 
 function printRepoVariableInstructions(issueNumber) {
@@ -249,6 +266,7 @@ async function main() {
 module.exports = {
   COORDINATION_TITLE,
   COORDINATION_LABELS,
+  ledgerHasLiveContent,
   renderIssueBody,
   parseArgs,
 };

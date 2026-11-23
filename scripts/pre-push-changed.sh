@@ -187,6 +187,7 @@ run_governance() {
   node --test scripts/test/execute_plan_pipeline_approve.test.js
   node --test scripts/test/execute_plan_own_files.test.js
   node --test scripts/uat_queue_runtime.test.js
+  node --test scripts/uat_queue_sync.test.js
   node --test scripts/uat_coordinator_payload.test.js
   node --test scripts/ci/evaluate-uat-promote-hold.test.js
   node --test scripts/ci/resolve-promote-commit-sha.test.js

@@ -17,15 +17,14 @@ const {
   markEntryRemedial,
   parseUatTag,
   pruneExpiredWatcher,
-  remedialFreezeApplied,
   releaseWatcher,
   setPromoteHold,
 } = require('../../scripts/lib/uat_queue_lib');
 const { reconcileFailedDeployLedger, reconcileFailedPreUatLedger } = require('../../scripts/lib/uat_deploy_run_resolve');
 const {
+  commitStateMutation,
   loadStateFromIssue,
   resolveCoordinationIssue,
-  updateQueueState,
 } = require('../../scripts/lib/uat_queue_sync');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -73,86 +72,6 @@ function printJson(obj) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
-/**
- * Dispatch-side ledger transition: acquire the watcher lease (optionally forcing a
- * stale one), mark the head entry remedial when it failed, and set the promote hold.
- * Mutates `state`. Shared by the preview and the verified save, so a retry re-runs
- * the same transition on a fresh load.
- */
-function applyDispatchTransition(state, { holder, force, head, workflowRunId, skipPromoteHold }) {
-  if (force && isWatcherLeaseActive(state)) {
-    releaseWatcher(state);
-  }
-
-  let watcherResult = acquireWatcher(state, { holder, leaseMinutes: 90, watchingSeq: head.seq });
-  if (!watcherResult.acquired) {
-    if (!force) {
-      return { skipped: true, reason: 'watcher_lease_held', holder: watcherResult.holder };
-    }
-    releaseWatcher(state);
-    watcherResult = acquireWatcher(state, { holder, leaseMinutes: 90, watchingSeq: head.seq });
-    if (!watcherResult.acquired) {
-      return { skipped: true, reason: 'watcher_lease_held', holder: watcherResult.holder };
-    }
-  }
-
-  if (head.state === 'failed') {
-    markEntryRemedial(state, { mergeSha: head.merge_sha });
-  }
-  const entry = findEntryByMergeSha(state, head.merge_sha) || head;
-  if (!skipPromoteHold) {
-    setPromoteHold(state, { reason: `deploy-uat failure run ${workflowRunId}` });
-  }
-  return { skipped: false, entry };
-}
-
-function dispatchEffectPresent(state, { holder, seq, needsRemedial, skipPromoteHold, workflowRunId }) {
-  if (state.active_watcher?.holder !== holder) {
-    return false;
-  }
-  if (needsRemedial && !remedialFreezeApplied(state, seq)) {
-    return false;
-  }
-  if (!skipPromoteHold) {
-    return (
-      state.promote_hold === true
-      && state.promote_hold_reason === `deploy-uat failure run ${workflowRunId}`
-    );
-  }
-  return true;
-}
-
-/**
- * updateQueueState mutation for the dispatch ledger save. Re-runs the stale-holder
- * release and the transition on a fresh load. The head is re-targeted from the fresh
- * state (an overlapping writer may have moved it), and the verified effect covers the
- * lease, the remedial freeze and the promote hold.
- */
-function dispatchMutation(transitionOptions, { owner, repo, token }) {
-  return async (state) => {
-    await releaseWatcherIfHolderRunFinished(state, owner, repo, token);
-    const freshHead = findEntryByMergeSha(state, transitionOptions.head.merge_sha);
-    if (!freshHead || !['failed', 'remedial'].includes(freshHead.state)) {
-      return { result: { skipped: true, reason: 'head_changed' }, verify: null };
-    }
-    const options = { ...transitionOptions, head: freshHead };
-    const seq = freshHead.seq;
-    const needsRemedial = freshHead.state === 'failed';
-    const transition = applyDispatchTransition(state, options);
-    if (transition.skipped) {
-      return { result: transition, verify: null };
-    }
-    return {
-      result: transition,
-      verify: (loaded) => dispatchEffectPresent(loaded.state, {
-        ...options,
-        seq,
-        needsRemedial,
-      }),
-    };
-  };
-}
-
 async function prepareDispatch({
   coordinationIssue,
   workflowRunId,
@@ -195,12 +114,49 @@ async function prepareDispatch({
     };
   }
 
-  const transitionOptions = { holder, force, head, workflowRunId, skipPromoteHold };
-  const transition = applyDispatchTransition(state, transitionOptions);
-  if (transition.skipped) {
-    return transition;
+  if (force && isWatcherLeaseActive(state)) {
+    releaseWatcher(state);
   }
-  const { entry } = transition;
+
+  let watcherResult = acquireWatcher(state, {
+    holder,
+    leaseMinutes: 90,
+    watchingSeq: head.seq,
+  });
+  if (!watcherResult.acquired) {
+    if (!force) {
+      return {
+        skipped: true,
+        reason: 'watcher_lease_held',
+        holder: watcherResult.holder,
+      };
+    }
+    releaseWatcher(state);
+    watcherResult = acquireWatcher(state, {
+      holder,
+      leaseMinutes: 90,
+      watchingSeq: head.seq,
+    });
+    if (!watcherResult.acquired) {
+      return {
+        skipped: true,
+        reason: 'watcher_lease_held',
+        holder: watcherResult.holder,
+      };
+    }
+  }
+
+  let nextState = watcherResult.state;
+  if (head.state === 'failed') {
+    const remedial = markEntryRemedial(nextState, { mergeSha: head.merge_sha });
+    nextState = remedial.state;
+  }
+  const entry = findEntryByMergeSha(nextState, head.merge_sha) || head;
+  if (!skipPromoteHold) {
+    setPromoteHold(nextState, {
+      reason: `deploy-uat failure run ${workflowRunId}`,
+    });
+  }
 
   const resolvedFailedGates =
     failedGates || classifyFailedJobs(await fetchWorkflowJobs(owner, repo, workflowRunId, token));
@@ -220,9 +176,40 @@ async function prepareDispatch({
     entry,
     payload,
     failed_gates: resolvedFailedGates,
-    nextState: state,
-    transition: transitionOptions,
+    nextState,
   };
+}
+
+async function reapplyDispatchLedger(state, prepared, context = {}) {
+  const { owner, repo, token, force = false } = context;
+  if (owner && repo && token) {
+    await releaseWatcherIfHolderRunFinished(state, owner, repo, token);
+  }
+  if (force && isWatcherLeaseActive(state)) {
+    releaseWatcher(state);
+  }
+
+  const mergeSha = prepared.entry && prepared.entry.merge_sha;
+  const live = mergeSha ? findEntryByMergeSha(state, mergeSha) : null;
+  if (live && live.state === 'failed' && prepared.entry.state === 'remedial') {
+    markEntryRemedial(state, { mergeSha });
+  }
+
+  const holder = prepared.nextState.active_watcher && prepared.nextState.active_watcher.holder;
+  const sameHolder = holder && state.active_watcher && state.active_watcher.holder === holder;
+  const current = mergeSha ? findEntryByMergeSha(state, mergeSha) : null;
+  if (holder && current && !sameHolder && !isWatcherLeaseActive(state)) {
+    acquireWatcher(state, {
+      holder,
+      leaseMinutes: 90,
+      watchingSeq: current.seq,
+    });
+  }
+
+  if (prepared.nextState.promote_hold) {
+    setPromoteHold(state, { reason: prepared.nextState.promote_hold_reason });
+  }
+  return state;
 }
 
 async function main() {
@@ -383,18 +370,20 @@ async function main() {
     throw error;
   }
 
-  let ledgerWrite = null;
-  if (writeLedger && prepared.transition) {
-    const outcome = await updateQueueState(
-      prepared.issueNumber,
-      dispatchMutation(prepared.transition, { owner, repo, token }),
-      { token },
-    );
-    ledgerWrite = {
-      written: outcome.written,
-      attempts: outcome.attempts,
-      transition: outcome.result,
-    };
+  if (writeLedger && prepared.nextState) {
+    await commitStateMutation({
+      issueNumber: prepared.issueNumber,
+      token,
+      async mutate(state) {
+        await reapplyDispatchLedger(state, prepared, {
+          owner,
+          repo,
+          token,
+          force: forceDispatch,
+        });
+        return { state };
+      },
+    });
   }
 
   printJson({
@@ -402,7 +391,6 @@ async function main() {
     issue_number: prepared.issueNumber,
     pr_number: prepared.entry.pr_number,
     workflow_run_id: workflowRunId,
-    ledger_write: ledgerWrite,
   });
 }
 
@@ -416,4 +404,5 @@ if (require.main === module) {
 module.exports = {
   prepareDispatch,
   fetchWorkflowJobs,
+  reapplyDispatchLedger,
 };

@@ -20,9 +20,9 @@ const {
   releaseWatcher,
 } = require('../lib/uat_queue_lib');
 const {
+  commitStateMutation,
   loadStateFromIssue,
   resolveCoordinationIssue,
-  updateQueueState,
 } = require('../lib/uat_queue_sync');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -60,24 +60,6 @@ async function recoverStaleWatcher(state, owner, repo, token) {
   };
 }
 
-/**
- * updateQueueState mutation for the stale-watcher release. Re-runs the recovery on a
- * fresh load and verifies the lease it computed is the one stored.
- */
-function watcherRecoveryMutation(owner, repo, token) {
-  return async (state) => {
-    const recovery = await recoverStaleWatcher(state, owner, repo, token);
-    if (!recovery.changed) {
-      return { result: recovery, verify: null };
-    }
-    const expected = JSON.stringify(recovery.after ?? null);
-    return {
-      result: recovery,
-      verify: (loaded) => JSON.stringify(loaded.state.active_watcher ?? null) === expected,
-    };
-  };
-}
-
 async function main() {
   const token = process.env.GITHUB_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
@@ -97,27 +79,24 @@ async function main() {
   const [owner, repo] = repository.split('/');
   const { state, issueNumber } = await loadStateFromIssue(coordinationIssue, token);
   const watcherRecovery = await recoverStaleWatcher(state, owner, repo, token);
+  const hold = queueHeadHold(state);
+  const head = headEntryNeedingAttention(state);
 
   let saved = false;
-  let current = state;
   if (write && watcherRecovery.changed) {
-    const outcome = await updateQueueState(
+    const committed = await commitStateMutation({
       issueNumber,
-      watcherRecoveryMutation(owner, repo, token),
-      { token },
-    );
-    saved = outcome.written;
-    current = outcome.state;
+      token,
+      mutate: (fresh) => recoverStaleWatcher(fresh, owner, repo, token),
+    });
+    saved = committed.written === true;
   }
 
-  // Decide from the converged state: another writer may have changed the lease or head.
-  const hold = queueHeadHold(current);
-  const head = headEntryNeedingAttention(current);
   const needsCoordinator =
     head
     && ['failed', 'remedial'].includes(head.state)
     && head.deploy_run_id
-    && !isWatcherLeaseActive(current);
+    && !isWatcherLeaseActive(state);
 
   const result = {
     ok: !hold.hold,
