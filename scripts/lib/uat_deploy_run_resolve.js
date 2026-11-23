@@ -6,7 +6,7 @@ const {
   findActiveEntryByPr,
   findEntryByMergeSha,
 } = require('./uat_queue_lib');
-const { loadStateFromIssue, resolveCoordinationIssue, saveStateToIssue } =
+const { commitStateMutation, loadStateFromIssue, resolveCoordinationIssue } =
   require('./uat_queue_sync');
 
 function yymmddFromIso(iso) {
@@ -128,41 +128,52 @@ async function reconcileFailedPreUatLedger({
     return { skipped: true, reason: 'pr_unresolved', mergeSha };
   }
 
-  let { state: workingState } = await loadStateFromIssue(coordIssue, token);
-  let entry =
-    findEntryByMergeSha(workingState, mergeSha) || findActiveEntryByPr(workingState, prNumber);
+  const mutate = (workingState) => {
+    let entry =
+      findEntryByMergeSha(workingState, mergeSha) || findActiveEntryByPr(workingState, prNumber);
 
-  if (!entry) {
-    const enqueued = enqueueEntry(workingState, {
-      mergeSha,
-      prNumber,
-      enqueuedBy: `pre-uat-run-${workflowRunId}`,
-    });
-    workingState = enqueued.state;
-    entry = enqueued.entry;
-  } else if (['complete', 'superseded'].includes(entry.state)) {
+    if (!entry) {
+      const enqueued = enqueueEntry(workingState, {
+        mergeSha,
+        prNumber,
+        enqueuedBy: `pre-uat-run-${workflowRunId}`,
+      });
+      workingState = enqueued.state;
+      entry = enqueued.entry;
+    } else if (['complete', 'superseded'].includes(entry.state)) {
+      return {
+        state: workingState,
+        skipped: true,
+        reason: 'entry_already_terminal',
+        entry,
+      };
+    }
+
+    entry.state = 'failed';
+    entry.result = 'failure';
+    entry.gate_summary_ref = workflowUrl;
+    entry.deploy_run_id = String(workflowRunId);
+    entry.completed_at = new Date().toISOString();
+    return { state: workingState, skipped: false, entry };
+  };
+
+  const outcome = write
+    ? await commitStateMutation({ issueNumber: coordIssue, token, mutate })
+    : mutate((await loadStateFromIssue(coordIssue, token)).state);
+
+  if (outcome.skipped) {
     return {
       skipped: true,
-      reason: 'entry_already_terminal',
-      entry,
+      reason: outcome.reason,
+      entry: outcome.entry,
       mergeSha,
       prNumber,
     };
   }
 
-  entry.state = 'failed';
-  entry.result = 'failure';
-  entry.gate_summary_ref = workflowUrl;
-  entry.deploy_run_id = String(workflowRunId);
-  entry.completed_at = new Date().toISOString();
-
-  if (write) {
-    await saveStateToIssue(coordIssue, workingState, token);
-  }
-
   return {
     skipped: false,
-    entry,
+    entry: outcome.entry,
     mergeSha,
     prNumber,
     issueNumber: coordIssue,

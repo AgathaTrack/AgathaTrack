@@ -20,11 +20,13 @@ const ATSUPPORT_COLUMNS = [
   'Done',
 ];
 
+const SUPPORT_MIRROR_ISSUE_TYPES = ['Support Bug', 'Support Question'];
+
 /**
  * Exact org `Stage` single-select spellings (GitHub rejects PATCH with wrong casing).
  * Board columns may differ case (`In Analysis` ↔ `In analysis`); matching is case-insensitive.
  */
-const STAGE_ORG_FIELD_OPTIONS = [
+const PAWPET_STAGE_ORG_FIELD_OPTIONS = [
   'Backlog',
   'To do',
   'In analysis',
@@ -33,11 +35,34 @@ const STAGE_ORG_FIELD_OPTIONS = [
   'In Main',
   'In UAT',
   'Done',
+];
+
+/** Org `Support Stage` options (ATSupport board only; scoped to support issue types in GitHub). */
+const SUPPORT_STAGE_ORG_FIELD_OPTIONS = [
+  'New',
+  'Triaged',
+  'Waiting on user',
+  'In Progress',
+  'Engineering done',
+  'Done',
+];
+
+/** @deprecated Merged list kept for backward-compatible imports; mirror uses per-board lists. */
+const STAGE_ORG_FIELD_OPTIONS = [
+  ...PAWPET_STAGE_ORG_FIELD_OPTIONS,
   'New',
   'Triaged',
   'Waiting on user',
   'Engineering done',
 ];
+
+function pawpetStageOrgFieldOptions() {
+  return [...PAWPET_STAGE_ORG_FIELD_OPTIONS];
+}
+
+function supportStageOrgFieldOptions() {
+  return [...SUPPORT_STAGE_ORG_FIELD_OPTIONS];
+}
 
 function stageOrgFieldOptions() {
   return [...STAGE_ORG_FIELD_OPTIONS];
@@ -93,6 +118,10 @@ function loadStageMirrorBoards({ defaultOwner, defaultRepo }) {
         columns: PAWPET_COLUMNS,
         owner: defaultOwner,
         repo: defaultRepo,
+        stageFieldName: 'Stage',
+        stageFieldIdEnv: 'STAGE_ISSUE_FIELD_ID',
+        staticStageOptions: pawpetStageOrgFieldOptions,
+        supportIssueTypes: null,
       },
       {
         key: 'atsupport',
@@ -103,6 +132,10 @@ function loadStageMirrorBoards({ defaultOwner, defaultRepo }) {
         columns: ATSUPPORT_COLUMNS,
         owner: atParsed.owner,
         repo: atParsed.repo,
+        stageFieldName: 'Support Stage',
+        stageFieldIdEnv: 'SUPPORT_STAGE_ISSUE_FIELD_ID',
+        staticStageOptions: supportStageOrgFieldOptions,
+        supportIssueTypes: SUPPORT_MIRROR_ISSUE_TYPES,
       },
     ],
   };
@@ -111,6 +144,11 @@ function loadStageMirrorBoards({ defaultOwner, defaultRepo }) {
 module.exports = {
   PAWPET_COLUMNS,
   ATSUPPORT_COLUMNS,
+  SUPPORT_MIRROR_ISSUE_TYPES,
+  PAWPET_STAGE_ORG_FIELD_OPTIONS,
+  SUPPORT_STAGE_ORG_FIELD_OPTIONS,
+  pawpetStageOrgFieldOptions,
+  supportStageOrgFieldOptions,
   stageOrgFieldOptions,
   loadStageMirrorBoards,
   parseRepoSlug,
