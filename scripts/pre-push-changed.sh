@@ -127,6 +127,10 @@ while IFS= read -r f; do
       needs_schema=true
       needs_governance=true
       ;;
+    # Issue pipeline v2 runtime: explicit so the v2 suite cannot be skipped by a later scripts/* carve-out.
+    scripts/pipeline_runners/*|.github/pipeline-agents.json|.github/workflows/issue-pipeline-v2.yml)
+      needs_governance=true
+      ;;
     scripts/*|.github/*|docs/agent-efficiency*|docs/architecture/index.md)
       needs_governance=true
       ;;
@@ -225,17 +229,7 @@ run_governance() {
   node --test scripts/issue_pipeline_monitor.test.js
   node --test scripts/issue_pipeline_legacy.test.js
   node --test scripts/issue_pipeline_repair.test.js
-  node --test scripts/issue_pipeline_v2.test.js
-  node --test scripts/issue_pipeline_v2_spec.test.js
-  node --test scripts/issue_pipeline_v2_review.test.js
-  node --test scripts/issue_pipeline_v2_apply.test.js
-  node --test scripts/issue_pipeline_v2_launch.test.js
-  node --test scripts/issue_pipeline_v2_release.test.js
-  node --test scripts/issue_pipeline_v2_migrate.test.js
-  node --test scripts/issue_pipeline_v2_reopen.test.js
-  node --test scripts/issue_pipeline_v2_soak_fixes.test.js
-  node --test scripts/issue_pipeline_v2_tier_model.test.js
-  node --test scripts/issue_pipeline_v2_p2_shared.test.js
+  run_prepush_gate issue-pipeline-v2-tests
   node --test .github/scripts/pipeline-v2-owner.test.js
   node --test .github/scripts/issue-agent-handlers.test.js
   node --test .github/scripts/github-project-lib.test.js
