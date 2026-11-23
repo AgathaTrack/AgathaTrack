@@ -49,13 +49,6 @@ function loadOrgStageFieldFromEnv() {
   return { id, options, name: STAGE_FIELD_NAME };
 }
 
-/**
- * Read the org Stage field. The real option list is read first, so a missing or renamed option fails
- * at start-up. Only when that read is refused (the projects PAT has no org issue-field read, see
- * #2375) does it fall back to the id in STAGE_ISSUE_FIELD_ID with the static option list, and that
- * fallback logs a warning every run: the options are then unverified. Auth, configuration, and
- * transient API errors are not eligible for that fallback (HTTP 403 only).
- */
 function orgIssueFieldsPath(org) {
   return `/orgs/${encodeURIComponent(org)}/issue-fields`;
 }
@@ -75,6 +68,13 @@ function actionableOrgIssueFieldsError(err, org) {
   );
 }
 
+/**
+ * Read the org Stage field. The real option list is read first, so a missing or renamed option fails
+ * at start-up. Only when that read is refused (the projects PAT has no org issue-field read, see
+ * #2375) does it fall back to the id in STAGE_ISSUE_FIELD_ID with the static option list, and that
+ * fallback logs a warning every run: the options are then unverified. Auth, configuration, and
+ * transient API errors are not eligible for that fallback (HTTP 403 only).
+ */
 async function loadOrgStageField({ org, token, warn = console.warn, getIssueFields = null }) {
   const envId = loadOrgStageFieldFromEnv()?.id ?? null;
   const fetchFields = getIssueFields || (() => rest('GET', orgIssueFieldsPath(org), token));
