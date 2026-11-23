@@ -7,6 +7,7 @@ const {
   isOrgIssueFieldsReadRefused,
   loadOrgStageField,
   loadOrgSupportStageField,
+  buildCarriedIssueFieldPatch,
 } = require('./stage_mirror_fields');
 
 const ISSUE_FIELDS_PATH = '/orgs/AgathaTrack/issue-fields';
@@ -201,6 +202,32 @@ test('loadOrgStageField: a successful read returns the verified option list', as
     assert.equal(field.optionsVerified, true);
     assert.deepEqual(field.options, ['To do', 'Done']);
   });
+});
+
+test('buildCarriedIssueFieldPatch carries existing values and sets one field', () => {
+  const payload = buildCarriedIssueFieldPatch(
+    [
+      { field_id: 10, single_select_option: { name: 'Billing' } },
+      { field_id: 20, value: 'form' },
+    ],
+    { set: [{ field_id: 99, value: 'New' }] },
+  );
+  assert.deepEqual(payload, [
+    { field_id: 10, value: 'Billing' },
+    { field_id: 20, value: 'form' },
+    { field_id: 99, value: 'New' },
+  ]);
+});
+
+test('buildCarriedIssueFieldPatch omits cleared field ids', () => {
+  const payload = buildCarriedIssueFieldPatch(
+    [
+      { field_id: 1, single_select_option: { name: 'Triaged' } },
+      { field_id: 2, single_select_option: { name: 'New' } },
+    ],
+    { set: [{ field_id: 2, value: 'Triaged' }], omitFieldIds: [1] },
+  );
+  assert.deepEqual(payload, [{ field_id: 2, value: 'Triaged' }]);
 });
 
 test('loadOrgSupportStageField: a successful read returns support columns only', async () => {

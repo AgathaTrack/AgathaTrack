@@ -172,10 +172,70 @@ async function fetchIssueStage(owner, repo, issueNumber, token, stageFieldId) {
   return findFieldValueById(issue?.issue_field_values, stageFieldId) || '';
 }
 
+function entryToPatchValue(entry) {
+  const select = readIssueFieldStageName(entry);
+  if (select != null && select !== '') {
+    return select;
+  }
+  const raw = entry?.value;
+  if (raw != null && raw !== '') {
+    return raw;
+  }
+  return null;
+}
+
+/**
+ * Issue-field PATCH replaces the whole value set. Carry existing values and apply `set`; omit
+ * field ids in `omitFieldIds` so they are cleared.
+ */
+function buildCarriedIssueFieldPatch(issueFieldValues, { set = [], omitFieldIds = [] } = {}) {
+  const omit = new Set(omitFieldIds.map((id) => Number(id)));
+  const setById = new Map(set.map(({ field_id, value }) => [Number(field_id), value]));
+  const payload = [];
+  const written = new Set();
+
+  for (const entry of issueFieldValues || []) {
+    const id = Number(entry?.field_id ?? entry?.issue_field_id ?? entry?.issue_field?.id);
+    if (!Number.isFinite(id)) {
+      continue;
+    }
+    if (omit.has(id)) {
+      continue;
+    }
+    if (setById.has(id)) {
+      payload.push({ field_id: id, value: setById.get(id) });
+      written.add(id);
+      continue;
+    }
+    const carried = entryToPatchValue(entry);
+    if (carried === null) {
+      continue;
+    }
+    payload.push({ field_id: id, value: carried });
+  }
+  for (const [id, value] of setById) {
+    if (!written.has(id)) {
+      payload.push({ field_id: id, value });
+    }
+  }
+  return payload;
+}
+
 async function setIssueStageField({ owner, repo, issueNumber, token, stageFieldId, value }) {
-  await rest('PATCH', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`, token, {
-    issue_field_values: [{ field_id: stageFieldId, value }],
+  const issue = await rest(
+    'GET',
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`,
+    token,
+  );
+  const issueFieldValues = buildCarriedIssueFieldPatch(issue.issue_field_values, {
+    set: [{ field_id: stageFieldId, value }],
   });
+  await rest(
+    'PATCH',
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`,
+    token,
+    { issue_field_values: issueFieldValues },
+  );
 }
 
 function resolveCanonicalOption(name, options) {
@@ -218,6 +278,8 @@ module.exports = {
   fetchIssueStage,
   fetchIssueForMirror,
   setIssueStageField,
+  buildCarriedIssueFieldPatch,
+  entryToPatchValue,
   findFieldValueById,
   readIssueFieldStageName,
   resolveCanonicalOption,

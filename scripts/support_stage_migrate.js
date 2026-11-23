@@ -8,27 +8,43 @@
  */
 
 const { listProjectIssues } = require('../.github/scripts/github-project-lib');
-const {
-  loadStageMirrorBoards,
-  SUPPORT_MIRROR_ISSUE_TYPES,
-  supportStageOrgFieldOptions,
-} = require('./stage_mirror_config');
+const { loadStageMirrorBoards, SUPPORT_MIRROR_ISSUE_TYPES } = require('./stage_mirror_config');
 const {
   loadOrgStageField,
   loadOrgSupportStageField,
   findFieldValueById,
   resolveCanonicalOption,
-  setIssueStageField,
+  buildCarriedIssueFieldPatch,
 } = require('./stage_mirror_fields');
 const { rest } = require('../.github/scripts/github-project-lib');
-
-const supportOptions = supportStageOrgFieldOptions();
 
 async function fetchIssueRaw(owner, repo, issueNumber, token) {
   return rest(
     'GET',
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}`,
     token,
+  );
+}
+
+async function applySupportStageMigrate({
+  issue,
+  issueOwner,
+  issueRepo,
+  num,
+  projectsPat,
+  legacyStage,
+  supportStage,
+  targetSupport,
+}) {
+  const payload = buildCarriedIssueFieldPatch(issue.issue_field_values, {
+    set: [{ field_id: supportStage.id, value: targetSupport }],
+    omitFieldIds: [legacyStage.id],
+  });
+  await rest(
+    'PATCH',
+    `/repos/${encodeURIComponent(issueOwner)}/${encodeURIComponent(issueRepo)}/issues/${num}`,
+    projectsPat,
+    { issue_field_values: payload },
   );
 }
 
@@ -52,6 +68,7 @@ async function main() {
     projectId: board.projectId,
     statusFieldId: board.statusFieldId,
     projectsPat,
+    includeClosed: true,
   });
 
   let migrated = 0;
@@ -70,8 +87,10 @@ async function main() {
       findFieldValueById(issue?.issue_field_values, legacyStage.id) || '';
     const fromSupport =
       findFieldValueById(issue?.issue_field_values, supportStage.id) || '';
-    const canonical = resolveCanonicalOption(fromStage, supportOptions);
-    if (!canonical) {
+    const legacyCanonical = resolveCanonicalOption(fromStage, supportStage.options);
+    const supportCanonical = resolveCanonicalOption(fromSupport, supportStage.options);
+
+    if (!legacyCanonical) {
       if (fromStage) {
         console.log(
           `[skip] ${issueRepo}#${num} Stage=${JSON.stringify(fromStage)} not a support column`,
@@ -80,28 +99,29 @@ async function main() {
       skipped += 1;
       continue;
     }
-    if (fromSupport && resolveCanonicalOption(fromSupport, supportOptions)) {
+
+    if (supportCanonical && !fromStage) {
       skipped += 1;
       continue;
     }
-    console.log(
-      `${apply ? '[apply]' : '[dry-run]'} ${issueRepo}#${num} Stage → Support Stage ${canonical}`,
-    );
+
+    const targetSupport = supportCanonical || legacyCanonical;
+    const action =
+      supportCanonical && fromStage
+        ? 'clear legacy Stage'
+        : `Stage → Support Stage ${targetSupport}`;
+    console.log(`${apply ? '[apply]' : '[dry-run]'} ${issueRepo}#${num} ${action}`);
     if (apply) {
-      await setIssueStageField({
-        owner: issueOwner,
-        repo: issueRepo,
-        issueNumber: num,
-        token: projectsPat,
-        stageFieldId: supportStage.id,
-        value: canonical,
-      });
-      await rest(
-        'PATCH',
-        `/repos/${encodeURIComponent(issueOwner)}/${encodeURIComponent(issueRepo)}/issues/${num}`,
+      await applySupportStageMigrate({
+        issue,
+        issueOwner,
+        issueRepo,
+        num,
         projectsPat,
-        { issue_field_values: [{ field_id: legacyStage.id, value: '' }] },
-      );
+        legacyStage,
+        supportStage,
+        targetSupport,
+      });
     }
     migrated += 1;
   }
@@ -115,4 +135,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = { main, applySupportStageMigrate };
