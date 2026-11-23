@@ -110,7 +110,7 @@ assert_flutter_asset_not_served() {
         "Flutter asset ${path} is served while PROD_PUBLIC_MODE=coming_soon"
       ;;
     *)
-      fail "flutter_served_in_teaser_mode" "Unexpected classification for ${path}: ${kind}"
+      fail "$kind" "GET ${path} is not a documented absence (${kind}, HTTP ${code})"
       ;;
   esac
 }

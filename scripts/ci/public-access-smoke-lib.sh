@@ -40,20 +40,47 @@ pas_classify_http_code() {
 }
 
 # Classify GET on a Flutter bootstrap path during coming_soon prod smoke.
-# SPA fallback may return teaser index.html with HTTP 200 — not real Flutter.
-# Prints: absent | teaser_fallback | served
+# Documented "asset absent" outcomes only:
+#   absent          — HTTP 404 (file is not there)
+#   teaser_fallback — HTTP 200 whose body is the coming-soon teaser and not Flutter
+# Every other status is its own failure kind. A non-200 is not absence.
+# Prints one of: absent | teaser_fallback | served | basic_auth | forbidden |
+#   redirect | server_error | transport_error | http_error
 pas_classify_flutter_asset_response() {
   local code="${1:-}"
   local body="${2:-}"
-  if [[ "$code" != "200" ]]; then
-    printf '%s\n' 'absent'
+  # curl writes 000, or nothing, when the connection fails.
+  if [[ -z "$code" || "$code" == "000" ]]; then
+    printf '%s\n' 'transport_error'
     return 0
   fi
-  if pas_is_teaser_html "$body" && ! pas_body_mentions_flutter_main "$body"; then
-    printf '%s\n' 'teaser_fallback'
-    return 0
-  fi
-  printf '%s\n' 'served'
+  case "$code" in
+    200)
+      if pas_is_teaser_html "$body" && ! pas_body_mentions_flutter_main "$body"; then
+        printf '%s\n' 'teaser_fallback'
+      else
+        printf '%s\n' 'served'
+      fi
+      ;;
+    404)
+      printf '%s\n' 'absent'
+      ;;
+    401)
+      printf '%s\n' 'basic_auth'
+      ;;
+    403)
+      printf '%s\n' 'forbidden'
+      ;;
+    3*)
+      printf '%s\n' 'redirect'
+      ;;
+    5*)
+      printf '%s\n' 'server_error'
+      ;;
+    *)
+      printf '%s\n' 'http_error'
+      ;;
+  esac
 }
 
 # Classify teaser vs Flutter mismatch given expected mode and observed body.

@@ -195,6 +195,7 @@ run_governance() {
   node --test scripts/ci/prepush-parity.test.mjs
   node --test scripts/ci/check-ci-retry-budget-refs.test.mjs
   node --test scripts/ci/ci-scope.test.js
+  node --test scripts/ci/public-access-smoke-lib.test.js scripts/ci/prod-post-deploy-smoke.test.js
   node --test e2e/scripts/select-affected-specs.test.mjs
   node --test scripts/quality/generate-scorecard-metrics.test.mjs
   node scripts/quality/generate-scorecard-metrics.mjs --write-scorecard
