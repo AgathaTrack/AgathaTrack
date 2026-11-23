@@ -70,7 +70,7 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 - **Pre:** **#2539** org **Stage** rolled back to **Ready**; **`soak4` label removed** so Ready ticks do not re-launch delivery; stray `cursor-b` run `bc-58bc7723` left idle (no PR).
 - **Exit:** next `request-review` for new hash, other brand; red run authors hash; `v2:claim` present — or **not reached**.
 - **Run:** dry-run [45082871201](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45082871201); `on` [45082988023](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45082988023) … [45083450749](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45083450749) (6 ticks). Log: [`soak4-phase-3-log.jsonl`](./soak4-phase-3-log.jsonl). `dry-run` restored after.
-- **Result:** **pass** on **#2549** — spec **claude-a** → **In analysis**; R2 **cursor-a** `review` **down** + body edit (`v2:claim`, hash `bc781fd548fb51c1`); tick 6 **R3 `request-review` claude-a** on new hash (other brand).
+- **Result:** **not reached** on engine-verified exit — [`soak4-phase-3-log.jsonl`](./soak4-phase-3-log.jsonl) ends with R2 derived `result:null` / `hashOut:null` (request hash `ac09d352bb53f04d`) even though #2549 issue comments show **cursor-a** `v2:claim` + `review` **down** on hash `bc781fd548fb51c1`; tick 6 **R3 `request-review` claude-a** on that hash with round marker `author=human`. **Observation:** red+edit+claim occurred on #2549; hash-in / attribution verifier did not close R2 in derived state — finding until rerun or engine fix.
 
 ### Phase 4 — failure classes (observed)
 
@@ -103,4 +103,4 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 | 1 | 2026-11-22 | **pass** (#2539 → In analysis, tick 3) | **continue** → Phase 2 |
 | 2 | 2026-11-22 | **pass** (converge → Ready); **finding** (over-tick → In progress) | **pause** — fix fixture before Phase 3 |
 | 2 repair | 2026-11-22 | **#2539** → **Ready**; scope label off | owner **continue** → Phase 3 |
-| 3 | 2026-11-22 | **pass** (**#2549** red+edit+claim → R3 on new hash) | **pause** |
+| 3 | 2026-11-22 | **not reached** (verifier gap; comment evidence on #2549) | **pause** |
