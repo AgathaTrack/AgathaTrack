@@ -19,7 +19,7 @@ Validates the **live** In analysis action (round plan, PIPE-V2-D-REV3-012). Uses
 |----|-------------|--------|-----------------|
 | **A** | How `on` ticks run branch code: workflow checks out `main`. Owner chooses **merged** (main has new engine) or **run locally with engine identity`. | **Done** | **merged** — workflow `issue-pipeline-v2.yml` on `main` (`e8e2f824`, #2537). |
 | **B** | Label `soak4` exists | **Done** | Created 2026-11-22 UTC (blue). Repo variable `ISSUE_PIPELINE_V2_LABEL` set to `soak4` (was `pipeline-beta`). |
-| **C** | Fixture issues created on GitHub | **Partial** | **#2539** soak4-01 created; soak4-02/03 deferred. |
+| **C** | Fixture issues created on GitHub | **Partial** | **#2539** soak4-01 (label `soak4` removed after phases 0–2); **#2549** soak4-02; soak4-03 deferred. |
 
 ### Fixtures
 
@@ -66,8 +66,11 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 ### Phase 3 — red with edit (optional)
 
-- Until red+edit or **6 ticks**. **soak4-02** only if owner agreed at prior pause.
+- Until red+edit or **6 ticks**. **#2549 soak4-02** (owner **continue** after Phase 2 repair).
+- **Pre:** **#2539** org **Stage** rolled back to **Ready**; **`soak4` label removed** so Ready ticks do not re-launch delivery; stray `cursor-b` run `bc-58bc7723` left idle (no PR).
 - **Exit:** next `request-review` for new hash, other brand; red run authors hash; `v2:claim` present — or **not reached**.
+- **Run:** dry-run [45082871201](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45082871201); `on` [45082988023](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45082988023) … [45083450749](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45083450749) (6 ticks). Log: [`soak4-phase-3-log.jsonl`](./soak4-phase-3-log.jsonl). `dry-run` restored after.
+- **Result:** **not reached** on engine-verified exit — [`soak4-phase-3-log.jsonl`](./soak4-phase-3-log.jsonl) ends with R2 derived `result:null` / `hashOut:null` (request hash `ac09d352bb53f04d`) even though #2549 issue comments show **cursor-a** `v2:claim` + `review` **down** on hash `bc781fd548fb51c1`; tick 6 **R3 `request-review` claude-a** on that hash with round marker `author=human`. **Observation:** red+edit+claim occurred on #2549; hash-in / attribution verifier did not close R2 in derived state — finding until rerun or engine fix.
 
 ### Phase 4 — failure classes (observed)
 
@@ -99,3 +102,5 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 | 0 | 2026-11-22 | **pass** (post-#2542, `025a33ed`) | — |
 | 1 | 2026-11-22 | **pass** (#2539 → In analysis, tick 3) | **continue** → Phase 2 |
 | 2 | 2026-11-22 | **pass** (converge → Ready); **finding** (over-tick → In progress) | **pause** — fix fixture before Phase 3 |
+| 2 repair | 2026-11-22 | **#2539** → **Ready**; scope label off | owner **continue** → Phase 3 |
+| 3 | 2026-11-22 | **not reached** (verifier gap; comment evidence on #2549) | **pause** |
