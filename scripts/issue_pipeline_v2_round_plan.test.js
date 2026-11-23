@@ -98,3 +98,16 @@ test('the same red verdict with no edit claim does not count: neither hash alone
   const r2 = out.derived[1];
   assert.deepEqual([r2.attempts[0].result, r2.attempts[0].hashOut], [null, null]);
 });
+
+test('a late verdict from the old run, posted after the next request, does not attach to the previous request', () => {
+  const comments = [
+    requestComment(1, 'h0', 'claude-a', T_LAUNCH),
+    launchComment(2, 'claude-a', T_LAUNCH + 1000, NONCE),
+    claimComment(3, 'pawpet-claude', T_LAUNCH + 2000, 'claude-a', 'h1', NONCE),
+    requestComment(4, 'h1', 'cursor-a', T_LAUNCH + 3000),
+    verdictComment(5, 'pawpet-claude', T_LAUNCH + 4000, 'claude-a', 'h1', 'down', NONCE),
+  ];
+  const out = planRounds({ comments, config, engineLogins: ENGINE, editors: {}, bodyHash: 'h1', issueNumber: 1, limits: config.limits, now: NOW });
+  const r2 = out.derived[1];
+  assert.deepEqual([r2.attempts[0].result, r2.attempts[0].hashOut], [null, null], 'the next request already started, so the late verdict is not this round');
+});
