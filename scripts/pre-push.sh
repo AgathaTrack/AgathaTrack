@@ -39,6 +39,7 @@ node scripts/check_skill_frontmatter.js
 node --test scripts/check_babysit_skill_family.test.js
 node --test scripts/github_issue_workflow.test.js
 node --test scripts/db/normalize-schema-dump.test.js
+node --test scripts/db/regenerate-canonical.test.js
 node scripts/db/check-migration-manifest.js
 node scripts/check_occurrence_writes.js
 node e2e/scripts/check_bdd_coverage.js
