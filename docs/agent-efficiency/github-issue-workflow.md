@@ -46,7 +46,7 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
 | `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (boolean; true in this repo), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
 
-The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch.
+The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch. A manual dispatch **previews by default** (dry-run, whatever the repo switch says). It writes only when the `live` input is ticked and the repo `ISSUE_PIPELINE_V2` is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. Each run logs its effective mode and target (`pipeline_v2_run`) before any write (#2553 P4).
 Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the tick line reports `errors`.
 
 ### Stored state
@@ -217,7 +217,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 - **Lifting the WIP cap:** `WIP_LIMIT=off` (see the switches table) only changes the Ready gate. In `on` mode it still
   writes only to issues matching `ISSUE_PIPELINE_V2_LABEL`, but with the cap off every matching Ready issue launches on
   the next tick. Set it back or remove it when the soak is done.
-- **Dry run:** set `ISSUE_PIPELINE_V2=dry-run` (or dispatch the workflow) and read the `pipeline_v2_action` lines and the
+- **Dry run:** set `ISSUE_PIPELINE_V2=dry-run`, or dispatch the workflow without `live` (a manual dispatch previews by default, so an operator following these steps cannot write while scheduled ticks are live), and read the `pipeline_v2_action` lines and the
   tick summary. Check that nothing acts on hand-driven issues (label them `manual-only`).
 - **Migration (once):** dispatch [`issue-pipeline-v2-migrate.yml`](../../.github/workflows/issue-pipeline-v2-migrate.yml)
   as a dry run, read the `pipeline_v2_migrate` lines, then dispatch with `apply`. It gives each open board issue a `Stage`
