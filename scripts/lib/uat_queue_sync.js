@@ -13,11 +13,13 @@ const {
 const {
   UatQueueError,
   createEmptyState,
+  normalizeState,
   parseStateFromCommentBody,
   renderStateCommentBody,
 } = require('./uat_queue_lib');
 
-const DEFAULT_UPDATE_ATTEMPTS = 3;
+/** Bound for re-read / reapply when another writer changes the marker mid-update. */
+const MAX_UAT_QUEUE_WRITE_ATTEMPTS = 5;
 
 function resolveCoordinationIssue(issueOverride) {
   const issueNumber = Number(issueOverride || COORDINATION_ISSUE_NUMBER);
@@ -66,14 +68,117 @@ async function loadStateFromIssue(issueNumber, token) {
     .find((comment) => comment.body?.includes(STATE_MARKER));
 
   if (!markerComment) {
-    return { state: createEmptyState(), issueNumber, commentId: null };
+    return {
+      state: createEmptyState(),
+      issueNumber,
+      commentId: null,
+      commentUpdatedAt: null,
+    };
   }
 
   return {
     state: parseStateFromCommentBody(markerComment.body),
     issueNumber,
     commentId: markerComment.id,
+    commentUpdatedAt: markerComment.updated_at || markerComment.created_at || null,
   };
+}
+
+function fingerprintState(state) {
+  const normalized = normalizeState(state);
+  normalized.updated_at = null;
+  return JSON.stringify(normalized);
+}
+
+function revisionOf(loaded) {
+  const commentId = loaded.commentId == null ? 'none' : String(loaded.commentId);
+  const updatedAt = loaded.commentUpdatedAt == null ? 'none' : String(loaded.commentUpdatedAt);
+  return `${commentId}:${updatedAt}:${fingerprintState(loaded.state)}`;
+}
+
+function cloneState(state) {
+  return JSON.parse(JSON.stringify(normalizeState(state)));
+}
+
+/**
+ * Load the marker, apply `mutate`, and save. If the marker changes between the
+ * read and the save, discard that attempt and reapply `mutate` on the new
+ * snapshot. Stops after `maxAttempts` when the store never converges.
+ *
+ * GitHub issue comments have no conditional PATCH. A writer can still lose an
+ * update that lands after its last read and before its PATCH.
+ *
+ * `mutate` receives a clone and returns an object. Include `state` when the
+ * result lives on a different object; in-place edits of the clone are kept.
+ * A `created: true` result from any attempt is preserved on the return value.
+ */
+async function commitStateMutation({
+  issueNumber,
+  token = null,
+  mutate,
+  maxAttempts = MAX_UAT_QUEUE_WRITE_ATTEMPTS,
+  loadState = loadStateFromIssue,
+  saveState = saveStateToIssue,
+} = {}) {
+  if (typeof mutate !== 'function') {
+    throw new UatQueueError('commitStateMutation requires mutate');
+  }
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+    throw new UatQueueError('maxAttempts must be a positive integer');
+  }
+
+  let createdOnAnyAttempt = false;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const loaded = await loadState(issueNumber, token);
+    const baseline = revisionOf(loaded);
+    const working = cloneState(loaded.state);
+    const returned = await mutate(working);
+    const outcome = returned && typeof returned === 'object' ? returned : {};
+    if (outcome.created === true) {
+      createdOnAnyAttempt = true;
+    }
+    const nextState = outcome.state || working;
+    const fresh = await loadState(issueNumber, token);
+    if (revisionOf(fresh) !== baseline) {
+      continue;
+    }
+
+    // A skipped mutation must not create a marker or rewrite the ledger.
+    if (outcome.skipped === true) {
+      return finishCommit(outcome, fresh, false, attempt, issueNumber, createdOnAnyAttempt);
+    }
+
+    const unchanged = fingerprintState(fresh.state) === fingerprintState(nextState);
+    if (fresh.commentId != null && unchanged) {
+      return finishCommit(outcome, fresh, false, attempt, issueNumber, createdOnAnyAttempt);
+    }
+
+    await saveState(issueNumber, nextState, token);
+    const confirmed = await loadState(issueNumber, token);
+    if (fingerprintState(confirmed.state) === fingerprintState(nextState)) {
+      return finishCommit(outcome, confirmed, true, attempt, issueNumber, createdOnAnyAttempt);
+    }
+  }
+
+  throw new UatQueueError(
+    `uat queue write did not converge after ${maxAttempts} attempts`,
+    'uat_queue_write_conflict',
+  );
+}
+
+function finishCommit(outcome, loaded, written, attempt, issueNumber, createdOnAnyAttempt) {
+  const result = {
+    ...outcome,
+    state: loaded.state,
+    written,
+    attempts: attempt,
+    commentId: loaded.commentId ?? null,
+    issueNumber,
+  };
+  if (createdOnAnyAttempt) {
+    result.created = true;
+  }
+  return result;
 }
 
 async function saveStateToIssue(issueNumber, state, token) {
@@ -102,72 +207,12 @@ async function ensureCoordinationIssueExists(issueNumber, token) {
   await fetchIssue(owner, repo, issueNumber, authToken);
 }
 
-/**
- * Read-modify-write the marker comment, then verify the mutation's effect landed.
- *
- * GitHub offers no conditional PATCH for issue comments, so two writers can load the
- * same state and the later save drops the earlier one. After each save this re-reads
- * the marker; if the effect is missing it reloads and reapplies `mutate` to the fresh
- * state. Bounded: throws once `attempts` writes have not converged. The window between
- * a read-back and another writer's PATCH is not closed (see uat-coordinator-plan.md).
- *
- * @param {number} issueNumber
- * @param {(state: object, loaded: object) => ({ result?: any, verify?: (loaded: object) => boolean }) | Promise<object>} mutate
- *   Mutates `state` in place. Return `verify` only when a write is needed; omit it for a no-op.
- *   `verify` receives a freshly loaded `{ state, commentId }` and returns true when the effect is present.
- * @param {{ token?: string, attempts?: number, write?: boolean, store?: { load: Function, save: Function } }} [options]
- *   `write: false` runs the mutation without saving (dry run). `store` replaces load/save (tests).
- * @returns {Promise<{ result: any, state: object, written: boolean, attempts: number, commentId: number|null, save: object|null }>}
- */
-async function updateQueueState(issueNumber, mutate, options = {}) {
-  const {
-    token,
-    attempts = DEFAULT_UPDATE_ATTEMPTS,
-    write = true,
-    store = { load: loadStateFromIssue, save: saveStateToIssue },
-  } = options;
-  if (!Number.isInteger(attempts) || attempts < 1) {
-    throw new UatQueueError('updateQueueState attempts must be a positive integer');
-  }
-
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const loaded = await store.load(issueNumber, token);
-    const step = (await mutate(loaded.state, loaded)) || {};
-    if (!step.verify || !write) {
-      return {
-        result: step.result,
-        state: loaded.state,
-        written: false,
-        attempts: attempt,
-        commentId: loaded.commentId,
-        save: null,
-      };
-    }
-
-    const save = await store.save(issueNumber, loaded.state, token);
-    const reloaded = await store.load(issueNumber, token);
-    if (step.verify(reloaded)) {
-      return {
-        result: step.result,
-        state: reloaded.state,
-        written: true,
-        attempts: attempt,
-        commentId: reloaded.commentId,
-        save,
-      };
-    }
-  }
-
-  throw new UatQueueError(
-    `uat queue write did not converge after ${attempts} attempts on issue #${issueNumber}`,
-    'uat_queue_write_conflict',
-  );
-}
-
 module.exports = {
+  MAX_UAT_QUEUE_WRITE_ATTEMPTS,
+  commitStateMutation,
   ensureCoordinationIssueExists,
+  fingerprintState,
   loadStateFromIssue,
   resolveCoordinationIssue,
   saveStateToIssue,
-  updateQueueState,
 };

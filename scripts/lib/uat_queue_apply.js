@@ -6,68 +6,48 @@ const {
 const {
   applyDeployResult,
   enqueueEntry,
-  entryHasState,
   findActiveEntryByPr,
-  hasActiveEntryForSha,
   parseUatTag,
 } = require('./uat_queue_lib');
 const {
+  commitStateMutation,
+  loadStateFromIssue,
   resolveCoordinationIssue,
-  updateQueueState,
 } = require('./uat_queue_sync');
 
-/**
- * Ensure a ledger entry exists for the UAT tag's PR inside `state` (mutates it).
- * Pure apart from the optional tag-SHA lookup, so callers can run it inside one
- * updateQueueState mutation.
- */
-async function ensureEntryInState(state, { deployRef, mergeSha, owner, repo, token, enqueuedBy }) {
+function ensuredDeployEntry(state, { deployRef, mergeSha, enqueuedBy }) {
   const parsed = parseUatTag(deployRef);
   if (!parsed) {
-    return { skipped: true, reason: 'invalid_deploy_ref' };
+    return { state, skipped: true, reason: 'invalid_deploy_ref' };
   }
 
   const existing = findActiveEntryByPr(state, parsed.prNumber);
   if (existing) {
-    return { skipped: false, entry: existing, created: false };
+    return { state, skipped: false, entry: existing, created: false };
   }
-
-  let sha = mergeSha || null;
-  if (!sha && owner && repo && token) {
-    try {
-      const { tagCommitSha } = require('./uat_deploy_run_resolve');
-      sha = await tagCommitSha(owner, repo, deployRef, token);
-    } catch {
-      sha = null;
-    }
-  }
-  if (!sha) {
-    return { skipped: true, reason: 'merge_sha_unavailable' };
+  if (!mergeSha) {
+    return { state, skipped: true, reason: 'merge_sha_unavailable' };
   }
 
   const result = enqueueEntry(state, {
-    mergeSha: sha,
+    mergeSha,
     prNumber: parsed.prNumber,
     enqueuedBy: enqueuedBy || `pr-${parsed.prNumber}`,
     uatTag: deployRef,
   });
-  return { skipped: false, entry: result.entry, created: result.created };
+  return { state: result.state, skipped: false, entry: result.entry, created: result.created };
 }
 
-/**
- * updateQueueState mutation that enqueues one merge. Idempotent on mergeSha: a
- * duplicate event returns the existing entry with created: false and no write.
- * @param {{ mergeSha: string, prNumber: number, enqueuedBy?: string|null, uatTag?: string }} input
- */
-function enqueueMutation(input) {
-  return (state) => {
-    const result = enqueueEntry(state, input);
-    if (!result.created) {
-      return { result, verify: null };
-    }
-    const sha = result.entry.merge_sha;
-    return { result, verify: (loaded) => hasActiveEntryForSha(loaded.state, sha) };
-  };
+async function resolveDeployMergeSha({ deployRef, mergeSha, owner, repo, token }) {
+  if (mergeSha || !owner || !repo || !token) {
+    return mergeSha || null;
+  }
+  try {
+    const { tagCommitSha } = require('./uat_deploy_run_resolve');
+    return await tagCommitSha(owner, repo, deployRef, token);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -83,8 +63,12 @@ async function ensureQueueEntryForDeployRef({
   token,
   enqueuedBy,
   write = true,
+  loadState,
+  saveState,
+  maxAttempts,
 }) {
-  if (!parseUatTag(deployRef)) {
+  const parsed = parseUatTag(deployRef);
+  if (!parsed) {
     return { skipped: true, reason: 'invalid_deploy_ref' };
   }
 
@@ -93,34 +77,43 @@ async function ensureQueueEntryForDeployRef({
     return { skipped: true, reason: 'coordination_issue_not_configured' };
   }
 
-  const outcome = await updateQueueState(
-    coordIssue,
-    async (state) => {
-      const ensured = await ensureEntryInState(state, {
-        deployRef,
-        mergeSha,
-        owner,
-        repo,
-        token,
-        enqueuedBy,
-      });
-      if (ensured.skipped || !ensured.created) {
-        return { result: ensured, verify: null };
-      }
-      const sha = ensured.entry.merge_sha;
-      return { result: ensured, verify: (loaded) => hasActiveEntryForSha(loaded.state, sha) };
-    },
-    { token, write },
-  );
+  const sha = await resolveDeployMergeSha({ deployRef, mergeSha, owner, repo, token });
+  const mutate = (state) => ensuredDeployEntry(state, {
+    deployRef,
+    mergeSha: sha,
+    enqueuedBy: enqueuedBy || `pr-${parsed.prNumber}`,
+  });
 
-  const ensured = outcome.result;
-  if (ensured.skipped) {
-    return { ...ensured, issueNumber: coordIssue };
+  if (!write) {
+    const { state } = await loadStateFromIssue(coordIssue, token);
+    const result = mutate(state);
+    if (result.skipped) {
+      return { skipped: true, reason: result.reason, issueNumber: coordIssue };
+    }
+    return {
+      skipped: false,
+      entry: result.entry,
+      created: result.created,
+      issueNumber: coordIssue,
+      state: result.state,
+    };
+  }
+
+  const outcome = await commitStateMutation({
+    issueNumber: coordIssue,
+    token,
+    mutate,
+    loadState,
+    saveState,
+    maxAttempts,
+  });
+  if (outcome.skipped) {
+    return { skipped: true, reason: outcome.reason, issueNumber: coordIssue };
   }
   return {
     skipped: false,
-    entry: ensured.entry,
-    created: ensured.created,
+    entry: outcome.entry,
+    created: outcome.created,
     issueNumber: coordIssue,
     state: outcome.state,
   };
@@ -132,25 +125,33 @@ async function syncEnqueueAfterMerge({
   enqueuedBy,
   issueNumber = COORDINATION_ISSUE_NUMBER,
   token,
+  loadState,
+  saveState,
+  maxAttempts,
 }) {
   const coordIssue = resolveCoordinationIssue(issueNumber);
   if (!coordIssue) {
     return { skipped: true, reason: 'coordination_issue_not_configured' };
   }
 
-  const outcome = await updateQueueState(
-    coordIssue,
-    enqueueMutation({
-      mergeSha,
-      prNumber,
-      enqueuedBy: enqueuedBy || `pr-${prNumber}`,
-    }),
-    { token },
-  );
+  const outcome = await commitStateMutation({
+    issueNumber: coordIssue,
+    token,
+    loadState,
+    saveState,
+    maxAttempts,
+    mutate(state) {
+      return enqueueEntry(state, {
+        mergeSha,
+        prNumber,
+        enqueuedBy: enqueuedBy || `pr-${prNumber}`,
+      });
+    },
+  });
   return {
     skipped: false,
-    entry: outcome.result.entry,
-    created: outcome.result.created,
+    entry: outcome.entry,
+    created: outcome.created,
     issueNumber: coordIssue,
   };
 }
@@ -167,6 +168,9 @@ async function syncDeployResult({
   owner = null,
   repo = null,
   mergeSha = null,
+  loadState,
+  saveState,
+  maxAttempts,
 }) {
   const coordIssue = resolveCoordinationIssue(issueNumber);
   if (!coordIssue) {
@@ -174,58 +178,45 @@ async function syncDeployResult({
   }
 
   const parsed = parseUatTag(deployRef);
-  const outcome = await updateQueueState(
-    coordIssue,
-    async (state) => {
-      if (parsed && !findActiveEntryByPr(state, parsed.prNumber)) {
-        await ensureEntryInState(state, {
-          deployRef,
-          mergeSha,
-          owner,
-          repo,
-          token,
-          enqueuedBy: `pr-${parsed.prNumber}`,
-        });
-      }
-
-      const result = applyDeployResult(state, {
+  const sha = await resolveDeployMergeSha({ deployRef, mergeSha, owner, repo, token });
+  const mutate = (state) => {
+    let working = state;
+    if (parsed && !findActiveEntryByPr(working, parsed.prNumber)) {
+      const ensured = ensuredDeployEntry(working, {
         deployRef,
-        conclusion,
-        deployRunId,
-        gateSummaryRef,
-        gateFailureClass,
+        mergeSha: sha,
+        enqueuedBy: `pr-${parsed.prNumber}`,
       });
-      if (result.skipped) {
-        return { result, verify: null };
+      if (!ensured.skipped && ensured.state) {
+        working = ensured.state;
       }
-      const {
-        seq,
-        state: entryState,
-        result: entryResult,
-        deploy_run_id: deployRunIdValue,
-        gate_summary_ref: gateSummaryValue,
-      } = result.entry;
-      return {
-        result,
-        verify: (loaded) =>
-          entryHasState(loaded.state, seq, {
-            state: entryState,
-            result: entryResult,
-            deploy_run_id: deployRunIdValue,
-            gate_summary_ref: gateSummaryValue,
-          }),
-      };
-    },
-    { token, write },
-  );
+    }
+    return applyDeployResult(working, {
+      deployRef,
+      conclusion,
+      deployRunId,
+      gateSummaryRef,
+      gateFailureClass,
+    });
+  };
 
-  const applied = outcome.result;
-  if (applied.skipped) {
-    return { skipped: true, reason: applied.reason, issueNumber: coordIssue };
+  const outcome = write
+    ? await commitStateMutation({
+      issueNumber: coordIssue,
+      token,
+      mutate,
+      loadState,
+      saveState,
+      maxAttempts,
+    })
+    : mutate((await loadStateFromIssue(coordIssue, token)).state);
+
+  if (outcome.skipped) {
+    return { skipped: true, reason: outcome.reason, issueNumber: coordIssue };
   }
   return {
     skipped: false,
-    entry: applied.entry,
+    entry: outcome.entry,
     issueNumber: coordIssue,
     conclusion,
     state: outcome.state,
@@ -234,8 +225,6 @@ async function syncDeployResult({
 }
 
 module.exports = {
-  enqueueMutation,
-  ensureEntryInState,
   ensureQueueEntryForDeployRef,
   syncDeployResult,
   syncEnqueueAfterMerge,
