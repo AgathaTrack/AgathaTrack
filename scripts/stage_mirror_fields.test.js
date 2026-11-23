@@ -6,6 +6,7 @@ const {
   githubRestErrorStatus,
   isOrgIssueFieldsReadRefused,
   loadOrgStageField,
+  loadOrgSupportStageField,
 } = require('./stage_mirror_fields');
 
 const ISSUE_FIELDS_PATH = '/orgs/AgathaTrack/issue-fields';
@@ -200,4 +201,32 @@ test('loadOrgStageField: a successful read returns the verified option list', as
     assert.equal(field.optionsVerified, true);
     assert.deepEqual(field.options, ['To do', 'Done']);
   });
+});
+
+test('loadOrgSupportStageField: a successful read returns support columns only', async () => {
+  const prev = process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
+  delete process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
+  try {
+    const field = await loadOrgSupportStageField({
+      org: 'AgathaTrack',
+      token: 't',
+      getIssueFields: async () => [
+        {
+          id: 60001,
+          name: 'Support Stage',
+          options: [{ name: 'New' }, { name: 'Triaged' }, { name: 'Done' }],
+        },
+        { id: 49916872, name: 'Stage', options: [{ name: 'Backlog' }] },
+      ],
+    });
+    assert.equal(field.id, 60001);
+    assert.equal(field.name, 'Support Stage');
+    assert.deepEqual(field.options, ['New', 'Triaged', 'Done']);
+  } finally {
+    if (prev === undefined) {
+      delete process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
+    } else {
+      process.env.SUPPORT_STAGE_ISSUE_FIELD_ID = prev;
+    }
+  }
 });
