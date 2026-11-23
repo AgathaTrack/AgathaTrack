@@ -187,6 +187,10 @@ Blocking checks use `node scripts/npm_audit_gate.js --package server|e2e` (not b
 
 Refs: [#2436](https://github.com/AgathaTrack/AgathaTrack/issues/2436) · owner approval 2026-11-18.
 
+#### Issue pipeline v2 offline suite (convention-discovered)
+
+Governance job step `Issue pipeline v2 offline tests` runs `node scripts/ci/run-issue-pipeline-v2-tests.mjs`. It runs every `scripts/issue_pipeline_v2*.test.js` file (no list to edit), prints one summary line (`suite=issue-pipeline-v2 files=N tests=T pass=P fail=F skipped=S exit=E result=…`), and fails on any test failure, on zero test files, or on zero tests run. Registry id `issue-pipeline-v2-tests` (`scripts/ci/governance-blocking-steps.mjs`) is the same command used by `pre-push-changed.sh` (governance scope), so pre-push and CI share one gate. Changes under `scripts/pipeline_runners/`, `.github/pipeline-agents.json` and `.github/workflows/issue-pipeline-v2.yml` set the governance scope explicitly.
+
 #### Accepted trade-off: no CI re-run on merge to `main`
 
 Auto-promotion (`promote-uat.yml`) does **not** re-run CI on the merge commit.
