@@ -294,6 +294,22 @@ test('Ready: risky-scope preflight failure sets sensitive blocked instead of bac
   assert.deepEqual([action.type, action.reason, action.row], ['set-blocked', 'sensitive', 'ready.risky-scope']);
 });
 
+test('Ready: owner-approved-delivery relaunches after risky-scope preflight failure', () => {
+  const ready = {
+    stage: 'Ready',
+    deliveryMethod: 'light-plan',
+    labels: ['go', 'owner-approved-delivery'],
+    launch: { failures: 1, lastFailureAt: NOW - 6 * MIN, riskyScopePreflight: true },
+  };
+  assert.equal(rowOf(ready).type, 'launch');
+  assert.equal(rowOf(ready).row, 'ready.launch');
+  assert.equal(
+    rowOf({ ...ready, wip: 99 }).reason,
+    'ready.queued',
+    'WIP cap still applies after owner waiver',
+  );
+});
+
 test('Ready: queue, launch, ack window, backoff, blocked', () => {
   const ready = { stage: 'Ready', deliveryMethod: 'PR' };
   assert.equal(rowOf({ ...ready, wip: 2 }).reason, 'ready.queued');

@@ -306,7 +306,10 @@ function decideReady(facts, config) {
   if (launch.busy) {
     return setStage('In progress', 'ready.launched', { evidence: { runId: launch.runId || null } });
   }
-  if (launch.riskyScopePreflight) {
+  const ownerApprovedDelivery = (facts.labels || []).some(
+    (label) => String(label).trim().toLowerCase() === 'owner-approved-delivery',
+  );
+  if (launch.riskyScopePreflight && !ownerApprovedDelivery) {
     return setBlocked('sensitive', 'ready.risky-scope');
   }
   if (launch.runId && facts.now - launch.startedAt < config.limits.ackWindowMin * MIN) {
