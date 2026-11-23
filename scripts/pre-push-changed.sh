@@ -244,6 +244,7 @@ run_governance() {
   node --test scripts/stage_mirror_apply.test.js
   node --test scripts/stage_mirror_fields.test.js
   node --test scripts/db/normalize-schema-dump.test.js
+  node --test scripts/db/regenerate-canonical.test.js
   bash scripts/test/require-non-prod-wrappers.test.sh
   node scripts/db/check-migration-manifest.js
   node scripts/check_migration_sql_transactions.js
