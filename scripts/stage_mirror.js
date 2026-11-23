@@ -122,18 +122,23 @@ async function reconcileBoard({
   projectsPat,
   dryRun,
   issueFilter,
+  io = defaultIo,
+  ports = {},
 }) {
-  await assertProjectTextField(projectsPat, board.syncedFieldId, 'Synced stage');
+  const assertSyncedField = ports.assertSyncedField || assertProjectTextField;
+  const listIssues = ports.listIssues || listProjectIssues;
+  const readStage = ports.readStage || fetchIssueStage;
+  await assertSyncedField(projectsPat, board.syncedFieldId, 'Synced stage');
   assertBoardColumnsMatchStageOptions(board.columns, stageField.options, board.label);
 
-  const rows = await listProjectIssues({
+  const rows = await listIssues({
     projectId: board.projectId,
     statusFieldId: board.statusFieldId,
     syncedFieldId: board.syncedFieldId,
     projectsPat,
   });
 
-  const stats = { scanned: 0, writes: 0, noop: 0, failures: [] };
+  const stats = { scanned: 0, planned: 0, applied: 0, noop: 0, failures: [] };
 
   stats.failures = await forEachRowIsolated(rows, async (row) => {
     const issueNum = row.issue.number;
@@ -164,7 +169,7 @@ async function reconcileBoard({
     const P = row.status || '';
     const S = row.syncedStage || '';
     const F =
-      (await fetchIssueStage(issueOwner, issueRepo, issueNum, projectsPat, stageField.id)) || '';
+      (await readStage(issueOwner, issueRepo, issueNum, projectsPat, stageField.id)) || '';
 
     const plan = decideStageMirror(P, F, S, board.columns);
     if (plan.action === 'none') {
@@ -173,8 +178,8 @@ async function reconcileBoard({
     }
 
     logMirrorLine(board.key, row, P, F, S, plan, dryRun);
+    stats.planned += 1;
     if (dryRun) {
-      stats.writes += 1;
       return;
     }
 
@@ -187,8 +192,8 @@ async function reconcileBoard({
       issueOwner,
       issueRepo,
       issueNum,
-    });
-    stats.writes += 1;
+    }, io);
+    stats.applied += 1;
   });
 
   return stats;
@@ -244,7 +249,7 @@ async function runStageMirror() {
   }
 
   const issueFilter = process.env.ISSUE_NUMBER ? Number(process.env.ISSUE_NUMBER) : null;
-  const totals = { scanned: 0, writes: 0, noop: 0 };
+  const totals = { scanned: 0, planned: 0, applied: 0, noop: 0 };
   const failures = [];
 
   for (const board of config.boards) {
@@ -263,7 +268,8 @@ async function runStageMirror() {
       continue;
     }
     totals.scanned += stats.scanned;
-    totals.writes += stats.writes;
+    totals.planned += stats.planned;
+    totals.applied += stats.applied;
     totals.noop += stats.noop;
     failures.push(...stats.failures);
   }
@@ -272,7 +278,7 @@ async function runStageMirror() {
     console.error(`[error] ${failure.ref}: ${failure.message}`);
   }
   console.log(
-    `stage-mirror complete mode=${mode} dry_run=${dryRun} scanned=${totals.scanned} writes=${totals.writes} noop=${totals.noop} failures=${failures.length}`,
+    `stage-mirror complete mode=${mode} dry_run=${dryRun} scanned=${totals.scanned} planned=${totals.planned} applied=${totals.applied} noop=${totals.noop} failures=${failures.length}`,
   );
   if (failures.length > 0) {
     // Fail the run so the problem is visible, after every other item has been mirrored.
