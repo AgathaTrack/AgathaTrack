@@ -76,7 +76,7 @@ node scripts/uat_queue_runtime.js enqueue \
 
 ## Overlapping writers
 
-The ledger is one marker comment (`<!-- uat-queue-state:v1 -->`). Writers load that comment, change the snapshot, and save it back. `commitStateMutation` (`scripts/lib/uat_queue_sync.js`) re-reads before the save. When the marker changed, it drops that attempt and reapplies the same change on the new snapshot. A duplicate `merge_sha` stays one entry and returns `created: false`. A store that never converges throws `uat_queue_write_conflict` after five attempts.
+The ledger is one marker comment (`<!-- uat-queue-state:v1 -->`). Writers load that comment, change the snapshot, and save it back. `commitStateMutation` (`scripts/lib/uat_queue_sync.js`) re-reads before the save. When the marker changed, it drops that attempt and reapplies the same change on the new snapshot. A duplicate `merge_sha` stays one entry. `created` comes from the attempt that landed, so an overlapping duplicate returns `created: false` when the entry is already present. Saves patch the newest marker and delete older copies of it. Bootstrap does not replace a ledger that already has entries, a barrier, a promote hold, or an active watcher. A store that never converges throws `uat_queue_write_conflict` after five attempts.
 
 GitHub issue comments have no conditional update. A save can still overwrite a comment that landed after the writer's last read and before its PATCH. Closing that gap would need another queue store, or a serialisation design the owner accepts. A shared Actions concurrency group is not that design: with `cancel-in-progress: false`, GitHub keeps one pending run and cancels earlier pending runs, so a queued enqueue would be dropped.
 

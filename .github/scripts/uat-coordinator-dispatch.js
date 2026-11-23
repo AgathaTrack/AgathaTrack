@@ -180,7 +180,15 @@ async function prepareDispatch({
   };
 }
 
-function reapplyDispatchLedger(state, prepared) {
+async function reapplyDispatchLedger(state, prepared, context = {}) {
+  const { owner, repo, token, force = false } = context;
+  if (owner && repo && token) {
+    await releaseWatcherIfHolderRunFinished(state, owner, repo, token);
+  }
+  if (force && isWatcherLeaseActive(state)) {
+    releaseWatcher(state);
+  }
+
   const mergeSha = prepared.entry && prepared.entry.merge_sha;
   const live = mergeSha ? findEntryByMergeSha(state, mergeSha) : null;
   if (live && live.state === 'failed' && prepared.entry.state === 'remedial') {
@@ -189,12 +197,12 @@ function reapplyDispatchLedger(state, prepared) {
 
   const holder = prepared.nextState.active_watcher && prepared.nextState.active_watcher.holder;
   const sameHolder = holder && state.active_watcher && state.active_watcher.holder === holder;
-  if (holder && !sameHolder && !isWatcherLeaseActive(state)) {
-    const current = mergeSha ? findEntryByMergeSha(state, mergeSha) : null;
+  const current = mergeSha ? findEntryByMergeSha(state, mergeSha) : null;
+  if (holder && current && !sameHolder && !isWatcherLeaseActive(state)) {
     acquireWatcher(state, {
       holder,
       leaseMinutes: 90,
-      watchingSeq: (current && current.seq) || prepared.entry.seq,
+      watchingSeq: current.seq,
     });
   }
 
@@ -366,8 +374,13 @@ async function main() {
     await commitStateMutation({
       issueNumber: prepared.issueNumber,
       token,
-      mutate(state) {
-        reapplyDispatchLedger(state, prepared);
+      async mutate(state) {
+        await reapplyDispatchLedger(state, prepared, {
+          owner,
+          repo,
+          token,
+          force: forceDispatch,
+        });
         return { state };
       },
     });
@@ -391,4 +404,5 @@ if (require.main === module) {
 module.exports = {
   prepareDispatch,
   fetchWorkflowJobs,
+  reapplyDispatchLedger,
 };

@@ -3,9 +3,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createEmptyState, UatQueueError } = require('./lib/uat_queue_lib');
+const { createEmptyState, enqueueEntry, UatQueueError } = require('./lib/uat_queue_lib');
 const { syncEnqueueAfterMerge } = require('./lib/uat_queue_apply');
 const { commitStateMutation } = require('./lib/uat_queue_sync');
+const { ledgerHasLiveContent } = require('./uat_coordinator_bootstrap');
+const { reapplyDispatchLedger } = require('../.github/scripts/uat-coordinator-dispatch');
 
 function defer() {
   let resolve;
@@ -92,7 +94,7 @@ function enqueueOn(store, mergeSha, prNumber, maxAttempts) {
     issueNumber: 2558,
     maxAttempts,
     loadState: () => store.load(),
-    saveState: (issueNumber, state) => store.save(issueNumber, state),
+    saveState: (...args) => store.save(...args),
   });
 }
 
@@ -104,10 +106,55 @@ test('two interleaved enqueues both survive', { timeout: 5000 }, async () => {
   ]);
   const shas = store.read().entries.map((entry) => entry.merge_sha).sort();
   assert.deepEqual(shas, ['sha-aaa', 'sha-bbb']);
-  assert.equal(first.created, true);
-  assert.equal(second.created, true);
   assert.equal(first.entry.merge_sha === 'sha-aaa' || second.entry.merge_sha === 'sha-aaa', true);
   assert.equal(first.entry.merge_sha === 'sha-bbb' || second.entry.merge_sha === 'sha-bbb', true);
+});
+
+test('overlapping duplicate enqueues report created from the landed attempt', { timeout: 5000 }, async () => {
+  const store = createClobberStore();
+  const run = (enqueuedAt) => commitStateMutation({
+    issueNumber: 2558,
+    maxAttempts: 5,
+    loadState: () => store.load(),
+    saveState: (...args) => store.save(...args),
+    mutate(state) {
+      return enqueueEntry(state, {
+        mergeSha: 'sha-same',
+        prNumber: 7,
+        enqueuedBy: 'pr-7',
+        enqueuedAt,
+      });
+    },
+  });
+  const [first, second] = await Promise.all([
+    run('2026-01-01T00:00:00.000Z'),
+    run('2026-01-02T00:00:00.000Z'),
+  ]);
+  assert.equal(store.read().entries.length, 1);
+  assert.deepEqual([first.created, second.created].sort(), [false, true]);
+});
+
+test('a save patches the comment id from the pre-write read', async () => {
+  let revision = 0;
+  let snapshot = createEmptyState();
+  const patched = [];
+  const store = {
+    async load() {
+      return {
+        state: structuredClone(snapshot),
+        commentId: 99,
+        commentUpdatedAt: String(revision),
+      };
+    },
+    async save(_issueNumber, state, _token, commentId) {
+      patched.push(commentId);
+      revision += 1;
+      snapshot = structuredClone(state);
+    },
+  };
+  const result = await enqueueOn(store, 'sha-patch', 3);
+  assert.equal(result.created, true);
+  assert.deepEqual(patched, [99]);
 });
 
 test('duplicate enqueue for the same mergeSha is idempotent', async () => {
@@ -118,6 +165,47 @@ test('duplicate enqueue for the same mergeSha is idempotent', async () => {
   assert.equal(second.created, false);
   assert.equal(store.read().entries.length, 1);
   assert.equal(store.read().entries[0].merge_sha, 'sha-same');
+});
+
+test('bootstrap keeps a ledger that only has an active watcher', () => {
+  const state = createEmptyState();
+  state.active_watcher = { holder: 'gha-1', lease_until: '2099-01-01T00:00:00.000Z', watching_seq: 1 };
+  assert.equal(ledgerHasLiveContent(state), true);
+  assert.equal(ledgerHasLiveContent(createEmptyState()), false);
+});
+
+test('dispatch reapply does not lease a missing entry', async () => {
+  const state = createEmptyState();
+  await reapplyDispatchLedger(state, {
+    entry: { merge_sha: 'missing', seq: 9, state: 'failed' },
+    nextState: {
+      active_watcher: { holder: 'gha-2' },
+      promote_hold: false,
+    },
+  });
+  assert.equal(state.active_watcher, null);
+});
+
+test('dispatch reapply leases the live entry sequence', async () => {
+  const state = createEmptyState();
+  state.entries = [{
+    seq: 4,
+    pr_number: 4,
+    merge_sha: 'abc',
+    state: 'failed',
+  }];
+  await reapplyDispatchLedger(state, {
+    entry: { merge_sha: 'abc', seq: 99, state: 'remedial' },
+    nextState: {
+      active_watcher: { holder: 'gha-2' },
+      promote_hold: true,
+      promote_hold_reason: 'deploy-uat failure run 2',
+    },
+  });
+  assert.equal(state.entries[0].state, 'remedial');
+  assert.equal(state.active_watcher.holder, 'gha-2');
+  assert.equal(state.active_watcher.watching_seq, 4);
+  assert.equal(state.promote_hold, true);
 });
 
 test('a skipped mutation does not create a marker', async () => {

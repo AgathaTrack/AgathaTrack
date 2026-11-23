@@ -156,6 +156,15 @@ function pinIssue(issueNumber) {
   ghJson(['issue', 'pin', String(issueNumber)]);
 }
 
+function ledgerHasLiveContent(state) {
+  return Boolean(
+    (state.entries && state.entries.length > 0)
+    || state.main_barrier_sha
+    || state.promote_hold
+    || state.active_watcher,
+  );
+}
+
 async function ensureMarkerComment(issueNumber, token, write) {
   const loaded = await loadStateFromIssue(issueNumber, token);
   if (loaded.commentId) {
@@ -168,7 +177,7 @@ async function ensureMarkerComment(issueNumber, token, write) {
     issueNumber,
     token,
     mutate(state) {
-      if (state.entries.length > 0 || state.main_barrier_sha || state.promote_hold) {
+      if (ledgerHasLiveContent(state)) {
         return { state, initialized: false };
       }
       return { state: createEmptyState(), initialized: true };
@@ -257,6 +266,7 @@ async function main() {
 module.exports = {
   COORDINATION_TITLE,
   COORDINATION_LABELS,
+  ledgerHasLiveContent,
   renderIssueBody,
   parseArgs,
 };

@@ -110,7 +110,8 @@ function cloneState(state) {
  *
  * `mutate` receives a clone and returns an object. Include `state` when the
  * result lives on a different object; in-place edits of the clone are kept.
- * A `created: true` result from any attempt is preserved on the return value.
+ * `created` is the value from the attempt that landed. An earlier attempt that
+ * only tried to insert does not override a later `created: false`.
  */
 async function commitStateMutation({
   issueNumber,
@@ -127,16 +128,12 @@ async function commitStateMutation({
     throw new UatQueueError('maxAttempts must be a positive integer');
   }
 
-  let createdOnAnyAttempt = false;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const loaded = await loadState(issueNumber, token);
     const baseline = revisionOf(loaded);
     const working = cloneState(loaded.state);
     const returned = await mutate(working);
     const outcome = returned && typeof returned === 'object' ? returned : {};
-    if (outcome.created === true) {
-      createdOnAnyAttempt = true;
-    }
     const nextState = outcome.state || working;
     const fresh = await loadState(issueNumber, token);
     if (revisionOf(fresh) !== baseline) {
@@ -145,18 +142,21 @@ async function commitStateMutation({
 
     // A skipped mutation must not create a marker or rewrite the ledger.
     if (outcome.skipped === true) {
-      return finishCommit(outcome, fresh, false, attempt, issueNumber, createdOnAnyAttempt);
+      return finishCommit(outcome, fresh, false, attempt, issueNumber);
     }
 
     const unchanged = fingerprintState(fresh.state) === fingerprintState(nextState);
     if (fresh.commentId != null && unchanged) {
-      return finishCommit(outcome, fresh, false, attempt, issueNumber, createdOnAnyAttempt);
+      return finishCommit(outcome, fresh, false, attempt, issueNumber);
     }
 
-    await saveState(issueNumber, nextState, token);
+    // Patch the comment this attempt read. upsertMarkerComment edits the
+    // oldest marker, while load reads the newest, so a duplicate pair would
+    // never converge.
+    await saveState(issueNumber, nextState, token, fresh.commentId ?? null);
     const confirmed = await loadState(issueNumber, token);
     if (fingerprintState(confirmed.state) === fingerprintState(nextState)) {
-      return finishCommit(outcome, confirmed, true, attempt, issueNumber, createdOnAnyAttempt);
+      return finishCommit(outcome, confirmed, true, attempt, issueNumber);
     }
   }
 
@@ -166,8 +166,8 @@ async function commitStateMutation({
   );
 }
 
-function finishCommit(outcome, loaded, written, attempt, issueNumber, createdOnAnyAttempt) {
-  const result = {
+function finishCommit(outcome, loaded, written, attempt, issueNumber) {
+  return {
     ...outcome,
     state: loaded.state,
     written,
@@ -175,13 +175,9 @@ function finishCommit(outcome, loaded, written, attempt, issueNumber, createdOnA
     commentId: loaded.commentId ?? null,
     issueNumber,
   };
-  if (createdOnAnyAttempt) {
-    result.created = true;
-  }
-  return result;
 }
 
-async function saveStateToIssue(issueNumber, state, token) {
+async function saveStateToIssue(issueNumber, state, token, commentId = null) {
   const { owner, repo } = resolveRepository();
   const authToken = token || getGithubToken();
   if (!authToken) {
@@ -189,16 +185,51 @@ async function saveStateToIssue(issueNumber, state, token) {
   }
 
   const body = renderStateCommentBody(state);
-  const commentId = await upsertMarkerComment({
-    owner,
-    repo,
-    issueNumber,
-    marker: STATE_MARKER,
-    body,
-    token: authToken,
-  });
+  let writtenId = commentId;
+  if (writtenId) {
+    await rest(
+      'PATCH',
+      `/repos/${owner}/${repo}/issues/comments/${writtenId}`,
+      authToken,
+      { body },
+    );
+    await removeOtherMarkerComments(owner, repo, issueNumber, authToken, writtenId);
+  } else {
+    writtenId = await upsertMarkerComment({
+      owner,
+      repo,
+      issueNumber,
+      marker: STATE_MARKER,
+      body,
+      token: authToken,
+    });
+  }
 
-  return { issueNumber, commentId, updated_at: state.updated_at };
+  return { issueNumber, commentId: writtenId, updated_at: state.updated_at };
+}
+
+async function removeOtherMarkerComments(owner, repo, issueNumber, token, keepId) {
+  let comments;
+  try {
+    comments = await fetchIssueComments(owner, repo, issueNumber, token);
+  } catch {
+    return;
+  }
+  const extras = comments.filter(
+    (comment) => comment.id !== keepId && comment.body?.includes(STATE_MARKER),
+  );
+  for (const comment of extras) {
+    try {
+      await rest(
+        'DELETE',
+        `/repos/${owner}/${repo}/issues/comments/${comment.id}`,
+        token,
+      );
+    } catch {
+      // The newest marker is already updated. A leftover duplicate is removed
+      // on a later save that again targets that newest comment.
+    }
+  }
 }
 
 async function ensureCoordinationIssueExists(issueNumber, token) {
