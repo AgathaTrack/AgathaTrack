@@ -3,11 +3,11 @@
 const { rest } = require('../../.github/scripts/github-project-lib');
 const {
   enqueueEntry,
+  entryHasState,
   findActiveEntryByPr,
   findEntryByMergeSha,
 } = require('./uat_queue_lib');
-const { loadStateFromIssue, resolveCoordinationIssue, saveStateToIssue } =
-  require('./uat_queue_sync');
+const { resolveCoordinationIssue, updateQueueState } = require('./uat_queue_sync');
 
 function yymmddFromIso(iso) {
   if (!iso || iso.length < 10) {
@@ -128,37 +128,55 @@ async function reconcileFailedPreUatLedger({
     return { skipped: true, reason: 'pr_unresolved', mergeSha };
   }
 
-  let { state: workingState } = await loadStateFromIssue(coordIssue, token);
-  let entry =
-    findEntryByMergeSha(workingState, mergeSha) || findActiveEntryByPr(workingState, prNumber);
+  const outcome = await updateQueueState(
+    coordIssue,
+    (workingState) => {
+      let entry =
+        findEntryByMergeSha(workingState, mergeSha) || findActiveEntryByPr(workingState, prNumber);
 
-  if (!entry) {
-    const enqueued = enqueueEntry(workingState, {
-      mergeSha,
-      prNumber,
-      enqueuedBy: `pre-uat-run-${workflowRunId}`,
-    });
-    workingState = enqueued.state;
-    entry = enqueued.entry;
-  } else if (['complete', 'superseded'].includes(entry.state)) {
-    return {
-      skipped: true,
-      reason: 'entry_already_terminal',
-      entry,
-      mergeSha,
-      prNumber,
-    };
+      if (!entry) {
+        entry = enqueueEntry(workingState, {
+          mergeSha,
+          prNumber,
+          enqueuedBy: `pre-uat-run-${workflowRunId}`,
+        }).entry;
+      } else if (['complete', 'superseded'].includes(entry.state)) {
+        return {
+          result: {
+            skipped: true,
+            reason: 'entry_already_terminal',
+            entry,
+            mergeSha,
+            prNumber,
+          },
+          verify: null,
+        };
+      }
+
+      entry.state = 'failed';
+      entry.result = 'failure';
+      entry.gate_summary_ref = workflowUrl;
+      entry.deploy_run_id = String(workflowRunId);
+      entry.completed_at = new Date().toISOString();
+
+      const { seq } = entry;
+      return {
+        result: { entry },
+        verify: (loaded) =>
+          entryHasState(loaded.state, seq, {
+            state: 'failed',
+            result: 'failure',
+            deploy_run_id: String(workflowRunId),
+          }),
+      };
+    },
+    { token, write },
+  );
+
+  if (outcome.result.skipped) {
+    return outcome.result;
   }
-
-  entry.state = 'failed';
-  entry.result = 'failure';
-  entry.gate_summary_ref = workflowUrl;
-  entry.deploy_run_id = String(workflowRunId);
-  entry.completed_at = new Date().toISOString();
-
-  if (write) {
-    await saveStateToIssue(coordIssue, workingState, token);
-  }
+  const { entry } = outcome.result;
 
   return {
     skipped: false,

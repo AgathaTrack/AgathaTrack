@@ -109,6 +109,21 @@ function findActiveEntryByPr(state, prNumber) {
   );
 }
 
+/** True when a non-superseded entry for this merge SHA is present. */
+function hasActiveEntryForSha(state, mergeSha) {
+  const needle = String(mergeSha).toLowerCase();
+  return state.entries.some(
+    (e) => e.merge_sha.toLowerCase() === needle && e.state !== 'superseded',
+  );
+}
+
+/** True when the entry with `seq` exists and every field in `expected` matches. */
+function entryHasState(state, seq, expected) {
+  const entry = state.entries.find((e) => e.seq === seq);
+  if (!entry) return false;
+  return Object.entries(expected).every(([key, value]) => entry[key] === value);
+}
+
 function expectedUatTag(prNumber, date = new Date()) {
   const yy = String(date.getUTCFullYear()).slice(-2);
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -435,7 +450,9 @@ module.exports = {
   expectedUatTag,
   findActiveEntry,
   findActiveEntryByPr,
+  entryHasState,
   findEntryByMergeSha,
+  hasActiveEntryForSha,
   hasRemedialEntry,
   headEntryNeedingAttention,
   isWatcherLeaseActive,

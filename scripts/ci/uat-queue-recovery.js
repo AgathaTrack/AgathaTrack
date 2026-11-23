@@ -22,7 +22,7 @@ const {
 const {
   loadStateFromIssue,
   resolveCoordinationIssue,
-  saveStateToIssue,
+  updateQueueState,
 } = require('../lib/uat_queue_sync');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -60,6 +60,24 @@ async function recoverStaleWatcher(state, owner, repo, token) {
   };
 }
 
+/**
+ * updateQueueState mutation for the stale-watcher release. Re-runs the recovery on a
+ * fresh load and verifies the lease it computed is the one stored.
+ */
+function watcherRecoveryMutation(owner, repo, token) {
+  return async (state) => {
+    const recovery = await recoverStaleWatcher(state, owner, repo, token);
+    if (!recovery.changed) {
+      return { result: recovery, verify: null };
+    }
+    const expected = JSON.stringify(recovery.after ?? null);
+    return {
+      result: recovery,
+      verify: (loaded) => JSON.stringify(loaded.state.active_watcher ?? null) === expected,
+    };
+  };
+}
+
 async function main() {
   const token = process.env.GITHUB_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
@@ -84,8 +102,12 @@ async function main() {
 
   let saved = false;
   if (write && watcherRecovery.changed) {
-    await saveStateToIssue(issueNumber, state, token);
-    saved = true;
+    const outcome = await updateQueueState(
+      issueNumber,
+      watcherRecoveryMutation(owner, repo, token),
+      { token },
+    );
+    saved = outcome.written;
   }
 
   const needsCoordinator =
