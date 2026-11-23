@@ -71,16 +71,17 @@ test('#2482: a human comment does not wake a paused issue; other Blocked reasons
 
 // --- soak-1 (#2480): hand-driven work filled the WIP queue ---------------------------------------
 
-const launchRecord = (agent, at, issue = 1) => ({
+const launchRecord = (agent, at, issue = 1, purpose = 'doorbell') => ({
   id: `${issue}-${agent}-${at}`,
   user: { login: 'pawpet-engine' },
   created_at: iso(at),
-  body: `<!-- v2:launch run=r agent=${agent} purpose=doorbell stage=To do nonce=${'a'.repeat(32)} -->`,
+  body: `<!-- v2:launch run=r agent=${agent} purpose=${purpose} stage=To do nonce=${'a'.repeat(32)} -->`,
 });
+const deliveryLaunch = (agent, at, issue = 1) => launchRecord(agent, at, issue, 'delivery');
 const entry = (number, stage, over = {}) => ({ number, stage, labels: [], parsed: { stage }, ...over });
 
-test('#2480: WIP counts only In progress issues the engine started', async () => {
-  const comments = { 1: [launchRecord('cursor-a', NOW - 60 * MIN)], 2: [], 3: [launchRecord('cursor-b', NOW)] };
+test('#2480: WIP counts only In progress issues the engine started (delivery launch, not doorbell)', async () => {
+  const comments = { 1: [deliveryLaunch('cursor-a', NOW - 60 * MIN)], 2: [], 3: [deliveryLaunch('cursor-b', NOW)] };
   const entries = [
     entry(1, 'In progress'),
     entry(2, 'In progress'), // hand-driven: no engine launch record
@@ -112,7 +113,7 @@ test('#2484: last-used is read from this issue\'s own launch records, newest per
 test('a failed comment read in the board pass does not stop the tick', async () => {
   const commentsOf = async (e) => {
     if (e.number === 2) throw new Error('rate limited');
-    return [launchRecord('cursor-a', NOW - MIN, e.number)];
+    return [deliveryLaunch('cursor-a', NOW - MIN, e.number)];
   };
   const entries = [entry(1, 'In progress'), entry(2, 'In progress')];
   assert.equal(await countEngineWip({ entries, commentsOf, engineLogins: ['pawpet-engine'] }), 1);

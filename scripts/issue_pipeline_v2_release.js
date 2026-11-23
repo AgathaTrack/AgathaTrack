@@ -12,6 +12,7 @@
 
 const { rest } = require('../.github/scripts/github-project-lib');
 const { fetchAllPages } = require('./issue_pipeline_v2_comments');
+const { parseLaunchComment } = require('./issue_pipeline_v2_launch');
 
 const RESUME = 'v2:resume';
 const REOPENED = 'v2:reopened';
@@ -118,14 +119,19 @@ function markerNote(comment, engine, marker) {
 }
 
 /**
- * A run the engine started: `v2:launch-pending` (written before the handoff, and only in progress
- * once `busy` was seen), `v2:launch` or `v2:launch-acked`; never `v2:launch-failed` (nothing started).
+ * A delivery run the engine started: `v2:launch-pending`, `v2:launch`, or `v2:launch-acked` with
+ * `purpose=delivery` (or a legacy record with no purpose, treated as delivery). Doorbells and
+ * `v2:launch-failed` do not count.
  */
 function engineStartedRun(comment, engine) {
-  return (
-    engine.has(comment.user?.login) &&
-    /<!--\s*v2:launch(?:-pending|-acked)?(?![\w-])/.test(comment.body || '')
-  );
+  if (!engine.has(comment.user?.login)) {
+    return false;
+  }
+  const record = parseLaunchComment(comment);
+  if (!record || record.purpose !== 'delivery') {
+    return false;
+  }
+  return ['launch', 'launch-pending', 'launch-acked'].includes(record.kind);
 }
 
 /**
