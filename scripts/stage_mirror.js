@@ -12,8 +12,8 @@ const { inEngineScope, labelNames, v2OwnsLazy } = require('../.github/scripts/pi
 const { decideStageMirror } = require('./stage_mirror_decide');
 const { loadStageMirrorBoards } = require('./stage_mirror_config');
 const {
-  loadOrgStageField,
-  fetchIssueStage,
+  loadBoardMirrorField,
+  fetchIssueForMirror,
   setIssueStageField,
   resolveCanonicalOption,
   assertBoardColumnsMatchStageOptions,
@@ -124,7 +124,12 @@ async function reconcileBoard({
   issueFilter,
 }) {
   await assertProjectTextField(projectsPat, board.syncedFieldId, 'Synced stage');
-  assertBoardColumnsMatchStageOptions(board.columns, stageField.options, board.label);
+  assertBoardColumnsMatchStageOptions(
+    board.columns,
+    stageField.options,
+    board.label,
+    stageField.name,
+  );
 
   const rows = await listProjectIssues({
     projectId: board.projectId,
@@ -160,11 +165,25 @@ async function reconcileBoard({
       return;
     }
 
+    const mirrorIssue = await fetchIssueForMirror(
+      issueOwner,
+      issueRepo,
+      issueNum,
+      projectsPat,
+      stageField.id,
+    );
+    if (board.supportIssueTypes?.length) {
+      const typeName = mirrorIssue.typeName;
+      if (!board.supportIssueTypes.includes(typeName)) {
+        stats.noop += 1;
+        return;
+      }
+    }
+
     stats.scanned += 1;
     const P = row.status || '';
     const S = row.syncedStage || '';
-    const F =
-      (await fetchIssueStage(issueOwner, issueRepo, issueNum, projectsPat, stageField.id)) || '';
+    const F = mirrorIssue.stage;
 
     const plan = decideStageMirror(P, F, S, board.columns);
     if (plan.action === 'none') {
@@ -231,7 +250,6 @@ async function runStageMirror() {
   }
 
   const projectsPat = process.env.GH_PROJECTS_PAT;
-  const stageField = await loadOrgStageField({ org: config.org, token: projectsPat });
 
   // Config problems stop the run before any write.
   for (const board of config.boards) {
@@ -250,6 +268,10 @@ async function runStageMirror() {
   for (const board of config.boards) {
     let stats;
     try {
+      const stageField = await loadBoardMirrorField(board, {
+        org: config.org,
+        token: projectsPat,
+      });
       stats = await reconcileBoard({
         board,
         stageField,
