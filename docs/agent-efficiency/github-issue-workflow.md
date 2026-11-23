@@ -139,6 +139,7 @@ clears it.
   it is the id's first verdict of that kind on that hash. An `edit` claim also needs the newest body edit to be by the
   id's `actsAs` and to be no later than the claim (`claim.created_at >= editedAt`), so a later same-login revert does not
   credit an older claim.
+  A red with an edit posts its verdict on the **new** hash, which the verifier accepts only for that hash. Round derivation links that verdict to the request it answered through the assignee's confirmed edit claim: request hash in, claimed hash out, claim made after that request and before the next one. A verdict on the new hash with no such claim does not count, and neither hash alone links it (#2553 P2).
 - **Delivery plan:** the method (`PR`, `light-plan` or `execute-plan`, read from the body's `Method:` line, default `PR`),
   the planned work, the `agent-paths` block and the Definition of Done are written into the body during review. After
   convergence the body is frozen except for Definition of Done ticks.
