@@ -53,9 +53,14 @@ function classifyRequiredChecks(checks) {
   return { decision: 'success', failing: [] };
 }
 
-/** True when a stored check-run conclusion counts as a failed attempt. */
+/**
+ * True when a stored check-run conclusion counts as a failed attempt.
+ * Same rule as a completed check in `classifyRequiredCheck`: any conclusion other
+ * than `success` is a failure. Empty means the run has not reported a verdict.
+ */
 function isRequiredCheckFailure(conclusion) {
-  return REQUIRED_CHECK_FAILURES.has(conclusion);
+  if (conclusion == null || conclusion === '' || conclusion === 'success') return false;
+  return true;
 }
 
 module.exports = {

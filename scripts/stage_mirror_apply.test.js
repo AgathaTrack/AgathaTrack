@@ -78,6 +78,7 @@ function mirrorPorts(rows, stage) {
     assertSyncedField: async () => {},
     listIssues: async () => rows,
     readStage: async () => stage,
+    fetchIssueForMirror: async () => ({ stage, typeName: null }),
   };
 }
 

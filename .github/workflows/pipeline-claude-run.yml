@@ -1,6 +1,6 @@
 name: Pipeline Claude run
 
-# Pipeline v2 doorbell for claude-a (#2428 P3). Dispatched by the engine only; inputs hold
+# Pipeline v2 claude-a runs: doorbell stages and delivery (Ready / In progress). Dispatched by the engine only; inputs hold
 # public run metadata — never the prompt body or doorbell nonce (the nonce is not a step input).
 on:
   workflow_dispatch:

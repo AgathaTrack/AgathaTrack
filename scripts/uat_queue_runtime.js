@@ -38,9 +38,9 @@ const {
   setPromoteHold,
 } = require('./lib/uat_queue_lib');
 const {
+  commitStateMutation,
   loadStateFromIssue,
   resolveCoordinationIssue,
-  saveStateToIssue,
 } = require('./lib/uat_queue_sync');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -168,36 +168,66 @@ function resolveBranchTip(branchName) {
   return gitRevParse(branch);
 }
 
-async function loadIssueState(flags) {
+function requireIssueNumber(flags) {
   const issueNumber = resolveCoordinationIssue(flags.issue);
   if (!issueNumber) {
     throw new UatQueueError(
       'coordination issue not configured — set UAT_COORDINATION_ISSUE or pass --issue'
     );
   }
+  return issueNumber;
+}
+
+async function loadIssueState(flags) {
+  const issueNumber = requireIssueNumber(flags);
   return loadStateFromIssue(issueNumber);
 }
 
-async function maybeSave(flags, issueNumber, state) {
+async function commitCommand(flags, mutate) {
+  const issueNumber = requireIssueNumber(flags);
   if (!flags.write) {
-    return { saved: false };
+    const loaded = await loadStateFromIssue(issueNumber);
+    const outcome = (await mutate(loaded.state)) || {};
+    return {
+      issueNumber,
+      state: outcome.state || loaded.state,
+      outcome,
+      saveMeta: { saved: false },
+    };
   }
-  const result = await saveStateToIssue(issueNumber, state);
-  return { saved: true, ...result };
+  const outcome = await commitStateMutation({ issueNumber, mutate });
+  return {
+    issueNumber,
+    state: outcome.state,
+    outcome,
+    saveMeta: {
+      saved: outcome.written === true,
+      issueNumber: outcome.issueNumber,
+      commentId: outcome.commentId,
+      updated_at: outcome.state ? outcome.state.updated_at : null,
+    },
+  };
 }
 
 async function runCommand(cmd, flags) {
   switch (cmd) {
     case 'enqueue': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      const result = enqueueEntry(state, {
-        mergeSha: requireStringFlag(flags, 'merge'),
-        prNumber: requirePositiveIntFlag(flags, 'pr'),
-        enqueuedBy: optionalStringFlag(flags, 'ref'),
-        uatTag: optionalStringFlag(flags, 'tag'),
+      const mergeSha = requireStringFlag(flags, 'merge');
+      const prNumber = requirePositiveIntFlag(flags, 'pr');
+      const enqueuedBy = optionalStringFlag(flags, 'ref');
+      const uatTag = optionalStringFlag(flags, 'tag');
+      const committed = await commitCommand(flags, (state) => enqueueEntry(state, {
+        mergeSha,
+        prNumber,
+        enqueuedBy,
+        uatTag,
+      }));
+      printJson({
+        command: 'enqueue',
+        entry: committed.outcome.entry,
+        created: committed.outcome.created,
+        ...committed.saveMeta,
       });
-      const saveMeta = await maybeSave(flags, issueNumber, result.state);
-      printJson({ command: 'enqueue', entry: result.entry, created: result.created, ...saveMeta });
       return;
     }
 
@@ -284,95 +314,102 @@ async function runCommand(cmd, flags) {
     }
 
     case 'acquire-watcher': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      const head = headEntryNeedingAttention(state);
-      const result = acquireWatcher(state, {
-        holder: requireStringFlag(flags, 'holder'),
-        leaseMinutes: optionalPositiveIntFlag(
-          flags,
-          'lease-minutes',
-          DEFAULT_WATCHER_LEASE_MINUTES
-        ),
-        watchingSeq: head?.seq,
+      const holder = requireStringFlag(flags, 'holder');
+      const leaseMinutes = optionalPositiveIntFlag(
+        flags,
+        'lease-minutes',
+        DEFAULT_WATCHER_LEASE_MINUTES
+      );
+      const committed = await commitCommand(flags, (state) => {
+        const head = headEntryNeedingAttention(state);
+        return acquireWatcher(state, { holder, leaseMinutes, watchingSeq: head?.seq });
       });
+      const result = committed.outcome;
       if (!result.acquired) {
         printJson({ command: 'acquire-watcher', acquired: false, ...result });
         process.exit(2);
       }
-      const saveMeta = await maybeSave(flags, issueNumber, result.state);
-      printJson({ command: 'acquire-watcher', acquired: true, watcher: result.watcher, ...saveMeta });
+      printJson({
+        command: 'acquire-watcher',
+        acquired: true,
+        watcher: result.watcher,
+        ...committed.saveMeta,
+      });
       return;
     }
 
     case 'release-watcher': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      releaseWatcher(state);
-      const saveMeta = await maybeSave(flags, issueNumber, state);
-      printJson({ command: 'release-watcher', ...saveMeta });
+      const committed = await commitCommand(flags, (state) => {
+        releaseWatcher(state);
+        return { state };
+      });
+      printJson({ command: 'release-watcher', ...committed.saveMeta });
       return;
     }
 
     case 'set-barrier': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      setBarrier(state, {
-        sha: requireStringFlag(flags, 'sha'),
-        reason: optionalStringFlag(flags, 'reason'),
+      const sha = requireStringFlag(flags, 'sha');
+      const reason = optionalStringFlag(flags, 'reason');
+      const committed = await commitCommand(flags, (state) => {
+        setBarrier(state, { sha, reason });
+        return { state };
       });
-      const saveMeta = await maybeSave(flags, issueNumber, state);
       printJson({
         command: 'set-barrier',
-        main_barrier_sha: state.main_barrier_sha,
-        ...saveMeta,
+        main_barrier_sha: committed.state.main_barrier_sha,
+        ...committed.saveMeta,
       });
       return;
     }
 
     case 'set-promote-hold': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      setPromoteHold(state, { reason: optionalStringFlag(flags, 'reason') });
-      const saveMeta = await maybeSave(flags, issueNumber, state);
+      const reason = optionalStringFlag(flags, 'reason');
+      const committed = await commitCommand(flags, (state) => {
+        setPromoteHold(state, { reason });
+        return { state };
+      });
       printJson({
         command: 'set-promote-hold',
-        promote_hold: state.promote_hold,
-        promote_hold_reason: state.promote_hold_reason,
-        ...saveMeta,
+        promote_hold: committed.state.promote_hold,
+        promote_hold_reason: committed.state.promote_hold_reason,
+        ...committed.saveMeta,
       });
       return;
     }
 
     case 'clear-promote-hold': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      clearPromoteHold(state);
-      const saveMeta = await maybeSave(flags, issueNumber, state);
-      printJson({ command: 'clear-promote-hold', promote_hold: false, ...saveMeta });
+      const committed = await commitCommand(flags, (state) => {
+        clearPromoteHold(state);
+        return { state };
+      });
+      printJson({ command: 'clear-promote-hold', promote_hold: false, ...committed.saveMeta });
       return;
     }
 
     case 'mark-remedial': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      const result = markEntryRemedial(state, {
-        mergeSha: optionalStringFlag(flags, 'merge'),
-        prNumber: flags.pr ? requirePositiveIntFlag(flags, 'pr') : null,
-      });
-      const saveMeta = await maybeSave(flags, issueNumber, result.state);
+      const mergeSha = optionalStringFlag(flags, 'merge');
+      const prNumber = flags.pr ? requirePositiveIntFlag(flags, 'pr') : null;
+      const committed = await commitCommand(flags, (state) => markEntryRemedial(state, {
+        mergeSha,
+        prNumber,
+      }));
       printJson({
         command: 'mark-remedial',
-        entry: result.entry,
-        ...saveMeta,
+        entry: committed.outcome.entry,
+        ...committed.saveMeta,
       });
       return;
     }
 
     case 'reconcile': {
-      const { state, issueNumber } = await loadIssueState(flags);
       // Phase 1: load + normalize only; Actions notify updates deploy results.
-      const saveMeta = await maybeSave(flags, issueNumber, state);
+      const committed = await commitCommand(flags, (state) => ({ state }));
       printJson({
         command: 'reconcile',
-        entries: state.entries.length,
-        head: headEntryNeedingAttention(state),
-        watcher_lease_active: isWatcherLeaseActive(state),
-        ...saveMeta,
+        entries: committed.state.entries.length,
+        head: headEntryNeedingAttention(committed.state),
+        watcher_lease_active: isWatcherLeaseActive(committed.state),
+        ...committed.saveMeta,
       });
       return;
     }

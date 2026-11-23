@@ -76,6 +76,33 @@ test('launch at runner WIP cap throws RUNNER_QUEUED', async () => {
   );
 });
 
+test('delivery launch dispatches In progress with the delivery method prompt path', async () => {
+  const calls = [];
+  const config = { limits: { runnerWip: { claude: 3 } } };
+  await launch({
+    agent: { id: 'claude-a' },
+    issue: { number: 9 },
+    owner: 'o',
+    repo: 'r',
+    method: 'light-plan',
+    purpose: 'delivery',
+    nonce: 'deliverynonce',
+    config,
+    deps: {
+      restFn: async (method, path, token, body) => {
+        if (path.includes('/runs?')) return { workflow_runs: [] };
+        calls.push({ method, path, body });
+        return {};
+      },
+      dispatchToken: 'pat',
+      randomRef: () => 'del1',
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.inputs.stage, 'In progress');
+  assert.equal(calls[0].body.inputs.method, 'light-plan');
+});
+
 test('claude status maps workflow conclusion', async () => {
   const runs = {
     workflow_runs: [

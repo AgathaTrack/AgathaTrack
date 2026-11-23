@@ -80,8 +80,9 @@ test('launch facts: risky-scope preflight failure is flagged for pause', () => {
   assert.match(risky.body, /owner-approved-delivery/);
 });
 
-test('only agents whose runner the engine can start are launched', () => {
-  assert.deepEqual(launchableAgents(config, 'PR'), ['cursor-a', 'cursor-b']);
+test('delivery launch pool is tier-a only and may use cursor or claude runners', () => {
+  assert.deepEqual(launchableAgents(config, 'PR'), ['cursor-a', 'claude-a']);
+  assert.deepEqual(launchableAgents(config, 'light-plan'), ['cursor-a', 'claude-a']);
   assert.deepEqual(launchableAgents(config, 'execute-plan'), ['cursor-a']);
   const ready = { mode: 'on', onBoard: true, stage: 'Ready', now: 1e12, wip: 0, deliveryMethod: 'light-plan' };
   assert.equal(decide(ready, config).agent, 'cursor-a');
@@ -406,19 +407,25 @@ test('deriveLaunchFacts: a pending record with no busy label is one failed start
 test('a pending delivery record is the agent lookup and counts as an engine-started run', () => {
   const { newestDeliveryLaunchAgentId } = require('./issue_pipeline_v2_launch');
   const { engineStartedRun } = require('./issue_pipeline_v2_release');
-  const engine = new Set(['pawpet-bot']);
+  const engine = new Set(['pawpet-engine']);
   const pending = {
-    body: '<!-- v2:launch-pending agent=pawpet-bot purpose=delivery -->\nLaunching',
-    user: { login: 'pawpet-bot' },
+    body: '<!-- v2:launch-pending agent=cursor-a purpose=delivery -->\nLaunching',
+    user: { login: 'pawpet-engine' },
     created_at: '2026-11-18T10:00:00Z',
   };
   const failed = {
-    body: '<!-- v2:launch-failed agent=pawpet-claude -->\nLaunching failed',
-    user: { login: 'pawpet-bot' },
+    body: '<!-- v2:launch-failed agent=cursor-a -->\nLaunching failed',
+    user: { login: 'pawpet-engine' },
     created_at: '2026-11-18T10:05:00Z',
   };
-  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending], engineLogins: ['pawpet-bot'] }), 'pawpet-bot');
-  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending, failed], engineLogins: ['pawpet-bot'] }), 'pawpet-bot');
+  const doorbell = {
+    body: '<!-- v2:launch run=r1 agent=claude-a purpose=doorbell stage=To do -->\nDoorbell',
+    user: { login: 'pawpet-engine' },
+    created_at: '2026-11-18T09:00:00Z',
+  };
+  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending], engineLogins: ['pawpet-engine'] }), 'cursor-a');
+  assert.equal(newestDeliveryLaunchAgentId({ comments: [pending, failed], engineLogins: ['pawpet-engine'] }), 'cursor-a');
   assert.equal(engineStartedRun(pending, engine), true);
   assert.equal(engineStartedRun(failed, engine), false, 'a failed start never counts as a run');
+  assert.equal(engineStartedRun(doorbell, engine), false, 'doorbell runs are not delivery');
 });

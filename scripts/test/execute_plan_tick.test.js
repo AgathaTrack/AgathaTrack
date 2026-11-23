@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildSnapshotFromPlan } = require('../lib/execute_plan_snapshot_v2');
 const { tick, watchCi } = require('../lib/execute_plan_tick');
-const { classifyRequiredChecks } = require('../lib/execute_plan_checks');
+const { classifyRequiredChecks, isRequiredCheckFailure } = require('../lib/execute_plan_checks');
 const { failureSignature, prLadder } = require('../lib/execute_plan_state');
 const { buildBase, deepMerge } = require('./helpers/execute_plan_scenarios');
 const fs = require('fs');
@@ -177,6 +177,15 @@ test('watch-ci returns success on completion and failure early', async () => {
   assert.deepEqual(ok, { timedOut: false, conclusion: 'success', failing: [] });
   const bad = await watchCi(ciClient([[ck('ci', 'completed', 'failure')]]), { pr: 5, sleep });
   assert.deepEqual(bad, { timedOut: false, conclusion: 'failure', failing: ['ci'] });
+});
+
+test('failed-attempt classification matches any completed non-success conclusion', () => {
+  assert.equal(isRequiredCheckFailure('success'), false);
+  assert.equal(isRequiredCheckFailure(''), false);
+  assert.equal(isRequiredCheckFailure(null), false);
+  assert.equal(isRequiredCheckFailure('failure'), true);
+  assert.equal(isRequiredCheckFailure('cancelled'), true);
+  assert.equal(isRequiredCheckFailure('startup_failure'), true);
 });
 
 test('watch-ci and the state machine share one decision per required-check conclusion', async () => {

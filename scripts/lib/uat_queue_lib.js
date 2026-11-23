@@ -109,6 +109,34 @@ function findActiveEntryByPr(state, prNumber) {
   );
 }
 
+/** True when a non-superseded entry for this merge SHA is present. */
+function hasActiveEntryForSha(state, mergeSha) {
+  const needle = String(mergeSha).toLowerCase();
+  return state.entries.some(
+    (e) => e.merge_sha.toLowerCase() === needle && e.state !== 'superseded',
+  );
+}
+
+/** True when the entry with `seq` exists and every field in `expected` matches. */
+function entryHasState(state, seq, expected) {
+  const entry = state.entries.find((e) => e.seq === seq);
+  if (!entry) return false;
+  return Object.entries(expected).every(
+    ([key, value]) => (entry[key] ?? null) === (value ?? null),
+  );
+}
+
+/**
+ * True when the entry at `seq` is remedial and no later entry is still pending or
+ * deploying, i.e. the remedial freeze (applyRemedialFreeze) is present.
+ */
+function remedialFreezeApplied(state, seq) {
+  return (
+    entryHasState(state, seq, { state: 'remedial' })
+    && !state.entries.some((e) => e.seq > seq && ['pending', 'deploying'].includes(e.state))
+  );
+}
+
 function expectedUatTag(prNumber, date = new Date()) {
   const yy = String(date.getUTCFullYear()).slice(-2);
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
@@ -435,7 +463,9 @@ module.exports = {
   expectedUatTag,
   findActiveEntry,
   findActiveEntryByPr,
+  entryHasState,
   findEntryByMergeSha,
+  hasActiveEntryForSha,
   hasRemedialEntry,
   headEntryNeedingAttention,
   isWatcherLeaseActive,
@@ -445,6 +475,7 @@ module.exports = {
   pruneExpiredWatcher,
   queueHeadHold,
   releaseWatcher,
+  remedialFreezeApplied,
   resolveRemediatedHeadEntries,
   renderStateCommentBody,
   setBarrier,
