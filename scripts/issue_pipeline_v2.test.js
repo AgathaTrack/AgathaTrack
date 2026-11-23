@@ -285,6 +285,15 @@ test('WIP_LIMIT=off lifts the Ready queue cap; any other value keeps it', () => 
   assert.equal(config.limits.wip, 2, 'the committed config is not mutated');
 });
 
+test('Ready: risky-scope preflight failure sets sensitive blocked instead of backoff', () => {
+  const action = rowOf({
+    stage: 'Ready',
+    deliveryMethod: 'PR',
+    launch: { failures: 1, lastFailureAt: NOW - MIN, riskyScopePreflight: true },
+  });
+  assert.deepEqual([action.type, action.reason, action.row], ['set-blocked', 'sensitive', 'ready.risky-scope']);
+});
+
 test('Ready: queue, launch, ack window, backoff, blocked', () => {
   const ready = { stage: 'Ready', deliveryMethod: 'PR' };
   assert.equal(rowOf({ ...ready, wip: 2 }).reason, 'ready.queued');
@@ -374,7 +383,13 @@ test('every non-none action names the table row it implements', () => {
 function orgFieldDefs() {
   return [
     { id: 1, name: 'Stage', options: ['Backlog', 'To do', 'In analysis', 'Ready', 'In progress', 'In Main', 'In UAT', 'Done'].map((name) => ({ name })) },
-    { id: 2, name: 'Blocked', options: ['question', 'no-convergence', 'launch-failed', 'decision', 'stalled', 'paused'].map((name) => ({ name })) },
+    {
+      id: 2,
+      name: 'Blocked',
+      options: ['question', 'no-convergence', 'launch-failed', 'decision', 'stalled', 'paused', 'sensitive'].map(
+        (name) => ({ name }),
+      ),
+    },
     { id: 3, name: 'Attempts' },
   ];
 }

@@ -41,10 +41,20 @@ function buildLaunchRecord({ runId, agent, agentUrl, purpose = 'delivery', stage
   ].join('\n');
 }
 
+const RISKY_SCOPE_PREFLIGHT = /preflight:\s*risky scope detected/i;
+
+function isRiskyScopeLaunchFailure(comment) {
+  const body = comment?.body || '';
+  return RISKY_SCOPE_PREFLIGHT.test(body);
+}
+
 function buildLaunchFailed({ agent, reason }) {
+  const tail = reason && RISKY_SCOPE_PREFLIGHT.test(String(reason))
+    ? ' The engine sets `Blocked=sensitive` on the next tick. Clear `Blocked`, add label `owner-approved-delivery`, and retry (or run delivery manually).'
+    : ' The engine retries with backoff.';
   return [
     `<!-- v2:launch-failed agent=${agent} -->`,
-    `Launching ${agent} failed${reason ? `: ${String(reason).slice(0, 300)}` : ''}. The engine retries with backoff.`,
+    `Launching ${agent} failed${reason ? `: ${String(reason).slice(0, 300)}` : ''}.${tail}`,
   ].join('\n');
 }
 
@@ -173,7 +183,12 @@ function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
     return busy ? { failures, busy } : { failures: failures + 1, busy, lastFailureAt: latest.at };
   }
   if (latest.kind === 'launch-failed') {
-    return { failures, busy, lastFailureAt: latest.at };
+    return {
+      failures,
+      busy,
+      lastFailureAt: latest.at,
+      riskyScopePreflight: isRiskyScopeLaunchFailure(latest.comment),
+    };
   }
   return { runId: latest.runId, startedAt: latest.at, failures, busy, deliveryAgentId: latest.agent };
 }
@@ -362,6 +377,8 @@ module.exports = {
   V2_APPROVAL_LABELS,
   buildLaunchRecord,
   buildLaunchFailed,
+  isRiskyScopeLaunchFailure,
+  RISKY_SCOPE_PREFLIGHT,
   buildLaunchAcked,
   buildLaunchPending,
   listLaunchRecords,

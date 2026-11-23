@@ -101,6 +101,15 @@ test('preflight allows question label when human-reviewed present', () => {
   assert.equal(result.ok, true);
 });
 
+test('preflight owner-approved-delivery bypasses risky scope', () => {
+  const result = preflightIssue({
+    title: 'Auth change',
+    body: '### Security or Sensitive Area: Yes\n\nWe touch server auth routes.',
+    labels: [{ name: 'agent-approved' }, { name: 'human-reviewed' }, { name: 'owner-approved-delivery' }],
+  });
+  assert.equal(result.ok, true);
+});
+
 test('findForbiddenPaths allows workflow edits', () => {
   const forbidden = findForbiddenPaths([
     'flutter_app/lib/main.dart',

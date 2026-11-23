@@ -306,6 +306,9 @@ function decideReady(facts, config) {
   if (launch.busy) {
     return setStage('In progress', 'ready.launched', { evidence: { runId: launch.runId || null } });
   }
+  if (launch.riskyScopePreflight) {
+    return setBlocked('sensitive', 'ready.risky-scope');
+  }
   if (launch.runId && facts.now - launch.startedAt < config.limits.ackWindowMin * MIN) {
     return none('ready.waiting-ack');
   }
@@ -444,9 +447,13 @@ function decide(facts, config) {
       : none('closed');
   }
   if (facts.blocked) {
-    // `paused` is the owner's hold: nothing happens, a comment wakes nobody, until the owner clears it.
-    if (String(facts.blocked).trim().toLowerCase() === 'paused') {
+    // `paused` and `sensitive` are owner holds: nothing happens, a comment wakes nobody, until the owner clears them.
+    const blockedHold = String(facts.blocked).trim().toLowerCase();
+    if (blockedHold === 'paused') {
       return none('blocked.paused');
+    }
+    if (blockedHold === 'sensitive') {
+      return none('blocked.sensitive');
     }
     // Only a human comment wakes a blocked issue, once per comment; the engine never clears the flag.
     const answered = (facts.wokenFor || []).includes(facts.humanCommentId);

@@ -54,7 +54,7 @@ Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the 
 | Item | Kind | Values |
 |------|------|--------|
 | `Stage` | org issue field, **is the board column** | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
-| `Blocked` | org issue field | empty, or `question` · `no-convergence` · `launch-failed` · `decision` · `stalled` · `paused` |
+| `Blocked` | org issue field | empty, or `question` · `no-convergence` · `launch-failed` · `decision` · `stalled` · `paused` · `sensitive` |
 | `Attempts` | number | engine retry counter (reassignments, failed launches); reset on every `Stage` change |
 | `busy` | label | an agent is actively working (delivery or a doorbell stage task) |
 | `manual-only` | label | hand-driven: the engine never touches the issue (it takes no WIP slot) |
@@ -99,6 +99,7 @@ One action per issue per tick; every transition is a field write.
 | In analysis | no vote after every eligible reviewer timed out | stays, `Blocked=stalled` |
 | Ready | a WIP slot is free (WIP counts In progress issues the engine launched; hand-driven and `manual-only` work takes no slot): the engine starts a run for the agreed method | → In progress once the issue is `busy` |
 | Ready | WIP at the limit | stays (Ready is the queue) |
+| Ready | delivery preflight refuses with `risky scope detected` (including declared sensitive area) | stays, `Blocked=sensitive` on the next tick; no launch backoff |
 | Ready | start failed after 3 retries on the backoff, or a run without `busy` after the acknowledge window counts as a failed start | stays, `Blocked=launch-failed` |
 | In progress | Definition of Done ticked, no open linked PR, at least one linked PR merged into `main`, `busy` released | → In Main. Intent review is requested unless `aat.enabled` is on, both acceptance fields exist, and the issue is not a follow-up |
 | In progress | the newest actionable acceptance verdict for the latest merge into `main` is `fail` with `reason=scope` or `reason=implementation` (`aat.enabled`, both fields, not a follow-up) | stays. `scope` relaunches delivery once; `implementation` waits for a follow-up whose body starts with this issue's marker, or for a linked PR. Neither sets `Blocked` while that work is still open. A newer merge into `main` ends the hold |
@@ -113,8 +114,8 @@ One action per issue per tick; every transition is a field write.
 | any | a human changes `Stage` or clears `Blocked` | as set |
 
 A blocked issue's only action is waking its stage agent once per new human comment (a user with write access who is not a
-listed agent); the engine never clears the flag. `paused` is the owner's hold: a comment wakes nobody until the owner
-clears it.
+listed agent); the engine never clears the flag. `paused` and `sensitive` are owner holds: a comment wakes nobody until
+the owner clears them.
 
 ### Review: votes and the markers
 
@@ -166,7 +167,10 @@ clears it.
   **`### Out of scope`** (or `Out-of-scope`) is excluded so exclusion lists do not trip preflight (PIPE-V2-D-PREFLIGHT-001).
   **Security or Sensitive Area: Yes** and in-scope sensitive work are still refused. Its `agent-approved` and `human-reviewed` label requirements are retired under v2, where a
   converged review and Ready are the approval, so the engine supplies those two labels to the check itself. A refusal
-  records `v2:launch-failed` with the reason and counts as a failed start.
+  records `v2:launch-failed` with the reason and counts as a failed start. When the reason is
+  `preflight: risky scope detected`, the next tick sets `Blocked=sensitive` instead of backoff retries. The owner clears
+  `Blocked`, adds label **`owner-approved-delivery`**, and the engine may launch again (preflight skips risky-scope scan
+  when that label is present).
 - **Tick log:** each tick logs `pipeline_v2_action` before applying an action and `pipeline_v2_applied` after, with what
   was done (`launch:`, `launch-failed:`, `doorbell:`, `doorbell-failed:<agent>:<reason>`, comments, writes). When the
   action was not written (dry-run mode, no engine identity, or outside the scope label) it logs `pipeline_v2_planned`
@@ -210,6 +214,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 | `launch-failed` | Ready | owner fixes the cause, clears |
 | `stalled` | To do, In analysis, In progress | owner checks, clears |
 | `paused` | any | the owner sets and clears it |
+| `sensitive` | Ready (risky preflight) | owner clears `Blocked`, fixes the body or adds `owner-approved-delivery` and retries; or runs delivery manually |
 
 ### Operating it
 
@@ -282,6 +287,7 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-SOAK-007 | **In analysis → Ready** and `busy` removal apply on a tick while `ISSUE_PIPELINE_V2=on`. Signed reviews that land after the repo returns to `dry-run`, or between ticks, do not move `Stage` until the next live tick (soak2 #2507/#2508). Agents must not open delivery PRs until **Ready** | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-SOAK-008 | Spec and review agents must not edit the issue body to evade launch safety (`detectRiskyScope` in `.github/scripts/triage-lib.js`, `preflightIssue` in `agent-safety-lib.js`): e.g. rewording **Security or Sensitive Area** to `No` while the plan still describes security/crypto escalation. Use **`Blocked=decision`** and leave the body truthful. Soak2 #2495: spec passed, then review edited the body to drop keyword tripwires | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-PREFLIGHT-001 | Delivery preflight keyword scan ignores bodies under **`### Out of scope`** / `Out-of-scope`; title, preamble, and all other sections still count. **Security or Sensitive Area: Yes** is unchanged. Soak2 #2507/#2499/#2498/#2508 launch-failed on exclusion-list keywords in whole-body scan | Accepted (soak2, 2026-11-21) |
+| PIPE-V2-D-PREFLIGHT-002 | Ready delivery: `preflight: risky scope detected` → next tick `Blocked=sensitive` (`ready.risky-scope`); no launch backoff. Owner clears `Blocked`, adds label `owner-approved-delivery` to bypass risky-scope preflight (or fixes the body), then retries; manual delivery remains valid | Accepted (owner, 2026-11-23) |
 | PIPE-V2-D-RUNNER-001 | Claude runner WIP (`limits.runnerWip.claude`, default **3** when unset): counts active `pipeline-claude-run.yml` jobs. On cap, defer with label **`queued`** and `ring-doorbell` while pickup is within `reviewTimeoutMin`; after that, normal timeout/reassign (e.g. Cursor). Real doorbell failures clear **`queued`** so `ringFailed` can reassign. Cursor runners have no repo-side cap. Owner agreed **3** concurrent Claude runs (2026-11-21). Agents remove `queued` via `clear-queued` at doorbell start or `finish-work` when done | Accepted (2026-11-21) |
 | PIPE-V2-D-REV3-001 | Review process v3 (revision 3): proposal in [`changes/pipeline-v2-review-process-v3.md`](./changes/pipeline-v2-review-process-v3.md). When accepted and delivered (P1–P6), replaces In analysis adversarial pickup/convergence (#2385) and review lanes (#2428); identity-based convergence, tier-a/tier-b rounds, challenge label, watchers and event triggers per that doc. Until then, §Review (shipped) and `decideInAnalysis` behaviour remain authoritative | Proposed |
 | PIPE-V2-D-REV3-002 | **Unit of independence is the run.** Every doorbell starts a new agent of a type (`cursor-a`, `claude-a`, `cursor-b`, `claude-b`). A run never comes back: the next call to the same type is a different agent, including when that type wrote the spec. Type (brand and tier) chooses who is called next and nothing else; it never decides whether a vote counts. Shared logins do not matter for independence | Accepted (owner, 2026-11-22) |

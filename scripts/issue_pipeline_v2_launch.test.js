@@ -69,6 +69,17 @@ test('launch facts: newest engine record decides, acked clears, others are ignor
   assert.equal(deriveLaunchFacts({ ...base, comments: [started, forged] }).runId, 'r1', 'only engine comments count');
 });
 
+test('launch facts: risky-scope preflight failure is flagged for pause', () => {
+  const risky = note(
+    buildLaunchFailed({ agent: 'cursor-a', reason: 'preflight: risky scope detected: migrations' }),
+    2,
+  );
+  const facts = deriveLaunchFacts({ engineLogins: engine, labels: [], attempts: 0, comments: [risky] });
+  assert.equal(facts.riskyScopePreflight, true);
+  assert.match(risky.body, /Blocked=sensitive/);
+  assert.match(risky.body, /owner-approved-delivery/);
+});
+
 test('only agents whose runner the engine can start are launched', () => {
   assert.deepEqual(launchableAgents(config, 'PR'), ['cursor-a', 'cursor-b']);
   assert.deepEqual(launchableAgents(config, 'execute-plan'), ['cursor-a']);
