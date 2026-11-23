@@ -1,5 +1,7 @@
 {"event":"pipeline_v2_action","mode":"dry-run","writes":false,"issue":2551,"action":{"type":"request-spec","agent":"cursor-a","row":"todo.request"}}
 {"event":"pipeline_v2_planned","issue":2551,"planned":["comment:spec-request","assign:cursor-a","comment:doorbell-launch","doorbell:cursor-a","comment:round-start","labels:queued-removed"]}
+{"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2551,"action":{"type":"request-spec","agent":"cursor-a","row":"todo.request"}}
+{"event":"pipeline_v2_applied","issue":2551,"applied":["comment:spec-request","assign:cursor-a","comment:doorbell-launch","doorbell:cursor-a","comment:round-start","labels:queued-removed"]}
 {"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2551,"action":{"type":"none","reason":"todo.waiting"}}
 {"event":"pipeline_v2_action","mode":"on","writes":true,"issue":2551,"action":{"type":"set-stage","to":"In analysis","row":"todo.dor-pass","evidence":{"passedBy":"pawpet-bot"}}}
 {"event":"pipeline_v2_applied","issue":2551,"applied":["labels:busy-removed","comment:round-close","fields:stage,attempts"]}

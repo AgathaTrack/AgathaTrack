@@ -83,7 +83,7 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 
 - Add **soak4-03** (To do); run until each In analysis or **6 ticks**.
 - **Exit:** tier discipline on both; round-robin on first picks; no `plan.error`; no `pipeline_v2_error`.
-- **Run:** **#2551** created; dry-run [45149684819](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45149684819) (`request-spec` **cursor-a** planned); `on` [45150069484](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45150069484), [45150254731](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45150254731) — **#2551** **In analysis** tick 2 (`todo.dor-pass`, spec by **pawpet-bot**). Log: [`soak4-phase-5-log.jsonl`](./soak4-phase-5-log.jsonl). Only one scoped fixture ( **#2549** off-scope at Ready).
+- **Run:** **#2551** created; dry-run [45149684819](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45149684819) (`request-spec` **cursor-a** planned); `on` [45149856640](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45149856640) (`request-spec` **cursor-a** applied), [45150069484](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45150069484), [45150254731](https://github.com/AgathaTrack/AgathaTrack/actions/runs/45150254731) — **#2551** **In analysis** on third `on` tick (`todo.dor-pass`, spec by **pawpet-bot**). Log: [`soak4-phase-5-log.jsonl`](./soak4-phase-5-log.jsonl). Only one scoped fixture ( **#2549** off-scope at Ready).
 - **Result:** **partial pass** — tier-a spec path and **In analysis** on **#2551**; parallel rotation across two live soak4 fixtures **not exercised** (single scoped To do).
 
 ## Out of scope without owner go-ahead
@@ -107,10 +107,6 @@ Body template matches soak3 fixtures: Summary, Objective, Scope, Out of Scope, D
 | 1 | 2026-11-22 | **pass** (#2539 → In analysis, tick 3) | **continue** → Phase 2 |
 | 2 | 2026-11-22 | **pass** (converge → Ready); **finding** (over-tick → In progress) | **pause** — fix fixture before Phase 3 |
 | 2 repair | 2026-11-22 | **#2539** → **Ready**; scope label off | owner **continue** → Phase 3 |
-<<<<<<< HEAD
 | 3 | 2026-11-22 | **not reached** (verifier gap; comment evidence on #2549) | **pause** |
-=======
-| 3 | 2026-11-22 | **pass** (**#2549** red+edit+claim → R3 on new hash) | **pause** |
 | 4 | 2026-11-23 | **not reached** (failure classes); **#2549** → Ready | owner **continue** |
 | 5 | 2026-11-23 | **partial** (**#2551** → In analysis; one fixture scoped) | **pause** — soak4 programme complete pending owner sign-off |
->>>>>>> 0c43554d (docs(soak4): phase 4 observation and phase 5 partial pass)
