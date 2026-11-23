@@ -95,7 +95,7 @@ flowchart TD
 
 | Item | Detail |
 |------|--------|
-| Workflow | New `ci-e2e-canary` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — `needs: flutter-build-web`, reuses `_reusable-e2e-local.yml` or inline localhost stack |
+| Workflow | New `ci-e2e-canary` job in [`.github/workflows/ci.yml`](/.github/workflows/ci.yml) — `needs: flutter-build-web`, reuses `_reusable-e2e-local.yml` or inline localhost stack |
 | Scope | Run **only** `@smoke-ci` project (not domain shards) |
 | Artifact | Download `flutter-build-web` artifact (same as UAT shards) |
 | Gate | Add to `ci-gate` / `assert-ci-gate.sh` |

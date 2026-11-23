@@ -126,7 +126,7 @@ Confirmed by product: when a `from_due_date` occurrence is moved, the **followin
 
 D-CSM-006's "does not change series recurrence rule" remains true: frequency and interval are unchanged, only the phase moves. The reschedule UI must say so in its preview (delivery plan R-C3).
 
-> **Amended 2026-09-29 by [D-CSM-027](./care-schedule-management-decisions.md#d-csm-027--changing-a-date-2026-09-29).** Moving a Fixed-schedule date now asks the scope: **This date only** (default — the moved date becomes `planned` and the series keeps its anchor) or **This and following** (new `schedule_anchor_date`). “The next booster counts from when it was given” is now the **After it's done** rule, which vaccination uses by default (D-CSM-020).
+> **Amended 2026-09-29 by [D-CSM-027](../features/care-schedule-management.md).** Moving a Fixed-schedule date now asks the scope: **This date only** (default — the moved date becomes `planned` and the series keeps its anchor) or **This and following** (new `schedule_anchor_date`). “The next booster counts from when it was given” is now the **After it's done** rule, which vaccination uses by default (D-CSM-020).
 
 ---
 

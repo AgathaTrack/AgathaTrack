@@ -1,15 +1,7 @@
----
-title: Auto-fix script for documentation PRs
-owner: Documentation Team
-audience: both
-status: active
-last_updated: 2026-08-22
-tags: [documentation]
----
-
 #!/bin/bash
 
 # Auto-fix script for documentation PRs
+# Metadata: scripts/auto_fix_docs.meta.yml
 # Integrates with Agatha Track's babysit infrastructure
 # Usage: ./scripts/auto_fix_docs.sh --pr <number|url> [--dry-run]
 
@@ -249,8 +241,12 @@ while [[ $ITERATION -lt $MAX_ITERATIONS ]]; do
   # Step 6: Commit changes
   if [[ "$DRY_RUN" == false ]]; then
     git add -A
-    git commit -m "docs: auto-fix review issues (iteration $ITERATION)" || true
-    git push origin HEAD
+    if git diff --cached --quiet; then
+      echo "  No changes to push"
+    else
+      git commit -m "docs: auto-fix review issues (iteration $ITERATION)"
+      git push origin HEAD
+    fi
   else
     echo "[DRY RUN] Would commit and push changes"
   fi

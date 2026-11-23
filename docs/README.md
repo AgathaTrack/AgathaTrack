@@ -200,7 +200,7 @@ Agent-focused documentation and skills:
 |----------|---------|
 | [/.cursor/skills/](/.cursor/skills/) | Reusable agent skills (split screens, BDD, etc.) |
 | [/.cursor/skills/](/.cursor/skills/) | Agent skills (Tier 1 slash workflows) |
-| [/.cursor/BUGBOT.md](/.cursor/BUGBOT.md) | BugBot configuration |
+| [PR review policy](/docs/agent-efficiency/autonomous-pr-policy.md) | Copilot-first PR review (BugBot retired) |
 | [/AGENTS.md](/AGENTS.md) | Agent quick-start and workflows |
 
 ---
@@ -242,7 +242,7 @@ See [/docs/archived/README.md](/docs/archived/README.md) for the full list.
 | **Adding a feature?** | [Architecture Index](/docs/architecture/index.md) |
 | **Running tests?** | [Contributing Guide](/CONTRIBUTING.md#pre-push-checklist) |
 | **Agent workflow?** | [Agent Guide](/AGENTS.md) |
-| **API changes?** | [API Reference](/API.md) |
+| **API changes?** | [API Reference](/docs/architecture/api-reference.md) |
 | **UAT deployment?** | [E2E README](/e2e/README.md) |
 | **Org/foster features?** | [Fostering domain](/docs/domains/fostering/README.md) |
 | **UI/UX changes?** | [Design Index](/docs/design/index.md) |
