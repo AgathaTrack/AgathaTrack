@@ -13,10 +13,9 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 const { rest } = require('../.github/scripts/github-project-lib');
 const { resolveRepository } = require('./lib/execute_plan_project');
-const { createEmptyState } = require('./lib/uat_queue_lib');
 const {
   loadStateFromIssue,
-  saveStateToIssue,
+  updateQueueState,
 } = require('./lib/uat_queue_sync');
 
 const COORDINATION_TITLE = '[uat-coordinator] UAT deploy queue';
@@ -164,9 +163,13 @@ async function ensureMarkerComment(issueNumber, token, write) {
   if (!write) {
     return { initialized: false, comment_id: null, needs_write: true };
   }
-  const state = createEmptyState();
-  const saved = await saveStateToIssue(issueNumber, state, token);
-  return { initialized: true, comment_id: saved.commentId };
+  // No marker yet: loaded state is empty, so the mutation only needs the marker to exist.
+  const outcome = await updateQueueState(
+    issueNumber,
+    () => ({ verify: (reloaded) => Boolean(reloaded.commentId) }),
+    { token },
+  );
+  return { initialized: true, comment_id: outcome.commentId };
 }
 
 function printRepoVariableInstructions(issueNumber) {

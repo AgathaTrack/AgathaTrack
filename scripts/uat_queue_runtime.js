@@ -27,20 +27,21 @@ const {
   acquireWatcher,
   barrierCheck,
   clearPromoteHold,
-  enqueueEntry,
   findEntryByMergeSha,
   headEntryNeedingAttention,
   isWatcherLeaseActive,
   markEntryRemedial,
   queueHeadHold,
   releaseWatcher,
+  remedialFreezeApplied,
   setBarrier,
   setPromoteHold,
 } = require('./lib/uat_queue_lib');
+const { enqueueMutation } = require('./lib/uat_queue_apply');
 const {
   loadStateFromIssue,
   resolveCoordinationIssue,
-  saveStateToIssue,
+  updateQueueState,
 } = require('./lib/uat_queue_sync');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -178,26 +179,45 @@ async function loadIssueState(flags) {
   return loadStateFromIssue(issueNumber);
 }
 
-async function maybeSave(flags, issueNumber, state) {
-  if (!flags.write) {
-    return { saved: false };
+/**
+ * Run a state mutation through updateQueueState. Writes only with --write;
+ * otherwise the mutation is previewed on the loaded state.
+ */
+async function mutateIssueState(flags, mutate) {
+  const issueNumber = resolveCoordinationIssue(flags.issue);
+  if (!issueNumber) {
+    throw new UatQueueError(
+      'coordination issue not configured — set UAT_COORDINATION_ISSUE or pass --issue'
+    );
   }
-  const result = await saveStateToIssue(issueNumber, state);
-  return { saved: true, ...result };
+  return updateQueueState(issueNumber, mutate, { write: Boolean(flags.write) });
+}
+
+function saveMetaOf(outcome) {
+  if (!outcome.written) {
+    return { saved: false, attempts: outcome.attempts };
+  }
+  return { saved: true, attempts: outcome.attempts, ...outcome.save };
 }
 
 async function runCommand(cmd, flags) {
   switch (cmd) {
     case 'enqueue': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      const result = enqueueEntry(state, {
-        mergeSha: requireStringFlag(flags, 'merge'),
-        prNumber: requirePositiveIntFlag(flags, 'pr'),
-        enqueuedBy: optionalStringFlag(flags, 'ref'),
-        uatTag: optionalStringFlag(flags, 'tag'),
+      const outcome = await mutateIssueState(
+        flags,
+        enqueueMutation({
+          mergeSha: requireStringFlag(flags, 'merge'),
+          prNumber: requirePositiveIntFlag(flags, 'pr'),
+          enqueuedBy: optionalStringFlag(flags, 'ref'),
+          uatTag: optionalStringFlag(flags, 'tag'),
+        }),
+      );
+      printJson({
+        command: 'enqueue',
+        entry: outcome.result.entry,
+        created: outcome.result.created,
+        ...saveMetaOf(outcome),
       });
-      const saveMeta = await maybeSave(flags, issueNumber, result.state);
-      printJson({ command: 'enqueue', entry: result.entry, created: result.created, ...saveMeta });
       return;
     }
 
@@ -284,95 +304,123 @@ async function runCommand(cmd, flags) {
     }
 
     case 'acquire-watcher': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      const head = headEntryNeedingAttention(state);
-      const result = acquireWatcher(state, {
-        holder: requireStringFlag(flags, 'holder'),
-        leaseMinutes: optionalPositiveIntFlag(
-          flags,
-          'lease-minutes',
-          DEFAULT_WATCHER_LEASE_MINUTES
-        ),
-        watchingSeq: head?.seq,
+      const holder = requireStringFlag(flags, 'holder');
+      const leaseMinutes = optionalPositiveIntFlag(
+        flags,
+        'lease-minutes',
+        DEFAULT_WATCHER_LEASE_MINUTES
+      );
+      const outcome = await mutateIssueState(flags, (state) => {
+        const head = headEntryNeedingAttention(state);
+        const result = acquireWatcher(state, { holder, leaseMinutes, watchingSeq: head?.seq });
+        if (!result.acquired) {
+          return { result, verify: null };
+        }
+        return { result, verify: (loaded) => loaded.state.active_watcher?.holder === holder };
       });
-      if (!result.acquired) {
-        printJson({ command: 'acquire-watcher', acquired: false, ...result });
+      const acquisition = outcome.result;
+      if (!acquisition.acquired) {
+        printJson({ command: 'acquire-watcher', acquired: false, ...acquisition });
         process.exit(2);
       }
-      const saveMeta = await maybeSave(flags, issueNumber, result.state);
-      printJson({ command: 'acquire-watcher', acquired: true, watcher: result.watcher, ...saveMeta });
+      printJson({
+        command: 'acquire-watcher',
+        acquired: true,
+        watcher: acquisition.watcher,
+        ...saveMetaOf(outcome),
+      });
       return;
     }
 
     case 'release-watcher': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      releaseWatcher(state);
-      const saveMeta = await maybeSave(flags, issueNumber, state);
-      printJson({ command: 'release-watcher', ...saveMeta });
+      const outcome = await mutateIssueState(flags, (state) => {
+        releaseWatcher(state);
+        return { result: null, verify: (loaded) => !loaded.state.active_watcher };
+      });
+      printJson({ command: 'release-watcher', ...saveMetaOf(outcome) });
       return;
     }
 
     case 'set-barrier': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      setBarrier(state, {
-        sha: requireStringFlag(flags, 'sha'),
-        reason: optionalStringFlag(flags, 'reason'),
+      const sha = requireStringFlag(flags, 'sha');
+      const reason = optionalStringFlag(flags, 'reason');
+      const outcome = await mutateIssueState(flags, (state) => {
+        setBarrier(state, { sha, reason });
+        const barrierSha = state.main_barrier_sha;
+        return {
+          result: { main_barrier_sha: barrierSha },
+          verify: (loaded) => loaded.state.main_barrier_sha === barrierSha,
+        };
       });
-      const saveMeta = await maybeSave(flags, issueNumber, state);
       printJson({
         command: 'set-barrier',
-        main_barrier_sha: state.main_barrier_sha,
-        ...saveMeta,
+        main_barrier_sha: outcome.result.main_barrier_sha,
+        ...saveMetaOf(outcome),
       });
       return;
     }
 
     case 'set-promote-hold': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      setPromoteHold(state, { reason: optionalStringFlag(flags, 'reason') });
-      const saveMeta = await maybeSave(flags, issueNumber, state);
+      const reason = optionalStringFlag(flags, 'reason');
+      const outcome = await mutateIssueState(flags, (state) => {
+        setPromoteHold(state, { reason });
+        const holdReason = state.promote_hold_reason;
+        return {
+          result: { promote_hold: state.promote_hold, promote_hold_reason: holdReason },
+          verify: (loaded) =>
+            loaded.state.promote_hold === true && loaded.state.promote_hold_reason === holdReason,
+        };
+      });
       printJson({
         command: 'set-promote-hold',
-        promote_hold: state.promote_hold,
-        promote_hold_reason: state.promote_hold_reason,
-        ...saveMeta,
+        ...outcome.result,
+        ...saveMetaOf(outcome),
       });
       return;
     }
 
     case 'clear-promote-hold': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      clearPromoteHold(state);
-      const saveMeta = await maybeSave(flags, issueNumber, state);
-      printJson({ command: 'clear-promote-hold', promote_hold: false, ...saveMeta });
+      const outcome = await mutateIssueState(flags, (state) => {
+        clearPromoteHold(state);
+        return { result: null, verify: (loaded) => loaded.state.promote_hold === false };
+      });
+      printJson({ command: 'clear-promote-hold', promote_hold: false, ...saveMetaOf(outcome) });
       return;
     }
 
     case 'mark-remedial': {
-      const { state, issueNumber } = await loadIssueState(flags);
-      const result = markEntryRemedial(state, {
-        mergeSha: optionalStringFlag(flags, 'merge'),
-        prNumber: flags.pr ? requirePositiveIntFlag(flags, 'pr') : null,
+      const mergeSha = optionalStringFlag(flags, 'merge');
+      const prNumber = flags.pr ? requirePositiveIntFlag(flags, 'pr') : null;
+      const outcome = await mutateIssueState(flags, (state) => {
+        const result = markEntryRemedial(state, { mergeSha, prNumber });
+        const { seq } = result.entry;
+        return {
+          result,
+          verify: (loaded) => remedialFreezeApplied(loaded.state, seq),
+        };
       });
-      const saveMeta = await maybeSave(flags, issueNumber, result.state);
       printJson({
         command: 'mark-remedial',
-        entry: result.entry,
-        ...saveMeta,
+        entry: outcome.result.entry,
+        ...saveMetaOf(outcome),
       });
       return;
     }
 
     case 'reconcile': {
-      const { state, issueNumber } = await loadIssueState(flags);
       // Phase 1: load + normalize only; Actions notify updates deploy results.
-      const saveMeta = await maybeSave(flags, issueNumber, state);
+      const outcome = await mutateIssueState(flags, (state) => ({
+        result: {
+          entries: state.entries.length,
+          head: headEntryNeedingAttention(state),
+          watcher_lease_active: isWatcherLeaseActive(state),
+        },
+        verify: (loaded) => Boolean(loaded.commentId),
+      }));
       printJson({
         command: 'reconcile',
-        entries: state.entries.length,
-        head: headEntryNeedingAttention(state),
-        watcher_lease_active: isWatcherLeaseActive(state),
-        ...saveMeta,
+        ...outcome.result,
+        ...saveMetaOf(outcome),
       });
       return;
     }
