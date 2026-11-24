@@ -4,9 +4,12 @@
  * `gh` wrapper for Claude Code cloud sessions, where the session proxy blocks GitHub GraphQL.
  * Put `scripts/ccr-bin` first on PATH; the babysit scripts then run unchanged.
  *
- * Answers exactly two GraphQL-backed calls, from REST and the CCR review-thread route:
+ * Answers these GraphQL-backed calls from REST and the CCR review-thread route:
  *   1. `gh api graphql` with the reviewThreads query of scripts/babysit_pr_reviews.js
  *   2. `gh pr view <pr> --json baseRefName,headRefName [--jq expr]` (scripts/babysit_sync_base.sh --pr)
+ *   3. The merge-preflight reads (scripts/babysit_merge_preflight.mjs): `gh repo view --json nameWithOwner`,
+ *      `gh pr view <pr> --json <snapshot fields>`, `gh pr list --state open --base <b> --limit <n> --json <snapshot fields>`
+ *      (snapshot fields: number, url, baseRefName, headRefName, labels, updatedAt, title, mergeable, statusCheckRollup)
  * Every other call goes to the real gh untouched, so other GraphQL calls still fail loudly.
  *
  * Fails closed: an unknown query shape, a malformed thread, or a review comment that no thread
@@ -142,6 +145,127 @@ function planPrView(args, { remoteUrl = null } = {}) {
   return ['api', `repos/${slug}/pulls/${number}`, '--jq', jq];
 }
 
+/** Fields of `gh pr view` / `gh pr list --json` the merge preflight reads (no --jq). */
+const SNAPSHOT_FIELDS = Object.freeze(new Set([
+  'number', 'url', 'baseRefName', 'headRefName', 'labels', 'updatedAt', 'title', 'mergeable', 'statusCheckRollup',
+]));
+const SNAPSHOT_LIST_LIMIT_MAX = 100;
+
+const upper = (value) => (value === null || value === undefined ? null : String(value).toUpperCase());
+
+/** REST `mergeable` (true / false / null while GitHub computes it) → GraphQL-style enum. */
+function mergeableFromRest(value) {
+  if (value === true) return 'MERGEABLE';
+  if (value === false) return 'CONFLICTING';
+  return 'UNKNOWN';
+}
+
+/**
+ * statusCheckRollup items shaped like GraphQL: check runs carry `state` (the conclusion once completed,
+ * otherwise PENDING) so isPrCiGreen() reads them the same way; commit statuses are StatusContext.
+ */
+function checkRollupFromRest({ checkRuns = [], statuses = [] } = {}) {
+  const runs = checkRuns.map((run) => ({
+    __typename: 'CheckRun',
+    name: run.name,
+    status: upper(run.status),
+    conclusion: upper(run.conclusion),
+    state: run.status === 'completed' && run.conclusion ? upper(run.conclusion) : 'PENDING',
+  }));
+  const contexts = statuses.map((status) => ({
+    __typename: 'StatusContext',
+    context: status.context,
+    state: upper(status.state),
+  }));
+  return [...runs, ...contexts];
+}
+
+/** Projects a REST pull (plus its rollup, when requested) onto exactly the requested --json fields. */
+function pullSnapshot(pull, fields, rollup = null) {
+  const values = {
+    number: pull.number,
+    url: pull.html_url,
+    baseRefName: pull.base?.ref,
+    headRefName: pull.head?.ref,
+    labels: (pull.labels || []).map((label) => ({ name: label.name })),
+    updatedAt: pull.updated_at,
+    title: pull.title,
+    mergeable: mergeableFromRest(pull.mergeable),
+    statusCheckRollup: rollup,
+  };
+  return Object.fromEntries(fields.map((field) => [field, values[field]]));
+}
+
+function snapshotFields(raw) {
+  const fields = String(raw || '').split(',').filter(Boolean);
+  if (fields.length === 0 || fields.some((field) => !SNAPSHOT_FIELDS.has(field))) return null;
+  return fields;
+}
+
+/**
+ * Plans the merge-preflight reads, or returns null when the call is not one of them. `--jq` pr-view calls
+ * belong to planPrView (sync base); anything with other flags goes to the real gh.
+ */
+function planPrSnapshot(args, { remoteUrl = null } = {}) {
+  if (args[0] === 'repo' && args[1] === 'view') {
+    if (args.length !== 4 || args[2] !== '--json' || args[3] !== 'nameWithOwner') return null;
+    const slug = slugFromRemote(remoteUrl);
+    if (!slug) throw new ShimError('cannot resolve owner/repo from the origin remote');
+    return { kind: 'repo', slug };
+  }
+  if (args[0] !== 'pr') return null;
+
+  if (args[1] === 'view') {
+    if (args.length !== 5 || args[3] !== '--json' || args.includes('--jq')) return null;
+    const ref = args[2];
+    const fields = snapshotFields(args[4]);
+    if (!ref || ref.startsWith('-') || !fields) return null;
+    const url = /github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/.exec(ref);
+    if (url) return { kind: 'view', slug: url[1], number: url[2], fields };
+    if (!/^\d+$/.test(ref)) return null;
+    const slug = slugFromRemote(remoteUrl);
+    if (!slug) throw new ShimError('cannot resolve owner/repo from the origin remote');
+    return { kind: 'view', slug, number: ref, fields };
+  }
+
+  if (args[1] === 'list') {
+    // Exact shape the preflight uses: pr list --state open --base <b> --limit <n> --json <fields>
+    if (args.length !== 10 || args[2] !== '--state' || args[3] !== 'open' || args[4] !== '--base' ||
+        args[6] !== '--limit' || args[8] !== '--json') return null;
+    const base = args[5];
+    const limit = Number(args[7]);
+    const fields = snapshotFields(args[9]);
+    if (!base || base.startsWith('-') || !fields) return null;
+    if (!Number.isInteger(limit) || limit < 1 || limit > SNAPSHOT_LIST_LIMIT_MAX) return null;
+    const slug = slugFromRemote(remoteUrl);
+    if (!slug) throw new ShimError('cannot resolve owner/repo from the origin remote');
+    return { kind: 'list', slug, base, limit, fields };
+  }
+  return null;
+}
+
+function checkRollupFromGitHub(realGh, slug, sha) {
+  const pages = runRealGh(realGh, ['api', '--paginate', '--slurp', `repos/${slug}/commits/${sha}/check-runs?per_page=100`]);
+  const checkRuns = (pages || []).flatMap((page) => page.check_runs || []);
+  const statusPages = runRealGh(realGh, ['api', '--paginate', '--slurp', `repos/${slug}/commits/${sha}/status?per_page=100`]);
+  const statuses = (statusPages || []).flatMap((page) => page.statuses || []);
+  return checkRollupFromRest({ checkRuns, statuses });
+}
+
+function pullSnapshotFromGitHub(realGh, slug, number, fields) {
+  const pull = runRealGh(realGh, ['api', `repos/${slug}/pulls/${number}`]);
+  const rollup = fields.includes('statusCheckRollup') ? checkRollupFromGitHub(realGh, slug, pull.head.sha) : null;
+  return pullSnapshot(pull, fields, rollup);
+}
+
+/** Runs a plan from planPrSnapshot against REST and returns the value gh would have printed as JSON. */
+function runPrSnapshot(realGh, plan) {
+  if (plan.kind === 'repo') return { nameWithOwner: plan.slug };
+  if (plan.kind === 'view') return pullSnapshotFromGitHub(realGh, plan.slug, plan.number, plan.fields);
+  const pulls = runRealGh(realGh, ['api', `repos/${plan.slug}/pulls?state=open&base=${encodeURIComponent(plan.base)}&per_page=${plan.limit}`]);
+  return (pulls || []).slice(0, plan.limit).map((pull) => pullSnapshotFromGitHub(realGh, plan.slug, pull.number, plan.fields));
+}
+
 function isExecutable(file) {
   try {
     fs.accessSync(file, fs.constants.X_OK);
@@ -204,6 +328,11 @@ function main(args, { env = process.env, selfPath, stdout = process.stdout, stde
         return 0;
       }
     }
+    const snapshotPlan = planPrSnapshot(args, { remoteUrl: readOriginRemote() });
+    if (snapshotPlan) {
+      stdout.write(JSON.stringify(runPrSnapshot(realGh, snapshotPlan)));
+      return 0;
+    }
     const restPrView = args[0] === 'pr' && args[1] === 'view' ? planPrView(args, { remoteUrl: readOriginRemote() }) : null;
     if (restPrView) {
       stdout.write(runRealGh(realGh, restPrView, { json: false }));
@@ -224,7 +353,12 @@ module.exports = {
   graphqlLogin,
   isBabysitReviewThreadsQuery,
   main,
+  checkRollupFromRest,
+  mergeableFromRest,
   parseFieldFlags,
+  planPrSnapshot,
   planPrView,
+  pullSnapshot,
+  runPrSnapshot,
   slugFromRemote,
 };
