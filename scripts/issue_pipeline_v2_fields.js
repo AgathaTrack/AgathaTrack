@@ -137,7 +137,7 @@ function buildIssueFieldPatch(fields, writes, parsed) {
 
 /**
  * Apply field writes to one issue. `dryRun` only logs, so `dry-run` mode never writes.
- * The engine never clears `Blocked`, so there is deliberately no clear operation.
+ * A `Blocked` clear is a null write in `writes` (an engine release, PIPE-V2-D-HOLD-001).
  * Pass `parsed` so omitted fields are carried (PATCH replaces the whole value set).
  */
 async function writeIssueFields({

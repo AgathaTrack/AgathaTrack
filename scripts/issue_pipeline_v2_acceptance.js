@@ -10,6 +10,7 @@
  */
 
 const { agentActsAs, launchableAgents, nextInLine, startableIds } = require('./issue_pipeline_v2_config');
+const { launchBackoffMs } = require('./issue_pipeline_v2_holds');
 
 const FAIL_REASONS = new Set(['scope', 'implementation', 'quality']);
 const MIN = 60 * 1000;
@@ -83,9 +84,9 @@ function knownFail(verdict) {
   return verdict.verdict !== 'fail' || FAIL_REASONS.has(verdict.reason);
 }
 
-/** Actionable verdicts for one sha, newest last. Compared to that sha's latest launch. */
+/** Actionable verdicts for one sha, newest last. Compared to that sha's latest launch that started. */
 function actionableVerdicts(state, sha) {
-  const launch = latestOf(state.launches, sha);
+  const launch = latestOf(state.launches.filter((item) => !item.failed), sha);
   if (!launch) return [];
   return state.verdicts
     .filter((verdict) => verdict.sha === sha && verdict.createdAt > launch.createdAt && knownFail(verdict))
@@ -107,25 +108,36 @@ function verdictsInWindow(state, sha, launch, next) {
 }
 
 function launchConcluded(state, sha, launch, next, now, timeoutMs) {
-  if (launch.failed) return true;
   const window = verdictsInWindow(state, sha, launch, next);
   if (window.some((verdict) => verdict.verdict === 'inconclusive')) return true;
   return window.length === 0 && now - launch.createdAt > timeoutMs;
 }
 
+/**
+ * The `aat.maxInconclusive` budget for one sha. Only launches that started count; a launch that
+ * failed to start is an infrastructure fault, counted in `failedStreak` and retried on the backoff.
+ */
 function attemptBudget(state, sha, now, timeoutMin) {
   const launches = state.launches.filter((launch) => launch.sha === sha).sort(byTime);
   const timeoutMs = timeoutMin * MIN;
   let count = 0;
   for (let i = 0; i < launches.length; i += 1) {
-    if (launchConcluded(state, sha, launches[i], launches[i + 1], now, timeoutMs)) count += 1;
+    if (!launches[i].failed && launchConcluded(state, sha, launches[i], launches[i + 1], now, timeoutMs)) count += 1;
   }
   const latest = launches.at(-1) || null;
+  let failedStreak = 0;
+  for (let i = launches.length - 1; i >= 0 && launches[i].failed; i -= 1) failedStreak += 1;
   return {
     count,
     latest,
-    latestConcluded: Boolean(latest) && launchConcluded(state, sha, latest, undefined, now, timeoutMs),
+    failedStreak,
+    latestConcluded: Boolean(latest) && !latest.failed && launchConcluded(state, sha, latest, undefined, now, timeoutMs),
   };
+}
+
+/** No agent can take the work: a board-level error in the run summary, never a flag on the issue. */
+function noAgent(row) {
+  return { type: 'none', reason: row, boardError: true };
 }
 
 function acceptanceValue(facts) {
@@ -196,9 +208,12 @@ function none(reason, extra = {}) {
   return { type: 'none', reason, ...extra };
 }
 
+/** Quiet for `stalledInactivityHours` since `at`. A release (`v2:release`) restarts the clock, so a retry is not re-stalled at once. */
 function quietSince(facts, config, at) {
   if (at == null || !Number.isFinite(at)) return false;
-  return facts.now - at >= config.limits.stalledInactivityHours * 60 * MIN;
+  const released = facts.holds?.releasedAt;
+  const since = Number.isFinite(released) ? Math.max(at, released) : at;
+  return facts.now - since >= config.limits.stalledInactivityHours * 60 * MIN;
 }
 
 function acceptanceInMain(facts, config) {
@@ -260,7 +275,7 @@ function acceptanceInMain(facts, config) {
   if (!budget.latest) {
     const pool = acceptancePool(facts, config);
     const agent = pickAgent(pool, facts);
-    if (!agent) return { type: 'set-blocked', reason: 'stalled', row: 'aat.no-launchable-agent' };
+    if (!agent) return noAgent('aat.no-launchable-agent');
     return { type: 'launch-aat', agent, mergeSha: sha, row: 'aat.launch', ...launchWrites(state, sha, value) };
   }
 
@@ -277,14 +292,23 @@ function acceptanceInMain(facts, config) {
       acceptanceFailReason: newest.reason,
     };
   }
-  if (budget.latestConcluded && budget.count < config.aat.maxInconclusive) {
+  const retry = budget.latest.failed || budget.latestConcluded;
+  if (retry && budget.count >= config.aat.maxInconclusive) {
+    return { type: 'set-blocked', reason: 'stalled', row: 'aat.inconclusive-cap' };
+  }
+  if (budget.latest.failed) {
+    if (budget.failedStreak > config.limits.launchBackoffMin.length) {
+      return { type: 'set-blocked', reason: 'launch-failed', row: 'aat.launch-failed' };
+    }
+    if (facts.now - budget.latest.createdAt < launchBackoffMs(budget.failedStreak, config)) {
+      return none('aat.backoff');
+    }
+  }
+  if (retry) {
     const pool = acceptancePool(facts, config);
     const agent = pickAgent(pool, facts);
-    if (!agent) return { type: 'set-blocked', reason: 'stalled', row: 'aat.no-launchable-agent' };
+    if (!agent) return noAgent('aat.no-launchable-agent');
     return { type: 'launch-aat', agent, mergeSha: sha, row: 'aat.relaunch', ...launchWrites(state, sha, value) };
-  }
-  if (budget.latestConcluded && budget.count >= config.aat.maxInconclusive) {
-    return { type: 'set-blocked', reason: 'stalled', row: 'aat.inconclusive-cap' };
   }
   return none('aat.waiting-verdict');
 }
@@ -293,15 +317,23 @@ function scopeHold(facts, config, sha) {
   const state = stateOf(facts);
   const delivery = facts.delivery || {};
   if ((delivery.openLinkedPrs || 0) > 0) return none('aat.scope-waiting');
-  const relaunch = latestOf(state.relaunches, sha);
-  if (relaunch?.failed) return { type: 'set-blocked', reason: 'stalled', row: 'aat.scope-relaunch-failed' };
+  const relaunches = state.relaunches.filter((item) => item.sha === sha).sort(byTime);
+  const started = relaunches.some((item) => !item.failed);
   const quiet = quietSince(facts, config, delivery.lastActivityAt);
   if (delivery.busy && quiet) return { type: 'set-blocked', reason: 'stalled', row: 'aat.scope-quiet' };
   if (delivery.busy) return none('aat.scope-busy');
-  if (!relaunch) {
+  if (!started) {
+    // A relaunch that could not start is an infrastructure fault: retried on the launch backoff.
+    const failed = relaunches.length;
+    if (failed > config.limits.launchBackoffMin.length) {
+      return { type: 'set-blocked', reason: 'launch-failed', row: 'aat.scope-relaunch-failed' };
+    }
+    if (failed > 0 && facts.now - relaunches.at(-1).createdAt < launchBackoffMs(failed, config)) {
+      return none('aat.scope-backoff');
+    }
     const method = facts.deliveryMethod || 'PR';
     const agent = pickAgent(launchableAgents(config, method), facts);
-    if (!agent) return { type: 'set-blocked', reason: 'stalled', row: 'aat.scope-no-agent' };
+    if (!agent) return noAgent('aat.scope-no-agent');
     return { type: 'aat-relaunch', agent, method, mergeSha: sha, row: 'aat.scope-relaunch' };
   }
   if (quiet) return { type: 'set-blocked', reason: 'stalled', row: 'aat.scope-quiet' };
@@ -346,7 +378,7 @@ function buildAatLaunch({ mergeSha, runId, failed, reason }) {
     : `<!-- v2:aat-launch merge=${mergeSha} run=${runId} -->`;
   const detail = failed && reason ? `: ${String(reason).slice(0, 300)}` : '';
   const text = failed
-    ? `Starting acceptance failed${detail}. This counts as one concluded attempt.`
+    ? `Starting acceptance failed${detail}. It is retried on the launch backoff and does not use the acceptance attempt budget.`
     : `Acceptance started for merge ${mergeSha}.`;
   return `${marker}\n${text}`;
 }
@@ -364,7 +396,7 @@ function buildAatRelaunch({ mergeSha, failed }) {
     ? `<!-- v2:aat-relaunch merge=${mergeSha} reason=scope failed=1 -->`
     : `<!-- v2:aat-relaunch merge=${mergeSha} reason=scope -->`;
   const text = failed
-    ? 'Relaunching delivery after the acceptance scope fail failed. The issue stalls on the next tick.'
+    ? 'Relaunching delivery after the acceptance scope fail failed. It is retried on the launch backoff.'
     : 'Delivery was relaunched once after an acceptance scope fail. It continues the existing programme.';
   return `${marker}\n${text}`;
 }

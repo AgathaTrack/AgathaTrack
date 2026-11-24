@@ -17,7 +17,7 @@ const { resolveAgent, startableIds } = require('./issue_pipeline_v2_config');
 /**
  * @returns {{plan: object, rounds: number}|null} null when there is nothing to plan yet (no spec pass)
  */
-function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNumber, limits, now, roundRobinAfter, roundRobinOrder }) {
+function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNumber, limits, now, roundRobinAfter, roundRobinOrder, releasedAt = null }) {
   const requests = findReviewRequests(comments, engineLogins, editors);
   const idOf = (value) => (value ? resolveAgent(config, value)?.id || value : null);
 
@@ -83,7 +83,7 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNu
     history: (request.parsed.history || []).map(idOf),
     at: Date.parse(request.comment.updated_at || request.comment.created_at),
   }));
-  const rounds = deriveRoundRecords({ spec, requests: requestsIn, verdicts, launches, bodyHash });
+  const rounds = deriveRoundRecords({ spec, requests: requestsIn, verdicts, launches, bodyHash, releasedAt });
   const plan = decideRound({ bodyHash, rounds, now, lastUsed, config });
   return { plan, rounds: rounds.length, reviews: rounds.filter((r) => r.kind === 'review').length, derived: rounds };
 }

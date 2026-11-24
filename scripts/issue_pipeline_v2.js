@@ -37,6 +37,7 @@ const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_r
 const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
 const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
 const { planRounds } = require('./issue_pipeline_v2_round_plan');
+const { deriveHoldFacts, sinceRelease } = require('./issue_pipeline_v2_holds');
 
 const RELEASE_STAGES = new Set(['In progress', 'In Main', 'In UAT']);
 
@@ -149,18 +150,33 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
   if (!(canonical === 'To do' || canonical === 'In analysis' || canonical === 'Ready' || RELEASE_STAGES.has(canonical) || blocked)) {
     return {};
   }
-  const comments = await (io.listIssueComments || listIssueComments)({
+  const allComments = await (io.listIssueComments || listIssueComments)({
     owner,
     repo,
     issueNumber: entry.number,
     token,
   });
-  const facts = {};
+  const holds = deriveHoldFacts(allComments, config.engine.logins);
+  const holdFacts = { holds };
   if (blocked) {
-    const human = latestHumanComment(comments, config);
-    facts.humanCommentSinceBlock = Boolean(human);
-    facts.humanCommentId = human ? human.id : null;
-    facts.wokenFor = wokenCommentIds(comments, config.engine.logins);
+    const human = latestHumanComment(allComments, config);
+    holdFacts.humanCommentSinceBlock = Boolean(human);
+    holdFacts.humanCommentId = human ? human.id : null;
+    holdFacts.wokenFor = wokenCommentIds(allComments, config.engine.logins);
+    // Owner holds decide nothing: spend no more calls. Every other hold gets full stage facts, so an
+    // engine hold can be re-evaluated and a wake can ring the current holder.
+    const value = String(entry.parsed.blocked).trim().toLowerCase();
+    if (value === 'paused' || value === 'sensitive') return holdFacts;
+  }
+  // A release (`v2:release`) restarts the stage's attempt count: older attempt markers are dropped.
+  const comments = sinceRelease(allComments, canonical, holds.releasedAt, config.engine.logins);
+  return { ...(await buildStageFacts({ owner, repo, entry, canonical, comments, config, token, io, runMode, now, roundRobinAfter, roundRobinOrder, releasedAt: holds.releasedAt })), ...holdFacts };
+}
+
+/** Facts for the stage rule, from the comments already read (see `buildCommentFacts`). */
+async function buildStageFacts({ owner, repo, entry, canonical, comments, config, token, io, runMode, now, roundRobinAfter, roundRobinOrder, releasedAt }) {
+  const facts = {};
+  if (!(canonical === 'To do' || canonical === 'In analysis' || canonical === 'Ready' || RELEASE_STAGES.has(canonical))) {
     return facts;
   }
   if (RELEASE_STAGES.has(canonical)) {
@@ -245,6 +261,7 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
     now,
     roundRobinAfter,
     roundRobinOrder,
+    releasedAt,
   });
   merged.rounds = merged.roundPlan.derived;
   if (merged.review?.assignedTo && runMode === 'on') {
@@ -359,6 +376,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const now = Date.now();
   const actions = [];
   const errors = [];
+  const boardErrors = new Map();
   if (runMode === 'on' && !identity.ok) {
     // `on` with no valid engine identity writes nothing, while the legacy handlers already step
     // aside for engine-owned issues: say so loudly instead of stalling quietly.
@@ -405,6 +423,11 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         roundRobinAfter = action.agent;
       }
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
+      if (action.boardError) {
+        // No agent can take this work: one board-level error per row, never a flag on each issue.
+        const known = boardErrors.get(action.reason) || [];
+        boardErrors.set(action.reason, [...known, entry.number]);
+      }
       console.log(
         JSON.stringify({ event: 'pipeline_v2_action', mode: runMode, writes: live && inScope, issue: entry.number, action }),
       );
@@ -475,6 +498,11 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       console.error(JSON.stringify({ event: 'pipeline_v2_error', issue: entry.number, message: error?.message ?? String(error) }));
       errors.push({ issue: entry.number, message: error?.message ?? String(error) });
     }
+  }
+  for (const [row, issues] of boardErrors) {
+    const message = `no launchable agent (${row}) for issues ${issues.map((n) => `#${n}`).join(', ')}`;
+    console.error(JSON.stringify({ event: 'pipeline_v2_error', message }));
+    errors.push({ issue: null, message });
   }
   return { mode: runMode, issueCount: entries.length, wip, actions, errors };
 }

@@ -335,9 +335,9 @@ test('Ready: queue, launch, ack window, backoff, blocked', () => {
   assert.deepEqual([failed(4, 500).type, failed(4, 500).reason], ['set-blocked', 'launch-failed']);
 });
 
-test('Ready: a method no agent can run blocks instead of launching', () => {
+test('Ready: a method no agent can run is a board-level error, not a flag on the issue', () => {
   const action = rowOf({ stage: 'Ready', deliveryMethod: 'unknown' });
-  assert.deepEqual([action.type, action.reason], ['set-blocked', 'launch-failed']);
+  assert.deepEqual([action.type, action.reason, action.boardError], ['none', 'ready.no-capable-agent', true]);
 });
 
 test('In progress: working, resume once, stalled, finished', () => {
