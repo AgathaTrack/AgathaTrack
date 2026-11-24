@@ -6,7 +6,7 @@
  * nothing; the tick logs the plan next to the live action so the two can be compared.
  */
 
-const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
+const { findVerifiedVerdicts, findConfirmedClaims } = require('./issue_pipeline_v2_verdict');
 const { parseLaunchComment } = require('./issue_pipeline_v2_launch');
 const { deriveSpecFacts } = require('./issue_pipeline_v2_comments');
 const { findReviewRequests } = require('./issue_pipeline_v2_review');
@@ -40,6 +40,34 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNu
       verdicts.push({ agentId: v.agentId, value: v.value, hash: v.hash, nonce: v.nonce, at: v.at });
     }
   }
+
+  // A red with an edit posts its verdict on the new hash. That verdict answers the request it came
+  // from only through the edit claim: the assignee's confirmed claim, made after this request and
+  // before the next one, names the new hash. Neither hash alone links it.
+  const claims = findConfirmedClaims({ comments, config, engineLogins, limits });
+  requests.forEach((request, i) => {
+    const assignee = idOf(request.parsed.assigned);
+    const from = Date.parse(request.comment.updated_at || request.comment.created_at);
+    const next = requests[i + 1];
+    const until = next ? Date.parse(next.comment.updated_at || next.comment.created_at) : Infinity;
+    for (const claim of claims) {
+      if (claim.agentId !== assignee || claim.hash === request.parsed.hash) continue;
+      if (claim.at < from || claim.at >= until) continue;
+      for (const v of findVerifiedVerdicts({
+        comments,
+        config,
+        engineLogins,
+        issueNumber,
+        bodyHash: claim.hash,
+        limits,
+        kinds: ['review'],
+      })) {
+        // A late verdict from the old run must not attach to this request once the next one has started.
+        if (v.agentId !== claim.agentId || v.at < claim.at || v.at >= until) continue;
+        verdicts.push({ agentId: v.agentId, value: v.value, hash: v.hash, nonce: v.nonce, at: v.at, requestHash: request.parsed.hash });
+      }
+    }
+  });
 
   const launchRecords = (comments || []).map((c) => parseLaunchComment(c)).filter((r) => r && r.kind === 'launch' && r.agent);
   const doorbells = launchRecords.filter((r) => r.purpose === 'doorbell');

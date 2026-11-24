@@ -16,9 +16,6 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
   if (!nonce) {
     throw new Error('claude launch requires nonce');
   }
-  if (purpose === 'delivery') {
-    throw new Error('claude runner supports doorbell stages only until delivery workflow ships');
-  }
   const token = deps.dispatchToken || process.env.GH_PROJECTS_PAT;
   const restFn = deps.restFn || rest;
   const runRef = (deps.randomRef || (() => randomBytes(8).toString('hex')))();
@@ -29,11 +26,12 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
     error.code = 'RUNNER_QUEUED';
     throw error;
   }
+  const doorbellStage = purpose === 'delivery' ? 'In progress' : stage || 'In progress';
   await restFn('POST', enc(owner, repo, `/actions/workflows/${WORKFLOW_FILE}/dispatches`), token, {
     ref: 'main',
     inputs: {
       issue: String(issue.number),
-      stage: stage || 'In progress',
+      stage: doorbellStage,
       agent_id: agent.id,
       method: method || 'PR',
       nonce,

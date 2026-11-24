@@ -42,7 +42,11 @@ probe() {
   local url="$1"
   local tmp code
   tmp="$(mktemp)"
-  code="$(curl -sS --max-time "${CURL_MAX_TIME}" -o "$tmp" -w "%{http_code}" "$url" || echo "000")"
+  # curl -w already prints 000 on failure. A second `|| echo 000` would glue another 000
+  # onto that, and the classifier would see 000000 instead of a transport error.
+  if ! code="$(curl -sS --max-time "${CURL_MAX_TIME}" -o "$tmp" -w "%{http_code}" "$url")"; then
+    code="000"
+  fi
   printf '%s\t' "$code"
   cat "$tmp"
   rm -f "$tmp"
@@ -50,7 +54,11 @@ probe() {
 
 probe_code() {
   local url="$1"
-  curl -sS --max-time "${CURL_MAX_TIME}" -o /dev/null -w "%{http_code}" "$url" || echo "000"
+  local code
+  if ! code="$(curl -sS --max-time "${CURL_MAX_TIME}" -o /dev/null -w "%{http_code}" "$url")"; then
+    code="000"
+  fi
+  printf '%s\n' "$code"
 }
 
 wait_for_health() {
@@ -110,7 +118,7 @@ assert_flutter_asset_not_served() {
         "Flutter asset ${path} is served while PROD_PUBLIC_MODE=coming_soon"
       ;;
     *)
-      fail "flutter_served_in_teaser_mode" "Unexpected classification for ${path}: ${kind}"
+      fail "$kind" "GET ${path} is not a documented absence (${kind}, HTTP ${code})"
       ;;
   esac
 }

@@ -12,6 +12,9 @@ const { METHOD_PROMPTS, STAGE_PROMPTS, stagePromptsForConfig } = require('./issu
 const { listIssueComments } = require('./issue_pipeline_v2_comments');
 const { findRequestComment, reactionHint, buildClaudeArgs } = require('./pipeline_claude_run_lib');
 
+/** Stages with a doorbell task prompt; delivery uses METHOD_PROMPTS instead. */
+const DOORBELL_STAGES = new Set(['To do', 'In analysis', 'In Main', 'acceptance']);
+
 function appendEnv(name, value) {
   const path = process.env.GITHUB_ENV;
   if (!path) {
@@ -67,11 +70,11 @@ async function main() {
   appendEnv('PIPELINE_RUN_STARTED_AT', new Date().toISOString());
 
   const prompts = stagePromptsForConfig(config, agent);
-  const extra = stage ? prompts[stage] : METHOD_PROMPTS[method];
+  const extra = stage && DOORBELL_STAGES.has(stage) ? prompts[stage] : METHOD_PROMPTS[method];
   // Reaction path only (a login with one pool id): name the comment and the exact command, so the
   // vote does not depend on the run finding the comment id itself (soak-6, #2485).
   let hint = '';
-  if (stage && prompts === STAGE_PROMPTS) {
+  if (stage && DOORBELL_STAGES.has(stage) && prompts === STAGE_PROMPTS) {
     try {
       const comments = await listIssueComments({ owner, repo, issueNumber, token });
       const request = findRequestComment({ comments, stage, engineLogins: config.engine.logins });

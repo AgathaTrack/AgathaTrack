@@ -127,6 +127,10 @@ while IFS= read -r f; do
       needs_schema=true
       needs_governance=true
       ;;
+    # Issue pipeline v2 runtime: explicit so the v2 suite cannot be skipped by a later scripts/* carve-out.
+    scripts/pipeline_runners/*|.github/pipeline-agents.json|.github/workflows/issue-pipeline-v2.yml)
+      needs_governance=true
+      ;;
     scripts/*|.github/*|docs/agent-efficiency*|docs/architecture/index.md)
       needs_governance=true
       ;;
@@ -187,6 +191,7 @@ run_governance() {
   node --test scripts/test/execute_plan_pipeline_approve.test.js
   node --test scripts/test/execute_plan_own_files.test.js
   node --test scripts/uat_queue_runtime.test.js
+  node --test scripts/uat_queue_sync.test.js
   node --test scripts/uat_coordinator_payload.test.js
   node --test scripts/ci/evaluate-uat-promote-hold.test.js
   node --test scripts/ci/resolve-promote-commit-sha.test.js
@@ -195,6 +200,7 @@ run_governance() {
   node --test scripts/ci/prepush-parity.test.mjs
   node --test scripts/ci/check-ci-retry-budget-refs.test.mjs
   node --test scripts/ci/ci-scope.test.js
+  node --test scripts/ci/public-access-smoke-lib.test.js scripts/ci/prod-post-deploy-smoke.test.js
   node --test e2e/scripts/select-affected-specs.test.mjs
   node --test scripts/quality/generate-scorecard-metrics.test.mjs
   node scripts/quality/generate-scorecard-metrics.mjs --write-scorecard
@@ -225,17 +231,7 @@ run_governance() {
   node --test scripts/issue_pipeline_monitor.test.js
   node --test scripts/issue_pipeline_legacy.test.js
   node --test scripts/issue_pipeline_repair.test.js
-  node --test scripts/issue_pipeline_v2.test.js
-  node --test scripts/issue_pipeline_v2_spec.test.js
-  node --test scripts/issue_pipeline_v2_review.test.js
-  node --test scripts/issue_pipeline_v2_apply.test.js
-  node --test scripts/issue_pipeline_v2_launch.test.js
-  node --test scripts/issue_pipeline_v2_release.test.js
-  node --test scripts/issue_pipeline_v2_migrate.test.js
-  node --test scripts/issue_pipeline_v2_reopen.test.js
-  node --test scripts/issue_pipeline_v2_soak_fixes.test.js
-  node --test scripts/issue_pipeline_v2_tier_model.test.js
-  node --test scripts/issue_pipeline_v2_p2_shared.test.js
+  run_prepush_gate issue-pipeline-v2-tests
   node --test .github/scripts/pipeline-v2-owner.test.js
   node --test .github/scripts/issue-agent-handlers.test.js
   node --test .github/scripts/github-project-lib.test.js
@@ -243,6 +239,7 @@ run_governance() {
   node --test scripts/stage_mirror_apply.test.js
   node --test scripts/stage_mirror_fields.test.js
   node --test scripts/db/normalize-schema-dump.test.js
+  node --test scripts/db/regenerate-canonical.test.js
   bash scripts/test/require-non-prod-wrappers.test.sh
   node scripts/db/check-migration-manifest.js
   node scripts/check_migration_sql_transactions.js

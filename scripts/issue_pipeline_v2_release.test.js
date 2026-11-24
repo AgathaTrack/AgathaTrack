@@ -96,6 +96,20 @@ test('deploy lookup: the newest successful run of the deploy workflow, never env
   assert.equal(await deployContains({ owner: 'o', repo: 'r', mergeSha: 'a', deploySha: 'b', token: 't', restFn: async () => { throw new Error('404'); } }), false);
 });
 
+test('resume draws only tier-a delivery agents (never cursor-b)', () => {
+  const base = {
+    mode: 'on',
+    onBoard: true,
+    stage: 'In progress',
+    now: 1e12,
+    deliveryMethod: 'PR',
+    roundRobinOrder: ['cursor-a', 'cursor-b', 'claude-a', 'claude-b'],
+    delivery: { busy: false, engineLaunched: true },
+  };
+  assert.equal(decide({ ...base, roundRobinAfter: 'cursor-a' }, config).agent, 'claude-a');
+  assert.ok(!['cursor-b', 'claude-b'].includes(decide({ ...base, roundRobinAfter: 'claude-a' }, config).agent));
+});
+
 test('resume: one agent restart is recorded even when it fails; no launchable agent stalls', async () => {
   const facts = { mode: 'on', onBoard: true, stage: 'In progress', now: 1e12, deliveryMethod: 'PR', delivery: { busy: false, engineLaunched: true } };
   const action = decide(facts, config);
@@ -254,13 +268,14 @@ test('runner: pickup walks one ring across issues, and a scope label limits wher
   }
 });
 
-test('engineLaunched: a run record counts, a failed-launch record does not', () => {
+test('engineLaunched: a delivery run record counts; doorbell and failed-launch do not', () => {
   const note = (body, login = 'pawpet-engine') => ({ user: { login }, body, created_at: '2026-11-10T00:00:00Z' });
   const launched = (comments) => deriveDeliveryFacts({ issue: { body: '', labels: [] }, prs: [], comments, engineLogins: engine }).delivery.engineLaunched;
-  assert.equal(launched([note('<!-- v2:launch run=r1 agent=pawpet-bot -->')]), true);
-  assert.equal(launched([note('<!-- v2:launch-acked run=r1 -->')]), true);
-  assert.equal(launched([note('<!-- v2:launch-failed agent=pawpet-bot -->')]), false, 'nothing was started');
-  assert.equal(launched([note('<!-- v2:launch run=r1 agent=pawpet-bot -->', 'someone')]), false, 'engine comments only');
+  assert.equal(launched([note('<!-- v2:launch run=r1 agent=cursor-a purpose=delivery -->')]), true);
+  assert.equal(launched([note('<!-- v2:launch-acked run=r1 purpose=delivery -->')]), true);
+  assert.equal(launched([note('<!-- v2:launch run=r1 agent=claude-a purpose=doorbell stage=To do -->')]), false);
+  assert.equal(launched([note('<!-- v2:launch-failed agent=cursor-a -->')]), false, 'nothing was started');
+  assert.equal(launched([note('<!-- v2:launch run=r1 agent=cursor-a purpose=delivery -->', 'someone')]), false, 'engine comments only');
   assert.equal(launched([]), false);
 });
 

@@ -20,9 +20,9 @@ const {
   releaseWatcher,
 } = require('../lib/uat_queue_lib');
 const {
+  commitStateMutation,
   loadStateFromIssue,
   resolveCoordinationIssue,
-  saveStateToIssue,
 } = require('../lib/uat_queue_sync');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -84,8 +84,12 @@ async function main() {
 
   let saved = false;
   if (write && watcherRecovery.changed) {
-    await saveStateToIssue(issueNumber, state, token);
-    saved = true;
+    const committed = await commitStateMutation({
+      issueNumber,
+      token,
+      mutate: (fresh) => recoverStaleWatcher(fresh, owner, repo, token),
+    });
+    saved = committed.written === true;
   }
 
   const needsCoordinator =

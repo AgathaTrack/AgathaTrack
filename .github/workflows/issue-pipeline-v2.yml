@@ -10,8 +10,14 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: Optional issue number to log a decision for (the whole board is still read)
+        description: Optional positive issue number to decide for (empty = whole board). Anything else is refused before any read or write.
         required: false
+        default: ''
+      live:
+        description: Write to the board. Off by default, so a manual run previews decisions only. Writes need the repo ISSUE_PIPELINE_V2 switch set to on.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -52,4 +58,6 @@ jobs:
           # `off` lifts the Ready queue cap (limits.wip) for the run. Any other value keeps it.
           WIP_LIMIT: ${{ vars.WIP_LIMIT }}
           ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
+          # Manual dispatch previews unless `live` is ticked (scripts/issue_pipeline_v2_dispatch.js).
+          ISSUE_PIPELINE_V2_LIVE: ${{ inputs.live && 'true' || 'false' }}
         run: node scripts/issue_pipeline_v2.js

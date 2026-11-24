@@ -14,8 +14,8 @@ const { loadPlanContext, observe, configError, latestRuns, CONFIG_PATH } = requi
 const { SCOPE_CONTEXT } = require('./execute_plan_scope_status');
 const { formatStatusComment, formatLogLine, formatScopeAckNotifyComment, applyDecisionToStatus, readMergedStatusForWrite } = require('./execute_plan_status');
 const { verifyComplete, resolveMergeSource, watchPreUat, watchDeploy } = require('./execute_plan_uat_observe');
+const { classifyRequiredChecks } = require('./execute_plan_checks');
 
-const FAILED = new Set(['failure', 'timed_out', 'action_required']);
 const STOP_EXIT_CODE = 2;
 
 const isoNow = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -150,9 +150,11 @@ async function watchCi(client, { pr, timeoutMin = 25, pollSec = 60, sleep = (ms)
     const runs = await client.listCheckRuns(pull.head.sha);
     const statuses = names.includes(SCOPE_CONTEXT) ? await client.listCommitStatuses(pull.head.sha) : [];
     const latest = latestRuns(runs, names, statuses);
-    const failing = latest.filter((c) => c.status === 'completed' && FAILED.has(c.conclusion)).map((c) => c.name);
-    if (failing.length) return { timedOut: false, conclusion: 'failure', failing };
-    if (latest.every((c) => c.status === 'completed')) return { timedOut: false, conclusion: 'success', failing: [] };
+    const verdict = classifyRequiredChecks(latest);
+    if (verdict.decision === 'failure') {
+      return { timedOut: false, conclusion: 'failure', failing: verdict.failing };
+    }
+    if (verdict.decision === 'success') return { timedOut: false, conclusion: 'success', failing: [] };
     if (i < polls - 1) await sleep(pollSec * 1000);
   }
   return { timedOut: true, conclusion: null, failing: [] };
