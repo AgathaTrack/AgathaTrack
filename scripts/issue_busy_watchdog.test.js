@@ -5,8 +5,10 @@ const assert = require('node:assert/strict');
 const {
   findStaleBusyIssues,
   buildWatchdogComment,
+  listOpenBusyIssues,
   parseArgs,
   WATCHDOG_MARKER,
+  MAX_PAGES,
 } = require('./issue_busy_watchdog');
 
 const NOW = Date.parse('2026-11-24T12:00:00Z');
@@ -50,4 +52,44 @@ test('parseArgs defaults to a dry run with a 6 h threshold', () => {
 
 test('parseArgs rejects a non-positive threshold', () => {
   assert.throws(() => parseArgs(['--threshold-hours', '0']), /positive number/);
+});
+
+test('buildWatchdogComment names the light-plan resume only for light-plan issues', () => {
+  const lp = buildWatchdogComment({ number: 9, idle_hours: 8, labels: ['busy', 'light-plan'] }, 6);
+  assert.match(lp, /continue light-plan #9/);
+  const other = buildWatchdogComment({ number: 10, idle_hours: 8, labels: ['busy', 'PR'] }, 6);
+  assert.doesNotMatch(other, /light-plan/);
+  assert.match(other, /\/babysit-plus/);
+  assert.match(other, /heuristic/);
+});
+
+test('findStaleBusyIssues carries labels for the comment', () => {
+  const [stale] = findStaleBusyIssues([{ number: 3, title: 't', updated_at: hoursAgo(9), labels: [{ name: 'busy' }, { name: 'light-plan' }] }], { now: NOW, thresholdHours: 6 });
+  assert.deepEqual(stale.labels, ['busy', 'light-plan']);
+});
+
+function pagedFetch(pages) {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    const page = Number(new URL(url).searchParams.get('page'));
+    const batch = pages[page - 1] || [];
+    return { ok: true, json: async () => batch };
+  };
+  return { fetchImpl, calls };
+}
+
+test('listOpenBusyIssues follows pages until a short page', async () => {
+  const full = Array.from({ length: 100 }, (_, i) => ({ number: i + 1 }));
+  const { fetchImpl, calls } = pagedFetch([full, [{ number: 101 }]]);
+  const issues = await listOpenBusyIssues({ token: 't', repository: 'o/r', fetchImpl });
+  assert.equal(issues.length, 101);
+  assert.equal(calls.length, 2);
+});
+
+test('listOpenBusyIssues fails loudly instead of truncating at the page cap', async () => {
+  const full = Array.from({ length: 100 }, (_, i) => ({ number: i + 1 }));
+  const pages = Array.from({ length: MAX_PAGES }, () => full);
+  const { fetchImpl } = pagedFetch(pages);
+  await assert.rejects(listOpenBusyIssues({ token: 't', repository: 'o/r', fetchImpl }), /raise MAX_PAGES/);
 });

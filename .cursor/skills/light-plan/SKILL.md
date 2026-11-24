@@ -41,7 +41,7 @@ Implement the current phase per its checklist scope (files needed for that outco
 **Phase and sync PRs run through [`/babysit-plus`](../babysit-plus/SKILL.md)** — with the `light-plan` label on, every PR this skill opens (phase dev → integration, sync, self-review fix) is driven by babysit+ (§0b Copilot/reviews wait, §2 triage, §3–4 fixes and debt issues, §5 CI loop, §7 review gate and merge). Even if the integration ruleset is inactive, babysit+ still requires green CI and **every review conversation resolved** (autonomous-pr-policy §Babysit skill family). Only the release PR leaves babysit+ for `/babysit-uat` (§Release).
 
 1. Run `/babysit-plus` on the PR until §7 merges it. The review gate `node scripts/babysit_pr_reviews.js gate --pr <url>` must exit `0` before the merge; `2` → triage and reply+resolve, re-run; `1` → fix the script, never merge on error.
-2. Merge into the integration branch with a **merge commit** (`gh pr merge <url> --merge`), never squash or rebase: integration must keep `main` as a parent so the release PR stays mergeable.
+2. Merge phase and sync PRs with babysit+'s squash merge (§7). The one exception is the `main` → integration sync PR that resolves a release conflict: merge it with a **merge commit**, never squash or rebase, so integration keeps `main` as a parent and the release PR stays mergeable.
 
 Babysit+ on a phase PR is a full babysit+ run (pre-PR self-review, triage comment, `pre-push-changed.sh`); an execute-plan merge lease is not needed here. Deferred review → debt issue, linked from the tracking issue.
 
