@@ -49,6 +49,20 @@ test('deliveryHandoffLines references light-plan skill', () => {
   assert.match(lines, /#99/);
 });
 
+test('every issue-driven delivery mode invokes babysit-plus for its PRs', () => {
+  // Enforces: any PR started from an issue is driven by /babysit-plus (release PRs: /babysit-uat).
+  for (const method of ['single', 'light-plan', 'execute-plan']) {
+    const lines = deliveryHandoffLines(method, 7).join('\n');
+    assert.match(lines, /\/babysit-plus/, `method ${method} must name /babysit-plus`);
+  }
+});
+
+test('light-plan delivery routes phase PRs to babysit-plus and release to babysit-uat', () => {
+  const lines = deliveryHandoffLines('light-plan', 7).join('\n');
+  assert.match(lines, /phase and sync PR[\s\S]*\/babysit-plus/);
+  assert.match(lines, /release PR[\s\S]*\/babysit-uat/);
+});
+
 test('implementLaunchReadiness requires flag and api key', () => {
   assert.equal(
     implementLaunchReadiness({ PIPELINE_IMPLEMENT_LAUNCH: 'false', CURSOR_API_KEY: 'k' }).canLaunch,

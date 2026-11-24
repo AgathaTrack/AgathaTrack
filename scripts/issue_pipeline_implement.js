@@ -36,6 +36,7 @@ function deliveryHandoffLines(method, issueNumber) {
       return [
         '## Delivery mode',
         'This issue uses **light-plan**. Follow `.cursor/skills/light-plan/SKILL.md` on the tracking issue.',
+        'Every phase and sync PR is driven by `/babysit-plus` (never a bare merge); the release PR is driven by `/babysit-uat`.',
         `Use \`continue light-plan #${issueNumber}\` when resuming.`,
         '',
       ];
@@ -43,6 +44,7 @@ function deliveryHandoffLines(method, issueNumber) {
       return [
         '## Delivery mode',
         'This issue uses **execute-plan**. Initialise from the plan snapshot; do not post `approve-autonomous` (D-001).',
+        'Every phase PR is driven by `/babysit-plus`; the final PR to `main` is driven by `/babysit-uat`.',
         '',
       ];
     default:
