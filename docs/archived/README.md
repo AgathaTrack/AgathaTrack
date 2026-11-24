@@ -84,7 +84,7 @@ Documentation may be **deleted entirely** (rather than archived) when:
 1. **Move the file** to `docs/archived/` with its original name
 2. **Add a deprecation header** at the top of the file:
    ```markdown
-   > ⚠️ **ARCHIVED**: This document has been superseded by [new-document.md](../new-document.md).
+   > ⚠️ **ARCHIVED**: This document has been superseded by [docs/README.md](/docs/README.md).
    > It is kept for historical reference only. Do not use for active development.
    ```
 3. **Update this README.md** to list the archived document
@@ -98,7 +98,7 @@ Documentation may be **deleted entirely** (rather than archived) when:
 When archiving a document, prepend the following header:
 
 ```markdown
-> ⚠️ **ARCHIVED**: This document has been superseded by [replacement-document.md](../../replacement-document.md).
+> ⚠️ **ARCHIVED**: This document has been superseded by [docs/README.md](/docs/README.md).
 > 
 > **Original Location**: `docs/original/path.md`
 > **Archived Date**: YYYY-MM-DD

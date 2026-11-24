@@ -61,78 +61,31 @@ has_frontmatter() {
     return 1
   fi
   # Check there's at least one metadata field and a closing --- within first 10 lines
-  if head -10 "$filepath" | grep -qE '^(title|owner|audience|status|last_updated|tags):' && \
-     head -10 "$filepath" | tail -9 | grep -qE '^---$'; then
+  if head -15 "$filepath" | grep -qE '^(title|owner|audience|status|last_updated|tags):' && \
+     head -15 "$filepath" | tail -n +2 | grep -qE '^---$'; then
     return 0
   fi
   return 1
 }
 
-# 1. Check for broken markdown links
+# 1. Check for broken markdown links (ordinary [label](path), repo-root /…, anchors)
 echo "Checking for broken links in markdown files..."
-
-# Find all markdown files (excluding .git, node_modules, etc.)
-MD_FILES=$(find "$REPO_ROOT" -name "*.md" -type f \
-  -not -path "*/.git/*" \
-  -not -path "*/node_modules/*" \
-  -not -path "*/artifacts/*" \
-  -not -path "*/.github/*" \
-  2>/dev/null)
-
-for filepath in $MD_FILES; do
-  # Read file line by line
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    # Extract all [text](path) patterns from this line
-    if echo "$line" | grep -qE '\[[^\]]*\]\([^)]*\)'; then
-      # Use process substitution to avoid subshell for counter updates
-      while IFS= read -r link; do
-        # Extract the path from the link
-        path=$(echo "$link" | grep -oE '\([^)]*\)' | tr -d '()')
-        
-        # Skip non-file links
-        if echo "$path" | grep -qE '^https?://|^ftp://|^mailto:'; then
-          continue
-        fi
-        
-        # Handle anchor links - split on # and validate file portion
-        base_path=$(echo "$path" | sed 's/#.*//')
-        
-        # Skip empty paths
-        if [[ -z "$base_path" ]]; then
-          continue
-        fi
-        
-        # Handle relative paths - convert to absolute
-        if echo "$base_path" | grep -qE '^\./|^\.\./'; then
-          # Get directory of current file
-          dir=$(dirname "$filepath")
-          # Resolve relative path
-          abs_path=$(cd "$dir" && realpath -s "$base_path" 2>/dev/null || echo "")
-          if [[ -z "$abs_path" ]]; then
-            abs_path="$REPO_ROOT/$base_path"
-          fi
-        else
-          abs_path="$REPO_ROOT/$base_path"
-        fi
-        
-        # Check if file exists (handle both .md and without extension)
-        if [[ -f "$abs_path" ]] || [[ -d "$abs_path" ]] || [[ -f "${abs_path}.md" ]]; then
-          continue
-        else
-          echo "  Broken link in $filepath: $link"
-          BROKEN_LINKS=$((BROKEN_LINKS + 1))
-          ERRORS=$((ERRORS + 1))
-        fi
-      done < <(echo "$line" | grep -oE '\[[^\]]*\]\([^)]*\)')
-    fi
-  done < "$filepath"
-done
-
-if [[ $BROKEN_LINKS -eq 0 ]]; then
-  echo "  All links are valid"
+LINK_CHECK_LOG=$(mktemp)
+if node "$REPO_ROOT/scripts/lib/validate_markdown_links.mjs" "$REPO_ROOT" >"$LINK_CHECK_LOG" 2>&1; then
+  cat "$LINK_CHECK_LOG"
 else
-  echo "  Found $BROKEN_LINKS broken links"
+  cat "$LINK_CHECK_LOG"
+  BROKEN_LINKS=$(grep -c '^  Broken link' "$LINK_CHECK_LOG" 2>/dev/null || true)
+  BROKEN_LINKS=${BROKEN_LINKS:-0}
+  if [[ "$BROKEN_LINKS" -eq 0 ]]; then
+    # Non-zero exit without broken-link lines is a checker failure, never a pass.
+    echo "  Link checker failed without reporting broken links (checker error)"
+    ERRORS=$((ERRORS + 1))
+  else
+    ERRORS=$((ERRORS + BROKEN_LINKS))
+  fi
 fi
+rm -f "$LINK_CHECK_LOG"
 
 # 2. Check for metadata headers in docs/
 echo ""

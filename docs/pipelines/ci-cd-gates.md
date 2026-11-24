@@ -11,7 +11,7 @@ tags: [ci, gates, pipeline]
 Single source of truth for **blocking vs advisory** automation and PROD promotion
 prerequisites. GitHub branch/environment settings must match the check names below.
 
-See also: [ci-cd-baseline.md](./ci-cd-baseline.md) (metrics), [CONTRIBUTING.md](../CONTRIBUTING.md) (contributor checklist),
+See also: [ci-cd-baseline.md](./ci-cd-baseline.md) (metrics), [CONTRIBUTING.md](../../CONTRIBUTING.md) (contributor checklist),
 [promotion-contract.md](./promotion-contract.md) (auto-promotion tags, idempotency, semver).
 
 **Program status:** Phases -1–6 merged (#162–#168). Phase 7 (#169) closes build-artifact
@@ -387,7 +387,7 @@ wait for one green **CI** run — GitHub only lists checks that have reported at
 
 ## 3. Blocking — UAT release pipeline
 
-Full tier model: [e2e/uat-deploy-tiers.md](./e2e/uat-deploy-tiers.md).
+Full tier model: [e2e/uat-deploy-tiers.md](../e2e/uat-deploy-tiers.md).
 
 **CI owns promotion:** every merge to `main` triggers async **Pre-UAT E2E**
 (`pre-uat-e2e.yml` on `push`). Green E2E at current `origin/main` HEAD chains to
@@ -396,7 +396,7 @@ Full tier model: [e2e/uat-deploy-tiers.md](./e2e/uat-deploy-tiers.md).
 
 Pre-UAT does **not** block merge — it runs post-merge only. Manual replay:
 `workflow_dispatch` on `pre-uat-e2e.yml` or `promote-uat.yml`; ops localhost replay:
-`scripts/agent-uat-babysit.sh` (see [e2e/uat-agent-babysit.md](./e2e/uat-agent-babysit.md)).
+`scripts/agent-uat-babysit.sh` (see [e2e/uat-agent-babysit.md](../e2e/uat-agent-babysit.md)).
 
 | Stage / job | Blocking? | Purpose |
 |-------------|-----------|---------|

@@ -8,11 +8,11 @@ tags: [e2e, ci, canary, plan, pipeline]
 ---
 # E2E fail-fast canary — phased implementation plan
 
-**Status:** Partially superseded by [e2e/uat-deploy-tiers.md](./e2e/uat-deploy-tiers.md) (Jul 2026) — full E2E now runs in `pre-uat-e2e.yml`; live `@smoke-uat` is advisory via `uat-live-e2e.yml`. PR `@smoke-ci` goals below remain current.
+**Status:** Partially superseded by [e2e/uat-deploy-tiers.md](../e2e/uat-deploy-tiers.md) (Jul 2026) — full E2E now runs in `pre-uat-e2e.yml`; live `@smoke-uat` is advisory via `uat-live-e2e.yml`. PR `@smoke-ci` goals below remain current.
 
-**Historical:** Phase 3–4 deploy-path goals (full E2E + `@smoke-uat` inside `deploy-uat.yml`) superseded Jul 2026 — see [uat-deploy-tiers.md](./e2e/uat-deploy-tiers.md).
+**Historical:** Phase 3–4 deploy-path goals (full E2E + `@smoke-uat` inside `deploy-uat.yml`) superseded Jul 2026 — see [uat-deploy-tiers.md](../e2e/uat-deploy-tiers.md).
 **Owner track:** CI/CD reliability (see [ci-cd-gates.md](./ci-cd-gates.md), [ci-cd-baseline.md](./ci-cd-baseline.md))  
-**Related:** [e2e/README.md](../e2e/README.md), [promotion-contract.md](./promotion-contract.md)  
+**Related:** [e2e/README.md](../../e2e/README.md), [promotion-contract.md](./promotion-contract.md)  
 **Agent policy:** `cursor/*` PRs may edit `.github/workflows/` (see `agent-safety-lib.js`); update `ci-gate` / `assert-ci-gate.sh` / `docs/pipelines/ci-cd-gates.md` in the same PR when adding blocking jobs.
 
 ---
@@ -81,7 +81,7 @@ flowchart TD
 | Exclude from `@smoke-ci` | signup (slow), axe (→ `@smoke-a11y` weekly), pet-create UI, weight UI |
 | `playwright.config.ts` | Projects: `ci-canary` (`@smoke-ci`, retries 0, timeout 45s), `uat-smoke` (`@smoke-uat`, retries 0), `full` (default, retries 1 until Phase 3) |
 | npm scripts | `test:smoke-ci`, `test:smoke-uat` (replace/alias `test:smoke`) |
-| Docs | [e2e/README.md](../e2e/README.md) § smoke tiers |
+| Docs | [e2e/README.md](../../e2e/README.md) § smoke tiers |
 
 **Exit:** `npm run test:smoke-ci` passes locally in &lt;2 min with stack running.
 
@@ -95,7 +95,7 @@ flowchart TD
 
 | Item | Detail |
 |------|--------|
-| Workflow | New `ci-e2e-canary` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — `needs: flutter-build-web`, reuses `_reusable-e2e-local.yml` or inline localhost stack |
+| Workflow | New `ci-e2e-canary` job in [`.github/workflows/ci.yml`](/.github/workflows/ci.yml) — `needs: flutter-build-web`, reuses `_reusable-e2e-local.yml` or inline localhost stack |
 | Scope | Run **only** `@smoke-ci` project (not domain shards) |
 | Artifact | Download `flutter-build-web` artifact (same as UAT shards) |
 | Gate | Add to `ci-gate` / `assert-ci-gate.sh` |
@@ -150,7 +150,7 @@ flowchart TD
 **Superseded (Jul 2026):** CI owns promotion — `pre-uat-e2e.yml` on merge to `main`,
 `promote-uat.yml` via `workflow_run`, no coordinator dispatch or queue ledger hold.
 
-See [uat-deploy-tiers.md](./e2e/uat-deploy-tiers.md). Historical: [uat-coordinator-plan.md](./agent-efficiency/uat-coordinator-plan.md).
+See [uat-deploy-tiers.md](../e2e/uat-deploy-tiers.md). Historical: [uat-coordinator-plan.md](../agent-efficiency/uat-coordinator-plan.md).
 
 ---
 
@@ -206,6 +206,6 @@ Track in [ci-cd-gates.md](./ci-cd-gates.md) § follow-up when scheduled.
 
 ## References
 
-- Bugbot/babysit review polling: [pr-review-cost-efficiency.md](./agent-efficiency/pr-review-cost-efficiency.md) · [autonomous-pr-policy.md](./agent-efficiency/autonomous-pr-policy.md) §Automatic reviews
-- Shard manifest: [e2e/scripts/shard-files.mjs](../e2e/scripts/shard-files.mjs)
-- UAT gate table: [scripts/ci/assert-uat-gates.sh](../scripts/ci/assert-uat-gates.sh)
+- Bugbot/babysit review polling: [pr-review-cost-efficiency.md](../agent-efficiency/pr-review-cost-efficiency.md) · [autonomous-pr-policy.md](../agent-efficiency/autonomous-pr-policy.md) §Automatic reviews
+- Shard manifest: [e2e/scripts/shard-files.mjs](../../e2e/scripts/shard-files.mjs)
+- UAT gate table: [scripts/ci/assert-uat-gates.sh](../../scripts/ci/assert-uat-gates.sh)

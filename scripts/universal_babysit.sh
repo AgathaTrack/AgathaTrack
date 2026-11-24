@@ -383,6 +383,36 @@ resolve_conflicts() {
   return 0
 }
 
+# Commit and push iteration fixes; stop on failure (no-op when nothing staged)
+push_iteration_changes() {
+  local message="$1"
+  if [[ "$DRY_RUN" == true ]]; then
+    echo "  [DRY RUN] Would push changes"
+    return 0
+  fi
+  git add -A
+  if git diff --cached --quiet; then
+    # A commit made earlier (for example by conflict resolution) may be ahead of its upstream and unpushed.
+    local ahead
+    ahead=$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
+    if [[ "$ahead" -eq 0 ]]; then
+      echo "  No changes to push"
+      return 0
+    fi
+    echo "  Pushing ${ahead} existing local commit(s)"
+  else
+    if ! git commit -m "$message"; then
+      echo -e "  ${RED}Commit failed; stopping (will not trust CI on stale PR head)${NC}" >&2
+      exit 1
+    fi
+  fi
+  if ! git push origin HEAD --force-with-lease; then
+    echo -e "  ${RED}Push failed; stopping (will not continue to CI on stale head)${NC}" >&2
+    exit 1
+  fi
+  return 0
+}
+
 # Run pre-push validation
 run_prepush() {
   echo -e "${YELLOW}Running pre-push validation...${NC}"
@@ -555,11 +585,7 @@ main() {
     # Step 2: Resolve conflicts
     if ! resolve_conflicts; then
       echo -e "${YELLOW}Conflicts remain, need manual resolution${NC}"
-      if [[ "$DRY_RUN" == false ]]; then
-        git add -A
-        git commit -m "chore: conflict resolution attempt $ITERATION" || true
-        git push origin HEAD --force-with-lease || true
-      fi
+      push_iteration_changes "chore: conflict resolution attempt $ITERATION"
       continue
     fi
     
@@ -574,18 +600,8 @@ main() {
       continue
     fi
     
-    # Step 4: Push changes
-    if [[ "$DRY_RUN" == false ]]; then
-      git add -A
-      if git diff --cached --quiet; then
-        echo "  No changes to push"
-      else
-        git commit -m "fix: auto-fix review issues (iteration $ITERATION)" || true
-        git push origin HEAD --force-with-lease || true
-      fi
-    else
-      echo "  [DRY RUN] Would push changes"
-    fi
+    # Step 4: Push changes (exit before CI when commit/push fails)
+    push_iteration_changes "fix: auto-fix review issues (iteration $ITERATION)"
     
     # Step 5: Wait for CI
     local ci_result

@@ -13,7 +13,7 @@ tags: [agent-efficiency, policy]
 **Status:** ~~Phase 1–2 merged (#281, #307); **Phase 1b bootstrap in progress**; Phase 3 not started~~ **Removed Jul 2026**  
 **Soak:** Jul 23 2026 — 50 deploy runs, 26% success; see [§Jul 23 soak review](#jul-23-soak-review)  
 **Owner track:** Agent efficiency + CI/CD reliability  
-**Related:** [autonomous-pr-policy.md](./autonomous-pr-policy.md) §Post-merge UAT, [e2e-ci-canary-plan.md](../pipelines/e2e-ci-canary-plan.md) Phase 5, [promotion-contract.md](../pipelines/promotion-contract.md), [github-issue-workflow.md](../github-issue-workflow.md)  
+**Related:** [autonomous-pr-policy.md](./autonomous-pr-policy.md) §Post-merge UAT, [e2e-ci-canary-plan.md](../pipelines/e2e-ci-canary-plan.md) Phase 5, [promotion-contract.md](../pipelines/promotion-contract.md), [github-issue-workflow.md](./github-issue-workflow.md)  
 **Supersedes (when implemented):** per-merge Task sub-agents in babysit-plus §8; per-plan-only UAT watch ledgers
 
 ---

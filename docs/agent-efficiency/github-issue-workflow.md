@@ -13,11 +13,11 @@ This document describes how issues are filed, triaged, and moved through deliver
 It covers two layers:
 
 - **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org field `Stage` is the board column and the only state; an engine moves issues through eight stages. See [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The earlier assignee-driven design ([plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md), [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md)) is superseded.
-- **Legacy label flow** (the old engine and `ISSUE_PIPELINE`, until it is removed): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipelineon).
+- **Legacy label flow** (the old engine and `ISSUE_PIPELINE`, until it is removed): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issuepipelineon).
 
 ## Issue forms
 
-Issue intake uses GitHub Issue Forms in [`.github/ISSUE_TEMPLATE/`](../.github/ISSUE_TEMPLATE/). Blank issues are disabled; contributors must choose a form.
+Issue intake uses GitHub Issue Forms in [`.github/ISSUE_TEMPLATE/`](/.github/ISSUE_TEMPLATE/). Blank issues are disabled; contributors must choose a form.
 
 | Form | File | Purpose |
 |------|------|---------|
@@ -28,6 +28,10 @@ Issue intake uses GitHub Issue Forms in [`.github/ISSUE_TEMPLATE/`](../.github/I
 New issues from these forms receive type labels (`bug`, `feature`, or `task`) and `needs-triage`.
 
 **Legacy issues:** Issues created before these forms were introduced are not automatically normalized. They may need manual enrichment to match the fields expected by triage and future automation.
+
+## Planned workflows by status
+
+When `ISSUE_PIPELINE_V2` is `on`, lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and the v2 engine dispatchers — not the legacy label flow in [§Live workflow (legacy)](#live-workflow-legacy-until-issuepipelineon).
 
 ## Pipeline v2: the Stage machine
 
@@ -224,7 +228,7 @@ merges into `main` count; phase PRs merged into an integration branch are open o
   the next tick. Set it back or remove it when the soak is done.
 - **Dry run:** set `ISSUE_PIPELINE_V2=dry-run`, or dispatch the workflow without `live` (a manual dispatch previews by default, so an operator following these steps cannot write while scheduled ticks are live), and read the `pipeline_v2_action` lines and the
   tick summary. Check that nothing acts on hand-driven issues (label them `manual-only`).
-- **Migration (once):** dispatch [`issue-pipeline-v2-migrate.yml`](../../.github/workflows/issue-pipeline-v2-migrate.yml)
+- **Migration (once):** dispatch [`issue-pipeline-v2-migrate.yml`](/.github/workflows/issue-pipeline-v2-migrate.yml)
   as a dry run, read the `pipeline_v2_migrate` lines, then dispatch with `apply`. It gives each open board issue a `Stage`
   (from the board column, else Backlog) and a `Blocked` reason from the legacy `question` / `needs-owner` labels.
 - **Soak:** `dry-run` for a day; then `on` with `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`, taking one sandbox issue
@@ -319,13 +323,13 @@ Backlog → In Analysis (+ human-reviewed) → [Auto Check] → Ready → In pro
 
 1. **Backlog** — New issues enter here after filing via a form.
 2. **In Analysis** — A maintainer reviews the issue: confirms clarity, priority, and that it belongs in the backlog. Move Project status to **In Analysis** and add the `human-reviewed` label.
-3. **Auto Check** (process, not a status) — The [triage workflow](../.github/workflows/triage-human-reviewed.yml) runs when `human-reviewed` is applied:
+3. **Auto Check** (process, not a status) — The [triage workflow](/.github/workflows/triage-human-reviewed.yml) runs when `human-reviewed` is applied:
    - If the issue is complete and safe → move to **Ready** and apply `agent-approved`.
    - If more information is needed → add `question`, **remove `human-reviewed`** (pauses the workflow), comment on what is missing, and move the issue to **Backlog** until resolved.
    - If the issue must not be automated → add `manual-only` and leave status **In Analysis**.
-4. **Ready** — Issue is approved for implementation. The [agent dispatch workflow](../.github/workflows/agent-dispatch.yml) picks it up automatically when `agent-approved` is present and status is **Ready**.
+4. **Ready** — Issue is approved for implementation. The [agent dispatch workflow](/.github/workflows/agent-dispatch.yml) picks it up automatically when `agent-approved` is present and status is **Ready**.
 5. **In progress** — Cursor agent dispatched (`busy` added). Stays here while the PR is open. If blocked, add `blocked` + `question`, **remove `human-reviewed`** (pauses dispatch), but keep **In progress**.
-6. **In Main** — After the agent PR merges to `main` ([merge handler](../.github/workflows/issue-agent-pr-merge.yml)).
+6. **In Main** — After the agent PR merges to `main` ([merge handler](/.github/workflows/issue-agent-pr-merge.yml)).
 7. **In UAT** — After UAT deploy succeeds for the linked `uat-YYMMDD-PR#` tag (`deploy-uat.yml` notify job).
 8. **Done** — Validation complete; close the issue.
 
@@ -345,17 +349,17 @@ GitHub remains the source of truth. Cursor Cloud Agents are workers that impleme
 
 | File | Purpose |
 |------|---------|
-| [`.github/workflows/agent-dispatch.yml`](../.github/workflows/agent-dispatch.yml) | Find eligible issues and launch Cursor agents |
-| [`.github/workflows/agent-monitor.yml`](../.github/workflows/agent-monitor.yml) | Poll agent runs; comment; apply `blocked` / success handoff |
-| [`.github/workflows/issue-agent-pr-merge.yml`](../.github/workflows/issue-agent-pr-merge.yml) | On merged `cursor/**` PR → **In Main**, record expected UAT tag |
-| [`.github/workflows/promote-uat.yml`](../.github/workflows/promote-uat.yml) | On push to `main` → create `uat-YYMMDD-PR#` tag |
-| [`.github/workflows/deploy-uat.yml`](../.github/workflows/deploy-uat.yml) | UAT deploy + **Notify linked agent issue** job → **In UAT** or escalate |
+| [`.github/workflows/agent-dispatch.yml`](/.github/workflows/agent-dispatch.yml) | Find eligible issues and launch Cursor agents |
+| [`.github/workflows/agent-monitor.yml`](/.github/workflows/agent-monitor.yml) | Poll agent runs; comment; apply `blocked` / success handoff |
+| [`.github/workflows/issue-agent-pr-merge.yml`](/.github/workflows/issue-agent-pr-merge.yml) | On merged `cursor/**` PR → **In Main**, record expected UAT tag |
+| [`.github/workflows/promote-uat.yml`](/.github/workflows/promote-uat.yml) | On push to `main` → create `uat-YYMMDD-PR#` tag |
+| [`.github/workflows/deploy-uat.yml`](/.github/workflows/deploy-uat.yml) | UAT deploy + **Notify linked agent issue** job → **In UAT** or escalate |
 | `execute-plan-scope.yml` (forbidden paths on all PRs to `main`) | Required commit status; owner review clears forbidden hits ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)) |
-| [`.github/scripts/agent-payload-lib.js`](../.github/scripts/agent-payload-lib.js) | Sanitized task payload + prompt |
-| [`.github/scripts/agent-safety-lib.js`](../.github/scripts/agent-safety-lib.js) | Preflight + forbidden path rules |
-| [`.github/scripts/launch-cursor-agent.js`](../.github/scripts/launch-cursor-agent.js) | Calls Cursor Cloud Agents API v1 |
-| [`.github/scripts/monitor-cursor-agent.js`](../.github/scripts/monitor-cursor-agent.js) | Polls run status via Cursor API |
-| [`.github/scripts/issue-agent-handlers.js`](../.github/scripts/issue-agent-handlers.js) | Merge + UAT status transitions |
+| [`.github/scripts/agent-payload-lib.js`](/.github/scripts/agent-payload-lib.js) | Sanitized task payload + prompt |
+| [`.github/scripts/agent-safety-lib.js`](/.github/scripts/agent-safety-lib.js) | Preflight + forbidden path rules |
+| [`.github/scripts/launch-cursor-agent.js`](/.github/scripts/launch-cursor-agent.js) | Calls Cursor Cloud Agents API v1 | <!-- pragma: allowlist secret -->
+| [`.github/scripts/monitor-cursor-agent.js`](/.github/scripts/monitor-cursor-agent.js) | Polls run status via Cursor API | <!-- pragma: allowlist secret -->
+| [`.github/scripts/issue-agent-handlers.js`](/.github/scripts/issue-agent-handlers.js) | Merge + UAT status transitions |
 
 ### Eligibility
 
@@ -431,9 +435,9 @@ Triage already blocks risky issues with `manual-only` before dispatch.
 
 When an agent PR merges to `main`:
 
-1. **[merge handler](../.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets the org `Stage` field to **In Main** (the board column follows through the stage mirror), and posts the expected UAT tag (`uat-YYMMDD-PR#`).
-2. **[promote-uat.yml](../.github/workflows/promote-uat.yml)** runs on the `main` push, resolves the merged PR, and creates the `uat-YYMMDD-PR#` tag on the merge commit.
-3. Tag push triggers **[deploy-uat.yml](../.github/workflows/deploy-uat.yml)** automatically.
+1. **[merge handler](/.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets the org `Stage` field to **In Main** (the board column follows through the stage mirror), and posts the expected UAT tag (`uat-YYMMDD-PR#`).
+2. **[promote-uat.yml](/.github/workflows/promote-uat.yml)** runs on the `main` push, resolves the merged PR, and creates the `uat-YYMMDD-PR#` tag on the merge commit.
+3. Tag push triggers **[deploy-uat.yml](/.github/workflows/deploy-uat.yml)** automatically.
 
 When UAT deploy finishes, the **Notify linked agent issue** job in `deploy-uat.yml` sets the org `Stage` field to **In UAT** (or adds `question` on failure). Prod notify walks the Pawpet board but **selects candidates by org `Stage` = In UAT** (not the project `Status` column), then sets `Stage` to **Done** and closes the issue.
 
@@ -476,7 +480,7 @@ Pick the **Pawpet** project from the script output (not **ATSupport**). Legacy u
 
 ### Stage mirror (org `Stage` field)
 
-Board columns stay on built-in Project **Status** (humans drag cards; the pipeline and release jobs keep writing Status). Agents without Projects scope read and write the org issue field **`Stage`** instead, kept in sync by [`stage-mirror.yml`](../.github/workflows/stage-mirror.yml) and `scripts/stage_mirror.js`.
+Board columns stay on built-in Project **Status** (humans drag cards; the pipeline and release jobs keep writing Status). Agents without Projects scope read and write the org issue field **`Stage`** instead, kept in sync by [`stage-mirror.yml`](/.github/workflows/stage-mirror.yml) and `scripts/stage_mirror.js`.
 
 | Switch | Meaning |
 |--------|---------|
@@ -562,18 +566,22 @@ or auto-migrate is off. **In UAT** is set only after all `deploy-uat.yml` gates 
 **Production promotion:** `deploy-prod.yml` runs automatically after green UAT
 **`Prod ready`** (stub `vX.Y.Z-rc.N` tag when `PROD_DEPLOY_ENABLED` is not `true`;
 full FTP + SSH deploy when `true`). Manual **`workflow_dispatch`** remains available
-for overrides. See [promotion-contract.md](./promotion-contract.md).
+for overrides. See [promotion-contract.md](../pipelines/promotion-contract.md).
+
+## To do — triage and intake (pawpet-claude)
+
+Planned lane: the same deterministic form checks run at the start of **To do** before delivery dispatch; keyword risk becomes a hint for the delivery-path check.
 
 ## Deterministic triage automation
 
-**Live** on `human-reviewed`. **Planned:** the same form checks run at the start of the To do lane, and keyword risk becomes a hint for the delivery path check ([§To do](#to-do--triage-and-intake-pawpet-claude)).
+**Live** on `human-reviewed`. **Planned:** see [§To do — triage and intake (pawpet-claude)](#to-do--triage-and-intake-pawpet-claude).
 
 The triage workflow is implemented in:
 
-- [`.github/workflows/triage-human-reviewed.yml`](../.github/workflows/triage-human-reviewed.yml) — GitHub Actions entry point
-- [`.github/scripts/triage-lib.js`](../.github/scripts/triage-lib.js) — rules-based validation logic
-- [`.github/scripts/triage-human-reviewed.js`](../.github/scripts/triage-human-reviewed.js) — applies labels, comments, and Project status updates
-- [`.github/scripts/discover-project-ids.js`](../.github/scripts/discover-project-ids.js) — helper to find Project and Status field IDs
+- [`.github/workflows/triage-human-reviewed.yml`](/.github/workflows/triage-human-reviewed.yml) — GitHub Actions entry point
+- [`.github/scripts/triage-lib.js`](/.github/scripts/triage-lib.js) — rules-based validation logic
+- [`.github/scripts/triage-human-reviewed.js`](/.github/scripts/triage-human-reviewed.js) — applies labels, comments, and Project status updates
+- [`.github/scripts/discover-project-ids.js`](/.github/scripts/discover-project-ids.js) — helper to find Project and Status field IDs
 
 ### Trigger
 
@@ -673,8 +681,8 @@ one script under `.github/scripts/`, and the logic lives in `scripts/lib/execute
 
 | Workflow | Events | Does |
 |----------|--------|------|
-| [`execute-plan-approve.yml`](../../.github/workflows/execute-plan-approve.yml) | `issue_comment` (created, edited, deleted) by the repo owner **or** `pawpet-bot` on `approve-autonomous` only | Validates `approve-autonomous` / `resume-autonomous` / `revoke-autonomous` on a control issue, creates the integration branch, status comment and labels on approve, then dispatches `execute-plan-driver.yml` for the plan (passes never run inline, so they share the driver's concurrency group). Pipeline programmes (`source_issue` on the snapshot): `pawpet-bot` may post `approve-autonomous`; `scripts/lib/execute_plan_pipeline_approve.js` enforces D-001 policy; failure → `needs-owner` on the product issue and `autonomous-revoked` on the control issue |
-| [`execute-plan-driver.yml`](../../.github/workflows/execute-plan-driver.yml) | `pull_request_target` (not fork PRs; a secret-less relay job re-dispatches the driver on `main`), `workflow_run` (CI, Pre-UAT, Promote UAT, Deploy UAT), `issues` labels, 30-minute heartbeat, manual dispatch | Runs `tick` for each affected active plan and executes the one driver action it returns |
+| [`execute-plan-approve.yml`](/.github/workflows/execute-plan-approve.yml) | `issue_comment` (created, edited, deleted) by the repo owner **or** `pawpet-bot` on `approve-autonomous` only | Validates `approve-autonomous` / `resume-autonomous` / `revoke-autonomous` on a control issue, creates the integration branch, status comment and labels on approve, then dispatches `execute-plan-driver.yml` for the plan (passes never run inline, so they share the driver's concurrency group). Pipeline programmes (`source_issue` on the snapshot): `pawpet-bot` may post `approve-autonomous`; `scripts/lib/execute_plan_pipeline_approve.js` enforces D-001 policy; failure → `needs-owner` on the product issue and `autonomous-revoked` on the control issue |
+| [`execute-plan-driver.yml`](/.github/workflows/execute-plan-driver.yml) | `pull_request_target` (not fork PRs; a secret-less relay job re-dispatches the driver on `main`), `workflow_run` (CI, Pre-UAT, Promote UAT, Deploy UAT), `issues` labels, 30-minute heartbeat, manual dispatch | Runs `tick` for each affected active plan and executes the one driver action it returns |
 
 **Control comments** (one line, on the control issue, by an owner in `.github/execute-plan.config.json`):
 `approve-autonomous <plan> sha256:<hash> until <ISO>`, `resume-autonomous <plan> sha256:<hash> until <ISO>`

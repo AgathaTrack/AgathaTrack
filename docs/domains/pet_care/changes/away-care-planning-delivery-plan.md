@@ -2,7 +2,10 @@
 title: Away Care Planning — Delivery Plan
 owner: Product / Agent
 audience: both
-status: frozen
+status: in-delivery
+folds_into: docs/domains/pet_care/features/care-schedule-management.md
+status_since: 2026-09-23
+plan: away-care-planning-delivery
 last_updated: 2026-09-23
 tags: [pet_care, care_context, care_schedule_management, away_planning, delivery]
 ---
@@ -11,9 +14,9 @@ tags: [pet_care, care_context, care_schedule_management, away_planning, delivery
 
 **Decisions:** [away-care-planning-decisions.md](./away-care-planning-decisions.md) (D-ACP-001 … D-ACP-010) — **frozen** (ACP-DOC-0)
 **Canonical product behaviour today:** [care-context.md](../features/care-context.md), [care-schedule-management.md](../features/care-schedule-management.md)
-**Predecessor plans:** [away-plan-detail-v2-delivery-plan.md](./away-plan-detail-v2-delivery-plan.md) (AWD, shipped), [care-schedule-management-delivery-plan.md](./care-schedule-management-delivery-plan.md) (CSM-1…17, on `main`)
+**Predecessor plans:** [away-plan-detail-v2-delivery-plan.md](./away-plan-detail-v2-delivery-plan.md) (AWD, shipped), [care-schedule-management.md](../features/care-schedule-management.md) (CSM-1…17, on `main`)
 
-**Status: frozen.** Execute-plan: `.agents/plans/away-care-planning.{md,snapshot.json}`. Phases run **continuously** under autonomy — no human validation gate between phases (merge-done → next phase immediately).
+**Status: in-delivery.** Execute-plan: `.agents/plans/away-care-planning.{md,snapshot.json}`. Phases run **continuously** under autonomy — no human validation gate between phases (merge-done → next phase immediately).
 
 ---
 

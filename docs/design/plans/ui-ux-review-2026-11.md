@@ -2760,7 +2760,7 @@ Requested by the product owner on 2026-11-09, added to this review so that the r
 
 **Delete the frozen Shelter and Fostering code from the repository. Git history and the existing tag keep it recoverable.**
 
-This replaces the "frozen, not deleted" stance of the [frozen-domains programme](../../engineering/frozen-domains/philosophy.md), which was written in September 2026 to avoid building archive machinery while the pivot was recent. Two months on, the costs of keeping the code have become visible in this review:
+This replaces the "frozen, not deleted" stance of the [frozen-domains programme](/docs/engineering/frozen-domains/README.md), which was written in September 2026 to avoid building archive machinery while the pivot was recent. Two months on, the costs of keeping the code have become visible in this review:
 
 - Active screens still carry frozen vocabulary, branches and placeholders (D-1.1, D-6.1, D-8.1, D-9.3, A-4.1, B-1.2, C-12, C-17), because the boundary only blocks imports, not semantics.
 - 124 active Dart files, roughly a quarter of the active tree, still mention organisation, shelter, foster, custody or adoption in identifiers, comments or copy. Every reader, including the agents that work on this repository, must keep deciding which of those are live.
@@ -2771,7 +2771,7 @@ This replaces the "frozen, not deleted" stance of the [frozen-domains programme]
 
 **What "delete" does not cover now.** Data. The retained tables (`organizations`, `organization_users`, `foster_placements`, `custody_transfers`, `archived_pets`), the migration files that created them, and the GDPR export and account-deletion paths that read them stay until a separate data decision is taken (5.4). Deleting rows that belong to real people is a data-protection act, not a code clean-up, and the programme's "data protection exception" stands.
 
-**Recovery path.** Tag `frozen-domains-baseline-2026-09` already marks the last state in which the frozen code was complete and tested. Before the deletion PR merges, add a second tag on `main` (suggested name `pre-frozen-domains-removal-2026-11`) so that the exact removed tree is one `git checkout` away. The [rehydration runbook](../../engineering/frozen-domains/rehydration-runbook.md) becomes "check out the tag, cherry-pick what is needed"; the product decisions in `mvp-pivot-decisions.md` remain valid and should be kept as the record of why.
+**Recovery path.** Tag `frozen-domains-baseline-2026-09` already marks the last state in which the frozen code was complete and tested. Before the deletion PR merges, add a second tag on `main` (suggested name `pre-frozen-domains-removal-2026-11`) so that the exact removed tree is one `git checkout` away. The [rehydration runbook](/docs/engineering/frozen-domains/README.md) becomes "check out the tag, cherry-pick what is needed"; the product decisions in `mvp-pivot-decisions.md` remain valid and should be kept as the record of why.
 
 **Why delete rather than keep freezing.** The programme's own success criterion was "Shelter can rot without infecting Pet Care". The review shows the infection is in the active vocabulary, routes and copy rather than in imports, and that is exactly what a boundary script cannot see. Removing the code lets the active-product content pass (Part 4, X-4) be checked mechanically: once the frozen roots are gone, any remaining organisation or foster identifier in `lib/` is a defect by definition.
 
