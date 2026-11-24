@@ -12,7 +12,7 @@ jobs:
   triage:
     name: Deterministic issue triage
     if: >-
-      vars.ISSUE_PIPELINE != 'on' &&
+      vars.ISSUE_PIPELINE_V2 != 'on' &&
       github.event.label.name == 'human-reviewed'
     runs-on: ubuntu-latest
     environment: automation

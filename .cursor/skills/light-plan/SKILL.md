@@ -85,7 +85,7 @@ Do not end the turn while the release PR is open or Pre-UAT is unfinished, excep
 
 ## Recovery
 
-If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When the engine launched the run (a `v2:launch` comment on the issue), it restarts a quiet run once and then sets `Blocked: stalled` (`github-issue-workflow.md` §Pipeline v2, In progress row). The issue pipeline monitor also relaunches a terminal run that still has `light-plan` and `busy` (the monitor code checks only these labels; the dispatcher gates on `ISSUE_PIPELINE`), up to `PIPELINE_STUCK_MAX` (default 3) times over the issue's lifetime, then sets `needs-owner` (`stuck`).
+If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When pipeline v2 launched the run (a `v2:launch` comment on the issue), the engine may issue one `resume` action on a later tick, then `Blocked: stalled` if delivery still does not progress (`github-issue-workflow.md` §Pipeline v2, In progress row). Outside v2, `agent-monitor.yml` still handles terminal Cursor runs while `ISSUE_PIPELINE_V2` is not `on`.
 
 ## Stop and ask
 

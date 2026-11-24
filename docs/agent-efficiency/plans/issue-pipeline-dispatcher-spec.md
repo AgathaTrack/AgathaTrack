@@ -11,7 +11,7 @@ parent: issue-pipeline-automation.md
 
 # Issue pipeline — dispatcher specification
 
-> **Superseded (2026-11-17).** The pipeline is now the `Stage` state machine in [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385), described in [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine). This document is kept for the decision history only.
+> **Superseded (2026-11-17).** The pipeline is now the `Stage` state machine in [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385), described in [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine). Implementation removed 2026-11-24 (PIPE-V2-D-DISPATCH-001). This document is kept for the decision history only.
 
 
 Normative implementation contract for the unified issue pipeline dispatcher. Product intent and decisions: [issue-pipeline-automation.md](./issue-pipeline-automation.md).
