@@ -25,7 +25,7 @@ jobs:
   dispatch:
     name: Dispatch Cursor agent
     if: >
-      vars.ISSUE_PIPELINE != 'on' &&
+      vars.ISSUE_PIPELINE_V2 != 'on' &&
       (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'issues' && github.event.label.name == 'agent-approved')

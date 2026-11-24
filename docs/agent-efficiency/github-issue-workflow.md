@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-23
+last_updated: 2026-11-24
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -12,8 +12,8 @@ This document describes how issues are filed, triaged, and moved through deliver
 
 It covers two layers:
 
-- **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org field `Stage` is the board column and the only state; an engine moves issues through eight stages. See [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The earlier assignee-driven design ([plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md), [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md)) is superseded.
-- **Legacy label flow** (the old engine and `ISSUE_PIPELINE`, until it is removed): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issuepipelineon).
+- **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org field `Stage` is the board column and the only state; an engine moves issues through eight stages. See [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The assignee-driven v1 dispatcher (`issue-pipeline-dispatcher.yml`, `ISSUE_PIPELINE`) is **removed**; history lives in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md) and [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md).
+- **Legacy label flow** (until `ISSUE_PIPELINE_V2=on`): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipeline_v2on).
 
 ## Issue forms
 
@@ -31,7 +31,7 @@ New issues from these forms receive type labels (`bug`, `feature`, or `task`) an
 
 ## Planned workflows by status
 
-When `ISSUE_PIPELINE_V2` is `on`, lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and the v2 engine dispatchers — not the legacy label flow in [§Live workflow (legacy)](#live-workflow-legacy-until-issuepipelineon).
+When `ISSUE_PIPELINE_V2` is `on`, lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and the v2 engine dispatchers — not the legacy label flow in [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipeline_v2on).
 
 ## Pipeline v2: the Stage machine
 
@@ -44,7 +44,7 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 
 | Setting | Where | Meaning |
 |---------|-------|---------|
-| `ISSUE_PIPELINE_V2` | repo variable | `off` (default; the job does not run), `dry-run` (decides and logs, sends nothing), `on` (writes). Separate from the legacy `ISSUE_PIPELINE`. |
+| `ISSUE_PIPELINE_V2` | repo variable | `off` (default; the job does not run), `dry-run` (decides and logs, sends nothing), `on` (writes). When `on`, label-flow triage/dispatch/monitor workflows are disabled (same guard as the retired v1 `ISSUE_PIPELINE=on` switch). |
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
 | `WIP_LIMIT` | repo variable | Temporary. `off` lifts the Ready queue cap (`limits.wip`) for every tick, so Ready issues launch without waiting for a free slot. Any other value, or unset, keeps the committed limit. Remove the variable to restore it. |
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
@@ -293,6 +293,7 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-SOAK-008 | Spec and review agents must not edit the issue body to evade launch safety (`detectRiskyScope` in `.github/scripts/triage-lib.js`, `preflightIssue` in `agent-safety-lib.js`): e.g. rewording **Security or Sensitive Area** to `No` while the plan still describes security/crypto escalation. Use **`Blocked=decision`** and leave the body truthful. Soak2 #2495: spec passed, then review edited the body to drop keyword tripwires | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-PREFLIGHT-001 | Delivery preflight keyword scan ignores bodies under **`### Out of scope`** / `Out-of-scope`; title, preamble, and all other sections still count. **Security or Sensitive Area: Yes** is unchanged. Soak2 #2507/#2499/#2498/#2508 launch-failed on exclusion-list keywords in whole-body scan | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-PREFLIGHT-002 | Ready delivery: `preflight: risky scope detected` → next tick `Blocked=sensitive` (`ready.risky-scope`); no launch backoff. With label `owner-approved-delivery`, the engine does not set `sensitive` and may `ready.launch`; preflight skips risky-scope. Owner workflow: clear `Blocked`, add the label (or fix the body); manual delivery remains valid | Accepted (owner, 2026-11-23) |
+| PIPE-V2-D-DISPATCH-001 | **Retire v1 pipeline dispatcher.** Delete `issue-pipeline-dispatcher.yml`, `issue-pipeline-todo.yml`, and assignee-driven lane scripts. All stage transitions are pipeline v2 (`issue-pipeline-v2.yml`) or, until `ISSUE_PIPELINE_V2=on`, the legacy label flow. `pipeline_health` schedule staleness is not ported. `<!-- pipeline-state -->` markers and `scripts/lib/pipeline_state_trust.js` stay for execute-plan auto-approve on issues that still carry them | Accepted (2026-11-24) |
 | PIPE-V2-D-RUNNER-001 | Claude runner WIP (`limits.runnerWip.claude`, default **3** when unset): counts active `pipeline-claude-run.yml` jobs. On cap, defer with label **`queued`** and `ring-doorbell` while pickup is within `reviewTimeoutMin`; after that, normal timeout/reassign (e.g. Cursor). Real doorbell failures clear **`queued`** so `ringFailed` can reassign. Cursor runners have no repo-side cap. Owner agreed **3** concurrent Claude runs (2026-11-21). Agents remove `queued` via `clear-queued` at doorbell start or `finish-work` when done | Accepted (2026-11-21) |
 | PIPE-V2-D-REV3-001 | Review process v3 (revision 3): proposal in [`changes/pipeline-v2-review-process-v3.md`](./changes/pipeline-v2-review-process-v3.md). When accepted and delivered (P1–P6), replaces In analysis adversarial pickup/convergence (#2385) and review lanes (#2428); identity-based convergence, tier-a/tier-b rounds, challenge label, watchers and event triggers per that doc. Until then, §Review (shipped) and `decideInAnalysis` behaviour remain authoritative | Proposed |
 | PIPE-V2-D-REV3-002 | **Unit of independence is the run.** Every doorbell starts a new agent of a type (`cursor-a`, `claude-a`, `cursor-b`, `claude-b`). A run never comes back: the next call to the same type is a different agent, including when that type wrote the spec. Type (brand and tier) chooses who is called next and nothing else; it never decides whether a vote counts. Shared logins do not matter for independence | Accepted (owner, 2026-11-22) |
@@ -311,9 +312,9 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-P2-001 | Shared-login Claude identities (claude-a, claude-b on `pawpet-claude`) vote only by signed verdict, like the Cursor pair. A reaction from a shared login is not a vote on either the spec path or the review path (the review path had counted it; fixed in P2). The verify step applies the same rule: a shared-login run counts as having acted only when a signed verdict names its agent id and nonce, so a sibling identity on the same login cannot stand in for it. claude-b is tier b on `claude-opus-5-5`, effort medium. Until P4 the tier is recorded but not used for the challenge. Superseded by PIPE-V2-D-REV3-004: the pre-challenge pool is tier a only, so claude-b does not take spec or review rings | Proposed (P2 of [review process v3](./changes/pipeline-v2-review-process-v3.md)) |
 | PIPE-AAT-D-009 | Inconclusive and timeout share `maxInconclusive`, then `Blocked=stalled`. Product fails are not a two-strike `Blocked=decision` cap. This supersedes #2424 owner decision 3 for the In Main gate | Accepted for this issue |
 
-## Live workflow (legacy, until `ISSUE_PIPELINE=on`)
+## Live workflow (legacy, until `ISSUE_PIPELINE_V2=on`)
 
-When `ISSUE_PIPELINE` is `on`, this section is **historical only** — use [§Planned workflows by status](#planned-workflows-by-status) and the dispatcher instead. After cutover, remove stale `human-reviewed` / `agent-approved` / `Agent1:*` labels from open issues (spec §14.4).
+When `ISSUE_PIPELINE_V2` is `on`, this section is **historical only** — use [§Pipeline v2](#pipeline-v2-the-stage-machine). After cutover, remove stale `human-reviewed` / `agent-approved` / `Agent1:*` labels from open issues where they no longer apply.
 
 ```
 Backlog → In Analysis (+ human-reviewed) → [Auto Check] → Ready → In progress → In Main → In UAT → Done
@@ -341,7 +342,7 @@ To re-run triage after updating an issue, re-add `human-reviewed` (triage clears
 
 ## Cursor agent execution layer
 
-**Legacy dispatch** applies while `ISSUE_PIPELINE` is not `on`. With `ISSUE_PIPELINE=on`, implement and monitor run only through `issue-pipeline-dispatcher.yml` (and lane workflows for manual soak).
+**Legacy dispatch** applies while `ISSUE_PIPELINE_V2` is not `on`. With `ISSUE_PIPELINE_V2=on`, triage, dispatch, and monitor label workflows are skipped; delivery and release run only through `issue-pipeline-v2.yml` and the handlers that respect v2 ownership.
 
 GitHub remains the source of truth. Cursor Cloud Agents are workers that implement `agent-approved` issues.
 

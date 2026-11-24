@@ -14,7 +14,7 @@ permissions:
 jobs:
   monitor:
     name: Monitor Cursor agent runs
-    if: vars.ISSUE_PIPELINE != 'on'
+    if: vars.ISSUE_PIPELINE_V2 != 'on'
     runs-on: ubuntu-latest
     environment: automation
     timeout-minutes: 15
