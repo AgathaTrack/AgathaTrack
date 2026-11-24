@@ -29,6 +29,11 @@ on:
         description: Public reference for the run name and status lookup (not the nonce)
         required: true
         type: string
+      merge_sha:
+        description: Merge commit an acceptance run judges (40-char sha); empty for every other stage
+        required: false
+        default: ''
+        type: string
 
 run-name: pipeline-claude-${{ inputs.run_ref }}
 
@@ -58,6 +63,7 @@ jobs:
           INPUT_STAGE: ${{ inputs.stage }}
           INPUT_AGENT_ID: ${{ inputs.agent_id }}
           INPUT_METHOD: ${{ inputs.method }}
+          INPUT_MERGE_SHA: ${{ inputs.merge_sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
         run: node scripts/pipeline_claude_prepare.js

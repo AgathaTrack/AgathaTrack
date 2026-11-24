@@ -10,6 +10,14 @@
  * `status()` return `failed`, and the next live tick reassigns at once (`ringFailed`).
  */
 
+const { METHOD_PROMPTS, fillPrompt } = require('./issue_pipeline_v2_launch');
+
+/** Stages with a doorbell task prompt; delivery uses METHOD_PROMPTS instead. */
+const DOORBELL_STAGES = new Set(['To do', 'In analysis', 'In Main', 'acceptance']);
+
+/** A full commit sha, the only form a `merge_sha` input may take. */
+const MERGE_SHA = /^[0-9a-f]{40}$/;
+
 /** The engine comment a doorbell stage answers. Stages without one (acceptance) have no reaction. */
 const REQUEST_MARKERS = {
   'To do': 'v2:spec-request',
@@ -147,12 +155,54 @@ function buildClaudeArgs(agent) {
   return `${base} --model ${model}`;
 }
 
+/**
+ * The task text for the run. An acceptance task names the merge it judges. A run with no valid merge
+ * is refused before it starts, so it never verifies a placeholder or a merge it was not given.
+ */
+function buildStageTask({ stage, method, prompts, number, mergeSha }) {
+  if (stage && DOORBELL_STAGES.has(stage)) {
+    if (stage === 'acceptance' && !MERGE_SHA.test(String(mergeSha || ''))) {
+      throw new Error('acceptance run has no valid merge_sha; refusing to start without the merge it judges');
+    }
+    return fillPrompt(prompts[stage], { number, mergeSha });
+  }
+  return METHOD_PROMPTS[method];
+}
+
+const AAT_VERDICT = /<!--\s*v2:aat\s+verdict=(?:pass|fail|inconclusive)\b([^>]*)-->/;
+const AAT_MERGE = /\bmerge=([0-9a-f]{40})\b/;
+
+/**
+ * An acceptance run is judged by its own verdict on this merge: a `v2:aat verdict=… merge=<sha>`
+ * comment from the run's login, posted after it started. Any other comment does not count.
+ */
+function acceptanceEvidence({ comments, actsAs, mergeSha, sinceMs }) {
+  if (!MERGE_SHA.test(String(mergeSha || ''))) {
+    return { ok: false, evidence: null, reason: 'acceptance run has no valid merge_sha' };
+  }
+  const login = String(actsAs || '').toLowerCase();
+  const verdict = (comments || []).find((entry) => {
+    if (String(entry.user?.login || '').toLowerCase() !== login) return false;
+    if (!(Date.parse(entry.created_at) >= sinceMs - SKEW_MS)) return false;
+    const marker = AAT_VERDICT.exec(entry.body || '');
+    const merge = marker && AAT_MERGE.exec(marker[0]);
+    return Boolean(merge && merge[1] === mergeSha);
+  });
+  return verdict
+    ? { ok: true, evidence: `verdict ${verdict.id}` }
+    : { ok: false, evidence: null, reason: 'no acceptance verdict on this merge' };
+}
+
 module.exports = {
   REQUEST_MARKERS,
   SKEW_MS,
+  DOORBELL_STAGES,
+  MERGE_SHA,
   bodyHasRequestMarker,
   findRequestComment,
   reactionHint,
   runEvidence,
+  acceptanceEvidence,
+  buildStageTask,
   buildClaudeArgs,
 };

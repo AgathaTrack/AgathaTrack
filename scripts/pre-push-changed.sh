@@ -233,6 +233,7 @@ run_governance() {
   node --test scripts/issue_pipeline_repair.test.js
   run_prepush_gate issue-pipeline-v2-tests
   node --test scripts/pipeline_runners/claude.test.js
+  node --test scripts/pipeline_claude_run_lib.test.js
   node --test .github/scripts/pipeline-v2-owner.test.js
   node --test .github/scripts/issue-agent-handlers.test.js
   node --test .github/scripts/github-project-lib.test.js

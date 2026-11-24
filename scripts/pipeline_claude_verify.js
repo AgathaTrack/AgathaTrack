@@ -11,9 +11,9 @@
 const { parseRepo } = require('../.github/scripts/github-project-lib');
 const { loadConfig, resolveAgent, isSharedActsAs } = require('./issue_pipeline_v2_config');
 const { listIssueComments, listCommentReactions } = require('./issue_pipeline_v2_comments');
-const { findRequestComment, runEvidence } = require('./pipeline_claude_run_lib');
+const { findRequestComment, runEvidence, acceptanceEvidence } = require('./pipeline_claude_run_lib');
 
-async function verify({ owner, repo, issueNumber, stage, agentId, nonce, sinceMs, token, deps = {} }) {
+async function verify({ owner, repo, issueNumber, stage, agentId, nonce, mergeSha, sinceMs, token, deps = {} }) {
   const config = deps.config || loadConfig();
   const agent = resolveAgent(config, agentId);
   if (!agent) {
@@ -22,6 +22,10 @@ async function verify({ owner, repo, issueNumber, stage, agentId, nonce, sinceMs
   const listComments = deps.listIssueComments || listIssueComments;
   const listReactions = deps.listCommentReactions || listCommentReactions;
   const comments = await listComments({ owner, repo, issueNumber, token });
+  // An acceptance run answers with its verdict on the merge it judges, not with a reaction or a request reply.
+  if (stage === 'acceptance') {
+    return acceptanceEvidence({ comments, actsAs: agent.actsAs, mergeSha, sinceMs });
+  }
   const request = findRequestComment({ comments, stage, engineLogins: config.engine.logins });
   const shared = isSharedActsAs(config, agent.actsAs);
   // A shared login's reactions cannot name the run, so they are not read at all.
@@ -44,6 +48,7 @@ async function main() {
     stage: process.env.PIPELINE_STAGE,
     agentId: process.env.PIPELINE_AGENT_ID,
     nonce: process.env.PIPELINE_RUN_NONCE,
+    mergeSha: process.env.PIPELINE_MERGE_SHA,
     sinceMs,
     token,
   });

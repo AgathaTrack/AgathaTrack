@@ -131,3 +131,23 @@ test('claude launch without a nonce is refused before any dispatch', async () =>
   );
   assert.equal(calls.length, 0);
 });
+
+test('an acceptance launch dispatches the merge it judges as merge_sha', async () => {
+  const calls = [];
+  const SHA = 'c'.repeat(40);
+  await launch({
+    agent: { id: 'claude-a' }, issue: { number: 42 }, owner: 'o', repo: 'r', stage: 'acceptance', method: 'PR',
+    nonce: 'abc123', purpose: 'doorbell', mergeSha: SHA, config: { limits: { runnerWip: { claude: 3 } } },
+    deps: {
+      restFn: async (method, path, token, body) => {
+        if (path.includes('/runs?')) return { workflow_runs: [] };
+        calls.push(body);
+        return {};
+      },
+      dispatchToken: 'pat',
+      randomRef: () => 'ref7',
+    },
+  });
+  assert.equal(calls[0].inputs.merge_sha, SHA);
+  assert.equal(calls[0].inputs.stage, 'acceptance');
+});
