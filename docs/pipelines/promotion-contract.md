@@ -11,7 +11,7 @@ tags: [uat, promotion, pipeline]
 Canonical reference for **auto-promotion** on `AgathaTrack/AgathaTrack`: merge to
 `main` → Pre-UAT E2E → UAT tag → UAT deploy → prod stub/release tag.
 
-Pipeline tiers: [e2e/uat-deploy-tiers.md](./e2e/uat-deploy-tiers.md).
+Pipeline tiers: [e2e/uat-deploy-tiers.md](../e2e/uat-deploy-tiers.md).
 
 Implementation phases: PR **#A** (ci-gate) through **#F** (doc cleanup). Phase **#D**
 (prod stub + auto semver) is implemented in `deploy-prod.yml`. Phase **#E**
@@ -148,7 +148,7 @@ to every `uat-*` tag before building (`scripts/ci/assert-uat-tag-commit-on-main.
 | unset / `false` | **Skipped** | `vX.Y.Z-rc.N` | **Success** — job `Production deploy skipped (intentional)` |
 | `true` | Full `deploy-prod.yml` path | Stable `vX.Y.Z` | Success after smoke |
 
-When `PROD_DEPLOY_ENABLED=true`, repository/environment variable **`PROD_PUBLIC_MODE`** must be exactly `coming_soon` or `app` (fail closed if unset/invalid). Frontend path and post-deploy smoke expectations are documented in [ops/public-access.md](./ops/public-access.md) (canonical truth table for teaser vs Flutter promote).
+When `PROD_DEPLOY_ENABLED=true`, repository/environment variable **`PROD_PUBLIC_MODE`** must be exactly `coming_soon` or `app` (fail closed if unset/invalid). Frontend path and post-deploy smoke expectations are documented in [ops/public-access.md](../ops/public-access.md) (canonical truth table for teaser vs Flutter promote).
 
 Step summary must state explicitly:
 

@@ -204,5 +204,5 @@ See `DEMO_IDS` in `server/db/seeds/demo-constants.js`.
 ## Related
 
 - [uat-demo-personas.md](./uat-demo-personas.md) — short credential reference (legacy alias)
-- [db-schema-bootstrap-plan.md](../db-schema-bootstrap-plan.md) — seed layer design (Phase 4)
+- [db-schema-bootstrap-plan.md](../pipelines/db-schema-bootstrap-plan.md) — seed layer design (Phase 4)
 - [uat-deploy-tiers.md](./uat-deploy-tiers.md) — deploy pipeline (reset is **not** part of deploy)

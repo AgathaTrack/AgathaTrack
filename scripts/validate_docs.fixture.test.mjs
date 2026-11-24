@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   extractMarkdownLinks,
+  findMarkdownFiles,
+  headingAnchorSlug,
   stripInlineCode,
   validateLink,
   validateRepoMarkdownLinks,
@@ -28,18 +30,6 @@ function copyCheckDocPlacement(root) {
     path.join(root, 'server/node_modules/js-yaml'),
     { recursive: true },
   );
-}
-
-function writeFixtureTree(root) {
-  const libDir = path.join(root, 'scripts/lib');
-  fs.mkdirSync(libDir, { recursive: true });
-  fs.copyFileSync(
-    path.join(REPO_ROOT, 'scripts/lib/validate_markdown_links.mjs'),
-    path.join(libDir, 'validate_markdown_links.mjs'),
-  );
-  fs.chmodSync(path.join(root, 'scripts/validate_docs.sh'), 0o755);
-  fs.copyFileSync(path.join(REPO_ROOT, 'scripts/validate_docs.sh'), path.join(root, 'scripts/validate_docs.sh'));
-  copyCheckDocPlacement(root);
 }
 
 test('check_doc_placement fails on deliberate misplaced root doc (docs validation gate)', () => {
@@ -112,9 +102,44 @@ test('universal_babysit.sh documents --pr and --dry-run in usage', () => {
 
 test('auto_fix_docs.sh is executable bash with documented --pr invocation', () => {
   const scriptPath = path.join(REPO_ROOT, 'scripts/auto_fix_docs.sh');
+  const text = fs.readFileSync(scriptPath, 'utf8');
   const mode = fs.statSync(scriptPath).mode & 0o111;
   assert.ok(mode, 'auto_fix_docs.sh must be executable');
-  const head = fs.readFileSync(scriptPath, 'utf8').split('\n').slice(0, 5).join('\n');
-  assert.match(head, /^#!\/bin\/bash/);
-  assert.match(fs.readFileSync(scriptPath, 'utf8'), /--pr/);
+  assert.match(text.split('\n').slice(0, 5).join('\n'), /^#!\/bin\/bash/);
+  assert.match(text, /--pr/);
+});
+
+test('heading anchor slug never leaves angle brackets (CodeQL incomplete sanitization)', () => {
+  assert.equal(headingAnchorSlug('## My Heading'), 'my-heading');
+  assert.doesNotMatch(headingAnchorSlug('## <scr<script>ipt>x'), /[<>]/);
+});
+
+test('heading anchors: valid fragment passes, missing fragment fails', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-anchors-'));
+  fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'docs', 'target.md'), '# Target\n\n## My Heading\n');
+  const page = path.join(root, 'docs', 'index.md');
+  fs.writeFileSync(page, '# Index\n');
+  assert.equal(validateLink(root, page, './target.md#my-heading'), null);
+  assert.match(validateLink(root, page, './target.md#missing-heading'), /missing heading anchor/);
+});
+
+test('relative ./ and ../ targets resolve only from their source file (no fallback match)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-relative-'));
+  fs.mkdirSync(path.join(root, 'docs', 'guides'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'README.md'), '# root readme\n');
+  const page = path.join(root, 'docs', 'guides', 'page.md');
+  fs.writeFileSync(page, '# Page\n');
+  // A repo-root README exists, but ../README.md from docs/guides/ is a dead link.
+  assert.match(validateLink(root, page, '../README.md'), /missing target/);
+});
+
+test('findMarkdownFiles scans .agents/ and documents regulatory/ as an intentional exclusion', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-scope-'));
+  for (const rel of ['.agents/plans/a.md', 'regulatory/legal/en/b.md', 'docs/c.md']) {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), '# x\n');
+  }
+  const files = findMarkdownFiles(root).map((p) => path.relative(root, p)).sort();
+  assert.deepEqual(files, ['.agents/plans/a.md', 'docs/c.md']);
 });

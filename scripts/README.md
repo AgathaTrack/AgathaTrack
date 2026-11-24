@@ -17,7 +17,7 @@ Supported entry points for documentation validation, PR babysitting, and local p
 | Docs PR auto-fix | `./scripts/auto_fix_docs.sh --pr <n> [--dry-run]` | May commit doc fixes on the PR branch | `node --test scripts/validate_docs.fixture.test.mjs` (invocation contract) | [BABYSIT_README](./BABYSIT_README.md#auto-fix-script-auto_fix_docssh) |
 | Universal babysit | `./scripts/universal_babysit.sh --pr <n> [--merge] [--dry-run]` | Syncs base, triages reviews, may commit/push fixes; stops on push failure | `node --test scripts/validate_docs.fixture.test.mjs` (invocation + push guard) | [BABYSIT_README](./BABYSIT_README.md#universal-babysit-universal_babysitsh) |
 | Review gate (used by helpers) | `node scripts/babysit_pr_reviews.js gate --pr <url>` | Read-only thread collection | `node --test scripts/babysit_pr_reviews.test.js` | [`babysit-plus` skill](/.cursor/skills/babysit-plus/SKILL.md) |
-| Base sync (used by helpers) | `./scripts/babysit_sync_base.sh --pr <n> --push` | May rebase and push the PR branch | `bash scripts/test/check_babysit_sync_base.test.sh` (if present) | [BABYSIT_README](./BABYSIT_README.md) |
+| Base sync (used by helpers) | `./scripts/babysit_sync_base.sh --pr <n> --push` | May rebase and push the PR branch | `node --test scripts/ccr_gh_shim.test.js` | [BABYSIT_README](./BABYSIT_README.md) |
 
 ## Pre-push
 

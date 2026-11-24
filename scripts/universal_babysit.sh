@@ -392,12 +392,19 @@ push_iteration_changes() {
   fi
   git add -A
   if git diff --cached --quiet; then
-    echo "  No changes to push"
-    return 0
-  fi
-  if ! git commit -m "$message"; then
-    echo -e "  ${RED}Commit failed; stopping (will not trust CI on stale PR head)${NC}" >&2
-    exit 1
+    # A commit made earlier (for example by conflict resolution) may be ahead of its upstream and unpushed.
+    local ahead
+    ahead=$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
+    if [[ "$ahead" -eq 0 ]]; then
+      echo "  No changes to push"
+      return 0
+    fi
+    echo "  Pushing ${ahead} existing local commit(s)"
+  else
+    if ! git commit -m "$message"; then
+      echo -e "  ${RED}Commit failed; stopping (will not trust CI on stale PR head)${NC}" >&2
+      exit 1
+    fi
   fi
   if ! git push origin HEAD --force-with-lease; then
     echo -e "  ${RED}Push failed; stopping (will not continue to CI on stale head)${NC}" >&2

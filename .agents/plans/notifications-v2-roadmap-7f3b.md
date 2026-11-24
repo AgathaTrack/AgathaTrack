@@ -22,7 +22,7 @@ status: active
 
 ## Goal
 
-Orchestrate Notifications v2 from **spec rev 2.3.1 on `main`** through **PR7** (account security), then **integration → `main`**. PR8 (subscription) is **skipped** until billing provider + server entitlement source. Programme index: [notifications-v2-programme.md](../../docs/domains/notifications/changes/notifications-v2-programme.md).
+Orchestrate Notifications v2 from **spec rev 2.3.1 on `main`** through **PR7** (account security), then **integration → `main`**. PR8 (subscription) is **skipped** until billing provider + server entitlement source. Programme index: [notifications-v2-spec.md](../../docs/domains/notifications/features/notifications-v2-spec.md).
 
 ## Autonomy
 

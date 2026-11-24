@@ -38,6 +38,7 @@ export function headingAnchorSlug(text) {
   return text
     .replace(/^#+\s*/, '')
     .replace(/<[^>]+>/g, '')
+    .replace(/[<>]/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/[*_`~]/g, '')
     .replace(/\s*\u2014\s*/g, '--')
@@ -124,37 +125,13 @@ function targetExists(absPath, isDir) {
   return false;
 }
 
-function fallbackCandidatePaths(repoRoot, sourceFile, pathPart) {
-  const relSource = path.relative(repoRoot, sourceFile);
-  const candidates = [];
+// Legacy fallback: a bare `docs/…` path may resolve from the repo root. Relative `./` and `../` targets
+// resolve only from their source file; a dead relative link must fail, never match another file.
+function fallbackCandidatePaths(repoRoot, pathPart) {
   if (pathPart.startsWith('docs/')) {
-    candidates.push(path.join(repoRoot, pathPart));
+    return [path.join(repoRoot, pathPart)];
   }
-  if (relSource.startsWith(`docs${path.sep}`) && pathPart.startsWith('./')) {
-    candidates.push(path.join(repoRoot, 'docs', pathPart.slice(2)));
-  }
-  if (/^\.\.\/[^/]+$/.test(pathPart)) {
-    candidates.push(path.join(repoRoot, path.basename(pathPart)));
-  }
-  if (/^\.\.\/\.github\//.test(pathPart)) {
-    candidates.push(path.join(repoRoot, pathPart.replace(/^\.\.\//, '')));
-  }
-  if (relSource.startsWith(`docs${path.sep}`) && pathPart.startsWith('../e2e/')) {
-    candidates.push(path.join(repoRoot, 'e2e', pathPart.slice('../e2e/'.length)));
-  }
-  if (relSource.startsWith(`docs${path.sep}`) && pathPart.startsWith('../scripts/')) {
-    candidates.push(path.join(repoRoot, 'scripts', pathPart.slice('../scripts/'.length)));
-  }
-  if (relSource.startsWith(`docs${path.sep}`) && pathPart.startsWith('../pipelines/')) {
-    candidates.push(path.join(repoRoot, 'docs', 'pipelines', pathPart.slice('../pipelines/'.length)));
-  }
-  if (relSource.startsWith(`docs${path.sep}`) && pathPart === '../db-schema-bootstrap-plan.md') {
-    candidates.push(path.join(repoRoot, 'docs', 'pipelines', 'db-schema-bootstrap-plan.md'));
-  }
-  if (relSource.startsWith(`docs${path.sep}`) && pathPart === '../e2e-navigation-contract.md') {
-    candidates.push(path.join(repoRoot, 'e2e', 'e2e-navigation-contract.md'));
-  }
-  return candidates;
+  return [];
 }
 
 function resolveExistingPath(repoRoot, sourceFile, pathPart, isDir) {
@@ -162,7 +139,7 @@ function resolveExistingPath(repoRoot, sourceFile, pathPart, isDir) {
   if (targetExists(absPath, isDir)) {
     return absPath;
   }
-  for (const candidate of fallbackCandidatePaths(repoRoot, sourceFile, pathPart)) {
+  for (const candidate of fallbackCandidatePaths(repoRoot, pathPart)) {
     if (targetExists(candidate, isDir)) {
       return candidate;
     }
@@ -215,7 +192,9 @@ export function validateLink(repoRoot, sourceFile, rawTarget) {
 }
 
 export function findMarkdownFiles(repoRoot) {
-  const skip = new Set(['.git', 'node_modules', 'artifacts', '.agents', 'regulatory']);
+  // regulatory/ holds legal-notice templates whose link text is placeholder (for example `(link-to-privacy-notice)`);
+  // it is an intentional exclusion, covered by a fixture test.
+  const skip = new Set(['.git', 'node_modules', 'artifacts', 'regulatory']);
   const results = [];
   function walk(dir) {
     for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {

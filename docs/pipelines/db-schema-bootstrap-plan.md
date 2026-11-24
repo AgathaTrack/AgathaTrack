@@ -11,7 +11,7 @@ tags: [database, bootstrap, plan]
 **Status:** Phase 3 complete (fast bootstrap). Phases 4–5 tracked in execute-plan `db-schema-bootstrap-345`.  
 **Principle:** Forward-only migrations are the production authority. The canonical schema is a **CI-verified snapshot** for fast bootstraps and drift detection — not a hand-edited alternate truth.
 
-See also: [DEPLOYMENT_DB.md](../DEPLOYMENT_DB.md) (deploy commands), [calendar-dates.md](../architecture/calendar-dates.md) (wire format).
+See also: [DEPLOYMENT_DB.md](../../DEPLOYMENT_DB.md) (deploy commands), [calendar-dates.md](../architecture/calendar-dates.md) (wire format).
 
 ---
 
