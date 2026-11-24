@@ -55,6 +55,7 @@ jobs:
             scripts/ci/append-summary.sh
             scripts/lib/resolve_prod_dispatch_guard.js
             scripts/lib/execute_plan_github.js
+            scripts/lib/ccr_gh_shim_lib.js
             scripts/lib/execute_plan_uat_observe.js
             scripts/lib/main_ancestry.js
             .github/execute-plan.config.json
@@ -65,6 +66,7 @@ jobs:
             scripts/issue_pipeline_v2_comments.js
             scripts/issue_pipeline_v2_config.js
             scripts/issue_pipeline_v2_decide.js
+            scripts/issue_pipeline_v2_rounds.js
             scripts/issue_pipeline_v2_fields.js
             scripts/issue_pipeline_v2_intent.js
             scripts/issue_pipeline_v2_launch.js
