@@ -112,6 +112,8 @@ node e2e/scripts/shard-files.mjs --summary
 
 When changing shard count, update `SHARD_TOTAL` in `shard-files.mjs`, `matrix.shard` / `shard_total` in `pre-uat-e2e.yml`, `e2e.yml`, and `_reusable-e2e-local.yml` together.
 
+`npm run test:ci-shard` sets Playwright **`globalTimeout`** from `shard-files.mjs` (`spec-durations` load + 10 min) so a hung spec fails with a runner timeout instead of sitting until the Actions job cap (45 min).
+
 **PR pre-merge E2E:** `ci.yml` job `ci-e2e-affected` runs a bounded subset of specs on localhost (`e2e/scripts/select-affected-specs.mjs`: ≤720 s, ≤2 legs) when the PR diff is E2E-only. E2E-only PRs skip the Flutter unit stack but still build web (often from cache) and run `@smoke-ci`. Backend-only PRs do not run affected legs.
 
 ```bash
