@@ -13,7 +13,9 @@
 # Exit codes: 0 up to date (or rebase ok), 1 behind (--check / --no-rebase), 2 usage/error, 3 rebase conflict
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Operate on the checkout the caller is in (git toplevel of cwd), not the checkout that holds this script.
+# Before this, a run from another worktree compared the script's own checkout and reported a false "behind".
+ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 BASE="main"

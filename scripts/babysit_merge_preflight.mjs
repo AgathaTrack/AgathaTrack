@@ -122,8 +122,9 @@ function removeLeaseLabel(prNumber) {
 
 function syncBaseCheck(pr) {
   const script = path.join(repoRoot, 'scripts', 'babysit_sync_base.sh');
+  // The sync check must inspect the checkout the agent is in, not the one holding this script.
   const result = spawnSync(script, ['--pr', String(pr), '--check'], {
-    cwd: repoRoot,
+    cwd: process.cwd(),
     encoding: 'utf8',
   });
   if (result.status === 0) {

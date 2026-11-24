@@ -14,7 +14,11 @@ const {
   findRealGh,
   isBabysitReviewThreadsQuery,
   parseFieldFlags,
+  checkRollupFromRest,
+  mergeableFromRest,
+  planPrSnapshot,
   planPrView,
+  pullSnapshot,
   slugFromRemote,
 } = require('./lib/ccr_gh_shim_lib');
 
@@ -270,8 +274,160 @@ test('e2e: unchanged babysit_sync_base.sh --pr reads the PR base through the wra
   assert.match(result.stdout, /behind origin\/main by 1 commit\(s\) \(1 ahead\)/);
 });
 
+test('e2e: babysit_sync_base.sh counts against the checkout it is run in, not the one holding the script', { skip: !hasJq && 'jq not installed' }, () => {
+  // Script from the wrapper's checkout (ROOT), run from a scratch repo that is behind main by one commit.
+  const { dir, work } = syncBaseRepo();
+  const fake = path.join(dir, 'fake-gh');
+  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ 'api repos/o/r/pulls/7': { base: { ref: 'main' }, head: { ref: 'feature' } } }));
+  const result = spawnSync('bash', [path.join(ROOT, 'scripts/babysit_sync_base.sh'), '--pr', 'https://github.com/o/r/pull/7', '--check'], {
+    cwd: work,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${BIN_DIR}${path.delimiter}${process.env.PATH}`, REAL_GH: fake, FAKE_GH_ROUTES: path.join(dir, 'routes.json') },
+  });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /behind origin\/main by 1 commit\(s\) \(1 ahead\)/);
+});
+
 test('e2e: babysit_sync_base.sh --pr uses the base the PR names, not main (up to date with release → exit 0)', { skip: !hasJq && 'jq not installed' }, () => {
   const result = runSyncBase('release');
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /up to date with origin\/release \(1 commit\(s\) ahead\)/);
 });
+
+// Merge-preflight reads (scripts/babysit_merge_preflight.mjs) answered from REST.
+const REMOTE = 'git@github.com:o/r.git';
+
+test('planPrSnapshot maps the preflight calls to REST plans', () => {
+  assert.deepEqual(planPrSnapshot(['repo', 'view', '--json', 'nameWithOwner'], { remoteUrl: REMOTE }), { kind: 'repo', slug: 'o/r' });
+  assert.deepEqual(
+    planPrSnapshot(['pr', 'view', '7', '--json', 'number,mergeable,statusCheckRollup'], { remoteUrl: REMOTE }),
+    { kind: 'view', slug: 'o/r', number: '7', fields: ['number', 'mergeable', 'statusCheckRollup'] },
+  );
+  assert.deepEqual(
+    planPrSnapshot(['pr', 'view', 'https://github.com/x/y/pull/9', '--json', 'labels'], { remoteUrl: REMOTE }),
+    { kind: 'view', slug: 'x/y', number: '9', fields: ['labels'] },
+  );
+  assert.deepEqual(
+    planPrSnapshot(['pr', 'list', '--state', 'open', '--base', 'cursor/a-integration-1', '--limit', '50', '--json', 'number,mergeable'], { remoteUrl: REMOTE }),
+    { kind: 'list', slug: 'o/r', base: 'cursor/a-integration-1', limit: 50, fields: ['number', 'mergeable'] },
+  );
+});
+
+test('planPrSnapshot leaves other calls to the real gh (or to planPrView for --jq)', () => {
+  assert.equal(planPrSnapshot(['pr', 'view', '7', '--json', 'number', '--jq', '.number'], { remoteUrl: REMOTE }), null);
+  assert.equal(planPrSnapshot(['pr', 'view', '7', '--json', 'title,body'], { remoteUrl: REMOTE }), null);
+  assert.equal(planPrSnapshot(['pr', 'list', '--state', 'open', '--base', 'main', '--limit', '500', '--json', 'number'], { remoteUrl: REMOTE }), null);
+  assert.equal(planPrSnapshot(['pr', 'merge', '7', '--squash'], { remoteUrl: REMOTE }), null);
+  assert.equal(planPrSnapshot(['repo', 'view', '--json', 'url'], { remoteUrl: REMOTE }), null);
+});
+
+test('planPrSnapshot fails closed without an origin remote', () => {
+  assert.throws(() => planPrSnapshot(['repo', 'view', '--json', 'nameWithOwner'], { remoteUrl: null }), /origin remote/);
+});
+
+test('mergeableFromRest maps REST values to GraphQL enums', () => {
+  assert.equal(mergeableFromRest(true), 'MERGEABLE');
+  assert.equal(mergeableFromRest(false), 'CONFLICTING');
+  assert.equal(mergeableFromRest(null), 'UNKNOWN');
+});
+
+test('checkRollupFromRest: completed success is green, in-progress is pending, failures are not green', () => {
+  const rollup = checkRollupFromRest({
+    checkRuns: [
+      { name: 'ci-gate', status: 'completed', conclusion: 'success' },
+      { name: 'neutral', status: 'completed', conclusion: 'neutral' },
+      { name: 'slow', status: 'in_progress', conclusion: null },
+      { name: 'broken', status: 'completed', conclusion: 'failure' },
+    ],
+    statuses: [{ context: 'legacy/ci', state: 'success' }],
+  });
+  assert.deepEqual(rollup.map((c) => c.state), ['SUCCESS', 'NEUTRAL', 'PENDING', 'FAILURE', 'SUCCESS']);
+  assert.equal(rollup[0].__typename, 'CheckRun');
+  assert.equal(rollup[4].__typename, 'StatusContext');
+});
+
+test('pullSnapshot returns exactly the requested fields in GraphQL shape', () => {
+  const pull = {
+    number: 7,
+    html_url: 'https://github.com/o/r/pull/7',
+    base: { ref: 'main' },
+    head: { ref: 'feature', sha: 'abc' },
+    labels: [{ name: 'busy', color: 'ffffff' }],
+    updated_at: '2026-11-24T00:00:00Z',
+    title: 'T',
+    mergeable: false,
+  };
+  assert.deepEqual(pullSnapshot(pull, ['number', 'url', 'labels', 'mergeable']), {
+    number: 7,
+    url: 'https://github.com/o/r/pull/7',
+    labels: [{ name: 'busy' }],
+    mergeable: 'CONFLICTING',
+  });
+});
+
+test('e2e: gh pr view with snapshot fields is answered from REST, including the CI rollup', () => {
+  const routes = {
+    'api repos/o/r/pulls/7': {
+      number: 7,
+      html_url: 'https://github.com/o/r/pull/7',
+      base: { ref: 'main' },
+      head: { ref: 'feature', sha: 'abc' },
+      labels: [{ name: 'light-plan' }],
+      updated_at: '2026-11-24T00:00:00Z',
+      title: 'T',
+      mergeable: true,
+    },
+    'api --paginate --slurp repos/o/r/commits/abc/check-runs?per_page=100': [
+      { check_runs: [{ name: 'ci-gate', status: 'completed', conclusion: 'success' }, { name: 'slow', status: 'in_progress', conclusion: null }] },
+    ],
+    'api repos/o/r/commits/abc/status?per_page=100': { statuses: [{ context: 'legacy/ci', state: 'success' }] },
+  };
+  const result = runGhWithRoutes(['pr', 'view', 'https://github.com/o/r/pull/7', '--json', 'number,mergeable,labels,statusCheckRollup'], routes);
+  assert.equal(result.status, 0, result.stderr);
+  const out = JSON.parse(result.stdout);
+  assert.equal(out.number, 7);
+  assert.equal(out.mergeable, 'MERGEABLE');
+  assert.deepEqual(out.labels, [{ name: 'light-plan' }]);
+  assert.deepEqual(out.statusCheckRollup.map((c) => c.state), ['SUCCESS', 'PENDING', 'SUCCESS']);
+});
+
+test('e2e: gh pr list --base returns the open PRs, each projected from REST', () => {
+  const routes = {
+    'api repos/o/r/pulls?state=open&base=main&per_page=50': [{ number: 7 }, { number: 8 }],
+    'api repos/o/r/pulls/7': { number: 7, html_url: 'u7', base: { ref: 'main' }, head: { ref: 'f7', sha: 's7' }, labels: [], updated_at: 't', title: 'a', mergeable: null },
+    'api repos/o/r/pulls/8': { number: 8, html_url: 'u8', base: { ref: 'main' }, head: { ref: 'f8', sha: 's8' }, labels: [], updated_at: 't', title: 'b', mergeable: true },
+  };
+  const result = runGhWithRoutes(['pr', 'list', '--state', 'open', '--base', 'main', '--limit', '50', '--json', 'number,mergeable'], routes, syncBaseRepoRemote());
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), [{ number: 7, mergeable: 'UNKNOWN' }, { number: 8, mergeable: 'MERGEABLE' }]);
+});
+
+test('e2e: gh repo view --json nameWithOwner is answered from the origin remote', () => {
+  const result = spawnSync(path.join(BIN_DIR, 'gh'), ['repo', 'view', '--json', 'nameWithOwner'], {
+    encoding: 'utf8',
+    cwd: syncBaseRepoRemote(),
+    env: { ...process.env, REAL_GH: '/nonexistent/gh' },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { nameWithOwner: 'o/r' });
+});
+
+function runGhWithRoutes(args, routes, cwd = undefined) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-gh-snap-'));
+  const fake = path.join(dir, 'fake-gh');
+  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(routes));
+  return spawnSync(path.join(BIN_DIR, 'gh'), args, {
+    encoding: 'utf8',
+    cwd,
+    env: { ...process.env, REAL_GH: fake, FAKE_GH_ROUTES: path.join(dir, 'routes.json') },
+  });
+}
+
+function syncBaseRepoRemote() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-gh-remote-'));
+  spawnSync('git', ['init', '-q'], { cwd: dir });
+  spawnSync('git', ['remote', 'add', 'origin', 'git@github.com:o/r.git'], { cwd: dir });
+  return dir;
+}
