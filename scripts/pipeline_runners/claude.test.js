@@ -118,3 +118,16 @@ test('claude status maps workflow conclusion', async () => {
   assert.equal(await status({ runId: 'cursor-run', owner: 'o', repo: 'r', deps: { restFn } }), 'running', 'not a Claude run id');
   assert.equal(await countActiveClaudeRuns({ owner: 'o', repo: 'r', deps: { restFn } }), 1);
 });
+
+test('claude launch without a nonce is refused before any dispatch', async () => {
+  const calls = [];
+  await assert.rejects(
+    launch({
+      agent: { id: 'claude-a' }, issue: { number: 1 }, owner: 'o', repo: 'r', stage: 'acceptance', method: 'PR',
+      nonce: undefined, purpose: 'doorbell', config: { limits: { runnerWip: { claude: 3 } } },
+      deps: { restFn: async (m, path, t, body) => { calls.push({ m, path, body }); return {}; }, dispatchToken: 't' },
+    }),
+    /claude launch requires nonce/,
+  );
+  assert.equal(calls.length, 0);
+});

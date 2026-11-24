@@ -309,6 +309,8 @@ async function applyAction({ action: decided, ctx }) {
       case 'launch-aat': {
         let run = null;
         let failure = null;
+        // A doorbell run needs a nonce like a round doorbell does: the Claude runner refuses to dispatch without one.
+        const nonce = randomNonceHex();
         try {
           run = ctx.dryRun
             ? { runId: 'dry-run' }
@@ -317,13 +319,16 @@ async function applyAction({ action: decided, ctx }) {
                 stage: 'acceptance',
                 mergeSha: action.mergeSha,
                 purpose: 'doorbell',
+                nonce,
               });
           calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, stage: 'acceptance' } });
         } catch (error) {
           failure = error;
         }
         if (failure) {
-          await comment(buildAatLaunch({ mergeSha: action.mergeSha, failed: true }), 'comment:aat-launch-failed');
+          // The reason is public, so the nonce is removed from it before it is posted.
+          const reason = String(failure?.message ?? failure).split(nonce).join('[redacted]');
+          await comment(buildAatLaunch({ mergeSha: action.mergeSha, failed: true, reason }), 'comment:aat-launch-failed');
           applied.unshift(`aat-launch-failed:${action.agent}`);
           const { acceptance, acceptanceFailReason, ...rest } = action;
           action = rest;

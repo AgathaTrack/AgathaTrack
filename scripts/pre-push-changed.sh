@@ -231,6 +231,8 @@ run_governance() {
   node --test scripts/issue_pipeline_v2_spec.test.js
   node --test scripts/issue_pipeline_v2_review.test.js
   node --test scripts/issue_pipeline_v2_apply.test.js
+  node --test scripts/issue_pipeline_v2_acceptance.test.js
+  node --test scripts/pipeline_runners/claude.test.js
   node --test scripts/issue_pipeline_v2_launch.test.js
   node --test scripts/issue_pipeline_v2_release.test.js
   node --test scripts/issue_pipeline_v2_migrate.test.js
