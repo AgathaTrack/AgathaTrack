@@ -239,19 +239,17 @@ Set by coordinator on `failed`/`remedial`; cleared on `set-barrier` or infra res
 
 #### Queue writer invariant (#2558)
 
-Every write to the marker comment goes through `updateQueueState` in `scripts/lib/uat_queue_sync.js`. It loads the state, applies the mutation, saves, re-reads the marker, and checks the mutation's own effect (for example, the enqueued SHA is present, or the watcher holder matches). If the effect is missing, it reloads and reapplies, up to `attempts` (default 3), then throws `uat_queue_write_conflict`.
+Every write to the marker comment goes through `commitStateMutation` in `scripts/lib/uat_queue_sync.js`. It was introduced as `updateQueueState` in PR #2565 and landed on `main` in its current form via #2564. Each attempt loads the state and applies the mutation to a clone. It re-reads the marker before the write and discards the attempt if the marker revision moved. It patches the comment that attempt read, re-reads the marker, and confirms the saved fingerprint. If the store does not converge, it reapplies, up to `maxAttempts` (default 5), then throws `uat_queue_write_conflict`.
 
-Writers routed through the helper:
+Writers that call the helper:
 
-| Writer | Mutation |
-|--------|----------|
-| `scripts/lib/uat_queue_apply.js` `syncEnqueueAfterMerge` (PR merged to `main`) | `enqueueMutation` |
-| `scripts/lib/uat_queue_apply.js` `ensureQueueEntryForDeployRef` | `ensureEntryInState` |
-| `scripts/lib/uat_queue_apply.js` `syncDeployResult` (UAT deploy result) | ensure entry, then `applyDeployResult` |
-| `scripts/lib/uat_deploy_run_resolve.js` `reconcileFailedPreUatLedger` | enqueue (if absent), mark failed |
-| `scripts/uat_queue_runtime.js` `--write` commands | one mutation per command |
-| `scripts/uat_coordinator_bootstrap.js` marker creation | create empty marker |
-| `.github/scripts/uat-coordinator-dispatch.js` (dormant) | watcher lease, remedial, promote hold |
+| Writer | Call site |
+|--------|-----------|
+| `scripts/lib/uat_queue_apply.js` | `syncEnqueueAfterMerge`, `syncDeployResult`, `ensureQueueEntryForDeployRef` |
+| `scripts/lib/uat_deploy_run_resolve.js` | `reconcileFailedPreUatLedger` |
+| `scripts/uat_queue_runtime.js` | `--write` commands |
+| `scripts/uat_coordinator_bootstrap.js` | marker creation |
+| `.github/scripts/uat-coordinator-dispatch.js` (dormant) | dispatch ledger save |
 | `scripts/ci/uat-queue-recovery.js` (dormant / manual) | stale-watcher release |
 
 No workflow file under `.github/workflows/` is changed. Enqueue stays idempotent on `mergeSha`, so a duplicate event returns `created: false` with no write.
