@@ -12,7 +12,7 @@ function enc(owner, repo, path) {
 /**
  * @returns {Promise<{ runId: string, agentUrl: null }>}
  */
-async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose, config, deps = {} }) {
+async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose, config, mergeSha, deps = {} }) {
   if (!nonce) {
     throw new Error('claude launch requires nonce');
   }
@@ -37,6 +37,8 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
       nonce,
       // The run name and the run id use this public reference, never the nonce (PIPE-V2-D-REV3-011).
       run_ref: runRef,
+      // Acceptance runs judge one merge, so the run is told which one. Other runs send no merge.
+      ...(mergeSha ? { merge_sha: String(mergeSha) } : {}),
     },
   });
   return { runId: `claude:${runRef}`, agentUrl: null };

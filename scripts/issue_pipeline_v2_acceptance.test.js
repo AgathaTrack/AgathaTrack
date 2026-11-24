@@ -546,3 +546,66 @@ test('a missing acceptance field logs once and keeps intent review; an empty val
     else process.env.ISSUE_PIPELINE_V2 = prior;
   }
 });
+
+const AAT_FIELDS = {
+  stage: { id: 1, name: 'Stage', options: ['In Main', 'In progress', 'In UAT'] },
+  blocked: { id: 2, name: 'Blocked', options: ['stalled'] },
+  attempts: { id: 3, name: 'Attempts', options: [] },
+  acceptance: { id: 4, name: 'Acceptance', options: ['Pending', 'Passed', 'Failed', 'Manual', 'Skipped'] },
+  acceptanceFailReason: { id: 5, name: 'Acceptance fail reason', options: ['scope', 'implementation', 'quality'] },
+};
+
+function aatCtx(restFn, extra = {}) {
+  return {
+    owner: 'o', repo: 'r', issueNumber: 7, token: 'pat', config: both, fields: AAT_FIELDS,
+    parsed: { stage: 'In Main', attempts: 1, acceptance: 'Pending', acceptanceFailReason: '' },
+    assignees: [], facts: { launch: { runId: 'r9' }, delivery: { lastMergeSha: SHA } }, dryRun: false, restFn,
+    ...extra,
+  };
+}
+
+test('apply: a Claude AAT launch dispatches the claude run with a nonce', async () => {
+  const claudeRunner = require('./pipeline_runners/claude');
+  const dispatches = [];
+  const restFn = async (method, path, token, body) => {
+    if (path.includes('/runs?')) return { workflow_runs: [] };
+    if (path.includes('/dispatches')) dispatches.push(body);
+    return { id: 1, issue_field_values: [] };
+  };
+  const launchFn = async (args) => launchIssue({
+    ...args,
+    owner: 'o', repo: 'r', issue: { number: 7, labels: [], title: 't', body: 'b' }, token: 'pat', config: both,
+    deps: { lib: { setLabels: async () => {} }, runners: { claude: claudeRunner }, restFn },
+  });
+  const result = await applyAction({
+    action: { type: 'launch-aat', agent: 'claude-a', mergeSha: SHA, row: 'aat.launch', acceptance: 'Pending', acceptanceFailReason: null },
+    ctx: aatCtx(restFn, { launchFn }),
+  });
+  assert.equal(result.applied[0], 'aat-launch:claude-a');
+  assert.equal(dispatches.length, 1, 'one workflow dispatch for the claude run');
+  assert.match(dispatches[0].inputs.nonce, /^[0-9a-f]{32}$/);
+  assert.equal(dispatches[0].inputs.agent_id, 'claude-a');
+});
+
+test('apply: a failed acceptance launch names the reason and never posts the nonce', async () => {
+  const sent = [];
+  const restFn = async (method, path, token, body) => {
+    sent.push({ method, path, body });
+    return { id: 1, issue_field_values: [] };
+  };
+  let nonceSeen = null;
+  const result = await applyAction({
+    action: { type: 'launch-aat', agent: 'claude-a', mergeSha: SHA, row: 'aat.launch', acceptance: 'Pending', acceptanceFailReason: null },
+    ctx: aatCtx(restFn, {
+      launchFn: async ({ nonce }) => {
+        nonceSeen = nonce;
+        throw new Error(`claude launch refused for ${nonce}`);
+      },
+    }),
+  });
+  assert.equal(result.applied[0], 'aat-launch-failed:claude-a');
+  const body = sent[0].body.body;
+  assert.match(body, /v2:aat-launch merge=a{40} failed=1/);
+  assert.match(body, /Starting acceptance failed: claude launch refused for \[redacted\]\./);
+  assert.ok(nonceSeen && !body.includes(nonceSeen), 'the nonce stays secret until the run verdict');
+});

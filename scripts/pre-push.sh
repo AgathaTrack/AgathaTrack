@@ -56,6 +56,10 @@ echo "==> Server (audit + Jest)"
   npm test -- --forceExit
 )
 
+echo "==> Pipeline v2 tests"
+node scripts/ci/run-issue-pipeline-v2-tests.mjs
+node --test scripts/pipeline_claude_run_lib.test.js scripts/pipeline_runners/claude.test.js
+
 echo "==> Flutter (codegen + analyze + active CI shards)"
 (
   cd flutter_app

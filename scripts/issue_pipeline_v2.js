@@ -426,7 +426,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           launchFn:
             io.launchFn ||
             (({ agent, method, stage, purpose = 'delivery', nonce, mergeSha, scopeRelaunchSha }) => {
-              const launchNonce = nonce || (purpose === 'delivery' ? randomNonceHex() : undefined);
+              // Every launch gets a nonce: the Claude runner refuses to dispatch without one (AAT launches had none).
+              const launchNonce = nonce || randomNonceHex();
               return launchIssue({
                 agent,
                 method,

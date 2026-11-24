@@ -340,12 +340,13 @@ function implementationFailActive(facts) {
   return Boolean(newest && newest.verdict === 'fail' && newest.reason === 'implementation');
 }
 
-function buildAatLaunch({ mergeSha, runId, failed }) {
+function buildAatLaunch({ mergeSha, runId, failed, reason }) {
   const marker = failed
     ? `<!-- v2:aat-launch merge=${mergeSha} failed=1 -->`
     : `<!-- v2:aat-launch merge=${mergeSha} run=${runId} -->`;
+  const detail = failed && reason ? `: ${String(reason).slice(0, 300)}` : '';
   const text = failed
-    ? 'Starting acceptance failed. This counts as one concluded attempt.'
+    ? `Starting acceptance failed${detail}. This counts as one concluded attempt.`
     : `Acceptance started for merge ${mergeSha}.`;
   return `${marker}\n${text}`;
 }

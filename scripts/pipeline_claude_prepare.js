@@ -8,12 +8,15 @@
 const fs = require('fs');
 const { parseRepo } = require('../.github/scripts/github-project-lib');
 const { loadConfig, resolveAgent } = require('./issue_pipeline_v2_config');
-const { METHOD_PROMPTS, STAGE_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
+const { STAGE_PROMPTS, stagePromptsForConfig } = require('./issue_pipeline_v2_launch');
 const { listIssueComments } = require('./issue_pipeline_v2_comments');
-const { findRequestComment, reactionHint, buildClaudeArgs } = require('./pipeline_claude_run_lib');
-
-/** Stages with a doorbell task prompt; delivery uses METHOD_PROMPTS instead. */
-const DOORBELL_STAGES = new Set(['To do', 'In analysis', 'In Main', 'acceptance']);
+const {
+  DOORBELL_STAGES,
+  buildStageTask,
+  findRequestComment,
+  reactionHint,
+  buildClaudeArgs,
+} = require('./pipeline_claude_run_lib');
 
 function appendEnv(name, value) {
   const path = process.env.GITHUB_ENV;
@@ -48,6 +51,8 @@ async function main() {
   const stage = process.env.INPUT_STAGE;
   const agentId = process.env.INPUT_AGENT_ID;
   const method = process.env.INPUT_METHOD || 'PR';
+  // The merge an acceptance run judges. Empty for every other stage; checked again when the task is built.
+  const mergeSha = process.env.INPUT_MERGE_SHA || '';
   // Read from the event payload, not a step env (step env is printed in public logs), and mask it
   // before anything else can print it. It stays secret until the run posts its verdict.
   const nonce = readDispatchNonce();
@@ -66,11 +71,16 @@ async function main() {
   appendEnv('PIPELINE_RUN_NONCE', nonce);
   appendEnv('PIPELINE_ISSUE', String(issueNumber));
   appendEnv('PIPELINE_STAGE', stage);
+  // The task is built before the run starts, so an acceptance run without a valid merge stops here.
+  const prompts = stagePromptsForConfig(config, agent);
+  const mergeDir = process.env.MERGE_UNDER_TEST_DIR || '';
+  const extra = buildStageTask({ stage, method, prompts, number: issueNumber, mergeSha, mergeDir });
+  if (stage === 'acceptance') {
+    appendEnv('PIPELINE_MERGE_SHA', mergeSha);
+  }
   // The verify step counts only what the run posts after this instant.
   appendEnv('PIPELINE_RUN_STARTED_AT', new Date().toISOString());
 
-  const prompts = stagePromptsForConfig(config, agent);
-  const extra = stage && DOORBELL_STAGES.has(stage) ? prompts[stage] : METHOD_PROMPTS[method];
   // Reaction path only (a login with one pool id): name the comment and the exact command, so the
   // vote does not depend on the run finding the comment id itself (soak-6, #2485).
   let hint = '';

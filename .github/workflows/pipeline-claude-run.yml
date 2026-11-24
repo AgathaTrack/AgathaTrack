@@ -29,6 +29,11 @@ on:
         description: Public reference for the run name and status lookup (not the nonce)
         required: true
         type: string
+      merge_sha:
+        description: Merge commit an acceptance run judges (40-char sha); empty for every other stage
+        required: false
+        default: ''
+        type: string
 
 run-name: pipeline-claude-${{ inputs.run_ref }}
 
@@ -51,6 +56,20 @@ jobs:
         with:
           node-version: '22'
 
+      # An acceptance run judges one merge, so it reads that exact tree. The engine scripts stay on main.
+      - name: Check out the merge under test (acceptance only)
+        if: inputs.merge_sha != ''
+        env:
+          MERGE_SHA: ${{ inputs.merge_sha }}
+          MERGE_DIR: ${{ runner.temp }}/merge-under-test
+        run: |
+          if ! [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::merge_sha is not a full commit sha"
+            exit 1
+          fi
+          git fetch --depth=1 origin "$MERGE_SHA"
+          git worktree add --detach "$MERGE_DIR" "$MERGE_SHA"
+
       - name: Prepare PIPELINE_* env and prompt
         id: prep
         env:
@@ -58,6 +77,8 @@ jobs:
           INPUT_STAGE: ${{ inputs.stage }}
           INPUT_AGENT_ID: ${{ inputs.agent_id }}
           INPUT_METHOD: ${{ inputs.method }}
+          INPUT_MERGE_SHA: ${{ inputs.merge_sha }}
+          MERGE_UNDER_TEST_DIR: ${{ inputs.merge_sha != '' && format('{0}/merge-under-test', runner.temp) || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.PAWPET_CLAUDE_TOKEN }}
         run: node scripts/pipeline_claude_prepare.js
