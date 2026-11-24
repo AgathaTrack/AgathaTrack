@@ -6,7 +6,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SHARD_TOTAL } from './shard-files.mjs';
+import { SHARD_TOTAL, shardGlobalTimeoutMs } from './shard-files.mjs';
 
 const e2eRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -32,12 +32,23 @@ if (files.length === 0) {
 }
 
 const playwrightBin = path.join(e2eRoot, 'node_modules', '.bin', 'playwright');
+const globalTimeoutMs = shardGlobalTimeoutMs(shardIndex);
 const result = spawnSync(
   playwrightBin,
-  ['test', '--project=full', '--max-failures=1', ...files],
+  [
+    'test',
+    '--project=full',
+    '--max-failures=1',
+    `--global-timeout=${globalTimeoutMs}`,
+    ...files,
+  ],
   {
     cwd: e2eRoot,
     stdio: 'inherit',
+    env: {
+      ...process.env,
+      E2E_SHARD_GLOBAL_TIMEOUT_MS: String(globalTimeoutMs),
+    },
   },
 );
 process.exit(result.status ?? 1);

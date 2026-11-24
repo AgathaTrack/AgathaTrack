@@ -62,6 +62,18 @@ const balanced = balanceSpecs(activeSpecs(), SHARD_TOTAL, (spec) => specSeconds(
 export const SHARDS = balanced.shards.map((shard) => shard.map((spec) => `playwright/tests/${spec}`));
 export const SHARD_LOADS = balanced.loads;
 
+/** Headroom (seconds) added to estimated shard load for Playwright globalTimeout (under the 45m Actions leg). */
+export const SHARD_GLOBAL_TIMEOUT_BUFFER_SEC = 600;
+
+/** Wall-clock budget (ms) for one CI shard: measured load + {@link SHARD_GLOBAL_TIMEOUT_BUFFER_SEC}. */
+export function shardGlobalTimeoutMs(shardIndex) {
+  if (!Number.isInteger(shardIndex) || shardIndex < 1 || shardIndex > SHARD_TOTAL) {
+    throw new Error(`shardGlobalTimeoutMs: shard index must be 1-${SHARD_TOTAL}`);
+  }
+  const loadSec = SHARD_LOADS[shardIndex - 1] ?? 600;
+  return (loadSec + SHARD_GLOBAL_TIMEOUT_BUFFER_SEC) * 1000;
+}
+
 if (SHARDS.length !== SHARD_TOTAL) {
   throw new Error(`shard-files.mjs: expected ${SHARD_TOTAL} shards, got ${SHARDS.length}`);
 }

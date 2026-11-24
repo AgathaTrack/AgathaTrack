@@ -40,9 +40,15 @@ const sharedUse = {
   ...(httpCredentials ? { httpCredentials } : {}),
 };
 
+const shardGlobalTimeoutMs = Number(process.env.E2E_SHARD_GLOBAL_TIMEOUT_MS);
+
 export default defineConfig({
   testDir: './playwright/tests',
   globalSetup: require.resolve('./playwright/support/global-setup'),
+  globalTimeout:
+    Number.isFinite(shardGlobalTimeoutMs) && shardGlobalTimeoutMs > 0
+      ? shardGlobalTimeoutMs
+      : undefined,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   workers: 1,
