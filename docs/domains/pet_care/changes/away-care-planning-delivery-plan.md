@@ -16,7 +16,7 @@ tags: [pet_care, care_context, care_schedule_management, away_planning, delivery
 **Canonical product behaviour today:** [care-context.md](../features/care-context.md), [care-schedule-management.md](../features/care-schedule-management.md)
 **Predecessor plans:** [away-plan-detail-v2-delivery-plan.md](./away-plan-detail-v2-delivery-plan.md) (AWD, shipped), [care-schedule-management.md](../features/care-schedule-management.md) (CSM-1…17, on `main`)
 
-**Status: frozen.** Execute-plan: `.agents/plans/away-care-planning.{md,snapshot.json}`. Phases run **continuously** under autonomy — no human validation gate between phases (merge-done → next phase immediately).
+**Status: in-delivery.** Execute-plan: `.agents/plans/away-care-planning.{md,snapshot.json}`. Phases run **continuously** under autonomy — no human validation gate between phases (merge-done → next phase immediately).
 
 ---
 

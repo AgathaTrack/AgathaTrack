@@ -77,7 +77,13 @@ else
   cat "$LINK_CHECK_LOG"
   BROKEN_LINKS=$(grep -c '^  Broken link' "$LINK_CHECK_LOG" 2>/dev/null || true)
   BROKEN_LINKS=${BROKEN_LINKS:-0}
-  ERRORS=$((ERRORS + BROKEN_LINKS))
+  if [[ "$BROKEN_LINKS" -eq 0 ]]; then
+    # Non-zero exit without broken-link lines is a checker failure, never a pass.
+    echo "  Link checker failed without reporting broken links (checker error)"
+    ERRORS=$((ERRORS + 1))
+  else
+    ERRORS=$((ERRORS + BROKEN_LINKS))
+  fi
 fi
 rm -f "$LINK_CHECK_LOG"
 

@@ -20,7 +20,7 @@ status: active
 
 ## Goal
 
-Implement [care-item-context-header-spec.md](../../docs/domains/pet_care/changes/care-item-context-header-spec.md) (v2.2 on `main`): generic app bar title, context strip with `CareItemPetContextTile`, status chips (Finished/Paused), shell title on all route states, tests and E2E alignment. One integration PR to `main` after phases complete.
+Implement care-item-context-header-spec.md (not present on this branch) (v2.2 on `main`): generic app bar title, context strip with `CareItemPetContextTile`, status chips (Finished/Paused), shell title on all route states, tests and E2E alignment. One integration PR to `main` after phases complete.
 
 ## Autonomy
 

@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **plan_id** | `documentation-migration-514a` |
-| **programme** | [documentation-migration-handover.md](../docs/domains/documentation/changes/documentation-migration-handover.md) |
+| **programme** | [documentation-migration-handover.md](../../docs/domains/documentation/changes/documentation-migration-handover.md) |
 | **integration `base_branch`** | `cursor/documentation-migration-wave13-integration-514a` |
 | **control issue** | [#1787](https://github.com/KanopeeKa/AgathaCheck/issues/1787) |
 | **default_merge_mode** | `auto` (squash each phase PR into integration; phase 26 → `main` via `/babysit-uat`) |
