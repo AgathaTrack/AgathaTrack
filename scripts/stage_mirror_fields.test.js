@@ -257,3 +257,30 @@ test('loadOrgSupportStageField: a successful read returns support columns only',
     }
   }
 });
+
+
+test('loadOrgSupportStageField: a missing org field fails with the create and secret steps', async () => {
+  const prev = process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
+  delete process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
+  try {
+    await assert.rejects(
+      loadOrgSupportStageField({
+        org: 'AgathaTrack',
+        token: 't',
+        getIssueFields: async () => [{ id: 49916872, name: 'Stage', options: [{ name: 'Backlog' }] }],
+      }),
+      (err) => {
+        assert.match(err.message, /Org issue field "Support Stage" not found for AgathaTrack/);
+        assert.match(err.message, /Create the organisation issue field "Support Stage"/);
+        assert.match(err.message, /set SUPPORT_STAGE_ISSUE_FIELD_ID to its numeric id/);
+        return true;
+      },
+    );
+  } finally {
+    if (prev === undefined) {
+      delete process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
+    } else {
+      process.env.SUPPORT_STAGE_ISSUE_FIELD_ID = prev;
+    }
+  }
+});

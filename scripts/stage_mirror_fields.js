@@ -108,7 +108,11 @@ async function loadOrgMirrorField({
     (field) => field?.name?.toLowerCase() === fieldName.toLowerCase(),
   );
   if (!match?.id) {
-    throw new Error(`Org issue field "${fieldName}" not found for ${org}`);
+    throw new Error(
+      `Org issue field "${fieldName}" not found for ${org} (${orgIssueFieldsPath(org)} has no field with that name). ` +
+        `Create the organisation issue field "${fieldName}" with the options in stage_mirror_config.js, ` +
+        `then set ${envVarName} to its numeric id.`,
+    );
   }
   if (envId && Number(match.id) !== envId) {
     throw new Error(`${envVarName}=${envId} does not match org ${fieldName} field id ${match.id}`);
