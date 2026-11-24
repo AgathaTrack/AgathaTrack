@@ -34,11 +34,23 @@ function isSkippableTarget(rawTarget) {
   return false;
 }
 
+/**
+ * Removes HTML tags until none are left, then any stray angle brackets. A single pass can leave a tag
+ * behind (for example `<scr<script>ipt>`), so the pass repeats to a fixed point.
+ */
+function stripHtmlTags(text) {
+  let current = text;
+  let previous;
+  do {
+    previous = current;
+    current = current.replace(/<[^<>]*>/g, '');
+  } while (current !== previous);
+  return current.replace(/[<>]/g, '');
+}
+
 export function headingAnchorSlug(text) {
-  return text
-    .replace(/^#+\s*/, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/[<>]/g, '')
+  return stripHtmlTags(text
+    .replace(/^#+\s*/, ''))
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/[*_`~]/g, '')
     .replace(/\s*\u2014\s*/g, '--')
