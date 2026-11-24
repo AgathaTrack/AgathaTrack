@@ -247,8 +247,9 @@ function planPrSnapshot(args, { remoteUrl = null } = {}) {
 function checkRollupFromGitHub(realGh, slug, sha) {
   const pages = runRealGh(realGh, ['api', '--paginate', '--slurp', `repos/${slug}/commits/${sha}/check-runs?per_page=100`]);
   const checkRuns = (pages || []).flatMap((page) => page.check_runs || []);
-  const combined = runRealGh(realGh, ['api', `repos/${slug}/commits/${sha}/status?per_page=100`]);
-  return checkRollupFromRest({ checkRuns, statuses: (combined && combined.statuses) || [] });
+  const statusPages = runRealGh(realGh, ['api', '--paginate', '--slurp', `repos/${slug}/commits/${sha}/status?per_page=100`]);
+  const statuses = (statusPages || []).flatMap((page) => page.statuses || []);
+  return checkRollupFromRest({ checkRuns, statuses });
 }
 
 function pullSnapshotFromGitHub(realGh, slug, number, fields) {

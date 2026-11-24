@@ -381,7 +381,7 @@ test('e2e: gh pr view with snapshot fields is answered from REST, including the 
     'api --paginate --slurp repos/o/r/commits/abc/check-runs?per_page=100': [
       { check_runs: [{ name: 'ci-gate', status: 'completed', conclusion: 'success' }, { name: 'slow', status: 'in_progress', conclusion: null }] },
     ],
-    'api repos/o/r/commits/abc/status?per_page=100': { statuses: [{ context: 'legacy/ci', state: 'success' }] },
+    'api --paginate --slurp repos/o/r/commits/abc/status?per_page=100': [{ statuses: [{ context: 'legacy/ci', state: 'success' }] }],
   };
   const result = runGhWithRoutes(['pr', 'view', 'https://github.com/o/r/pull/7', '--json', 'number,mergeable,labels,statusCheckRollup'], routes);
   assert.equal(result.status, 0, result.stderr);

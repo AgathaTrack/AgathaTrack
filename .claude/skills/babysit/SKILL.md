@@ -45,7 +45,10 @@ A thread's `url` in the `babysit_pr_reviews.js` output ends in `#discussion_r<co
 ```bash
 PATH="$(git rev-parse --show-toplevel)/scripts/ccr-bin:$PATH" ./scripts/babysit_sync_base.sh --pr <n> --check
 PATH="$(git rev-parse --show-toplevel)/scripts/ccr-bin:$PATH" node scripts/babysit_pr_reviews.js gate --pr <n>
+PATH="$(git rev-parse --show-toplevel)/scripts/ccr-bin:$PATH" ./scripts/babysit_merge_preflight.sh --pr <n> --claim
 ```
+
+The merge preflight (`babysit_merge_preflight.sh`, including `--claim` and `--release`) needs the same `PATH` prefix: its reads of `repo view`, `pr view` and `pr list` are answered by the wrapper. Without it, the preflight exits `3` on the GraphQL call.
 
 Exit codes mean what the policy says, so the review gate is the policy's gate here too. The wrapper fails closed: an unknown query, a malformed thread, or a review comment no thread accounts for exits `1` with a `ccr-gh:` message. A script error is never a clean result: do not read it as "up to date" or "no threads", and never merge on it. Contract and tests: `scripts/lib/ccr_gh_shim_lib.js`, `scripts/ccr_gh_shim.test.js`.
 
