@@ -66,6 +66,7 @@ jobs:
             scripts/issue_pipeline_v2_comments.js
             scripts/issue_pipeline_v2_config.js
             scripts/issue_pipeline_v2_decide.js
+            scripts/issue_pipeline_v2_rounds.js
             scripts/issue_pipeline_v2_fields.js
             scripts/issue_pipeline_v2_intent.js
             scripts/issue_pipeline_v2_launch.js
