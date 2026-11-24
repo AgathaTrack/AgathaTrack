@@ -59,8 +59,17 @@ function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [],
     }
 
     if (request.assigned) {
+      // The body this attempt produces: the next request's hash, or the current body if the round
+      // is still the last one and the body has moved since.
+      const producedHash = next ? next.hash : bodyHash;
+      // A verdict on this request's own hash, or a linked verdict (posted on the edited hash through a
+      // confirmed claim, see planRounds): it counts only when it names the hash the attempt produced.
       const verdict = verdicts
-        .filter((v) => v.agentId === request.assigned && v.hash === request.hash && v.at >= request.at)
+        .filter((v) => {
+          if (v.agentId !== request.assigned || v.at < request.at) return false;
+          if (v.requestHash !== undefined) return v.requestHash === request.hash && v.hash === producedHash;
+          return v.hash === request.hash;
+        })
         .sort((a, b) => a.at - b.at)[0];
       const launch = launches
         .filter((l) => l.agentId === request.assigned && l.at >= request.at)
@@ -78,9 +87,6 @@ function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [],
         attempt.result = 'green';
       } else if (verdict?.value === 'down') {
         attempt.result = 'red';
-        // The body this red produced: the next request's hash, or the current body if the
-        // round is still the last one and the body has moved since.
-        const producedHash = next ? next.hash : bodyHash;
         if (producedHash && producedHash !== request.hash) {
           attempt.hashOut = producedHash;
         }

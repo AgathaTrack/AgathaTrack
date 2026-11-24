@@ -142,6 +142,9 @@ jobs:
           node --test scripts/quality/generate-scorecard-metrics.test.mjs
           node scripts/quality/generate-scorecard-metrics.mjs --check
 
+      - name: Issue pipeline v2 offline tests (convention-discovered suite)
+        run: node scripts/ci/run-issue-pipeline-v2-tests.mjs
+
       - name: Write governance job summary
         if: always()
         run: |

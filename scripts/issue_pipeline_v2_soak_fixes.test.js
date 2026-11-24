@@ -116,7 +116,8 @@ test('a failed comment read in the board pass does not stop the tick', async () 
     return [deliveryLaunch('cursor-a', NOW - MIN, e.number)];
   };
   const entries = [entry(1, 'In progress'), entry(2, 'In progress')];
-  assert.equal(await countEngineWip({ entries, commentsOf, engineLogins: ['pawpet-engine'] }), 1);
+  // #2553 P3: the unreadable issue holds a slot (a failed read never grants capacity), so 2 is the count.
+  assert.equal(await countEngineWip({ entries, commentsOf, engineLogins: ['pawpet-engine'] }), 2);
   assert.deepEqual(await lastUsedOnIssue({ entry: entries[1], commentsOf, config }), {});
 });
 

@@ -94,6 +94,19 @@ export const GOVERNANCE_GATE_REGISTRY = [
     fixture: 'node --test scripts/check_file_size.test.js',
   },
   {
+    id: 'issue-pipeline-v2-tests',
+    command: 'node scripts/ci/run-issue-pipeline-v2-tests.mjs',
+    cheap: true,
+    prepush: 'governance',
+    blocking: true,
+    ci: {
+      workflow: '.github/workflows/_reusable-test.yml',
+      jobId: 'governance',
+      runIncludes: ['run-issue-pipeline-v2-tests.mjs'],
+    },
+    fixture: 'node --test scripts/ci/run-issue-pipeline-v2-tests.test.mjs',
+  },
+  {
     id: 'web-bundle-budget',
     command: 'node scripts/ci/check-web-bundle-budget.mjs',
     cheap: false,
