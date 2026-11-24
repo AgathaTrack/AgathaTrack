@@ -31,7 +31,7 @@ New issues from these forms receive type labels (`bug`, `feature`, or `task`) an
 
 ## Planned workflows by status
 
-When `ISSUE_PIPELINE_V2` is `on`, lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and the v2 engine dispatchers — not the legacy label flow in [§Live workflow (legacy)](#live-workflow-legacy-until-issuepipelineon).
+When `ISSUE_PIPELINE_V2` is `on`, lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and the v2 engine dispatchers — not the legacy label flow in [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipeline_v2on).
 
 ## Pipeline v2: the Stage machine
 
