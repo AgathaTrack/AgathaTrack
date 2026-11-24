@@ -38,13 +38,12 @@ One GitHub issue with a one-sentence goal and `- [ ] P<n> — <outcome> — scop
 
 Implement the current phase per its checklist scope (files needed for that outcome → add them to that phase's scope on the checklist, note why on the issue, continue; stop only if the goal itself would change). Pre-PR self-review ([`pr-hygiene.mdc`](../../rules/pr-hygiene.mdc)) + `./scripts/pre-push-changed.sh`; open PR dev → integration (ready for review, not draft).
 
-**Light merge (not `/babysit-plus`):** even if the integration ruleset is inactive, still require green CI and **every review conversation resolved** (autonomous-pr-policy §Babysit skill family).
+**Phase and sync PRs run through [`/babysit-plus`](../babysit-plus/SKILL.md)** — with the `light-plan` label on, every PR this skill opens (phase dev → integration, sync, self-review fix) is driven by babysit+ (§0b Copilot/reviews wait, §2 triage, §3–4 fixes and debt issues, §5 CI loop, §7 review gate and merge). Even if the integration ruleset is inactive, babysit+ still requires green CI and **every review conversation resolved** (autonomous-pr-policy §Babysit skill family). Only the release PR leaves babysit+ for `/babysit-uat` (§Release).
 
-1. `gh pr checks <url> --watch` — red → fix, one push per batch; obey `autonomous-pr-policy.md` §**CI retry budget** (halt at streak 3 same signature or 5 any).
-2. `node scripts/babysit_pr_reviews.js gate --pr <url>` — `0` merge; `2` fix or reply+resolve, re-run; `3` → post once `Copilot review did not finish within 15 min; proceeding on triage + CI + pre-push.` then merge; `1` fix script, never merge on error.
-3. If draft: `gh pr ready <url>`. `gh pr merge <url> --merge`.
+1. Run `/babysit-plus` on the PR until §7 merges it. The review gate `node scripts/babysit_pr_reviews.js gate --pr <url>` must exit `0` before the merge; `2` → triage and reply+resolve, re-run; `1` → fix the script, never merge on error.
+2. Merge phase and sync PRs with babysit+'s squash merge (§7). The one exception is the `main` → integration sync PR that resolves a release conflict: merge it with a **merge commit**, never squash or rebase, so integration keeps `main` as a parent and the release PR stays mergeable.
 
-No merge lease, Copilot wait, triage comment, exit checklist or `./scripts/pre-push.sh` here. Deferred review → comment on tracking issue.
+Babysit+ on a phase PR is a full babysit+ run (pre-PR self-review, triage comment, `pre-push-changed.sh`); an execute-plan merge lease is not needed here. Deferred review → debt issue, linked from the tracking issue.
 
 Remote dev deleted on merge: `git fetch origin <integration>`, merge into local dev, `git push -u origin cursor/<slug>-dev`. Tick checklist with PR link. Then start the next phase, or §Final self-review after the last one, in the same turn.
 
@@ -94,4 +93,4 @@ If the run is cut off (platform limit, crash, or the owner stops it), resume wit
 
 ## Not included
 
-No snapshot, runtime, driver, approval, labels or budgets. Phase/sync PRs are not babysit+; full [`autonomous-pr-policy.md`](../../../docs/agent-efficiency/autonomous-pr-policy.md) on release only. Need guarantees → `/execute-plan`.
+No snapshot, runtime, driver, approval or budgets. Every phase and sync PR runs `/babysit-plus`; the release PR runs `/babysit-uat`, which builds on it. Full [`autonomous-pr-policy.md`](../../../docs/agent-efficiency/autonomous-pr-policy.md) applies to both. Need guarantees → `/execute-plan`.
