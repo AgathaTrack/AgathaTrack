@@ -258,7 +258,6 @@ test('loadOrgSupportStageField: a successful read returns support columns only',
   }
 });
 
-
 test('loadOrgSupportStageField: a missing org field fails with the create and secret steps', async () => {
   const prev = process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
   delete process.env.SUPPORT_STAGE_ISSUE_FIELD_ID;
