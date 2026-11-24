@@ -159,10 +159,17 @@ function buildClaudeArgs(agent) {
  * The task text for the run. An acceptance task names the merge it judges. A run with no valid merge
  * is refused before it starts, so it never verifies a placeholder or a merge it was not given.
  */
-function buildStageTask({ stage, method, prompts, number, mergeSha }) {
+function buildStageTask({ stage, method, prompts, number, mergeSha, mergeDir }) {
   if (stage && DOORBELL_STAGES.has(stage)) {
-    if (stage === 'acceptance' && !MERGE_SHA.test(String(mergeSha || ''))) {
-      throw new Error('acceptance run has no valid merge_sha; refusing to start without the merge it judges');
+    if (stage === 'acceptance') {
+      if (!MERGE_SHA.test(String(mergeSha || ''))) {
+        throw new Error('acceptance run has no valid merge_sha; refusing to start without the merge it judges');
+      }
+      if (!mergeDir) {
+        throw new Error('acceptance run has no checkout of the merge under test; refusing to start');
+      }
+      const task = fillPrompt(prompts[stage], { number, mergeSha });
+      return `${task}\n\nThe merge under test is checked out at ${mergeDir}. Read the behaviour there and do not edit it.`;
     }
     return fillPrompt(prompts[stage], { number, mergeSha });
   }
@@ -176,21 +183,31 @@ const AAT_MERGE = /\bmerge=([0-9a-f]{40})\b/;
  * An acceptance run is judged by its own verdict on this merge: a `v2:aat verdict=… merge=<sha>`
  * comment from the run's login, posted after it started. Any other comment does not count.
  */
-function acceptanceEvidence({ comments, actsAs, mergeSha, sinceMs }) {
+function acceptanceEvidence({ comments, actsAs, engineLogins, mergeSha, sinceMs }) {
   if (!MERGE_SHA.test(String(mergeSha || ''))) {
     return { ok: false, evidence: null, reason: 'acceptance run has no valid merge_sha' };
   }
   const login = String(actsAs || '').toLowerCase();
+  const engine = new Set((engineLogins || []).map((name) => String(name).toLowerCase()));
+  // The engine's latest launch for this merge: a verdict counts only when it is newer than that launch.
+  const launchTimes = (comments || [])
+    .filter((entry) => engine.has(String(entry.user?.login || '').toLowerCase()))
+    .filter((entry) => new RegExp(`<!--\\s*v2:aat-launch\\s+merge=${mergeSha}\\b`).test(entry.body || ''))
+    .map((entry) => Date.parse(entry.created_at))
+    .filter(Number.isFinite);
+  const latestLaunch = launchTimes.length ? Math.max(...launchTimes) : null;
   const verdict = (comments || []).find((entry) => {
     if (String(entry.user?.login || '').toLowerCase() !== login) return false;
-    if (!(Date.parse(entry.created_at) >= sinceMs - SKEW_MS)) return false;
+    const postedAt = Date.parse(entry.created_at);
+    if (!(postedAt >= sinceMs - SKEW_MS)) return false;
+    if (latestLaunch !== null && !(postedAt > latestLaunch)) return false;
     const marker = AAT_VERDICT.exec(entry.body || '');
     const merge = marker && AAT_MERGE.exec(marker[0]);
     return Boolean(merge && merge[1] === mergeSha);
   });
   return verdict
     ? { ok: true, evidence: `verdict ${verdict.id}` }
-    : { ok: false, evidence: null, reason: 'no acceptance verdict on this merge' };
+    : { ok: false, evidence: null, reason: 'no acceptance verdict on this merge newer than its launch' };
 }
 
 module.exports = {

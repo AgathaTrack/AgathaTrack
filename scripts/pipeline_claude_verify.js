@@ -24,7 +24,7 @@ async function verify({ owner, repo, issueNumber, stage, agentId, nonce, mergeSh
   const comments = await listComments({ owner, repo, issueNumber, token });
   // An acceptance run answers with its verdict on the merge it judges, not with a reaction or a request reply.
   if (stage === 'acceptance') {
-    return acceptanceEvidence({ comments, actsAs: agent.actsAs, mergeSha, sinceMs });
+    return acceptanceEvidence({ comments, actsAs: agent.actsAs, engineLogins: config.engine.logins, mergeSha, sinceMs });
   }
   const request = findRequestComment({ comments, stage, engineLogins: config.engine.logins });
   const shared = isSharedActsAs(config, agent.actsAs);

@@ -73,7 +73,8 @@ async function main() {
   appendEnv('PIPELINE_STAGE', stage);
   // The task is built before the run starts, so an acceptance run without a valid merge stops here.
   const prompts = stagePromptsForConfig(config, agent);
-  const extra = buildStageTask({ stage, method, prompts, number: issueNumber, mergeSha });
+  const mergeDir = process.env.MERGE_UNDER_TEST_DIR || '';
+  const extra = buildStageTask({ stage, method, prompts, number: issueNumber, mergeSha, mergeDir });
   if (stage === 'acceptance') {
     appendEnv('PIPELINE_MERGE_SHA', mergeSha);
   }
