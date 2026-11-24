@@ -55,6 +55,7 @@ jobs:
             scripts/ci/append-summary.sh
             scripts/lib/resolve_prod_dispatch_guard.js
             scripts/lib/execute_plan_github.js
+            scripts/lib/ccr_gh_shim_lib.js
             scripts/lib/execute_plan_uat_observe.js
             scripts/lib/main_ancestry.js
             .github/execute-plan.config.json

@@ -98,6 +98,7 @@ jobs:
             scripts/ci/assert-git-ref-exists.sh
             scripts/ci/assert-uat-tag-commit-on-main.js
             scripts/lib/execute_plan_github.js
+            scripts/lib/ccr_gh_shim_lib.js
             scripts/lib/main_ancestry.js
           sparse-checkout-cone-mode: false
 
