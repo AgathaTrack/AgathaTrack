@@ -11,6 +11,7 @@ const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
+const { resolveDispatchTarget, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
@@ -341,8 +342,15 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   const listComments = memoComments(io.listIssueComments || listIssueComments);
   const tickIo = { ...io, listIssueComments: listComments };
   const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
-  // WIP counts only In progress issues the engine started: hand-driven work takes no pipeline slot.
-  let wip = await countEngineWip({ entries, commentsOf, engineLogins: config.engine.logins });
+  // WIP: In progress issues the engine started, plus Ready issues with a delivery launch in flight,
+  // each issue once. Hand-driven work takes no pipeline slot; an unreadable issue holds one.
+  let wip = await countEngineWip({
+    entries,
+    commentsOf,
+    engineLogins: config.engine.logins,
+    now: Date.now(),
+    ackWindowMs: config.limits.ackWindowMin * 60 * 1000,
+  });
   // One ring for the board. Null means nothing has been assigned yet, so the next pick is the
   // first startable agent. Each in-scope assignment this tick advances the ring.
   let roundRobinAfter = await lastAssignedAgent({ entries, commentsOf, config });
@@ -472,6 +480,22 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
 }
 
 async function main() {
+  // #2553 P4: validate the issue filter and resolve the mode before any board read or write.
+  const target = resolveDispatchTarget(process.env.ISSUE_NUMBER);
+  if (!target.ok) {
+    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: target.reason }));
+    process.exitCode = 1;
+    return;
+  }
+  const run = resolveRunMode({
+    eventName: process.env.GITHUB_EVENT_NAME,
+    liveRequested: process.env.ISSUE_PIPELINE_V2_LIVE === 'true',
+    repoMode: process.env.ISSUE_PIPELINE_V2,
+  });
+  process.env.ISSUE_PIPELINE_V2 = run.mode;
+  console.log(
+    JSON.stringify({ event: 'pipeline_v2_run', mode: run.mode, source: run.source, target: target.only ?? 'board', writes: run.mode === 'on' }),
+  );
   const { owner, repo } = parseRepo(process.env.GITHUB_REPOSITORY || '');
   const projectsPat = process.env.GH_PROJECTS_PAT;
   const projectId = process.env.GH_PROJECT_ID;
@@ -479,7 +503,7 @@ async function main() {
   if (mode() !== 'off' && (!projectsPat || !projectId || !statusFieldId)) {
     throw new Error('GH_PROJECTS_PAT, GH_PROJECT_ID and GH_STATUS_FIELD_ID are required');
   }
-  const only = process.env.ISSUE_NUMBER ? Number(process.env.ISSUE_NUMBER) : null;
+  const only = target.only;
   const result = await tick({
     owner,
     repo,
