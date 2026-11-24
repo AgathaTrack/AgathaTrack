@@ -15,7 +15,7 @@
 
 const { canonicalStage } = require('./issue_pipeline_v2_decide');
 const { engineStartedRun } = require('./issue_pipeline_v2_release');
-const { listLaunchRecords } = require('./issue_pipeline_v2_launch');
+const { listLaunchRecords, deriveLaunchFacts } = require('./issue_pipeline_v2_launch');
 const { resolveAgent } = require('./issue_pipeline_v2_config');
 
 /** Stages whose facts read comments (see `buildCommentFacts`). */
@@ -66,15 +66,50 @@ function includeInBoardLaunchHistory(entry) {
   return readsComments(entry);
 }
 
-async function countEngineWip({ entries, commentsOf, engineLogins }) {
+/**
+ * A Ready issue whose delivery launch is in flight holds a slot: the engine launched it and either
+ * the run handed off with `busy`, or it started inside the acknowledge window. A launch that failed
+ * with no run, or whose window has passed unacknowledged, holds nothing.
+ */
+function holdsLaunchReservation({ comments, engine, labels, now, ackWindowMs }) {
+  const hasDeliveryRecord = listLaunchRecords({ comments, engineLogins: [...engine] }).some(
+    (record) => record.purpose === 'delivery' && ['launch', 'launch-pending', 'launch-acked'].includes(record.kind),
+  );
+  if (!hasDeliveryRecord) return false;
+  const launch = deriveLaunchFacts({ comments, engineLogins: [...engine], labels, attempts: 0 });
+  if (launch.busy) return true;
+  return Boolean(launch.runId) && now - launch.startedAt < ackWindowMs;
+}
+
+/**
+ * Pipeline slots in use. One count per issue, so an issue cannot hold two slots:
+ * - In progress, started by the engine: holds a slot (hand-driven and manual-only work do not);
+ * - Ready, with a delivery launch in flight (`holdsLaunchReservation`): holds a slot;
+ * - unreadable (the comment read failed): holds a slot. A failed read never grants capacity.
+ */
+async function countEngineWip({ entries, commentsOf, engineLogins, now = Date.now(), ackWindowMs = 0 }) {
   const engine = new Set(engineLogins || []);
   let wip = 0;
   for (const entry of entries) {
-    if (entry.closed || entry.labels.includes('manual-only') || canonicalStage(entry.stage) !== 'In progress') {
+    if (entry.closed || entry.labels.includes('manual-only')) {
       continue;
     }
-    const comments = await safeComments(commentsOf, entry);
-    if (comments.some((comment) => engineStartedRun(comment, engine))) {
+    const stage = canonicalStage(entry.stage);
+    if (stage !== 'In progress' && stage !== 'Ready') {
+      continue;
+    }
+    let comments;
+    try {
+      comments = (await commentsOf(entry)) || [];
+    } catch {
+      wip += 1;
+      continue;
+    }
+    const holds =
+      stage === 'In progress'
+        ? comments.some((comment) => engineStartedRun(comment, engine))
+        : holdsLaunchReservation({ comments, engine, labels: entry.labels, now, ackWindowMs });
+    if (holds) {
       wip += 1;
     }
   }

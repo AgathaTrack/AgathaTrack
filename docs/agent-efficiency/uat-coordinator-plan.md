@@ -237,6 +237,27 @@ Set by coordinator on `failed`/`remedial`; cleared on `set-barrier` or infra res
 
 **Exit codes:** `0` ok; `2` expected wait; `1` error.
 
+#### Queue writer invariant (#2558)
+
+Every write to the marker comment goes through `updateQueueState` in `scripts/lib/uat_queue_sync.js`. It loads the state, applies the mutation, saves, re-reads the marker, and checks the mutation's own effect (for example, the enqueued SHA is present, or the watcher holder matches). If the effect is missing, it reloads and reapplies, up to `attempts` (default 3), then throws `uat_queue_write_conflict`.
+
+Writers routed through the helper:
+
+| Writer | Mutation |
+|--------|----------|
+| `scripts/lib/uat_queue_apply.js` `syncEnqueueAfterMerge` (PR merged to `main`) | `enqueueMutation` |
+| `scripts/lib/uat_queue_apply.js` `ensureQueueEntryForDeployRef` | `ensureEntryInState` |
+| `scripts/lib/uat_queue_apply.js` `syncDeployResult` (UAT deploy result) | ensure entry, then `applyDeployResult` |
+| `scripts/lib/uat_deploy_run_resolve.js` `reconcileFailedPreUatLedger` | enqueue (if absent), mark failed |
+| `scripts/uat_queue_runtime.js` `--write` commands | one mutation per command |
+| `scripts/uat_coordinator_bootstrap.js` marker creation | create empty marker |
+| `.github/scripts/uat-coordinator-dispatch.js` (dormant) | watcher lease, remedial, promote hold |
+| `scripts/ci/uat-queue-recovery.js` (dormant / manual) | stale-watcher release |
+
+No workflow file under `.github/workflows/` is changed. Enqueue stays idempotent on `mergeSha`, so a duplicate event returns `created: false` with no write.
+
+**Residual risk (not closed by this design):** GitHub has no conditional (ETag or revision) PATCH for issue comments. The helper narrows the lost-update window to the gap between one writer's read-back and another writer's PATCH; it cannot close that gap. The same gap applies to bootstrap marker creation: if another writer creates the marker between the bootstrap's load and its save, the empty save can overwrite that writer's entry, and no verification can see an entry the bootstrap never loaded. Bootstrap is a manual, one-time step. A hard guarantee needs a different queue store (for example append-only entries) or a serialisation design. A shared workflow `concurrency` group does not help: with `cancel-in-progress: false`, GitHub keeps one pending run per group and cancels earlier pending ones, which drops an enqueue run instead of losing a write.
+
 ### 4. UAT coordinator agent (Phase 3)
 
 **Skill:** `.cursor/skills/uat-coordinator/SKILL.md`  

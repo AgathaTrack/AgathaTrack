@@ -183,15 +183,18 @@ function agentActsAs(config, idOrKey) {
   return agent ? entryActsAs(agent) : null;
 }
 
-/** Agents with `method` whose runner the engine can start itself. */
+/**
+ * Tier-a agents the engine can start for a delivery method (Ready launch, In progress resume,
+ * acceptance relaunch). Same tier gate as spec/review (`reviewPoolIds`); tier-b ids never implement.
+ */
 function launchableAgents(config, method) {
   return (config.agents || [])
     .filter(
       (agent) =>
+        (agent.tier || 'a') === 'a' &&
         (agent.methods || []).includes(method) &&
         agent.runner &&
-        (config.launchRunners || []).includes(agent.runner) &&
-        agent.runner !== 'claude',
+        (config.launchRunners || []).includes(agent.runner),
     )
     .map((agent) => entryId(agent));
 }

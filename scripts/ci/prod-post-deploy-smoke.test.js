@@ -269,6 +269,92 @@ test('coming_soon mode: teaser marker plus main.dart.js in bootstrap body → fl
   }
 });
 
+test('coming_soon mode: curl failure on bootstrap is transport_error', async () => {
+  const server = http.createServer((req, res) => {
+    const url = req.url || '/';
+    if (url.startsWith('/backend/health')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(HEALTH_OK);
+      return;
+    }
+    if (url.startsWith('/main.dart.js') || url.startsWith('/flutter_bootstrap.js')) {
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(TEASER_HTML);
+  });
+  const fx = await new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        reject(new Error('failed to bind fixture server'));
+        return;
+      }
+      resolve({
+        baseUrl: `http://127.0.0.1:${addr.port}`,
+        close: () =>
+          new Promise((resClose, rejClose) => {
+            server.close((err) => (err ? rejClose(err) : resClose()));
+          }),
+      });
+    });
+    server.on('error', reject);
+  });
+  try {
+    const r = await runSmoke(fx.baseUrl, 'coming_soon');
+    assert.equal(r.status, 1, `stderr=${r.stderr}\nstdout=${r.stdout}`);
+    assert.match(`${r.stdout}\n${r.stderr}`, /transport_error/);
+    assert.doesNotMatch(`${r.stdout}\n${r.stderr}`, /http_error/);
+    assert.doesNotMatch(r.stdout, /Production post-deploy smoke passed/);
+  } finally {
+    await fx.close();
+  }
+});
+
+test('coming_soon mode: bootstrap 500 is server_error, not asset absent', async () => {
+  const server = http.createServer((req, res) => {
+    const url = req.url || '/';
+    if (url.startsWith('/backend/health')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(HEALTH_OK);
+      return;
+    }
+    if (url.startsWith('/main.dart.js') || url.startsWith('/flutter_bootstrap.js')) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('unavailable');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(TEASER_HTML);
+  });
+  const fx = await new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        reject(new Error('failed to bind fixture server'));
+        return;
+      }
+      resolve({
+        baseUrl: `http://127.0.0.1:${addr.port}`,
+        close: () =>
+          new Promise((resClose, rejClose) => {
+            server.close((err) => (err ? rejClose(err) : resClose()));
+          }),
+      });
+    });
+    server.on('error', reject);
+  });
+  try {
+    const r = await runSmoke(fx.baseUrl, 'coming_soon');
+    assert.equal(r.status, 1, `stderr=${r.stderr}\nstdout=${r.stdout}`);
+    assert.match(`${r.stdout}\n${r.stderr}`, /server_error/);
+    assert.doesNotMatch(r.stdout, /Production post-deploy smoke passed/);
+  } finally {
+    await fx.close();
+  }
+});
+
 test('app mode: health + landing → exit 0', async () => {
   const fx = await startFixtureServer({ mode: 'flutter', serveDartJs: true });
   try {

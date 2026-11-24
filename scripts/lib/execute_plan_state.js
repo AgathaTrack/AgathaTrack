@@ -8,13 +8,13 @@
 
 const { deriveControl, leaseAlive, launchCounts } = require('./execute_plan_control');
 const { decideUat } = require('./execute_plan_uat');
+const { classifyRequiredCheck } = require('./execute_plan_checks');
 
 const DEFAULT_REPO = process.env.GITHUB_REPOSITORY || 'AgathaTrack/AgathaTrack';
 const COPILOT_WAIT_MS = 15 * 60 * 1000;
 const AUTO_MERGE_FALLBACK_MS = 10 * 60 * 1000;
 const MISSING_CHECK_MS = 15 * 60 * 1000;
 const MISSING_CHECK_HARD_MS = 2 * 60 * 60 * 1000;
-const FAILED = new Set(['failure', 'timed_out', 'action_required']);
 const SCOPE_CHECK = 'execute-plan-scope';
 const SCOPE_STOP = new Set(['drift', 'protected']);
 const SCOPE_FIXABLE = new Set(['unclassified', 'companion-cap', 'too-many-files']);
@@ -43,7 +43,7 @@ function workerBlockedDetail(pr) {
 
 /** Stable signature of failing required checks on a PR head (for ci-stuck detection). */
 function failureSignature(pr) {
-  const failing = (pr.checks || []).filter((c) => FAILED.has(c.conclusion));
+  const failing = (pr.checks || []).filter((c) => classifyRequiredCheck(c) === 'failure');
   if (!failing.length) return null;
   return failing.map((c) => `${c.name}:${c.reason || c.conclusion}`).sort().join('|');
 }
@@ -238,7 +238,7 @@ function prLadder(pr, rawCtx) {
     return finish(ctx, { ...base, action: wait('scope-ack', { pr: pr.number, head_sha: pr.head_sha }), looked });
   }
   // PR-ladder 4
-  const failing = checks.filter((c) => FAILED.has(c.conclusion));
+  const failing = checks.filter((c) => classifyRequiredCheck(c) === 'failure');
   if (failing.length) {
     const attempts = pr.failed_attempts_since_epoch || 0;
     const phaseKey = kind === 'phase' ? ctx.phase : ctx.launchKey;
@@ -286,7 +286,7 @@ function prLadder(pr, rawCtx) {
     return stop('check-missing', `required check(s) ${missing.join(', ')} never reported on PR #${pr.number} head ${String(pr.head_sha).slice(0, 7)}`);
   }
   // PR-ladder 10 — auto-merge armed: wait for checks, then merge if GitHub does not
-  const pending = checks.some((c) => c.status !== 'completed' || c.conclusion !== 'success');
+  const pending = checks.some((c) => classifyRequiredCheck(c) === 'pending');
   if (pending) return finish(ctx, { ...base, action: wait('checks'), looked });
   const times = checks.map((c) => c.completed_at).filter(Boolean).map((t) => Date.parse(t));
   const newest = times.length ? Math.max(...times) : 0;

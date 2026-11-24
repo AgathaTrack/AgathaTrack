@@ -36,9 +36,18 @@ function pasClassifyHttpCode(code) {
 }
 
 function pasClassifyFlutterAssetResponse(code, body) {
-  if (String(code) !== '200') return 'absent';
-  if (pasIsTeaserHtml(body) && !pasBodyMentionsFlutterMain(body)) return 'teaser_fallback';
-  return 'served';
+  const status = String(code ?? '');
+  if (status === '' || status === '000') return 'transport_error';
+  if (status === '200') {
+    if (pasIsTeaserHtml(body) && !pasBodyMentionsFlutterMain(body)) return 'teaser_fallback';
+    return 'served';
+  }
+  if (status === '404') return 'absent';
+  if (status === '401') return 'basic_auth';
+  if (status === '403') return 'forbidden';
+  if (status.startsWith('3')) return 'redirect';
+  if (status.startsWith('5')) return 'server_error';
+  return 'http_error';
 }
 
 function pasClassifyTeaserBody(mode, body) {
@@ -143,6 +152,36 @@ test('bash probe: pas_classify_flutter_asset_response', () => {
     'served',
   );
   assert.equal(probe('pas_classify_flutter_asset_response', '200', '// flutter'), 'served');
+});
+
+test('bash probe: flutter asset table — only documented absence or teaser is absent', () => {
+  const teaser = '<html data-site-mode="coming-soon"><body>Coming soon</body></html>';
+  const served = '<html><script src="main.dart.js"></script></html>';
+  // Documented absence/teaser are the only non-failure outcomes.
+  // teaser_fallback is the teaser form of "asset absent"; 404 is absence.
+  const rows = [
+    ['200', teaser, 'teaser_fallback'],
+    ['200', served, 'served'],
+    ['404', '', 'absent'],
+    ['401', '', 'basic_auth'],
+    ['403', '', 'forbidden'],
+    ['500', 'boom', 'server_error'],
+    ['503', '', 'server_error'],
+    ['302', '', 'redirect'],
+    ['301', '', 'redirect'],
+    ['', '', 'transport_error'],
+    ['000', '', 'transport_error'],
+  ];
+  const absentOutcomes = new Set(['absent', 'teaser_fallback']);
+  for (const [code, body, expected] of rows) {
+    const kind = probe('pas_classify_flutter_asset_response', code, body);
+    assert.equal(kind, expected, `code=${JSON.stringify(code)}`);
+    if (absentOutcomes.has(expected)) {
+      assert.ok(absentOutcomes.has(kind));
+    } else {
+      assert.equal(absentOutcomes.has(kind), false, `${expected} must not be reported as absent`);
+    }
+  }
 });
 
 test('bash probe: pas_classify_teaser_body', () => {

@@ -22,9 +22,9 @@ const {
 } = require('../../scripts/lib/uat_queue_lib');
 const { reconcileFailedDeployLedger, reconcileFailedPreUatLedger } = require('../../scripts/lib/uat_deploy_run_resolve');
 const {
+  commitStateMutation,
   loadStateFromIssue,
   resolveCoordinationIssue,
-  saveStateToIssue,
 } = require('../../scripts/lib/uat_queue_sync');
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -178,6 +178,38 @@ async function prepareDispatch({
     failed_gates: resolvedFailedGates,
     nextState,
   };
+}
+
+async function reapplyDispatchLedger(state, prepared, context = {}) {
+  const { owner, repo, token, force = false } = context;
+  if (owner && repo && token) {
+    await releaseWatcherIfHolderRunFinished(state, owner, repo, token);
+  }
+  if (force && isWatcherLeaseActive(state)) {
+    releaseWatcher(state);
+  }
+
+  const mergeSha = prepared.entry && prepared.entry.merge_sha;
+  const live = mergeSha ? findEntryByMergeSha(state, mergeSha) : null;
+  if (live && live.state === 'failed' && prepared.entry.state === 'remedial') {
+    markEntryRemedial(state, { mergeSha });
+  }
+
+  const holder = prepared.nextState.active_watcher && prepared.nextState.active_watcher.holder;
+  const sameHolder = holder && state.active_watcher && state.active_watcher.holder === holder;
+  const current = mergeSha ? findEntryByMergeSha(state, mergeSha) : null;
+  if (holder && current && !sameHolder && !isWatcherLeaseActive(state)) {
+    acquireWatcher(state, {
+      holder,
+      leaseMinutes: 90,
+      watchingSeq: current.seq,
+    });
+  }
+
+  if (prepared.nextState.promote_hold) {
+    setPromoteHold(state, { reason: prepared.nextState.promote_hold_reason });
+  }
+  return state;
 }
 
 async function main() {
@@ -339,7 +371,19 @@ async function main() {
   }
 
   if (writeLedger && prepared.nextState) {
-    await saveStateToIssue(prepared.issueNumber, prepared.nextState, token);
+    await commitStateMutation({
+      issueNumber: prepared.issueNumber,
+      token,
+      async mutate(state) {
+        await reapplyDispatchLedger(state, prepared, {
+          owner,
+          repo,
+          token,
+          force: forceDispatch,
+        });
+        return { state };
+      },
+    });
   }
 
   printJson({
@@ -360,4 +404,5 @@ if (require.main === module) {
 module.exports = {
   prepareDispatch,
   fetchWorkflowJobs,
+  reapplyDispatchLedger,
 };

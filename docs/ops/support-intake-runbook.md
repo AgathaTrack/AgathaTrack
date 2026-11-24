@@ -47,7 +47,7 @@ If the token cannot set issue type or fields, the worker must not treat the crea
 
 Local dev / tests: leave `SUPPORT_GITHUB_REPO` empty so GitHub outbox rows stay `disabled`.
 
-**Stage mirror (#2345):** support issues expose org issue field **Stage** (same catalog as Pawpet). [`stage-mirror.yml`](/.github/workflows/stage-mirror.yml) syncs ATSupport **Status** with **Stage** on a **10-minute** poll (`STAGE_MIRROR`; no `issues` events from `AgathaTrackPrivate`). Hidden project field **Synced stage** stores the last applied value. Agents may set **Stage** on private issues; invalid values for the support board are reverted on the next pass (board wins).
+**Stage mirror (#2345):** support issues (types **Support Bug** and **Support Question**) expose org issue field **Support Stage** (ATSupport columns only — not Pawpet **Stage**). [`stage-mirror.yml`](../../.github/workflows/stage-mirror.yml) syncs ATSupport **Status** with **Support Stage** on a **10-minute** poll (`STAGE_MIRROR`; no `issues` events from `AgathaTrackPrivate`). Hidden project field **Synced stage** stores the last applied value. Agents may set **Support Stage** on private support issues; invalid values for the support board are reverted on the next pass (board wins). One-off cutover: `scripts/support_stage_migrate.js`.
 
 ## ATSupport board columns
 
