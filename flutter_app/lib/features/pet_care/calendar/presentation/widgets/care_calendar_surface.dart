@@ -85,6 +85,7 @@ class CareCalendarSurface extends StatelessWidget {
               child: Semantics(
                 identifier: 'care_calendar_empty_month',
                 child: Column(
+                  key: const Key('care_calendar_empty_month'),
                   children: [
                     Text(
                       l.careCalendarEmptyMonthTitle,

@@ -46,7 +46,7 @@ EN **Care calendar** / FR **Calendrier de soins** — read-only month view. **Be
 | Given a window > 42 inclusive days When requested Then 400 `care_calendar_window_span` | CARE-CALENDAR-R-002 | test: server/test/care/careCalendarWindow.test.js |
 | Given dashboard pets excluding passed-away When Calendar tab is selected Then each pet loads via care-calendar with concurrency 4 | CARE-CALENDAR-R-010 | bdd: flutter_app/test/bdd/features/care_calendar.feature#Dashboard calendar tab |
 | Given a materialised occurrence When user taps a single-item day Then Care date opens via `openOccurrenceScreen` | CARE-CALENDAR-R-004 | bdd: flutter_app/test/bdd/features/care_calendar.feature#Open Care date from calendar |
-| Given after-it's-done sparse projection When future month has no dated slots Then empty-state copy explains sparsity | CARE-CALENDAR-R-011 | none — #1539 |
+| Given after-it's-done sparse projection When future month has no dated slots Then empty-state copy explains sparsity | CARE-CALENDAR-R-011 | test: flutter_app/test/features/pet_care/calendar/care_calendar_empty_month_test.dart |
 
 ## States & data
 
