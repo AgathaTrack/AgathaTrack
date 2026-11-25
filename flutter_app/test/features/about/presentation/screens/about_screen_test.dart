@@ -13,7 +13,10 @@ void main() {
         GoRoute(
           path: '/',
           builder: (context, state) => const AboutScreen(
-            initialSiteVersion: SiteVersionInfo(version: '1.2.3', build: 'abc1234'),
+            initialSiteVersion: SiteVersionInfo(
+              version: '1.2.3',
+              build: 'abc1234',
+            ),
           ),
         ),
       ],
