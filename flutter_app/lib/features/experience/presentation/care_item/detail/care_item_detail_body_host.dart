@@ -55,6 +55,24 @@ class _CareItemDetailBodyHostState extends ConsumerState<CareItemDetailBodyHost>
   }
 
   @override
+  void didUpdateWidget(CareItemDetailBodyHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final needsAttentionBefore = _showsNeedsAttention(oldWidget);
+    final needsAttentionNow = _showsNeedsAttention(widget);
+    if (oldWidget.entryId != widget.entryId ||
+        needsAttentionBefore != needsAttentionNow) {
+      _bulkSelection.reset();
+    }
+  }
+
+  bool _showsNeedsAttention(CareItemDetailBodyHost host) {
+    return !host.isClosed &&
+        !host.entry.isCompleted &&
+        host.entry.schedule != null &&
+        !host.entry.isPaused;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return CareItemBulkSelectionScope(
       selection: _bulkSelection,

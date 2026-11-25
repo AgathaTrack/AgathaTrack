@@ -73,8 +73,15 @@ class CareItemAttentionOccurrenceRow extends ConsumerWidget {
 
     return Semantics(
       identifier: 'care_item_occurrence_row_${occurrence.id}',
-      label: '$when, ${pill.label}. ${l.careRowOpensDate}',
-      button: true,
+      label: selectionMode
+          ? '$whenSemantic, ${pill.label}'
+          : '$whenSemantic, ${pill.label}. ${l.careRowOpensDate}',
+      button: !selectionMode,
+      checked: selectionMode ? selected : null,
+      enabled: !muted,
+      onTap: selectionMode && !muted
+          ? () => onSelectionChanged?.call(!selected)
+          : null,
       child: InkWell(
         key: Key('care_item_occurrence_${occurrence.id}'),
         onTap: selectionMode
@@ -91,12 +98,14 @@ class CareItemAttentionOccurrenceRow extends ConsumerWidget {
           child: Row(
             children: [
               if (selectionMode) ...[
-                Checkbox(
-                  key: Key('care_item_select_${occurrence.id}'),
-                  value: selected,
-                  onChanged: muted
-                      ? null
-                      : (value) => onSelectionChanged?.call(value == true),
+                ExcludeSemantics(
+                  child: Checkbox(
+                    key: Key('care_item_select_${occurrence.id}'),
+                    value: selected,
+                    onChanged: muted
+                        ? null
+                        : (value) => onSelectionChanged?.call(value == true),
+                  ),
                 ),
               ],
               Expanded(child: ExcludeSemantics(child: Text(when))),

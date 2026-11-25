@@ -235,6 +235,9 @@ class CareItemDetailScreen extends ConsumerWidget {
                 ),
               ],
               child: CareItemDetailBodyHost(
+                key: ValueKey(
+                  '$entryId-${entry.isPaused}-$isClosed-${entry.isCompleted}',
+                ),
                 petId: petId,
                 entry: entry,
                 pet: pet,

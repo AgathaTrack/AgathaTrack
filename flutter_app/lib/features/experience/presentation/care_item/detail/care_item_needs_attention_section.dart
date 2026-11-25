@@ -43,6 +43,19 @@ class _CareItemNeedsAttentionSectionState
     await ref.read(careDataChangedProvider)();
   }
 
+  void _reconcileSelection(Set<String> openStartedIds) {
+    CareItemBulkSelectionScope.maybeOf(context)?.reconcileOpenIds(openStartedIds);
+  }
+
+  Future<void> _onRowChanged() async {
+    await _refresh();
+    if (!mounted) return;
+    final started = sortStartedOpenOccurrences(
+      partitionOpenOccurrences(widget.schedule).started,
+    );
+    _reconcileSelection(started.map((o) => o.id).toSet());
+  }
+
   Future<void> _bulk({required bool done, List<String>? occurrenceIds}) async {
     if (_busy) return;
     final l = AppLocalizations.of(context)!;
@@ -136,10 +149,15 @@ class _CareItemNeedsAttentionSectionState
                 entryId: _s.entryId,
                 undoToken: value.undoToken,
               );
-              await _refresh();
+              await _onRowChanged();
             },
           );
         }
+        _reconcileSelection(
+          sortStartedOpenOccurrences(partitionOpenOccurrences(_s).started)
+              .map((o) => o.id)
+              .toSet(),
+        );
       case CareFailed(failure: CareNotOpenFailure()):
         messenger.showSnackBar(SnackBar(content: Text(l.careAlreadyUpdated)));
       case CareFailed():
@@ -162,6 +180,9 @@ class _CareItemNeedsAttentionSectionState
     final showSelectToggle = showBulk && selection != null;
 
     if (selection != null) {
+      if (selectionMode) {
+        selection.reconcileOpenIds(started.map((o) => o.id).toSet());
+      }
       selection.bindStickyActions(
         muted: rowMuted,
         onMarkSelected: () => _bulk(
@@ -207,7 +228,7 @@ class _CareItemNeedsAttentionSectionState
                 schedule: _s,
                 occurrence: occ,
                 muted: rowMuted,
-                onChanged: _refresh,
+                onChanged: _onRowChanged,
                 onSkip: () => _skipRow(occ),
                 selectionMode: selectionMode,
                 selected: selection?.selectedIds.contains(occ.id) ?? false,

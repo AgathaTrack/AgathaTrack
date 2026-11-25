@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Selection state for partial bulk Mark/Skip on Care Item started rows (#1673).
 class CareItemBulkSelection extends ChangeNotifier {
@@ -35,6 +36,23 @@ class CareItemBulkSelection extends ChangeNotifier {
   }
 
   void clearAfterBulk() {
+    _selectionMode = false;
+    _selectedIds.clear();
+    notifyListeners();
+  }
+
+  /// Drop selections that no longer appear in the started list (after row Mark/Skip).
+  void reconcileOpenIds(Set<String> openIds) {
+    final before = _selectedIds.length;
+    _selectedIds.removeWhere((id) => !openIds.contains(id));
+    if (_selectedIds.length != before) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => notifyListeners());
+    }
+  }
+
+  /// Clears mode and selection when the care item leaves the needs-attention surface.
+  void reset() {
+    if (!_selectionMode && _selectedIds.isEmpty) return;
     _selectionMode = false;
     _selectedIds.clear();
     notifyListeners();
