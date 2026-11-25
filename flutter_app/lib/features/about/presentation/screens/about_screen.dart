@@ -7,11 +7,13 @@ import '../../../../core/site_version/fetch_site_version.dart';
 import '../../../../core/site_version/site_version_info.dart';
 import '../widgets/about_version_label.dart';
 
-class AboutScreen extends StatefulWidget {
-  const AboutScreen({super.key, this.initialSiteVersion});
+typedef SiteVersionLoader = Future<SiteVersionInfo> Function();
 
-  /// Test-only override; production leaves this null and loads `/version.json` on web.
-  final SiteVersionInfo? initialSiteVersion;
+class AboutScreen extends StatefulWidget {
+  const AboutScreen({super.key, this.siteVersionLoader});
+
+  /// Override in tests to exercise the real fetch path or failure modes.
+  final SiteVersionLoader? siteVersionLoader;
 
   @override
   State<AboutScreen> createState() => _AboutScreenState();
@@ -23,9 +25,7 @@ class _AboutScreenState extends State<AboutScreen> {
   @override
   void initState() {
     super.initState();
-    _versionFuture = widget.initialSiteVersion != null
-        ? Future.value(widget.initialSiteVersion!)
-        : fetchSiteVersion();
+    _versionFuture = (widget.siteVersionLoader ?? fetchSiteVersion)();
   }
 
   Widget _buildLogo({required double size}) {

@@ -12,9 +12,11 @@ if [[ ! -d "$WEB_DIR" ]]; then
   exit 1
 fi
 
-GIT_SHA="${GITHUB_SHA:-}"
+# Checked-out HEAD wins: workflow_run builds may check out deploy_ref while
+# GITHUB_SHA still refers to the triggering event commit.
+GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
 if [[ -z "$GIT_SHA" ]]; then
-  GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+  GIT_SHA="${GITHUB_SHA:-}"
 fi
 if [[ -z "$GIT_SHA" ]]; then
   echo "::error::Could not resolve git SHA for version.json (set GITHUB_SHA or run from a git checkout)" >&2

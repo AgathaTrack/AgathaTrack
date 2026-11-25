@@ -74,10 +74,10 @@ build = str(data.get("build") or "").strip()
 commit = str(data.get("commit") or "").strip()
 if not app_version or not build or not commit:
     raise SystemExit("version.json must include non-empty version, build, and commit")
-if not re.fullmatch(r"[0-9a-f]{7,40}", build.lower()):
-    raise SystemExit(f"version.json build must be a git short SHA, got {build!r}")
-if len(commit) < 7 or not re.fullmatch(r"[0-9a-f]+", commit.lower()):
-    raise SystemExit(f"version.json commit must be a full git SHA, got {commit!r}")
+if not re.fullmatch(r"[0-9a-f]{7}", build.lower()):
+    raise SystemExit(f"version.json build must be a 7-char git short SHA, got {build!r}")
+if not re.fullmatch(r"[0-9a-f]{40}", commit.lower()):
+    raise SystemExit(f"version.json commit must be a full 40-char git SHA, got {commit!r}")
 if commit.lower()[: len(build)] != build.lower():
     raise SystemExit("version.json build must match the commit prefix")
 version_line = ""
