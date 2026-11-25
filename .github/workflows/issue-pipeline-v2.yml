@@ -16,6 +16,14 @@ on:
         type: boolean
         required: false
         default: false
+      mission:
+        description: Scope this tick. `board` = full pipeline (default). `analyse` = To do through Ready only (requires issue_number; never ready.launch). Agent skills wake the engine with analyse + issue_number.
+        type: choice
+        required: false
+        default: board
+        options:
+          - board
+          - analyse
 
 permissions:
   contents: read
@@ -58,4 +66,5 @@ jobs:
           ISSUE_NUMBER: ${{ inputs.issue_number || '' }}
           # Manual dispatch previews unless `live` is ticked (scripts/issue_pipeline_v2_dispatch.js).
           ISSUE_PIPELINE_V2_LIVE: ${{ inputs.live && 'true' || 'false' }}
+          PIPELINE_V2_MISSION: ${{ inputs.mission || 'board' }}
         run: node scripts/issue_pipeline_v2.js

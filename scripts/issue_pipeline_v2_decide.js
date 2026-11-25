@@ -31,6 +31,7 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
+const { missionGuard } = require('./issue_pipeline_mission');
 const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
 const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
 const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
@@ -500,6 +501,10 @@ function decide(facts, config) {
 /** The stage rows, for an issue that is not blocked (or an engine hold being re-evaluated). */
 function decideStage(facts, config) {
   const stage = canonicalStage(facts.stage);
+  const missionBlock = missionGuard(stage, facts.mission);
+  if (missionBlock) {
+    return missionBlock;
+  }
   if (!String(facts.stage || '').trim() && facts.followUp) {
     return facts.followUp.depth <= config.limits.followUpMaxDepth
       ? setStage('To do', 'followup.todo')

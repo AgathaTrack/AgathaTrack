@@ -12,6 +12,7 @@ const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
 const { resolveDispatchTarget, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
+const { resolveMission } = require('./issue_pipeline_mission');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
@@ -46,7 +47,7 @@ function mode() {
 }
 
 /** Facts available from the issue itself; later phases add comments, reactions and PRs. */
-function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
+function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode, mission }) {
   const facts = {
     mode: runMode,
     now,
@@ -56,6 +57,7 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
     blocked: parsed.blocked,
     bodyHash: bodySha(issue.body),
     wip,
+    mission: mission || 'board',
   };
   if (parsed.acceptance !== undefined) facts.acceptance = parsed.acceptance;
   if (parsed.acceptanceFailReason !== undefined) facts.acceptanceFailReason = parsed.acceptanceFailReason;
@@ -281,7 +283,7 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
   return merged;
 }
 
-async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, io = {} }) {
+async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, mission = 'board', io = {} }) {
   const runMode = mode();
   if (runMode === 'off') {
     return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [] };
@@ -389,6 +391,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           wip,
           now,
           runMode,
+          mission,
         }),
         roundRobinAfter,
         roundRobinOrder,
@@ -512,9 +515,25 @@ async function main() {
     liveRequested: process.env.ISSUE_PIPELINE_V2_LIVE === 'true',
     repoMode: process.env.ISSUE_PIPELINE_V2,
   });
+  const missionResolved = resolveMission({
+    mission: process.env.PIPELINE_V2_MISSION,
+    issueNumber: target.only,
+  });
+  if (!missionResolved.ok) {
+    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: missionResolved.reason }));
+    process.exitCode = 1;
+    return;
+  }
   process.env.ISSUE_PIPELINE_V2 = run.mode;
   console.log(
-    JSON.stringify({ event: 'pipeline_v2_run', mode: run.mode, source: run.source, target: target.only ?? 'board', writes: run.mode === 'on' }),
+    JSON.stringify({
+      event: 'pipeline_v2_run',
+      mode: run.mode,
+      source: run.source,
+      target: target.only ?? 'board',
+      mission: missionResolved.mission,
+      writes: run.mode === 'on',
+    }),
   );
   const { owner, repo } = parseRepo(process.env.GITHUB_REPOSITORY || '');
   const projectsPat = process.env.GH_PROJECTS_PAT;
@@ -532,6 +551,7 @@ async function main() {
     projectId,
     statusFieldId,
     only,
+    mission: missionResolved.mission,
   });
   console.log(JSON.stringify({ event: 'pipeline_v2_tick', ...result, actions: result.actions?.length }));
   if (result.errors?.length > 0) {
