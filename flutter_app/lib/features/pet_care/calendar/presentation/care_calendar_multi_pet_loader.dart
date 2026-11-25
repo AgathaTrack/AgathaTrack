@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 import '../../context/presentation/providers/care_context_providers.dart';
+import '../domain/care_calendar_account_month.dart';
 import '../domain/care_calendar_month_window.dart';
 import '../domain/entities/care_calendar.dart';
 
@@ -49,12 +51,20 @@ class CareCalendarMultiPetNotifier
     extends StateNotifier<CareCalendarMultiPetState> {
   CareCalendarMultiPetNotifier(this._ref, this._petLabels)
     : super(_initialState(_petLabels)) {
+    _httpClient = http.Client();
     unawaited(_reload());
   }
 
   final Ref _ref;
   final Map<String, String> _petLabels;
   int _loadGeneration = 0;
+  http.Client? _httpClient;
+  bool _monthAlignedFromAsOf = false;
+
+  void _cancelInFlightHttp() {
+    _httpClient?.close();
+    _httpClient = http.Client();
+  }
 
   static CareCalendarMultiPetState _initialState(
     Map<String, String> petLabels,
@@ -71,6 +81,7 @@ class CareCalendarMultiPetNotifier
   }
 
   Future<void> setMonth(DateTime month) async {
+    _cancelInFlightHttp();
     final window = CareCalendarMonthWindow.forMonth(month);
     state = state.copyWith(
       month: month,
@@ -83,8 +94,22 @@ class CareCalendarMultiPetNotifier
     await _reload();
   }
 
+  Future<void> _maybeAlignMonthFromAsOf(CareCalendarResult data) async {
+    if (_monthAlignedFromAsOf) return;
+    final accountMonth = careCalendarMonthFromAsOf(data.asOf.date);
+    if (accountMonth == null) return;
+    _monthAlignedFromAsOf = true;
+    if (accountMonth.year == state.month.year &&
+        accountMonth.month == state.month.month) {
+      return;
+    }
+    await setMonth(accountMonth);
+  }
+
   Future<void> _reload() async {
+    _cancelInFlightHttp();
     final generation = ++_loadGeneration;
+    final client = _httpClient!;
     final repo = _ref.read(careContextRepositoryProvider);
     final window = state.window;
     final pending = List<CareCalendarPetLoadState>.from(state.perPet);
@@ -101,7 +126,10 @@ class CareCalendarMultiPetNotifier
             petId: row.petId,
             startsOn: window.startsOn,
             endsOn: window.endsOn,
+            httpClient: client,
           );
+          if (generation != _loadGeneration) return;
+          await _maybeAlignMonthFromAsOf(data);
           if (generation != _loadGeneration) return;
           pending[i] = (
             petId: row.petId,
@@ -133,6 +161,12 @@ class CareCalendarMultiPetNotifier
       List.generate(_careCalendarConcurrency, (_) => worker()),
       eagerError: false,
     );
+  }
+
+  @override
+  void dispose() {
+    _httpClient?.close();
+    super.dispose();
   }
 }
 

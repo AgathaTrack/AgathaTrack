@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pet_profile_app/core/router/shell_return_navigation.dart';
 import 'package:pet_profile_app/l10n/app_localizations.dart';
 import '../../domain/entities/care_calendar.dart';
+import 'care_calendar_before_month_strip.dart';
 
 class CareCalendarSurface extends StatelessWidget {
   const CareCalendarSurface({
@@ -69,7 +70,10 @@ class CareCalendarSurface extends StatelessWidget {
           ),
           if (result.beforeMonthItems.isNotEmpty) ...[
             const SizedBox(height: 8),
-            _BeforeMonthStrip(petId: petId, items: result.beforeMonthItems),
+            CareCalendarBeforeMonthStrip(
+              petId: petId,
+              items: result.beforeMonthItems,
+            ),
           ],
           if (result.notices.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -158,6 +162,13 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
     }
 
     final errors = rows.where((r) => r.error != null).toList();
+    final beforeMonth =
+        <({String petId, String petName, CareCalendarItem item})>[
+          for (final row in rows)
+            if (row.data != null)
+              for (final item in row.data!.beforeMonthItems)
+                (petId: row.petId, petName: row.petName, item: item),
+        ];
 
     return Semantics(
       container: true,
@@ -172,7 +183,13 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
                 onPressed: onPreviousMonth,
                 icon: const Icon(Icons.chevron_left),
               ),
-              Expanded(child: Text(monthLabel, textAlign: TextAlign.center)),
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  identifier: 'care_calendar_month_label',
+                  child: Text(monthLabel, textAlign: TextAlign.center),
+                ),
+              ),
               IconButton(
                 key: const Key('care_calendar_next_month'),
                 onPressed: onNextMonth,
@@ -192,49 +209,12 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
                   ),
               ],
             ),
+          if (beforeMonth.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            CareCalendarMultiBeforeMonthStrip(rows: beforeMonth),
+          ],
           const SizedBox(height: 8),
           _MonthGridMarkers(month: month, markers: merged),
-        ],
-      ),
-    );
-  }
-}
-
-class _BeforeMonthStrip extends StatelessWidget {
-  const _BeforeMonthStrip({required this.petId, required this.items});
-
-  final String petId;
-  final List<CareCalendarItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
-    return Semantics(
-      container: true,
-      identifier: 'care_calendar_before_month',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l.careCalendarBeforeMonth,
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: 4),
-          for (final item in items)
-            ListTile(
-              dense: true,
-              title: Text(item.name),
-              subtitle: Text(item.scheduledDate),
-              onTap: item.isMaterialised
-                  ? () => openOccurrenceScreen(
-                      context,
-                      petId: petId,
-                      entryId: item.healthEntryId,
-                      occurrenceId: item.occurrenceId!,
-                      source: 'care_calendar',
-                    )
-                  : null,
-            ),
         ],
       ),
     );
@@ -286,7 +266,7 @@ class _MonthGridMarkers extends StatelessWidget {
     final firstOfMonth = DateTime(month.year, month.month);
     final firstWeekday = firstOfMonth.weekday % 7;
     final gridStart = firstOfMonth.subtract(Duration(days: firstWeekday));
-    const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    final weekdays = MaterialLocalizations.of(context).narrowWeekdays;
 
     return Column(
       children: [
@@ -337,38 +317,43 @@ class _DayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final iso = DateFormat('yyyy-MM-dd').format(date);
     final count = markers.length;
-    final stackCount = _stackCount(markers);
+    final hasProjectedOnly =
+        count > 0 && markers.every((row) => row.item.isProjected);
 
     return Semantics(
       button: count > 0,
       identifier: 'care_calendar_day_$iso',
       child: InkWell(
         onTap: count == 0 ? null : () => _onTap(context, iso, markers),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Column(
-            children: [
-              Text('${date.day}', style: Theme.of(context).textTheme.bodySmall),
-              if (count > 0)
-                Badge(label: Text(stackCount > 1 ? '$stackCount' : '•')),
-            ],
+        child: SizedBox(
+          height: 48,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${date.day}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (count > 0)
+                  Badge(
+                    isLabelVisible: true,
+                    backgroundColor: hasProjectedOnly
+                        ? Theme.of(context).colorScheme.surfaceContainerHighest
+                        : null,
+                    label: Text(
+                      count > 1 ? '$count' : '•',
+                      style: hasProjectedOnly
+                          ? Theme.of(context).textTheme.labelSmall
+                          : null,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  int _stackCount(
-    List<({String petId, String petName, CareCalendarItem item})> rows,
-  ) {
-    final byEntry = <String, int>{};
-    for (final row in rows) {
-      byEntry[row.item.healthEntryId] =
-          (byEntry[row.item.healthEntryId] ?? 0) + 1;
-    }
-    return byEntry.values.fold<int>(
-      0,
-      (a, b) => a + (b > 1 ? 1 : (b == 1 ? 1 : 0)),
     );
   }
 

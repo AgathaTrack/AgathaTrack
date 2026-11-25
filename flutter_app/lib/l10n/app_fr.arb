@@ -2144,6 +2144,14 @@
       "close": { "type": "String" }
     }
   },
+  "historyPillA11yDoneWithWeight": "Échéance {due}, fait le {close}, {weight}",
+  "@historyPillA11yDoneWithWeight": {
+    "placeholders": {
+      "due": { "type": "String" },
+      "close": { "type": "String" },
+      "weight": { "type": "String" }
+    }
+  },
   "historyPillA11ySkipped": "Échéance {due}, ignoré le {close}",
   "@historyPillA11ySkipped": {
     "placeholders": {

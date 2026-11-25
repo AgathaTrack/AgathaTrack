@@ -84,6 +84,7 @@ function classifyMigrationSqlLine(line, state) {
     }
 
     if (mode === 'block') {
+      // An unterminated block runs to end of input, as in PostgreSQL, which rejects the file.
       if (line[i] === '/' && line[i + 1] === '*') {
         blockDepth += 1;
         i += 2;

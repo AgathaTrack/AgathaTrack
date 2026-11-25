@@ -10525,6 +10525,12 @@ abstract class AppLocalizations {
   /// **'Due {due}, done {close}'**
   String historyPillA11yDone(String due, String close);
 
+  /// No description provided for @historyPillA11yDoneWithWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {due}, done {close}, {weight}'**
+  String historyPillA11yDoneWithWeight(String due, String close, String weight);
+
   /// No description provided for @historyPillA11ySkipped.
   ///
   /// In en, this message translates to:

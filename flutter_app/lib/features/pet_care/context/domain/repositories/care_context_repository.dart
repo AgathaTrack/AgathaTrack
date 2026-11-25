@@ -7,11 +7,14 @@ import '../entities/per_pet_away_plan_status.dart';
 import '../entities/pet_planned_absence_row.dart';
 import '../entities/planned_absence.dart';
 
+import 'package:http/http.dart' as http;
+
 abstract class CareContextRepository {
   Future<CareCalendarResult> getCareCalendar({
     required String petId,
     required String startsOn,
     required String endsOn,
+    http.Client? httpClient,
   });
 
   Future<CarePeriodCoverageResult> getCarePeriodCoverage({
