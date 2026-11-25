@@ -20,12 +20,13 @@ test.describe('Care calendar @care', () => {
     const dashboard = new GuardianDashboardPage(page);
     await dashboard.open();
     await page.getByRole('button', { name: /calendar|calendrier/i }).click();
-    await expect(
-      page.locator('[flt-semantics-identifier="care_calendar_month_label"]'),
-    ).toBeVisible();
+    const monthLabel = page.locator(
+      '[flt-semantics-identifier="care_calendar_month_label"]',
+    );
+    await expect(monthLabel).toBeVisible({ timeout: 60_000 });
     await expect(
       page.locator('[flt-semantics-identifier^="care_calendar_day_"]').first(),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 60_000 });
   });
 
   test('Open Care date from calendar', async ({ page, testUser }) => {

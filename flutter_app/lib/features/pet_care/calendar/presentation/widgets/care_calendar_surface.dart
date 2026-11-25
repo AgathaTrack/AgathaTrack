@@ -162,12 +162,13 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
     }
 
     final errors = rows.where((r) => r.error != null).toList();
-    final beforeMonth = <({String petId, String petName, CareCalendarItem item})>[
-      for (final row in rows)
-        if (row.data != null)
-          for (final item in row.data!.beforeMonthItems)
-            (petId: row.petId, petName: row.petName, item: item),
-    ];
+    final beforeMonth =
+        <({String petId, String petName, CareCalendarItem item})>[
+          for (final row in rows)
+            if (row.data != null)
+              for (final item in row.data!.beforeMonthItems)
+                (petId: row.petId, petName: row.petName, item: item),
+        ];
 
     return Semantics(
       container: true,
@@ -331,7 +332,10 @@ class _DayCell extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('${date.day}', style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  '${date.day}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 if (count > 0)
                   Badge(
                     isLabelVisible: true,

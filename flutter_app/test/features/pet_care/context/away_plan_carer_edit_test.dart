@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,6 +96,7 @@ class _FakeCareContextRepository implements CareContextRepository {
     required String petId,
     required String startsOn,
     required String endsOn,
+    http.Client? httpClient,
   }) {
     throw UnimplementedError();
   }
