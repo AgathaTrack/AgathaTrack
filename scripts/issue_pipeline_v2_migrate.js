@@ -64,12 +64,18 @@ async function run({ owner, repo, projectsPat, projectId, statusFieldId, apply, 
     }
   }
   const fields = io.fields || (await loadOrgFields({ org: owner, token: projectsPat }));
-  const rows = await (io.listProjectIssues || listProjectIssues)({ projectId, statusFieldId, projectsPat });
+  const rows = await (io.listProjectIssues || listProjectIssues)({
+    projectId,
+    statusFieldId,
+    projectsPat,
+    owner,
+    repo,
+  });
   const getIssue = io.getIssue || ((n) => rest('GET', `/repos/${owner}/${repo}/issues/${n}`, projectsPat));
   const report = [];
   for (const row of rows) {
     const ref = row.issue;
-    if (!ref || ref.state !== 'OPEN' || ref.repository?.name !== repo || ref.repository?.owner?.login !== owner) {
+    if (!ref || ref.state !== 'OPEN') {
       continue;
     }
     const issue = await getIssue(ref.number);

@@ -6,11 +6,22 @@ const {
   projectRowsFromItems,
   formatStatusOptionNotFoundError,
   suggestStatusOptionNames,
+  listProjectIssues,
+  filterRowsByRepository,
+  projectRowMatchesRepo,
+  PROJECT_ITEMS_PAGE_SIZE,
 } = require('./github-project-lib');
 
 const item = (id, state, status, extra = {}) => ({
   id,
-  content: state ? { number: Number(id.replace('item-', '')), state } : null,
+  content: state
+    ? {
+        number: Number(id.replace('item-', '')),
+        state,
+        repository: extra.repository,
+        ...extra.contentExtra,
+      }
+    : null,
   fieldValues: { nodes: status ? [{ name: status, field: { id: 'S' } }] : [] },
   ...extra,
 });
@@ -60,4 +71,112 @@ test('formatStatusOptionNotFoundError is board-neutral for ATSupport Status look
   ]);
   assert.match(message, /github-issue-workflow\.md/);
   assert.doesNotMatch(message, /PAWPET_COLUMNS/);
+});
+
+test('projectRowMatchesRepo matches owner login and repository name', () => {
+  const row = {
+    issue: { repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } },
+  };
+  assert.equal(projectRowMatchesRepo(row, 'AgathaTrack', 'AgathaTrack'), true);
+  assert.equal(projectRowMatchesRepo(row, 'Other', 'AgathaTrack'), false);
+  assert.equal(projectRowMatchesRepo({ issue: {} }, 'AgathaTrack', 'AgathaTrack'), false);
+});
+
+test('filterRowsByRepository requires both owner and repo', () => {
+  const rows = [
+    { issue: { number: 1, repository: { name: 'A', owner: { login: 'O' } } } },
+    { issue: { number: 2, repository: { name: 'B', owner: { login: 'O' } } } },
+  ];
+  assert.throws(() => filterRowsByRepository(rows, 'O', null), /owner and repo must both be set/);
+  assert.deepEqual(filterRowsByRepository(rows, 'O', 'A').map((r) => r.issue.number), [1]);
+  assert.deepEqual(filterRowsByRepository(rows, null, null).length, 2);
+});
+
+test('listProjectIssues paginates GraphQL pages and applies repo filter', async () => {
+  const pageCalls = [];
+  const graphqlFn = async (_pat, _query, variables) => {
+    pageCalls.push(variables.after ?? null);
+    if (variables.after == null) {
+      return {
+        node: {
+          items: {
+            pageInfo: { hasNextPage: true, endCursor: 'cursor-2' },
+            nodes: [
+              {
+                id: 'pi-1',
+                fieldValues: { nodes: [] },
+                content: {
+                  number: 1,
+                  state: 'OPEN',
+                  repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } },
+                },
+              },
+              {
+                id: 'pi-2',
+                fieldValues: { nodes: [] },
+                content: {
+                  number: 2,
+                  state: 'OPEN',
+                  repository: { name: 'Private', owner: { login: 'AgathaTrack' } },
+                },
+              },
+            ],
+          },
+        },
+      };
+    }
+    return {
+      node: {
+        items: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: [
+            {
+              id: 'pi-3',
+              fieldValues: { nodes: [] },
+              content: {
+                number: 3,
+                state: 'OPEN',
+                repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } },
+              },
+            },
+          ],
+        },
+      },
+    };
+  };
+
+  const all = await listProjectIssues({
+    projectId: 'P1',
+    statusFieldId: 'S',
+    projectsPat: 'token',
+    graphqlFn,
+  });
+  assert.equal(all.length, 3);
+  assert.deepEqual(pageCalls, [null, 'cursor-2']);
+
+  pageCalls.length = 0;
+  const filtered = await listProjectIssues({
+    projectId: 'P1',
+    statusFieldId: 'S',
+    projectsPat: 'token',
+    owner: 'AgathaTrack',
+    repo: 'AgathaTrack',
+    graphqlFn,
+  });
+  assert.deepEqual(filtered.map((row) => row.issue.number), [1, 3]);
+});
+
+test('listProjectIssues requests page size 100 on each GraphQL page', async () => {
+  let queryText = '';
+  const graphqlFn = async (_pat, query) => {
+    queryText = query;
+    return { node: { items: { pageInfo: { hasNextPage: false }, nodes: [] } } };
+  };
+  await listProjectIssues({
+    projectId: 'P1',
+    statusFieldId: 'S',
+    projectsPat: 'token',
+    graphqlFn,
+  });
+  assert.match(queryText, new RegExp(`items\\(first: ${PROJECT_ITEMS_PAGE_SIZE}`));
 });

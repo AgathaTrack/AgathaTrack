@@ -162,4 +162,3 @@ Run after the Phase 3 migration on each environment. Staff read tickets at `/sta
 Track implementation gaps opened during plan phase 1:
 
 - Screenshot re-encoding / metadata stripping (`sharp`) — [#2301](https://github.com/AgathaTrack/AgathaTrack/issues/2301).
-- `listProjectIssues` pagination / repository filter gaps — [#2302](https://github.com/AgathaTrack/AgathaTrack/issues/2302) (pipeline dispatcher paginates board items; scoped `issue_number` uses direct project-item lookup).

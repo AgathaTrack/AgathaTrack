@@ -280,16 +280,30 @@ function projectRowsFromItems(items, { statusFieldId, includeClosed = false }) {
     .filter(Boolean);
 }
 
-async function listProjectIssues({
-  projectId,
-  statusFieldId,
-  projectsPat,
-  includeClosed = false,
-}) {
+function projectRowMatchesRepo(row, owner, repo) {
+  const issue = row?.issue;
+  if (!issue?.repository) {
+    return false;
+  }
+  return issue.repository.name === repo && issue.repository.owner?.login === owner;
+}
+
+/** Optional post-map filter; both `owner` and `repo` must be set. */
+function filterRowsByRepository(rows, owner, repo) {
+  if (owner == null && repo == null) {
+    return rows;
+  }
+  if (!owner || !repo) {
+    throw new Error('listProjectIssues: owner and repo must both be set to filter by repository');
+  }
+  return rows.filter((row) => projectRowMatchesRepo(row, owner, repo));
+}
+
+async function fetchProjectV2ItemNodes({ projectId, projectsPat, graphqlFn = graphql }) {
   const items = [];
   let after = null;
   while (true) {
-    const data = await graphql(
+    const data = await graphqlFn(
       projectsPat,
       `query($projectId: ID!, $after: String) {
         node(id: $projectId) {
@@ -330,8 +344,21 @@ async function listProjectIssues({
     }
     after = page.pageInfo.endCursor;
   }
+  return items;
+}
 
-  return projectRowsFromItems(items, { statusFieldId, includeClosed });
+async function listProjectIssues({
+  projectId,
+  statusFieldId,
+  projectsPat,
+  includeClosed = false,
+  owner = null,
+  repo = null,
+  graphqlFn = graphql,
+}) {
+  const items = await fetchProjectV2ItemNodes({ projectId, projectsPat, graphqlFn });
+  const rows = projectRowsFromItems(items, { statusFieldId, includeClosed });
+  return filterRowsByRepository(rows, owner, repo);
 }
 
 async function searchEligibleIssues(owner, repo, token) {
@@ -485,7 +512,10 @@ module.exports = {
   updateProjectStatus,
   fetchProjectV2Item,
   listProjectIssues,
+  fetchProjectV2ItemNodes,
   projectRowsFromItems,
+  projectRowMatchesRepo,
+  filterRowsByRepository,
   PROJECT_ITEMS_PAGE_SIZE,
   searchEligibleIssues,
   fetchAllIssueComments,

@@ -303,16 +303,10 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     console.log(JSON.stringify({ event: 'acceptance.field-missing' }));
   }
 
-  const rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true });
+  const rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true, owner, repo });
   const numbers = rows
     .map((row) => row.issue)
-    .filter(
-      (issue) =>
-        issue &&
-        issue.state === 'OPEN' &&
-        issue.repository?.name === repo &&
-        issue.repository?.owner?.login === owner,
-    )
+    .filter((issue) => issue && issue.state === 'OPEN')
     .map((issue) => issue.number);
 
   const entries = [];
@@ -335,8 +329,6 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       (row) =>
         row.issue &&
         row.issue.state === 'CLOSED' &&
-        row.issue.repository?.name === repo &&
-        row.issue.repository?.owner?.login === owner &&
         ['in progress', 'in main', 'in uat'].includes(String(row.status || '').trim().toLowerCase()),
     )
     .map((row) => row.issue.number);
