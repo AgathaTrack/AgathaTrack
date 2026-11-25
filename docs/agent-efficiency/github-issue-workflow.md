@@ -12,7 +12,7 @@ This document describes how issues are filed, triaged, and moved through deliver
 
 It covers two layers:
 
-- **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org field `Stage` is the board column and the only state; an engine moves issues through eight stages. See [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The assignee-driven v1 dispatcher (`issue-pipeline-dispatcher.yml`, `ISSUE_PIPELINE`) is **removed**; history lives in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md) and [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md).
+- **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org issue field **`Stage`** is the engine’s authoritative state; an engine moves issues through eight stages. The Pawpet project **Status** column is separate (humans drag cards; release jobs may update **Status**). There is no automatic two-way sync between **Status** and **`Stage`** ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345) mirror cancelled). See [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The assignee-driven v1 dispatcher (`issue-pipeline-dispatcher.yml`, `ISSUE_PIPELINE`) is **removed**; history lives in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md) and [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md).
 - **Legacy label flow** (until `ISSUE_PIPELINE_V2=on`): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipeline_v2on).
 
 ## Issue forms
@@ -57,7 +57,8 @@ Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the 
 
 | Item | Kind | Values |
 |------|------|--------|
-| `Stage` | org issue field, **is the board column** | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
+| `Stage` | org issue field, **pipeline state** (not mirrored to/from Pawpet **Status**) | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
+| Pawpet **Status** | project single-select, **board column** | Same column names as `Stage` on the engineering board; updated by humans and release automation; engine and agents use org `Stage` instead when reading lifecycle state |
 | `Blocked` | org issue field | empty, or `question` · `no-convergence` · `launch-failed` · `decision` · `stalled` · `paused` · `sensitive` |
 | `Attempts` | number | engine retry counter (reassignments, failed launches); reset on every `Stage` change |
 | `busy` | label | an agent is actively working (delivery or a doorbell stage task) |

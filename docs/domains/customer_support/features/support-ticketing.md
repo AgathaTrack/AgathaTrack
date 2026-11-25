@@ -129,7 +129,7 @@ In-app replies or ticket history, customer-visible statuses, status-change email
 | SUPPORT-TICKETING-D-016 | Form classification uses the AgathaTrack issue types and issue fields: Support Bug, or Support Question plus Support Category. Source is form and Website or App is Website for this client. Labels are not the classification. This replaces the label method in SUPPORT-TICKETING-D-012; the @ATSupport URL in that row stays. | The org catalog is the target operators already see. Priority stays a staff field the worker does not set. | Live | 2026-11-14 | TBD |
 | SUPPORT-TICKETING-D-017 | The org project title is ATSupport (`https://github.com/orgs/AgathaTrack/projects/1`). The `@` prefix in earlier rows is not part of the name. | Confirmed by the operator after the org move. Auto-add and the project URL are unchanged. | Live | 2026-11-14 | TBD |
 | SUPPORT-TICKETING-D-018 | ATSupport board **Status** mirrors the org issue field **Support Stage** (Support Bug / Support Question only), not Pawpet **Stage** | Keeps engineering and support lifecycles separate on the org field catalog | Superseded by SUPPORT-TICKETING-D-019 | 2026-11-23 | TBD |
-| SUPPORT-TICKETING-D-019 | No ATSupport Status ↔ Support Stage mirror; D-018 is withdrawn and no board column is copied to an org field | Owner cancelled the mirror on #2345; removal takes effect when that code merges. Nothing reads or writes Support Stage in code | Live | 2026-11-25 | #2345 |
+| SUPPORT-TICKETING-D-019 | No ATSupport Status ↔ Support Stage mirror; D-018 is withdrawn and no board column is copied to an org field | Owner cancelled the mirror on #2345; workflow and scripts removed; nothing reads or writes Support Stage in automation | Live | 2026-11-25 | #2345 |
 
 ## Related
 
