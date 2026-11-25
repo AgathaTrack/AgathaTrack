@@ -28,6 +28,9 @@ const ATTEMPT_MARKERS = {
 
 /** Delay before retry number `failures` + 1, from `limits.launchBackoffMin` (the last entry repeats). */
 function launchBackoffMs(failures, config) {
+  if (!Number.isFinite(failures) || failures < 1) {
+    throw new RangeError('launchBackoffMs requires failures >= 1');
+  }
   const list = config.limits.launchBackoffMin;
   return list[Math.min(failures, list.length) - 1] * 60 * 1000;
 }

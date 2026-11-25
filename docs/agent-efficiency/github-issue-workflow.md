@@ -130,7 +130,8 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 - **Engine holds** (`stalled`, `launch-failed`): the engine ran out of retries. Each tick it reads the issue in full,
   re-runs the stage rule as if unblocked, and clears the flag itself when the rule no longer ends in an engine hold. While
   the rule still ends in one, a human comment wakes the stage agent as for a human hold. Setting one posts
-  `<!-- v2:hold reason=… row=… -->`.
+  `<!-- v2:hold reason=… row=… -->`. When the rule is only waiting on launch backoff, re-evaluation clears `Blocked` even
+  though the issue does not launch until the backoff elapses (the field is not a wait indicator).
 - **A human clear of an engine hold is a retry.** The next tick posts `<!-- v2:release by=human -->`; an engine release
   posts `by=engine`. Attempt markers older than the newest release stop counting: `v2:spec-request` in To do,
   `v2:resume` and `v2:aat-relaunch` in In progress, `v2:aat-launch` in In Main. In analysis, a release newer than the
