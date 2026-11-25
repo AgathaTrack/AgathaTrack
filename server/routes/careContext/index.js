@@ -4,6 +4,7 @@ import { createApiLimiter } from '../../config/rateLimit.js';
 import { registerPlannedAbsenceRoutes } from './plannedAbsencesRouter.js';
 import { registerCarePeriodProjectionRoutes } from './carePeriodProjectionRouter.js';
 import { registerCarePeriodCoverageRoutes } from './carePeriodCoverageRouter.js';
+import { registerCareCalendarRoutes } from './careCalendarRouter.js';
 import { registerPetPlannedAbsencesRoutes } from './petPlannedAbsencesRouter.js';
 
 export default function careContextRoutes(pool) {
@@ -17,4 +18,5 @@ export function registerCareContextPetRoutes(router, pool) {
   registerPetPlannedAbsencesRoutes(router, pool);
   registerCarePeriodProjectionRoutes(router, pool);
   registerCarePeriodCoverageRoutes(router, pool);
+  registerCareCalendarRoutes(router, pool);
 }

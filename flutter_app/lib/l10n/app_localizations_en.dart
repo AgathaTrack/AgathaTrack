@@ -1394,6 +1394,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get allCare => 'All care';
 
   @override
+  String get careCalendarAgendaTab => 'Agenda';
+
+  @override
+  String get careCalendarCalendarTab => 'Calendar';
+
+  @override
+  String get careCalendarSemanticsLabel => 'Care calendar';
+
+  @override
+  String get careCalendarEmptyMonthTitle => 'No care on this month yet';
+
+  @override
+  String get careCalendarEmptyMonthBody =>
+      'After-it\'s-done care may show few future dates until you mark care done. Use the agenda for what needs attention today.';
+
+  @override
+  String get careCalendarBeforeMonth => 'Before this month';
+
+  @override
+  String get careCalendarSparseMonthNotice =>
+      'Some care dates depend on when you last marked care done.';
+
+  @override
+  String careCalendarCouldntLoadPet(String petName) {
+    return 'Couldn\'t load $petName';
+  }
+
+  @override
+  String careCalendarDaySheetTitle(String date) {
+    return 'Care on $date';
+  }
+
+  @override
   String careForPet(String petName) {
     return '$petName\'s care';
   }
