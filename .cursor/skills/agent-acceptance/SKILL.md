@@ -210,7 +210,7 @@ No code or PR work during Phases 0–6 except verdict posting.
 
 - Parent issues only.
 - Evidence on the issue; marker line must match the CLI command.
-- **Copy to the issue is mandatory.** Any AAT run given an issue or PR ends with its verdict comment on the parent issue (PASS, FAIL or INCONCLUSIVE), in standalone mode too. This includes a run that stops early, or whose checks could not run (post an INCONCLUSIVE with the blocker). Chat output is not an AAT result. If the comment cannot be posted by the CLI or the fallback, say so in chat, name the blocker, and do not report the verdict as recorded.
+- **Copy to the issue is mandatory.** An AAT run with an eligible parent issue ends with its verdict comment on that parent (PASS, FAIL or INCONCLUSIVE), in standalone mode too. This includes a run that stops early, or whose checks could not run (post an INCONCLUSIVE with the blocker). A run that stops under §Eligibility (no resolvable parent, or a follow-up sub-issue) posts one comment on the issue it was given, explaining why, with no verdict marker. Chat output is not an AAT result. If the comment cannot be posted by the CLI or the fallback, say so in chat, name the blocker, and do not report the verdict as recorded.
 - `aat-start` on each re-entry clears prior pass/fail labels.
 - Engine mode: non-interactive, no subscriptions, no issue close.
 
