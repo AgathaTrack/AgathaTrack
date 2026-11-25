@@ -33,9 +33,11 @@
  * @param {Array<{agentId: string, nonce: string|null, at: number}>} input.launches
  *        doorbell launches for the In analysis stage
  * @param {string} input.bodyHash current body hash
+ * @param {number|null} [input.releasedAt] newest `v2:release`: when it is newer than the last request,
+ *        that round's earlier silent attempts no longer count, so it gets one more attempt (a retry)
  * @returns {Array<object>} rounds for `decideRound`, oldest first
  */
-function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [], bodyHash }) {
+function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [], bodyHash, releasedAt = null }) {
   const rounds = [];
   if (spec && spec.hash) {
     rounds.push({
@@ -53,8 +55,10 @@ function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [],
     const next = requests[i + 1];
     const attempts = [];
 
-    // Attempts that went silent before the current one are in the request's history.
-    for (const id of request.history || []) {
+    // Attempts that went silent before the current one are in the request's history. A release after
+    // the last request (a human retry) drops them, so the round can be tried again.
+    const released = !next && releasedAt != null && releasedAt > request.at;
+    for (const id of released ? [] : request.history || []) {
       attempts.push({ type: id, nonce: null, startedAt: request.at, result: 'silent', hashOut: null });
     }
 

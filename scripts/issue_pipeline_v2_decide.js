@@ -34,6 +34,7 @@
 const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
 const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
 const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
+const { decideEngineHold, holdCleared, launchBackoffMs } = require('./issue_pipeline_v2_holds');
 
 const STAGES = [
   'Backlog',
@@ -77,6 +78,11 @@ function wakeAgent(facts, stage, config) {
 
 function none(reason) {
   return { type: 'none', reason };
+}
+
+/** No agent can take the work: a board-level error in the run summary, never a flag on the issue. */
+function noAgent(row) {
+  return { type: 'none', reason: row, boardError: true };
 }
 
 function setStage(to, row, extra = {}) {
@@ -293,10 +299,7 @@ function decideInAnalysis(facts, config) {
   return toLiveAction(plan, facts);
 }
 
-function backoffDelayMs(failures, config) {
-  const list = config.limits.launchBackoffMin;
-  return list[Math.min(failures, list.length) - 1] * MIN;
-}
+const backoffDelayMs = launchBackoffMs;
 
 function decideReady(facts, config) {
   const launch = facts.launch || {};
@@ -333,7 +336,7 @@ function decideReady(facts, config) {
   }
   const capable = launchableAgents(config, facts.deliveryMethod);
   if (capable.length === 0) {
-    return setBlocked('launch-failed', 'ready.no-capable-agent');
+    return noAgent('ready.no-capable-agent');
   }
   return {
     type: 'launch',
@@ -370,10 +373,18 @@ function decideInProgress(facts, config) {
     if (delivery.resumed) {
       return setBlocked('stalled', 'progress.stalled');
     }
+    // A resume that could not start is an infrastructure fault: it is retried on the launch backoff.
+    const failedResumes = delivery.failedResumes || 0;
+    if (failedResumes > config.limits.launchBackoffMin.length) {
+      return setBlocked('launch-failed', 'progress.resume-failed');
+    }
+    if (failedResumes > 0 && facts.now - delivery.lastResumeFailureAt < backoffDelayMs(failedResumes, config)) {
+      return none('progress.backoff');
+    }
     const method = facts.deliveryMethod || 'PR';
     const capable = launchableAgents(config, method);
     return capable.length === 0
-      ? setBlocked('stalled', 'progress.no-launchable-agent')
+      ? noAgent('progress.no-launchable-agent')
       : { type: 'resume', agent: pickAgent(capable, facts), method, row: 'progress.resume' };
   }
   return none('progress.working');
@@ -424,7 +435,7 @@ function decideInUat(facts) {
 }
 
 /**
- * One action per issue per tick. Guards first, then the stage rows.
+ * One action per issue per decision. Guards first, then holds, then the stage rows.
  * @returns {{ type: string, reason?: string, row?: string }}
  */
 function decide(facts, config) {
@@ -458,7 +469,12 @@ function decide(facts, config) {
     if (blockedHold === 'sensitive') {
       return none('blocked.sensitive');
     }
-    // Only a human comment wakes a blocked issue, once per comment; the engine never clears the flag.
+    // An engine hold (`stalled`, `launch-failed`) is re-evaluated on full facts and released when its cause is gone.
+    const held = decideEngineHold(facts, config, decideStage);
+    if (held) {
+      return held;
+    }
+    // Otherwise only a human comment wakes a blocked issue, once per comment.
     const answered = (facts.wokenFor || []).includes(facts.humanCommentId);
     if (!(facts.humanCommentSinceBlock && !answered)) {
       return none(answered ? 'blocked.already-woken' : 'blocked');
@@ -474,6 +490,16 @@ function decide(facts, config) {
         }
       : none('blocked.no-agent');
   }
+  // A human cleared an engine hold: record the retry, so the stage's earlier attempts stop counting.
+  if (holdCleared(facts)) {
+    return { type: 'release-hold', by: 'human', from: facts.holds.hold.reason, row: 'blocked.cleared' };
+  }
+  return decideStage(facts, config);
+}
+
+/** The stage rows, for an issue that is not blocked (or an engine hold being re-evaluated). */
+function decideStage(facts, config) {
+  const stage = canonicalStage(facts.stage);
   if (!String(facts.stage || '').trim() && facts.followUp) {
     return facts.followUp.depth <= config.limits.followUpMaxDepth
       ? setStage('To do', 'followup.todo')

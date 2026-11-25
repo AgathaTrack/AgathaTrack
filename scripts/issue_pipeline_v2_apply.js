@@ -20,6 +20,7 @@ const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { isRunnerQueuedError } = require('./pipeline_runners/claude');
 const { buildRoundMarker, roundFor } = require('./issue_pipeline_v2_round_markers');
 const { authorOf } = require('./issue_pipeline_v2_rounds');
+const { buildHold, buildRelease, isEngineHold } = require('./issue_pipeline_v2_holds');
 
 /**
  * Field writes for one decision: the stage or blocked change, the attempt count on a reassign,
@@ -32,6 +33,10 @@ function buildWrites({ action, parsed }) {
     writes.attempts = 0;
   } else if (action.type === 'set-blocked') {
     writes.blocked = action.reason;
+  } else if (action.type === 'release-hold') {
+    // A release starts the count afresh. An engine release also clears the flag; a human already did.
+    if (action.by === 'engine') writes.blocked = null;
+    if (parsed?.attempts) writes.attempts = 0;
   } else if (
     (action.type === 'reassign' || action.type === 'launch') &&
     Number.isFinite(action.attempts) &&
@@ -393,7 +398,7 @@ async function applyAction({ action: decided, ctx }) {
         } catch {
           ok = false;
         }
-        // The resume is recorded even when it failed: the next tick then marks the issue stalled.
+        // The resume is recorded even when it failed (`ok=0`): the next tick retries it on the launch backoff.
         await comment(buildResume({ agent: action.agent, ok }), 'comment:resume');
         applied.unshift(`${ok ? 'resume' : 'resume-failed'}:${action.agent}`);
         break;
@@ -436,9 +441,15 @@ async function applyAction({ action: decided, ctx }) {
           await comment(buildLaunchAcked({ runId: ctx.facts.launch.runId }), 'comment:launch-acked');
         }
         break;
+      case 'release-hold':
+        await comment(buildRelease({ by: action.by, from: action.from, cause: action.cause }), 'comment:release');
+        break;
       case 'set-blocked': {
         await deleteBusyLabel();
         applied.push('labels:busy-removed');
+        if (isEngineHold(action.reason)) {
+          await comment(buildHold({ reason: action.reason, row: action.row }), 'comment:hold');
+        }
         if (ctx.facts.stage === 'In analysis' && ctx.facts.review?.requestedHash) {
           const current = currentRound(reviewsSoFar);
           await writeMarker({

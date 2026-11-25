@@ -189,12 +189,26 @@ test('an in-flight launch is not relaunched; inconclusive and timeout share one 
     ],
   });
   assert.equal(sameLaunch.type, 'launch-aat', 'timeout plus a later inconclusive on the same launch is one attempt');
-  const failed = gate({ comments: [launch(SHA, 1, 'failed=1')] });
-  assert.equal(failed.type, 'launch-aat');
-  const failedCap = gate({
-    comments: [launch(SHA, 30, 'failed=1'), launch(SHA, 1, 'failed=1')],
-  }, { ...config, aat: { ...config.aat, maxInconclusive: 2 } });
-  assert.equal(failedCap.row, 'aat.inconclusive-cap');
+});
+
+test('a launch that failed to start uses the backoff, not the attempt budget (#2554)', () => {
+  // Backoff 5, 30, 120 minutes: a failed start waits, then is retried.
+  assert.equal(gate({ comments: [launch(SHA, 1, 'failed=1')] }).reason, 'aat.backoff');
+  assert.equal(gate({ comments: [launch(SHA, 6, 'failed=1')] }).type, 'launch-aat');
+  // #2554: two failed starts are not two concluded attempts.
+  const twice = gate({ comments: [launch(SHA, 400, 'failed=1'), launch(SHA, 40, 'failed=1')] });
+  assert.equal(twice.type, 'launch-aat');
+  assert.notEqual(twice.reason, 'stalled');
+  // One inconclusive run, then a failed relaunch: still one attempt used, so it relaunches.
+  const mixed = gate({
+    comments: [launch(SHA, 400), verdict(`<!-- v2:aat verdict=inconclusive merge=${SHA} -->`, 300), launch(SHA, 200, 'failed=1')],
+  });
+  assert.equal(mixed.type, 'launch-aat');
+  // Past the backoff list the issue gets the engine hold launch-failed.
+  const exhausted = gate({
+    comments: [400, 300, 200, 10].map((ago) => launch(SHA, ago, 'failed=1')),
+  });
+  assert.deepEqual([exhausted.type, exhausted.reason, exhausted.row], ['set-blocked', 'launch-failed', 'aat.launch-failed']);
 });
 
 test('reset, waive, and bare Passed', () => {
@@ -302,10 +316,9 @@ test('a follow-up keeps today\'s In Main rows; manual-only never reaches them', 
   assert.equal(manual.reason, 'manual-only');
 });
 
-test('no startable agent stalls and does not enter In UAT', () => {
+test('no startable agent is a board-level error and does not enter In UAT', () => {
   const action = gate({ comments: [], uatContainsLatestMerge: true }, { ...config, launchRunners: [] });
-  assert.equal(action.reason, 'stalled');
-  assert.equal(action.row, 'aat.no-launchable-agent');
+  assert.deepEqual([action.type, action.reason, action.boardError], ['none', 'aat.no-launchable-agent', true]);
   assert.notEqual(action.to, 'In UAT');
 });
 
@@ -348,7 +361,7 @@ test('implementation follow-up, parent Refs, and search errors', () => {
   assert.equal(quiet.row, 'aat.implementation-quiet');
 });
 
-test('scope does not stall on a dropped busy label, an open PR, or a quiet late relaunch; failed=1 stalls', () => {
+test('scope does not stall on a dropped busy label, an open PR, or a quiet late relaunch; failed=1 backs off', () => {
   const dropped = gate({
     stage: 'In progress',
     comments: [launch(), fail('scope'), comment(ENGINE, `<!-- v2:aat-relaunch merge=${SHA} reason=scope -->`, 5)],
@@ -367,13 +380,16 @@ test('scope does not stall on a dropped busy label, an open PR, or a quiet late 
     delivery: { ...done, busy: false, openLinkedPrs: 0, lastActivityAt: NOW - 48 * 60 * 60 * 1000 },
   });
   assert.equal(late.type, 'aat-relaunch');
-  const blown = gate({
+  const relaunchFailed = (ago) => comment(ENGINE, `<!-- v2:aat-relaunch merge=${SHA} reason=scope failed=1 -->`, ago);
+  const scopeHold = (extra) => gate({
     stage: 'In progress',
-    comments: [launch(), fail('scope'), comment(ENGINE, `<!-- v2:aat-relaunch merge=${SHA} reason=scope failed=1 -->`, 1)],
+    comments: [launch(SHA, 500), fail('scope', SHA, 490), ...extra],
     delivery: { ...done, busy: false, openLinkedPrs: 0, lastActivityAt: NOW },
   });
-  assert.equal(blown.row, 'aat.scope-relaunch-failed');
-  assert.notEqual(blown.type, 'aat-relaunch');
+  assert.equal(scopeHold([relaunchFailed(1)]).reason, 'aat.scope-backoff');
+  assert.equal(scopeHold([relaunchFailed(6)]).type, 'aat-relaunch');
+  const blown = scopeHold([400, 300, 200, 10].map(relaunchFailed));
+  assert.deepEqual([blown.type, blown.reason, blown.row], ['set-blocked', 'launch-failed', 'aat.scope-relaunch-failed']);
 });
 
 test('prefer an agent who did not author the merged PRs', () => {

@@ -68,7 +68,7 @@ test('delivery facts: merges into main, open PRs, activity ignores the engine, m
   const facts = deriveDeliveryFacts({ issue: { body: '- [ ] x', labels: [{ name: 'busy' }] }, prs, comments, engineLogins: engine });
   assert.deepEqual(facts.delivery, {
     busy: true, dodComplete: true, openLinkedPrs: 1, mergedIntoMain: 2, mergedPrNumbers: [1, 2], lastMergeSha: 'bbb',
-    lastActivityAt: Date.parse('2026-11-14T00:00:00Z'), resumed: true, engineLaunched: false,
+    lastActivityAt: Date.parse('2026-11-14T00:00:00Z'), resumed: true, failedResumes: 0, lastResumeFailureAt: null, engineLaunched: false,
   });
   assert.equal(facts.intentReview.requested, false, 'a non-engine marker does not count');
   assert.deepEqual(facts.prAuthors, ['pawpet-bot', 'pawpet-claude']);
@@ -110,11 +110,24 @@ test('resume draws only tier-a delivery agents (never cursor-b)', () => {
   assert.ok(!['cursor-b', 'claude-b'].includes(decide({ ...base, roundRobinAfter: 'claude-a' }, config).agent));
 });
 
-test('resume: one agent restart is recorded even when it fails; no launchable agent stalls', async () => {
+test('resume: one agent restart is recorded even when it fails; a failed restart backs off; no agent is a board error', async () => {
   const facts = { mode: 'on', onBoard: true, stage: 'In progress', now: 1e12, deliveryMethod: 'PR', delivery: { busy: false, engineLaunched: true } };
   const action = decide(facts, config);
   assert.deepEqual([action.type, action.agent], ['resume', 'cursor-a']);
-  assert.equal(decide({ ...facts, deliveryMethod: 'carrier' }, config).type, 'set-blocked');
+  const noAgent = decide({ ...facts, deliveryMethod: 'carrier' }, config);
+  assert.deepEqual([noAgent.type, noAgent.reason, noAgent.boardError], ['none', 'progress.no-launchable-agent', true]);
+  const failedOnce = (ago) => ({ ...facts, delivery: { ...facts.delivery, failedResumes: 1, lastResumeFailureAt: 1e12 - ago * 60000 } });
+  assert.equal(decide(failedOnce(1), config).reason, 'progress.backoff');
+  assert.equal(decide(failedOnce(6), config).type, 'resume');
+  const exhausted = decide({ ...facts, delivery: { ...facts.delivery, failedResumes: 4, lastResumeFailureAt: 0 } }, config);
+  assert.deepEqual([exhausted.reason, exhausted.row], ['launch-failed', 'progress.resume-failed']);
+  const failedRecord = deriveDeliveryFacts({
+    issue: { body: '', labels: [] },
+    prs: [],
+    comments: [{ user: { login: 'pawpet-engine' }, body: `<!-- ${RESUME} agent=a ok=0 -->`, created_at: '2026-11-20T00:00:00Z' }],
+    engineLogins: engine,
+  }).delivery;
+  assert.deepEqual([failedRecord.resumed, failedRecord.failedResumes], [false, 1]);
   const sent = [];
   const ctx = (launchFn) => ({
     owner: 'o', repo: 'r', issueNumber: 7, token: 'p', config, fields: {}, parsed: {}, assignees: [], counters: {}, facts: {}, dryRun: false,

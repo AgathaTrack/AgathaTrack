@@ -77,7 +77,7 @@ join by configuration.
 
 This is a rule, not a permission: agent tokens can write org issue fields. **Bootstrap:** until the engine runs in `on`
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
-From `on`, only the engine writes `Stage`. `Blocked` set means a human is needed; the engine never clears it.
+From `on`, only the engine writes `Stage`. A human hold in `Blocked` means a human is needed; the engine clears only its own engine holds (`stalled`, `launch-failed`) when their cause is gone (§Transitions, Holds).
 
 **Merge, UAT and prod handlers (#2394 AAT).** While the engine is not `on` for an issue, the legacy handlers write `Stage` under the same table conditions: `In Main` only when the Definition of Done is ticked, no linked PR is still open, and a linked PR merged into `main` (`mayEnterInMain`); `In UAT` only when the issue's Stage is already `In Main` (an empty Stage keeps the legacy behaviour); `Done` with the prod close. A merge that does not complete the table leaves the issue `In progress`, so a two-PR issue reaches In Main after its last merge.
 
@@ -92,7 +92,9 @@ move `Status` after the *first* merged PR, remove `busy` and reopen, and the mir
 
 ### Transitions
 
-One action per issue per tick; every transition is a field write.
+Every transition is a field write. Today a tick takes one action per issue; that is how the runner works now, not a
+rule (PIPE-V2-D-TICK-001). The planned tick changes are in
+[changes/pipeline-v2-holds-and-ticks.md](./changes/pipeline-v2-holds-and-ticks.md).
 
 | Stage | Condition | Result |
 |-------|-----------|--------|
@@ -107,7 +109,7 @@ One action per issue per tick; every transition is a field write.
 | Ready | start failed after 3 retries on the backoff, or a run without `busy` after the acknowledge window counts as a failed start | stays, `Blocked=launch-failed` |
 | In progress | Definition of Done ticked, no open linked PR, at least one linked PR merged into `main`, `busy` released | → In Main. Intent review is requested unless `aat.enabled` is on, both acceptance fields exist, and the issue is not a follow-up |
 | In progress | the newest actionable acceptance verdict for the latest merge into `main` is `fail` with `reason=scope` or `reason=implementation` (`aat.enabled`, both fields, not a follow-up) | stays. `scope` relaunches delivery once; `implementation` waits for a follow-up whose body starts with this issue's marker, or for a linked PR. Neither sets `Blocked` while that work is still open. A newer merge into `main` ends the hold |
-| In progress | `busy` gone early or 24 h without activity | one resume (relaunch), then `Blocked=stalled`; issues the engine did not launch are never resumed. Not taken while a scope or implementation acceptance fail still holds |
+| In progress | `busy` gone early or 24 h without activity | one resume (relaunch), then `Blocked=stalled`; issues the engine did not launch are never resumed. A resume that fails to start does not use the one resume: it is retried on the launch backoff, then `Blocked=launch-failed`. Not taken while a scope or implementation acceptance fail still holds |
 | In Main | `aat.enabled` is off, or an acceptance field is missing, or the issue is a follow-up: an agent that did not author the PRs reviews what shipped against the issue's intent (does not gate) | stays |
 | In Main | that same flag-off path, and the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
 | In Main | `aat.enabled` is on, both fields exist, and the issue is not a follow-up | acceptance must pass for the latest merge into `main` (`aatSatisfied`) and that merge must be in the newest successful UAT deploy. No intent-review doorbell |
@@ -115,11 +117,34 @@ One action per issue per tick; every transition is a field write.
 | none | a follow-up (see below) of depth 1 or 2 | → To do; deeper → Backlog |
 | In progress / In Main / In UAT | the issue was closed (as completed) before Done, for example by a merge | reopened once (`v2:reopened` comment); a second close, a `not_planned` close and a `manual-only` issue are left alone |
 | any | an AGENTS.md escalation item is hit | stays, `Blocked=decision` |
+| any | `Blocked` is an engine hold (`stalled`, `launch-failed`) and the stage rule, re-run on full facts, no longer ends in an engine hold (a newer merge, a late vote, a merged PR, an agent back at work) | the engine clears `Blocked` (`v2:release by=engine`); the stage rule acts on the next tick |
+| any | a human clears an engine hold | a retry: the engine records `v2:release by=human`, and the stage's earlier attempts stop counting |
 | any | a human changes `Stage` or clears `Blocked` | as set |
 
-A blocked issue's only action is waking its stage agent once per new human comment (a user with write access who is not a
-listed agent); the engine never clears the flag. `paused` and `sensitive` are owner holds: a comment wakes nobody until
-the owner clears them.
+**Holds (PIPE-V2-D-HOLD-001 to 005).** `Blocked` carries two kinds of value:
+
+- **Human holds** (`question`, `decision`, `no-convergence`, `sensitive`, `paused`): a human must act. The engine
+  re-evaluates nothing. Its only action is waking the stage agent once per new human comment (a user with write access
+  who is not a listed agent). `paused` and `sensitive` are owner holds: a comment wakes nobody until the owner clears
+  them. To hold an issue by hand, use `paused`.
+- **Engine holds** (`stalled`, `launch-failed`): the engine ran out of retries. Each tick it reads the issue in full,
+  re-runs the stage rule as if unblocked, and clears the flag itself when the rule no longer ends in an engine hold. While
+  the rule still ends in one, a human comment wakes the stage agent as for a human hold. Setting one posts
+  `<!-- v2:hold reason=… row=… -->`. When the rule is only waiting on launch backoff, re-evaluation clears `Blocked` even
+  though the issue does not launch until the backoff elapses (the field is not a wait indicator).
+- **A human clear of an engine hold is a retry.** The next tick posts `<!-- v2:release by=human -->`; an engine release
+  posts `by=engine`. Attempt markers older than the newest release stop counting: `v2:spec-request` in To do,
+  `v2:resume` and `v2:aat-relaunch` in In progress, `v2:aat-launch` in In Main. In analysis, a release newer than the
+  last review request drops that round's earlier silent attempts, so the round gets one more attempt. Ready restarts its
+  count because a release writes `Attempts=0`. A release also restarts the `stalledInactivityHours` quiet clock for the
+  acceptance holds, so a retry is not stalled again at once. A hold set before this change has no `v2:hold` marker, so clearing it is
+  not seen as a retry; the engine still releases it when the cause changes.
+- **Infrastructure faults do not use a budget.** An acceptance launch, a scope relaunch or a resume that fails to start
+  is retried on `limits.launchBackoffMin` (5, 30, 120 min), then becomes `Blocked=launch-failed`. Only a run that
+  started and produced nothing usable counts toward `aat.maxInconclusive` or the one resume. A doorbell that fails to
+  ring in To do or In analysis still counts as that agent's attempt (see the change doc).
+- **No launchable agent is a board-level error.** Ready, In progress resume, acceptance and scope relaunch report
+  `no launchable agent (<row>) for issues #…` once per run and end the run red; nothing is written on the issues.
 
 ### Review: votes and the markers
 
@@ -211,15 +236,15 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 
 ### Blocked reasons
 
-| Reason | Stage | Cleared by |
-|--------|-------|-----------|
-| `question` | To do | human reply (the agent re-checks and clears) |
-| `no-convergence` | In analysis | owner decision (comment or body edit) |
-| `decision` | any | owner answer |
-| `launch-failed` | Ready | owner fixes the cause, clears |
-| `stalled` | To do, In analysis, In progress | owner checks, clears |
-| `paused` | any | the owner sets and clears it |
-| `sensitive` | Ready (risky preflight) | owner clears `Blocked`, fixes the body or adds `owner-approved-delivery` and retries; or runs delivery manually |
+| Reason | Kind | Stage | Cleared by |
+|--------|------|-------|-----------|
+| `question` | human | To do | human reply (the agent re-checks and clears) |
+| `no-convergence` | human | In analysis | owner decision (comment or body edit) |
+| `decision` | human | any | owner answer |
+| `launch-failed` | engine | Ready, In progress (resume), In Main (acceptance launch, scope relaunch) | the engine, when the stage rule no longer ends in a hold; or a human clear, which is a retry |
+| `stalled` | engine | To do, In analysis, In progress, In Main | the engine, when the stage rule no longer ends in a hold; or a human clear, which is a retry |
+| `paused` | human (owner) | any | the owner sets and clears it |
+| `sensitive` | human (owner) | Ready (risky preflight) | owner clears `Blocked`, fixes the body or adds `owner-approved-delivery` and retries; or runs delivery manually |
 
 ### Operating it
 
@@ -264,7 +289,7 @@ Holistic acceptance on a **parent** issue. With `aat.enabled` false it stays hum
 1. **Eligibility:** Parent issues only — not bodies with `<!-- v2:follow-up of=#n -->`.
 2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment (REST via `github_issue_workflow.js`, not `gh issue edit`). The engine does not read the labels. **Token:** `GH_TOKEN` or `PAWPET_CLAUDE_TOKEN` in agent sessions. Agents never write `Stage`, `Acceptance`, or `Acceptance fail reason`.
 3. **Verdict record:** last line of the verdict comment, `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->`. A fail includes `reason=scope|implementation|quality`. Pass and inconclusive omit `reason`. `inconclusive` is a verdict, not a reason. A fail without a known reason is ignored. Only a listed agent's comment newer than the engine's latest `v2:aat-launch` for that merge counts.
-4. **INCONCLUSIVE and timeout** share `aat.maxInconclusive` per merge, then `Blocked=stalled` while the issue stays In Main. A launch still inside `aat.timeoutMin` is not relaunched. A timeout is not a fail.
+4. **INCONCLUSIVE and timeout** share `aat.maxInconclusive` per merge, then `Blocked=stalled` while the issue stays In Main. A launch still inside `aat.timeoutMin` is not relaunched. A timeout is not a fail. A launch that failed to start (`v2:aat-launch … failed=1`) is not an attempt: it is retried on the launch backoff, then `Blocked=launch-failed`. A newer merge releases either hold (§Holds). Verdicts are compared to the latest launch that started.
 5. **Fail paths:** `quality` stays In Main until a newer linked merge into `main`. `scope` and `implementation` return to In progress and stay there until a newer linked merge into `main`. `scope` relaunches delivery once on the existing programme. `implementation` is a `bug` follow-up (`<!-- v2:follow-up of=#parent -->`, `Priority=Urgent` when that field exists) whose PRs also `Refs` the parent. Neither sets `Blocked` while a linked PR is open or, for implementation, while such a follow-up is open.
 6. **Waiver:** a human `Manual` or `Skipped` is bound with `v2:aat-waive` for one merge. `Manual` is cleared when the latest merge changes. `Skipped` stays, and the new merge gets its own waive. A bound waiver is not overwritten by a pass or a newer fail.
 7. **Checks:** Original intent (summary, acceptance criteria, Definition of Done) and behaviour on `main` at the merge SHA. `scope` means a stated criterion or planned phase has no merged implementation. `implementation` means the work was attempted and the behaviour on `main` is wrong. `quality` means the behaviour matches and only small fixes remain; those still block In UAT. A pass means nothing has to merge before In UAT.
@@ -277,7 +302,7 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 |---|---|---|
 | PIPE-AAT-D-001 | Acceptance gates **In Main → In UAT**. This supersedes #2424 owner decision 1's placement. #2424's In UAT acceptance rows are withdrawn. The production-deploy guard stays on #2424 | Accepted for this issue |
 | PIPE-AAT-D-002 | Fail reasons are `scope`, `implementation`, `quality`. `inconclusive` is a verdict | Accepted |
-| PIPE-AAT-D-003 | `scope` and `implementation` go to In progress and stay there until a newer merge into `main`. `quality` stays In Main. Neither sets `Blocked` while a linked PR is open or, for implementation, while an open follow-up still exists, because the engine never clears `Blocked`. A scope rewind that has not relaunched yet does not stall just because activity is already quiet | Accepted |
+| PIPE-AAT-D-003 | `scope` and `implementation` go to In progress and stay there until a newer merge into `main`. `quality` stays In Main. Neither sets `Blocked` while a linked PR is open or, for implementation, while an open follow-up still exists, because the engine never clears `Blocked`. A scope rewind that has not relaunched yet does not stall just because activity is already quiet | Accepted; the rationale "the engine never clears `Blocked`" is superseded by PIPE-V2-D-HOLD-001 (the rows are unchanged) |
 | PIPE-AAT-D-004 | In UAT needs `aatSatisfied` for the latest merge and `uatContainsLatestMerge` | Accepted |
 | PIPE-AAT-D-005 | When `aat.enabled` and both fields exist, a non-follow-up does not get the intent-review doorbell. Follow-ups still do | Accepted; `aat.enabled` true in config as of #2448 P4 |
 | PIPE-AAT-D-006 | `implementation` remediation is `bug` follow-up issues whose PRs also `Refs` the parent, with `Priority=Urgent` when that field exists. `scope` relaunches delivery. `quality` is small PRs on the parent | Accepted |
@@ -291,6 +316,12 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-SOAK-005 | `Blocked=paused` is never woken by a comment. Dry-run, no-identity and out-of-scope actions log `pipeline_v2_planned`, not `pipeline_v2_applied` | Proposed |
 | PIPE-V2-D-SOAK-007 | **In analysis → Ready** and `busy` removal apply on a tick while `ISSUE_PIPELINE_V2=on`. Signed reviews that land after the repo returns to `dry-run`, or between ticks, do not move `Stage` until the next live tick (soak2 #2507/#2508). Agents must not open delivery PRs until **Ready** | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-SOAK-008 | Spec and review agents must not edit the issue body to evade launch safety (`detectRiskyScope` in `.github/scripts/triage-lib.js`, `preflightIssue` in `agent-safety-lib.js`): e.g. rewording **Security or Sensitive Area** to `No` while the plan still describes security/crypto escalation. Use **`Blocked=decision`** and leave the body truthful. Soak2 #2495: spec passed, then review edited the body to drop keyword tripwires | Accepted (soak2, 2026-11-21) |
+| PIPE-V2-D-HOLD-001 | **Engine holds are re-evaluated, not latched.** `stalled` and `launch-failed` are engine holds. Each tick the engine loads full facts for them, re-runs the stage rule as if unblocked, and clears `Blocked` itself (`v2:release by=engine`) when the rule no longer ends in an engine hold. `question`, `decision`, `no-convergence`, `sensitive` and `paused` stay human holds. Replaces "the engine never clears `Blocked`". #2554: the AAT cap is per merge but the flag was per issue, so a newer merge could not recover it | Accepted (owner, 2026-11-24) |
+| PIPE-V2-D-HOLD-002 | **A human clear of an engine hold is a retry request.** The engine records `v2:release by=human`; the stage's attempt markers older than the newest release stop counting, and a release writes `Attempts=0`. Before this, clearing re-blocked on the next tick (the cap and the resume marker were still there) | Accepted (owner, 2026-11-24) |
+| PIPE-V2-D-HOLD-003 | **Infrastructure failures do not use the attempt budget.** An acceptance launch, a scope relaunch or a resume that fails to start is retried on `limits.launchBackoffMin`, then `Blocked=launch-failed`. Only a started run counts toward `aat.maxInconclusive` or the one resume. #2554 was blocked by two failed starts with no agent run. Doorbell ring failures in To do and In analysis are not changed yet | Accepted (owner, 2026-11-24) |
+| PIPE-V2-D-HOLD-004 | **No launchable agent is a board-level error,** reported once per run with the issue numbers, ending the run red; it is never written on an issue. Covers Ready (was `launch-failed`), In progress resume, acceptance launch and scope relaunch (were `stalled`). An empty spec or review pool still sets `stalled` | Accepted (owner, 2026-11-24) |
+| PIPE-V2-D-HOLD-005 | **A blocked issue is read in full** (except `paused` and `sensitive`), so an engine hold can be re-evaluated and a wake rings the current spec or review holder instead of the next agent in the round robin | Accepted (owner, 2026-11-24) |
+| PIPE-V2-D-TICK-001 | **"One action per issue per tick" is not a rule.** It describes the current runner. The planned advance loop and event wakes may take several actions for one issue in one run ([changes/pipeline-v2-holds-and-ticks.md](./changes/pipeline-v2-holds-and-ticks.md)) | Accepted (owner, 2026-11-24) |
 | PIPE-V2-D-PREFLIGHT-001 | Delivery preflight keyword scan ignores bodies under **`### Out of scope`** / `Out-of-scope`; title, preamble, and all other sections still count. **Security or Sensitive Area: Yes** is unchanged. Soak2 #2507/#2499/#2498/#2508 launch-failed on exclusion-list keywords in whole-body scan | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-PREFLIGHT-002 | Ready delivery: `preflight: risky scope detected` → next tick `Blocked=sensitive` (`ready.risky-scope`); no launch backoff. With label `owner-approved-delivery`, the engine does not set `sensitive` and may `ready.launch`; preflight skips risky-scope. Owner workflow: clear `Blocked`, add the label (or fix the body); manual delivery remains valid | Accepted (owner, 2026-11-23) |
 | PIPE-V2-D-DISPATCH-001 | **Retire v1 pipeline dispatcher.** Delete `issue-pipeline-dispatcher.yml`, `issue-pipeline-todo.yml`, and assignee-driven lane scripts. All stage transitions are pipeline v2 (`issue-pipeline-v2.yml`) or, until `ISSUE_PIPELINE_V2=on`, the legacy label flow. `pipeline_health` schedule staleness is not ported. `<!-- pipeline-state -->` markers and `scripts/lib/pipeline_state_trust.js` stay for execute-plan auto-approve on issues that still carry them | Accepted (2026-11-24) |

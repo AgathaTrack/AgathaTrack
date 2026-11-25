@@ -149,6 +149,8 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
     ...(comments || []).filter((c) => !engine.has(c.user?.login)).map((c) => Date.parse(c.created_at)),
   ].filter(Number.isFinite);
   const labels = (issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
+  const resumes = resumeRecords(comments, engine);
+  const failedResumes = resumes.filter((record) => !record.ok);
   return {
     delivery: {
       busy: labels.includes('busy'),
@@ -158,13 +160,24 @@ function deriveDeliveryFacts({ issue, prs, comments, engineLogins }) {
       mergedPrNumbers: merges.map((pr) => pr.number),
       lastMergeSha: merges.at(-1)?.mergeSha || null,
       lastActivityAt: times.length > 0 ? Math.max(...times) : null,
-      resumed: (comments || []).some((c) => markerNote(c, engine, RESUME)),
+      // Only a resume that started uses the one resume; one that failed to start is retried on the backoff.
+      resumed: resumes.some((record) => record.ok),
+      failedResumes: failedResumes.length,
+      lastResumeFailureAt: failedResumes.at(-1)?.at ?? null,
       // Only a run the engine started is the engine's to resume; a hand-driven issue has no record.
       engineLaunched: (comments || []).some((c) => engineStartedRun(c, engine)),
     },
     intentReview: deriveIntentReviewFacts(comments, engineLogins, merges.at(-1)?.mergeSha),
     prAuthors: [...new Set(prs.filter((pr) => pr.merged).map((pr) => pr.author).filter(Boolean))],
   };
+}
+
+/** Engine `v2:resume` records, oldest first: `{ ok, at }`. A record without `ok=0` started. */
+function resumeRecords(comments, engine) {
+  return (comments || [])
+    .filter((c) => markerNote(c, engine, RESUME))
+    .map((c) => ({ ok: !/<!--\s*v2:resume\b[^>]*\bok=0\b/.test(c.body || ''), at: Date.parse(c.created_at) }))
+    .sort((a, b) => a.at - b.at);
 }
 
 /** The engine reopened this issue once; a second close is then taken as deliberate. */
@@ -185,7 +198,7 @@ function buildResume({ agent, ok }) {
     `<!-- ${RESUME} agent=${agent} ok=${ok ? 1 : 0} -->`,
     ok
       ? `The run on this issue went quiet, so ${agent} was started again. If it goes quiet again the issue is marked \`Blocked: stalled\`.`
-      : `The run on this issue went quiet and restarting ${agent} failed. The issue is marked \`Blocked: stalled\` next.`,
+      : `The run on this issue went quiet and restarting ${agent} failed. It is retried on the launch backoff.`,
   ].join('\n');
 }
 
