@@ -44,10 +44,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('07 Nov 26 at 09:00'), findsOneWidget);
-    expect(find.textContaining('07 Nov 26'), findsOneWidget);
+    expect(find.text(' 07 Nov 26'), findsNothing);
     expect(find.text('Done'), findsNothing);
     expect(find.textContaining('Skipped'), findsNothing);
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
+    final semantics = tester.getSemantics(find.byType(PastOccurrenceHistoryPill));
+    expect(semantics.label, contains('done 07 Nov 26'));
   });
 
   testWidgets('done pill shows close date when the day differs', (
