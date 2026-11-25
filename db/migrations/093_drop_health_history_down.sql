@@ -22,9 +22,15 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'health_history_health_entry_id_fkey'
   ) THEN
+  IF to_regclass('public.care_items') IS NOT NULL THEN
+    ALTER TABLE ONLY public.health_history
+      ADD CONSTRAINT health_history_health_entry_id_fkey
+      FOREIGN KEY (health_entry_id) REFERENCES public.care_items(id) ON DELETE CASCADE;
+  ELSE
     ALTER TABLE ONLY public.health_history
       ADD CONSTRAINT health_history_health_entry_id_fkey
       FOREIGN KEY (health_entry_id) REFERENCES public.health_entries(id) ON DELETE CASCADE;
+  END IF;
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'health_history_marked_by_user_id_fkey'
