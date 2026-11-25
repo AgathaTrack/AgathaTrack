@@ -25,6 +25,10 @@ node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live
 
 Preview without writes: omit `--live` (workflow default).
 
+## Stage writes (policy)
+
+With `ISSUE_PIPELINE_V2=on`, only the engine and humans normally write `Stage` (`AGENTS.md` §GitHub issues). **This skill's orchestrator** is the sole agent exception: **one PATCH to `Stage` = To do** at intake (**PIPE-V2-D-ANALYSE-003**, owner 2026-11-25). Do not write In analysis or Ready.
+
 ## Engine-first procedure
 
 1. **Intake** — Read issue and comments. PATCH org **`Stage` = To do** (preserve existing `Blocked` and `Attempts` in the same issue-fields payload). Post one comment: analyse-issue started with evidence link.
@@ -47,7 +51,7 @@ Preview without writes: omit `--live` (workflow default).
 
 ## Rules
 
-- **Composer-2.5** for orchestration (wake, poll, triage); lane work follows spec-agent / review-agent.
+- **Cursor orchestration:** use **`composer-2.5`** for wake, poll, and triage (see `pr-review-cost-efficiency.md`); lane work follows spec-agent / review-agent.
 - Evidence on the issue, not only in chat.
 - Refs pipeline v2 [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385).
 

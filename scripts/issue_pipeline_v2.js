@@ -11,8 +11,7 @@ const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
-const { resolveDispatchTarget, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
-const { resolveMission } = require('./issue_pipeline_mission');
+const { validatePipelineDispatch, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
@@ -504,9 +503,12 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
 
 async function main() {
   // #2553 P4: validate the issue filter and resolve the mode before any board read or write.
-  const target = resolveDispatchTarget(process.env.ISSUE_NUMBER);
-  if (!target.ok) {
-    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: target.reason }));
+  const dispatch = validatePipelineDispatch({
+    issueNumberRaw: process.env.ISSUE_NUMBER,
+    missionRaw: process.env.PIPELINE_V2_MISSION,
+  });
+  if (!dispatch.ok) {
+    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: dispatch.reason }));
     process.exitCode = 1;
     return;
   }
@@ -515,23 +517,14 @@ async function main() {
     liveRequested: process.env.ISSUE_PIPELINE_V2_LIVE === 'true',
     repoMode: process.env.ISSUE_PIPELINE_V2,
   });
-  const missionResolved = resolveMission({
-    mission: process.env.PIPELINE_V2_MISSION,
-    issueNumber: target.only,
-  });
-  if (!missionResolved.ok) {
-    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: missionResolved.reason }));
-    process.exitCode = 1;
-    return;
-  }
   process.env.ISSUE_PIPELINE_V2 = run.mode;
   console.log(
     JSON.stringify({
       event: 'pipeline_v2_run',
       mode: run.mode,
       source: run.source,
-      target: target.only ?? 'board',
-      mission: missionResolved.mission,
+      target: dispatch.only ?? 'board',
+      mission: dispatch.mission,
       writes: run.mode === 'on',
     }),
   );
@@ -542,7 +535,7 @@ async function main() {
   if (mode() !== 'off' && (!projectsPat || !projectId || !statusFieldId)) {
     throw new Error('GH_PROJECTS_PAT, GH_PROJECT_ID and GH_STATUS_FIELD_ID are required');
   }
-  const only = target.only;
+  const only = dispatch.only;
   const result = await tick({
     owner,
     repo,
@@ -551,7 +544,7 @@ async function main() {
     projectId,
     statusFieldId,
     only,
-    mission: missionResolved.mission,
+    mission: dispatch.mission,
   });
   console.log(JSON.stringify({ event: 'pipeline_v2_tick', ...result, actions: result.actions?.length }));
   if (result.errors?.length > 0) {

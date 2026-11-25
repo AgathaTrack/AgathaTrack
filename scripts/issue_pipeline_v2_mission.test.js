@@ -3,7 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { resolveMission, missionGuard } = require('./issue_pipeline_mission');
-const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
+const { decide } = require('./issue_pipeline_v2_decide');
+const { loadConfig } = require('./issue_pipeline_v2_config');
 
 test('resolveMission: board allows whole-board tick', () => {
   assert.deepEqual(resolveMission({ mission: 'board', issueNumber: null }), { ok: true, mission: 'board' });
@@ -26,19 +27,29 @@ test('missionGuard: analyse stops at Ready without launch', () => {
   assert.equal(missionGuard('To do', 'analyse'), null);
 });
 
-test('decide: mission analyse skips ready.launch on Ready issue', () => {
-  const config = { limits: { wip: 2 }, agents: [], engine: { logins: [] } };
-  const facts = {
-    mode: 'on',
-    onBoard: true,
-    labels: [],
-    stage: 'Ready',
-    blocked: null,
-    bodyHash: 'abc',
-    wip: { count: 0, limit: 2 },
-    mission: 'analyse',
-  };
-  const action = decide(facts, config);
-  assert.equal(action.type, 'none');
-  assert.equal(action.row, 'mission.analyse.complete');
+const readyFactsBase = () => ({
+  mode: 'on',
+  onBoard: true,
+  labels: [],
+  stage: 'Ready',
+  blocked: null,
+  bodyHash: 'abc',
+  wip: 0,
+  deliveryMethod: 'PR',
+  now: Date.now(),
+  closed: false,
+  launch: {},
+});
+
+test('decide: mission analyse at Ready does not launch; board mission reaches ready.launch', () => {
+  const config = loadConfig();
+  const facts = readyFactsBase();
+  const analyseAction = decide({ ...facts, mission: 'analyse' }, config);
+  assert.equal(analyseAction.type, 'none');
+  assert.equal(analyseAction.row, 'mission.analyse.complete');
+
+  const boardAction = decide({ ...facts, mission: 'board' }, config);
+  assert.notEqual(boardAction.row, 'mission.analyse.complete');
+  assert.equal(boardAction.type, 'launch');
+  assert.equal(boardAction.row, 'ready.launch');
 });

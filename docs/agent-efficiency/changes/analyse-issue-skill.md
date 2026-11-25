@@ -2,7 +2,7 @@
 title: analyse-issue skill and pipeline mission scope
 owner: Agent efficiency
 audience: agent
-status: proposed
+status: in-delivery
 status_since: 2026-11-25
 folds_into: docs/agent-efficiency/github-issue-workflow.md
 last_updated: 2026-11-25
@@ -62,12 +62,12 @@ Log line: `pipeline_v2_run` includes `"mission":"analyse"` and `"target":<n>`.
 | **Engine doorbell** | Engine → agent: `v2:spec-request` / `v2:review-request`, assignee, Cursor/Claude launch |
 | **Wake engine** | Agent → engine: dispatch scoped tick (`issue_number` + `mission` + `live`) |
 
-## Who writes `Stage` (policy update)
+## Who writes `Stage` (policy — owner accepted 2026-11-25)
 
 | Writer | `Stage` |
 |--------|---------|
 | Engine | All pipeline transitions (including To do → In analysis → Ready) |
-| **Analyse orchestrator** | **Intake only:** set **To do** when starting `/analyse-issue` (org field PATCH with full value set — preserve `Blocked`, `Attempts`) |
+| **Analyse orchestrator** | **Intake only:** set **To do** when starting `/analyse-issue` (org field PATCH with full value set — preserve `Blocked`, `Attempts`). **Only exception** to engine-only `Stage` when `ISSUE_PIPELINE_V2=on` (**PIPE-V2-D-ANALYSE-003**); mirrored in **`AGENTS.md` §GitHub issues**. |
 | Lane agents (spec / review) | **No** `Stage` |
 | Humans | Any |
 
@@ -118,15 +118,9 @@ Under `/analyse-issue`, spec-agent and review-agent **must** wake the engine aft
 
 `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`
 
-## Decision log (proposed)
+## Decision log
 
-| ID | Decision |
-|----|----------|
-| PIPE-V2-D-ANALYSE-001 | **`mission=analyse`** scoped ticks never call `decideReady` launch rows |
-| PIPE-V2-D-ANALYSE-002 | **`mission=analyse`** requires **`issue_number`** |
-| PIPE-V2-D-ANALYSE-003 | Analyse orchestrator may write **`Stage` = To do** only at intake |
-| PIPE-V2-D-ANALYSE-004 | Engine-first: first wake before spec pass on a `v2:spec-request` |
-| PIPE-V2-D-ANALYSE-005 | Agent **wake** = `issue-pipeline-v2` dispatch with `mission` + `issue_number` + `live` |
+Authoritative rows live in [github-issue-workflow.md §Decision log](../github-issue-workflow.md#decision-log) (Accepted, owner 2026-11-25): **PIPE-V2-D-ANALYSE-001** through **-005**.
 
 ## Acceptance (when behaviour is exercised in soak)
 
