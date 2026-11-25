@@ -9,12 +9,12 @@ import {
  * @param {import('express').Multer.File[]} files
  * @returns {{ id: string, storage_key: string, mime: string, bytes: number }[]}
  */
-export function persistSupportScreenshotAttachments(files) {
+export async function persistSupportScreenshotAttachments(files) {
   /** @type {{ id: string, storage_key: string, mime: string, bytes: number }[]} */
   const saved = [];
   try {
     for (const file of files) {
-      const row = saveSupportScreenshotFile(file);
+      const row = await saveSupportScreenshotFile(file);
       saved.push({
         id: row.attachmentId,
         storage_key: row.storage_key,

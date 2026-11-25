@@ -95,7 +95,7 @@ export default function supportTicketsRoutes(pool) {
     let attachments = [];
     if (screenshotGate.files.length > 0) {
       try {
-        attachments = persistSupportScreenshotAttachments(screenshotGate.files);
+        attachments = await persistSupportScreenshotAttachments(screenshotGate.files);
       } catch (err) {
         const message = err?.message || 'Could not store screenshots.';
         return res.status(400).json({ error: message });

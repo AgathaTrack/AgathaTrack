@@ -13,6 +13,7 @@ import {
   SUPPORT_SCREENSHOT_MAX_BYTES_PER_FILE,
   SUPPORT_SCREENSHOT_STORAGE,
 } from './constants.js';
+import { reencodeSupportScreenshotBuffer, SupportScreenshotEncodeError } from './reencode.js';
 
 /** Private support screenshots live outside the public uploads tree (R-008). */
 export function supportScreenshotDir() {
@@ -57,16 +58,23 @@ export function parseSupportScreenshotStorageKey(storageKey) {
  * @param {{ buffer: Buffer, mimetype?: string }} file
  * @returns {{ attachmentId: string, storage_key: string, mime: string, bytes: number, filename: string }}
  */
-export function saveSupportScreenshotFile(file) {
+export async function saveSupportScreenshotFile(file) {
   const attachmentId = uuidv4();
   const mimeType = validateOrgImageMime(
     file.mimetype,
     file.buffer,
     SUPPORT_SCREENSHOT_EXTENSIONS,
   );
+  let encoded;
+  try {
+    encoded = await reencodeSupportScreenshotBuffer(file.buffer, mimeType);
+  } catch (err) {
+    if (err instanceof SupportScreenshotEncodeError) throw err;
+    throw new SupportScreenshotEncodeError('Invalid screenshot image.');
+  }
   const { filename } = saveUploadedFile({
-    buffer: file.buffer,
-    mimeType,
+    buffer: encoded.buffer,
+    mimeType: encoded.mime,
     fileId: attachmentId,
     rootDir: supportScreenshotDir(),
     allowedExtensions: SUPPORT_SCREENSHOT_EXTENSIONS,
@@ -75,8 +83,8 @@ export function saveSupportScreenshotFile(file) {
   return {
     attachmentId,
     storage_key: buildSupportScreenshotStorageKey(filename),
-    mime: mimeType,
-    bytes: file.buffer.length,
+    mime: encoded.mime,
+    bytes: encoded.bytes,
     filename,
   };
 }
