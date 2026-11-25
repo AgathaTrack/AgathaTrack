@@ -187,7 +187,7 @@ describe('Care recommendations API', () => {
           return { rows: pet ? [pet] : [] };
         }
 
-        if (sql.includes('FROM health_entries he') && sql.includes('WHERE he.pet_id')) {
+        if (sql.includes('FROM care_items he') && sql.includes('WHERE he.pet_id')) {
           return {
             rows: healthEntries.filter((e) => e.pet_id === params[0]),
           };
@@ -237,7 +237,7 @@ describe('Care recommendations API', () => {
           return { rows: row ? [row] : [] };
         }
 
-        if (sql.includes('INSERT INTO health_entries')) {
+        if (sql.includes('INSERT INTO care_items')) {
           const row = {
             id: params[0],
             pet_id: params[1],

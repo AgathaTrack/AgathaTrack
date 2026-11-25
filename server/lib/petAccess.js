@@ -206,7 +206,7 @@ export async function userCanManageWeightEntry(pool, entryId, userId) {
 
 export async function userCanManageHealthEntry(pool, entryId, userId) {
   const result = await pool.query(
-    'SELECT pet_id FROM health_entries WHERE id = $1 LIMIT 1',
+    'SELECT pet_id FROM care_items WHERE id = $1 LIMIT 1',
     [entryId]
   );
   const petId = result.rows[0]?.pet_id;
@@ -217,7 +217,7 @@ export async function userCanManageHealthEntry(pool, entryId, userId) {
 /** Pet parent (owner) only — close care is irreversible (CARE-STATUS-R-015). */
 export async function userCanCloseHealthEntry(pool, entryId, userId) {
   const result = await pool.query(
-    'SELECT pet_id FROM health_entries WHERE id = $1 LIMIT 1',
+    'SELECT pet_id FROM care_items WHERE id = $1 LIMIT 1',
     [entryId],
   );
   const petId = result.rows[0]?.pet_id;

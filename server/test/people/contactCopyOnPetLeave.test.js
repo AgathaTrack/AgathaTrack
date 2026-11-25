@@ -46,7 +46,7 @@ describe('copyHouseholdContactsForPetLeave (D23)', () => {
           updates.push(`repoint:${params[0]}`);
           return { rows: [] };
         }
-        if (s.includes('FROM health_entries he') || s.includes('FROM health_occurrences')
+        if (s.includes('FROM care_items he') || s.includes('FROM care_occurrences')
           || s.includes('FROM planned_absence')) {
           return { rows: [] };
         }

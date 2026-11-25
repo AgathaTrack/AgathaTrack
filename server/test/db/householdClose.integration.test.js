@@ -82,7 +82,7 @@ describe('closeHousehold (integration)', () => {
       );
 
       await pool.query(
-        `INSERT INTO health_entries (
+        `INSERT INTO care_items (
            id, pet_id, user_id, name, type, frequency, status,
            care_family, care_setting, care_planning, care_importance,
            importance_overridden, care_source, schedule_policy_version,
@@ -96,7 +96,7 @@ describe('closeHousehold (integration)', () => {
       );
 
       await pool.query(
-        `INSERT INTO health_entries (
+        `INSERT INTO care_items (
            id, pet_id, user_id, name, type, frequency, status,
            care_family, care_setting, care_planning, care_importance,
            importance_overridden, care_source, schedule_policy_version,
@@ -117,11 +117,11 @@ describe('closeHousehold (integration)', () => {
       expect(householdRow.rows).toHaveLength(0);
 
       const inProvider = await pool.query(
-        'SELECT provider_contact_id FROM health_entries WHERE id = $1',
+        'SELECT provider_contact_id FROM care_items WHERE id = $1',
         [entryInId],
       );
       const staleProvider = await pool.query(
-        'SELECT provider_contact_id FROM health_entries WHERE id = $1',
+        'SELECT provider_contact_id FROM care_items WHERE id = $1',
         [entryStaleId],
       );
 
@@ -149,7 +149,7 @@ describe('closeHousehold (integration)', () => {
       expect(staleContactDir.rows[0].owner_user_id).toBe(ownerOut.userId);
       expect(inContactDir.rows[0].owner_user_id).not.toBe(ownerOutDir);
     } finally {
-      await pool.query('DELETE FROM health_entries WHERE id = ANY($1::uuid[])', [
+      await pool.query('DELETE FROM care_items WHERE id = ANY($1::uuid[])', [
         [entryInId, entryStaleId],
       ]);
       await pool.query('DELETE FROM pets WHERE id = ANY($1::uuid[])', [

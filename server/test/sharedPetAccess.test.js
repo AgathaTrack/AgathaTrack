@@ -55,7 +55,7 @@ function buildMockPool() {
       };
     }
 
-    if (sql.includes('SELECT he.*') && sql.includes('FROM health_entries he')) {
+    if (sql.includes('SELECT he.*') && sql.includes('FROM care_items he')) {
       return {
         rows: [{
           id: 'he-1',
@@ -154,7 +154,7 @@ function buildMockPool() {
       return { rows: [] };
     }
 
-    if (sql.includes('SELECT 1 FROM health_entries he') && sql.includes('JOIN pets p')) {
+    if (sql.includes('SELECT 1 FROM care_items he') && sql.includes('JOIN pets p')) {
       return { rows: [{ '?column?': 1 }] };
     }
 

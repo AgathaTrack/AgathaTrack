@@ -69,7 +69,7 @@ export async function checkDueNotifications(pool, userId, petNamesFromClient = {
   const entries = await pool.query(
     `SELECT he.id, he.pet_id, he.name, he.next_due_date, he.remind_days_before,
             p.name AS pet_name, p.home_timezone AS pet_home_timezone
-     FROM health_entries he
+     FROM care_items he
      JOIN pets p ON p.id = he.pet_id
      WHERE ${accessiblePetSql('p', '$1')}
        AND he.next_due_date IS NOT NULL

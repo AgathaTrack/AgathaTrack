@@ -20,7 +20,7 @@ describe('migration 085 care item closed', () => {
     pool = createDbPool();
     const ready = await pool.query(
       `SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'health_entries' AND column_name = 'status'`,
+       WHERE table_name = 'care_items' AND column_name = 'status'`,
     );
     if (ready.rows.length === 0) {
       await pool.end();
@@ -29,7 +29,7 @@ describe('migration 085 care item closed', () => {
     }
     const legacy = await pool.query(
       `SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'health_entries' AND column_name = 'care_closed_reason'`,
+       WHERE table_name = 'care_items' AND column_name = 'care_closed_reason'`,
     );
     runnable = legacy.rows.length === 0;
     if (!runnable) return;
@@ -38,7 +38,7 @@ describe('migration 085 care item closed', () => {
     endedId = randomUUID();
     stoppedId = randomUUID();
     await pool.query(
-      `INSERT INTO health_entries
+      `INSERT INTO care_items
          (id, pet_id, user_id, name, type, frequency, status, care_planning, care_importance,
           start_date, next_due_date)
        VALUES ($1, $2, $3, 'Ended', 'medication', 'once', 'completed', 'planned', 'essential',
@@ -60,7 +60,7 @@ describe('migration 085 care item closed', () => {
     for (const id of [endedId, stoppedId]) {
       if (id) {
         await pool.query('DELETE FROM audit_events WHERE resource_id = $1', [id]);
-        await pool.query('DELETE FROM health_entries WHERE id = $1', [id]);
+        await pool.query('DELETE FROM care_items WHERE id = $1', [id]);
       }
     }
     if (owner) await removeOwner(pool, owner);
@@ -76,7 +76,7 @@ describe('migration 085 care item closed', () => {
       await migrateCareItemClosed(client);
       await migrateCareItemClosed(client);
       const rows = await client.query(
-        'SELECT id, status, care_closed_reason FROM health_entries WHERE id = ANY($1::uuid[])',
+        'SELECT id, status, care_closed_reason FROM care_items WHERE id = ANY($1::uuid[])',
         [[endedId, stoppedId]],
       );
       byId = Object.fromEntries(rows.rows.map((r) => [r.id, r]));

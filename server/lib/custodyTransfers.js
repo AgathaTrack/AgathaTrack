@@ -379,7 +379,7 @@ async function buildPetShadowSnapshot(db, petId) {
   const pet = petResult.rows[0];
   const [health, weight, vets] = await Promise.all([
     db.query(
-      'SELECT id, type, name, dosage, frequency, start_date, next_due_date, notes, status FROM health_entries WHERE pet_id = $1 ORDER BY created_at',
+      'SELECT id, type, name, dosage, frequency, start_date, next_due_date, notes, status FROM care_items WHERE pet_id = $1 ORDER BY created_at',
       [petId],
     ),
     db.query(

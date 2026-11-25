@@ -73,7 +73,7 @@ async function reverse(ctx, event, { restoreEntry }) {
     await updateEntryFields(db, entry.id, payload.entry_before);
     if ((payload.entry_before.status || 'active') === 'active') {
       await db.query(
-        'UPDATE health_entries SET care_closed_reason = NULL WHERE id = $1',
+        'UPDATE care_items SET care_closed_reason = NULL WHERE id = $1',
         [entry.id],
       );
     }

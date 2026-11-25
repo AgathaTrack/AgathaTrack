@@ -27,7 +27,7 @@ export async function openHarness() {
   try {
     const ready = await pool.query(
       `SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'health_occurrences' AND column_name = 'origin'`,
+       WHERE table_name = 'care_occurrences' AND column_name = 'origin'`,
     );
     if (ready.rows.length === 0) throw new Error('schema not migrated');
     return { pool, app: createApp(pool) };
@@ -46,7 +46,7 @@ export async function openHarness() {
 async function ensureCareDateOutcomeMigration(pool) {
   const legacy = await pool.query(
     `SELECT 1 FROM information_schema.columns
-     WHERE table_name = 'health_occurrences' AND column_name = 'close_reason'`,
+     WHERE table_name = 'care_occurrences' AND column_name = 'close_reason'`,
   );
   if (legacy.rows.length === 0) return;
   const client = await pool.connect();
@@ -96,7 +96,7 @@ async function ensureCareItemClosedMigration(pool) {
 export async function openStrictHarness() {
   const harness = await openHarness();
   if (!harness.pool) {
-    throw new Error('Care DB integration tests require a migrated PostgreSQL (health_occurrences.origin)');
+    throw new Error('Care DB integration tests require a migrated PostgreSQL (care_occurrences.origin)');
   }
   await ensureCareDateOutcomeMigration(harness.pool);
   await ensureCareItemClosedMigration(harness.pool);
@@ -128,7 +128,7 @@ export async function createOwner(pool, { timeZone = 'UTC' } = {}) {
  * @param {{ userId: string, petId: string }} owner
  */
 export async function removeOwner(pool, owner) {
-  await pool.query('DELETE FROM health_entries WHERE pet_id = $1', [owner.petId]);
+  await pool.query('DELETE FROM care_items WHERE pet_id = $1', [owner.petId]);
   await pool.query('DELETE FROM pets WHERE id = $1', [owner.petId]);
   await pool.query('DELETE FROM pet_activity_events WHERE actor_user_id = $1', [owner.userId]).catch(() => {});
   await pool.query('DELETE FROM audit_events WHERE actor_user_id = $1', [owner.userId]).catch(() => {});
@@ -223,7 +223,7 @@ export async function occurrenceRows(pool, entryId) {
     `SELECT id, to_char(scheduled_date, 'YYYY-MM-DD') AS date,
        to_char(scheduled_time, 'HH24:MI') AS time, status, origin,
        to_char(completed_on, 'YYYY-MM-DD') AS completed_on
-     FROM health_occurrences WHERE health_entry_id = $1
+     FROM care_occurrences WHERE health_entry_id = $1
      ORDER BY scheduled_date, scheduled_time NULLS FIRST`,
     [entryId],
   );
@@ -238,7 +238,7 @@ export async function occurrenceRows(pool, entryId) {
  * @returns {Promise<string[]>} violations
  */
 export async function invariantViolations(pool, entryId) {
-  const entry = (await pool.query('SELECT * FROM health_entries WHERE id = $1', [entryId])).rows[0];
+  const entry = (await pool.query('SELECT * FROM care_items WHERE id = $1', [entryId])).rows[0];
   const rows = await occurrenceRows(pool, entryId);
   const open = rows.filter((r) => r.status === 'pending');
   const violations = [];

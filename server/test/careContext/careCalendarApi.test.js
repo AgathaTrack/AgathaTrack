@@ -62,7 +62,7 @@ describe('care calendar API', () => {
       if (sql.includes('SELECT timezone FROM users')) {
         return { rows: [{ timezone: 'UTC' }] };
       }
-      if (sql.includes('FROM health_entries WHERE pet_id')) {
+      if (sql.includes('FROM care_items WHERE pet_id')) {
         return {
           rows: [{
             id: 'entry-1',
@@ -79,7 +79,7 @@ describe('care calendar API', () => {
           }],
         };
       }
-      if (sql.includes('FROM health_occurrences')) {
+      if (sql.includes('FROM care_occurrences')) {
         return { rows: [] };
       }
       return { rows: [] };
@@ -110,7 +110,7 @@ describe('care calendar API', () => {
       if (sql.includes('SELECT timezone FROM users')) {
         return { rows: [{ timezone: 'UTC' }] };
       }
-      if (sql.includes('FROM health_entries')) return { rows: [] };
+      if (sql.includes('FROM care_items')) return { rows: [] };
       return { rows: [] };
     });
 

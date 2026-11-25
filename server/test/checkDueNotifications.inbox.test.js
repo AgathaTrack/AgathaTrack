@@ -4,7 +4,7 @@ function buildPool({ entries = [], recipients = ['user-1'], prefs = {} } = {}) {
   return {
     query: async (sql, params) => {
       const text = String(sql);
-      if (text.includes('FROM health_entries')) {
+      if (text.includes('FROM care_items')) {
         return { rows: entries };
       }
       if (text.includes('notification_preferences')) {

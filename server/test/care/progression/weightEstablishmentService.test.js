@@ -42,7 +42,7 @@ describe('weightEstablishmentService', () => {
     let milestoneInserts = 0;
     const pool = makePool([
       (sql) => {
-        if (sql.includes('FROM health_entries') && sql.includes('pet_id = $2')) {
+        if (sql.includes('FROM care_items') && sql.includes('pet_id = $2')) {
           return {
             rows: [{
               id: healthEntryId,
@@ -63,7 +63,7 @@ describe('weightEstablishmentService', () => {
         return undefined;
       },
       (sql) => {
-        if (sql.includes('FROM health_occurrences ho')) {
+        if (sql.includes('FROM care_occurrences ho')) {
           return {
             rows: [
               { id: 'o1', status: 'completed', completed_on: '2026-06-01', scheduled_date: '2026-06-01', weight_id: 'w1', date: '2026-06-01', weight: 10, unit: 'kg', measurement_source: 'guardian' },
@@ -129,7 +129,7 @@ describe('weightEstablishmentService', () => {
   it('does not persist when evidence is insufficient', async () => {
     const pool = makePool([
       (sql) => {
-        if (sql.includes('FROM health_entries')) {
+        if (sql.includes('FROM care_items')) {
           return {
             rows: [{
               id: healthEntryId,
@@ -148,7 +148,7 @@ describe('weightEstablishmentService', () => {
         return undefined;
       },
       (sql) => {
-        if (sql.includes('FROM health_occurrences ho')) {
+        if (sql.includes('FROM care_occurrences ho')) {
           return {
             rows: [
               { id: 'o1', status: 'completed', completed_on: '2026-06-01', scheduled_date: '2026-06-01', weight_id: 'w1', date: '2026-06-01', weight: 10, unit: 'kg', measurement_source: 'guardian' },

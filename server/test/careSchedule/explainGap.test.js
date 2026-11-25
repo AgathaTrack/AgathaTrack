@@ -79,7 +79,7 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
       }
 
       if (
-        sql.includes('SELECT * FROM health_occurrences')
+        sql.includes('SELECT * FROM care_occurrences')
         && sql.includes("status = 'pending'")
         && sql.includes('WHERE id = $1')
       ) {
@@ -89,7 +89,7 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
         return { rows: row ? [row] : [] };
       }
 
-      if (sql.includes("UPDATE health_occurrences SET status = 'skipped'")) {
+      if (sql.includes("UPDATE care_occurrences SET status = 'skipped'")) {
         const idx = occurrences.findIndex(
           (o) => o.id === params[3] && o.health_entry_id === params[4] && o.status === 'pending',
         );
@@ -104,7 +104,7 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
         return { rows: [occurrences[idx]] };
       }
 
-      if (sql.includes('UPDATE health_occurrences SET scheduled_date = $1')) {
+      if (sql.includes('UPDATE care_occurrences SET scheduled_date = $1')) {
         const idx = occurrences.findIndex(
           (o) => o.id === params[1] && o.health_entry_id === params[2] && o.status === 'pending',
         );
@@ -116,7 +116,7 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
         return { rows: [occurrences[idx]] };
       }
 
-      if (sql.includes("UPDATE health_entries SET status = 'paused'")) {
+      if (sql.includes("UPDATE care_items SET status = 'paused'")) {
         entryStatus = 'paused';
         pausedSince = params[0];
         return {
@@ -152,7 +152,7 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
       }
 
       if (
-        sql.includes('SELECT scheduled_date FROM health_occurrences')
+        sql.includes('SELECT scheduled_date FROM care_occurrences')
         && sql.includes("status = 'pending'")
         && sql.includes('LIMIT 1')
       ) {
@@ -165,7 +165,7 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
       }
 
       if (
-        sql.includes('SELECT scheduled_date, completed_on FROM health_occurrences')
+        sql.includes('SELECT scheduled_date, completed_on FROM care_occurrences')
         && sql.includes("status IN ('completed', 'skipped')")
       ) {
         const closed = occurrences
@@ -181,11 +181,11 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
         };
       }
 
-      if (sql.includes('SELECT id FROM health_occurrences') && sql.includes("status = 'pending'")) {
+      if (sql.includes('SELECT id FROM care_occurrences') && sql.includes("status = 'pending'")) {
         return { rows: [] };
       }
 
-      if (sql.includes('INSERT INTO health_occurrences')) {
+      if (sql.includes('INSERT INTO care_occurrences')) {
         insertedDates.push(params[2]);
         occurrences.push(makeOccurrence({
           id: params[0],
@@ -197,7 +197,7 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
       }
 
       if (
-        sql.includes('SELECT scheduled_date, scheduled_time FROM health_occurrences')
+        sql.includes('SELECT scheduled_date, scheduled_time FROM care_occurrences')
         && sql.includes("status = 'pending'")
       ) {
         const pending = occurrences
@@ -213,16 +213,16 @@ function createHarness(entry, initialOccurrences = [], todayIso = '2026-09-01') 
         };
       }
 
-      if (sql.includes('UPDATE health_entries SET next_due_date')) {
+      if (sql.includes('UPDATE care_items SET next_due_date')) {
         nextDueDate = params[0];
         return { rows: [] };
       }
 
-      if (sql.includes('SELECT next_due_date FROM health_entries WHERE id = $1')) {
+      if (sql.includes('SELECT next_due_date FROM care_items WHERE id = $1')) {
         return { rows: [{ next_due_date: nextDueDate ? new Date(nextDueDate) : null }] };
       }
 
-      if (sql.includes('SELECT 1 FROM health_occurrences WHERE health_entry_id = $1 AND status = \'pending\'')) {
+      if (sql.includes('SELECT 1 FROM care_occurrences WHERE health_entry_id = $1 AND status = \'pending\'')) {
         const pending = occurrences.some(
           (o) => o.health_entry_id === params[0] && o.status === 'pending',
         );

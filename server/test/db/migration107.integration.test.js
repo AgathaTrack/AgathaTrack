@@ -1,6 +1,5 @@
 /**
- * Deploy 1 (#2405): legacy SQL against health_* views must keep working, including
- * INSERT ... ON CONFLICT on health_occurrences (occurrenceRepository).
+ * Deploy 2 (#2405): compatibility views dropped; server uses physical care_* tables.
  */
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 
@@ -17,8 +16,8 @@ afterAll(async () => {
   if (pool) await pool.end();
 });
 
-describe('migration 107 compatibility views', () => {
-  it('exposes care_items physical tables and health_* views', async () => {
+describe('migration 107/108 care table names', () => {
+  it('exposes care_* physical tables only (no health_* views)', async () => {
     const { rows } = await pool.query(
       `SELECT table_name, table_type FROM information_schema.tables
        WHERE table_schema = 'public'
@@ -28,19 +27,19 @@ describe('migration 107 compatibility views', () => {
     const byName = Object.fromEntries(rows.map((r) => [r.table_name, r.table_type]));
     expect(byName.care_items).toBe('BASE TABLE');
     expect(byName.care_occurrences).toBe('BASE TABLE');
-    expect(byName.health_entries).toBe('VIEW');
-    expect(byName.health_occurrences).toBe('VIEW');
+    expect(byName.health_entries).toBeUndefined();
+    expect(byName.health_occurrences).toBeUndefined();
   });
 
-  it('supports INSERT ON CONFLICT via health_occurrences view', async () => {
+  it('supports INSERT ON CONFLICT on care_occurrences', async () => {
     const owner = await createOwner(pool);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const { rows } = await client.query(
-        `INSERT INTO health_entries (
+        `INSERT INTO care_items (
            id, pet_id, user_id, type, name, frequency, care_importance
-         ) VALUES (gen_random_uuid(), $1, $2, 'medication', 'Compat', 'daily', 'routine')
+         ) VALUES (gen_random_uuid(), $1, $2, 'medication', 'Physical', 'daily', 'routine')
          RETURNING id`,
         [owner.petId, owner.userId],
       );

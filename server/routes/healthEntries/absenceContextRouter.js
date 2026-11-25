@@ -9,7 +9,7 @@ export function registerAbsenceContextRoutes(router, pool) {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     try {
       const entryResult = await pool.query(
-        'SELECT * FROM health_entries WHERE id = $1',
+        'SELECT * FROM care_items WHERE id = $1',
         [req.params.id]
       );
       const entry = entryResult.rows[0];

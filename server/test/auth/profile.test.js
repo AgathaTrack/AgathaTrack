@@ -348,7 +348,7 @@ describe('Auth Routes — Profile', () => {
       };
       const pool = buildMockPool({
         selectExportSection: async (sql) => {
-          if (sql.includes('health_entries WHERE')) return { rows: exportSections.health_entries };
+          if (sql.includes('care_items WHERE')) return { rows: exportSections.health_entries };
           if (sql.includes('health_issues WHERE')) return { rows: exportSections.health_issues };
           if (sql.includes('weight_entries WHERE')) return { rows: exportSections.weight_entries };
           if (sql.includes('notifications WHERE')) return { rows: exportSections.notifications };
@@ -357,7 +357,7 @@ describe('Auth Routes — Profile', () => {
           if (sql.includes('organizations o')) return { rows: exportSections.organizations };
           if (sql.includes('pet_access WHERE')) return { rows: exportSections.pet_access };
           if (sql.includes('pet_share_links')) return { rows: exportSections.pet_share_links };
-          if (sql.includes('FROM health_occurrences ho')) {
+          if (sql.includes('FROM care_occurrences ho')) {
             return { rows: exportSections.health_occurrences };
           }
           if (sql.includes('FROM care_schedule_events cse')) {
