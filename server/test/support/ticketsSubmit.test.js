@@ -97,4 +97,13 @@ describe('POST /api/support/tickets', () => {
     expect(res.body.reference).toMatch(/^AT-/);
     assertResponse(201, res.body);
   });
+
+  it('rejects a signed-out email that is not an email address', async () => {
+    const res = await request(app)
+      .post('/api/support/tickets')
+      .send(validPayload({ email: 'not-an-email' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toContain('email must be a valid email address');
+  });
 });

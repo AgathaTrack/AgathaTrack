@@ -1,4 +1,5 @@
 import { parseSupportContext } from './contextAllowlist.js';
+import { isValidEmail } from '../../../config/validation.js';
 
 const CATEGORIES = new Set(['bug', 'suggestion', 'account', 'billing']);
 const FREQUENCIES = new Set(['always', 'sometimes', 'once']);
@@ -61,6 +62,7 @@ export function validateSupportTicketBody(body, { signedIn }) {
     email = typeof body?.email === 'string' ? body.email.trim() : '';
     if (!email) errors.push('email is required when signed out');
     else if (email.length > LIMITS.email) errors.push(`email must be at most ${LIMITS.email} characters`);
+    else if (!isValidEmail(email)) errors.push('email must be a valid email address');
   }
 
   const contextResult = parseSupportContext(body?.context);
