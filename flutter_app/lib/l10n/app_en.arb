@@ -3884,6 +3884,7 @@
   "careAlreadyUpdated": "Already updated",
   "careMarkAllDone": "Mark all as done",
   "careSkipAll": "Skip all",
+  "careItemBulkSelectionMode": "Select",
   "careBulkMarkDoneCount": "{count, plural, =1{Mark 1 as done} other{Mark {count} as done}}",
   "@careBulkMarkDoneCount": {"placeholders": {"count": {"type": "int"}}},
   "careBulkSkipCount": "{count, plural, =1{Skip 1} other{Skip {count}}}",

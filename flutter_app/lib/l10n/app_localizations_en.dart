@@ -9522,6 +9522,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get careSkipAll => 'Skip all';
 
   @override
+  String get careItemBulkSelectionMode => 'Select';
+
+  @override
   String careBulkMarkDoneCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
