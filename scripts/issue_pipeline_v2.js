@@ -34,8 +34,9 @@ const {
   listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
 const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
-const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
+const { fetchBodyEdits, fetchCommentEditor, fetchIssueBlockedBy } = require('./issue_pipeline_v2_graphql');
 const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
+const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
 const { planRounds } = require('./issue_pipeline_v2_round_plan');
 const { deriveHoldFacts, sinceRelease } = require('./issue_pipeline_v2_holds');
 
@@ -285,8 +286,10 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
 async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, mission = 'board', io = {} }) {
   const runMode = mode();
   if (runMode === 'off') {
-    return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [] };
+    return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [], errors: [], summary: { decisions: 0, confirmedEffects: 0, deferrals: 0 } };
   }
+  const summary = { decisions: 0, confirmedEffects: 0, deferrals: 0 };
+  const readFailures = [];
   deploys.reset();
   // WIP_LIMIT=off (repo variable) lifts the Ready queue cap for this run; see applyWipOverride.
   const config = applyWipOverride(io.config || loadConfig(), process.env.WIP_LIMIT);
@@ -304,7 +307,19 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     console.log(JSON.stringify({ event: 'acceptance.field-missing' }));
   }
 
-  const rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true, owner, repo });
+  let rows;
+  try {
+    rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true, owner, repo });
+  } catch (error) {
+    return {
+      mode: runMode,
+      boardListFailed: true,
+      actions: [],
+      errors: [{ issue: null, message: error?.message ?? String(error) }],
+      summary,
+      readFailures,
+    };
+  }
   const numbers = rows
     .map((row) => row.issue)
     .filter((issue) => issue && issue.state === 'OPEN')
@@ -312,15 +327,19 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
 
   const entries = [];
   for (const number of numbers) {
-    const issue = await getIssue(number);
-    const parsed = parseIssueFields(issue, fields);
-    entries.push({
-      number,
-      issue,
-      parsed,
-      stage: parsed.stage,
-      labels: (issue.labels || []).map((label) => label.name || label),
-    });
+    try {
+      const issue = await getIssue(number);
+      const parsed = parseIssueFields(issue, fields);
+      entries.push({
+        number,
+        issue,
+        parsed,
+        stage: parsed.stage,
+        labels: (issue.labels || []).map((label) => label.name || label),
+      });
+    } catch (error) {
+      readFailures.push({ issue: number, message: error?.message ?? String(error) });
+    }
   }
   // Closed board items still on a delivery column (Status In progress / In Main / In UAT): a merge
   // may have auto-closed an issue that is still being delivered. Only those whose Stage is a
@@ -334,7 +353,13 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     )
     .map((row) => row.issue.number);
   for (const number of closedNumbers) {
-    const issue = await getIssue(number);
+    let issue;
+    try {
+      issue = await getIssue(number);
+    } catch (error) {
+      readFailures.push({ issue: number, message: error?.message ?? String(error) });
+      continue;
+    }
     if (!issue) {
       continue;
     }
@@ -398,6 +423,19 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io: tickIo, runMode, now, roundRobinAfter, roundRobinOrder })),
       };
+      const loadBlockedBy =
+        io.fetchIssueBlockedBy || (projectsPat === 'p' ? noopBlockedBy : fetchIssueBlockedBy);
+      const blockedBy = await loadBlockedBy({
+        owner,
+        repo,
+        issueNumber: entry.number,
+        token: projectsPat,
+      });
+      if (blockedBy.error) {
+        facts.blockedByReadError = blockedBy.error;
+      } else {
+        facts.blockedByOpen = blockedBy.open;
+      }
       if (entry.closed) {
         const comments = await commentsOf(entry);
         facts.closed = true;
@@ -408,15 +446,34 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
-      if (facts.roundPlan) {
+      summary.decisions += 1;
+      if (action.row === 'blocked-by' || action.row === 'blocked-by.read-failed') {
         console.log(
-          JSON.stringify({ event: 'pipeline_v2_round_plan', mode: runMode, issue: entry.number, plan: facts.roundPlan, live: action.row || action.type }),
+          JSON.stringify({
+            event: 'pipeline_v2_skip',
+            issue: entry.number,
+            row: action.row,
+            blockers: action.blockers || [],
+            readError: facts.blockedByReadError || null,
+          }),
         );
       }
       if (inScope && action.agent) {
         roundRobinAfter = action.agent;
       }
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
+      const decisionKey = action.row || action.type;
+      if (facts.roundPlan) {
+        console.log(
+          JSON.stringify({
+            event: 'pipeline_v2_round_plan',
+            mode: runMode,
+            issue: entry.number,
+            plan: facts.roundPlan,
+            decision: decisionKey,
+          }),
+        );
+      }
       if (action.boardError) {
         // No agent can take this work: one board-level error per row, never a flag on each issue.
         const known = boardErrors.get(action.reason) || [];
@@ -474,6 +531,12 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       if (result.applied.length > 0) {
         const event = live && inScope ? 'pipeline_v2_applied' : 'pipeline_v2_planned';
         console.log(JSON.stringify({ event, issue: entry.number, [event === 'pipeline_v2_applied' ? 'applied' : 'planned']: result.applied }));
+        if (live && inScope) {
+          summary.confirmedEffects += result.applied.length;
+        }
+        if (result.applied.some((line) => line.startsWith('runner-queued:'))) {
+          summary.deferrals += 1;
+        }
       }
       if (inScope && result.applied.some((entry) => entry.startsWith('launch:'))) {
         wip += 1; // a started run takes a slot; a failed launch or an out-of-scope simulation does not
@@ -498,10 +561,21 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     console.error(JSON.stringify({ event: 'pipeline_v2_error', message }));
     errors.push({ issue: null, message });
   }
-  return { mode: runMode, issueCount: entries.length, wip, actions, errors };
+  return {
+    mode: runMode,
+    issueCount: entries.length,
+    wip,
+    actions,
+    errors,
+    summary,
+    readFailures,
+    boardReadPartial: readFailures.length > 0,
+  };
 }
 
 async function main() {
+  const startedAt = Date.now();
+  const runId = randomNonceHex();
   // #2553 P4: validate the issue filter and resolve the mode before any board read or write.
   const dispatch = validatePipelineDispatch({
     issueNumberRaw: process.env.ISSUE_NUMBER,
@@ -509,6 +583,21 @@ async function main() {
   });
   if (!dispatch.ok) {
     console.error(JSON.stringify({ event: 'pipeline_v2_error', message: dispatch.reason }));
+    console.log(
+      JSON.stringify({
+        event: 'pipeline_v2_tick_summary',
+        runId,
+        mode: null,
+        target: dispatch.only ?? 'board',
+        mission: dispatch.mission ?? 'board',
+        boardReadComplete: false,
+        decisions: 0,
+        confirmedEffects: 0,
+        deferrals: 0,
+        errors: 1,
+        durationMs: Date.now() - startedAt,
+      }),
+    );
     process.exitCode = 1;
     return;
   }
@@ -521,6 +610,7 @@ async function main() {
   console.log(
     JSON.stringify({
       event: 'pipeline_v2_run',
+      runId,
       mode: run.mode,
       source: run.source,
       target: dispatch.only ?? 'board',
@@ -547,7 +637,24 @@ async function main() {
     mission: dispatch.mission,
   });
   console.log(JSON.stringify({ event: 'pipeline_v2_tick', ...result, actions: result.actions?.length }));
-  if (result.errors?.length > 0) {
+  const boardReadComplete = !result.boardListFailed && !result.boardReadPartial;
+  console.log(
+    JSON.stringify({
+      event: 'pipeline_v2_tick_summary',
+      runId,
+      mode: run.mode,
+      target: dispatch.only ?? 'board',
+      mission: dispatch.mission,
+      boardReadComplete,
+      readFailures: result.readFailures || [],
+      decisions: result.summary?.decisions ?? 0,
+      confirmedEffects: result.summary?.confirmedEffects ?? 0,
+      deferrals: result.summary?.deferrals ?? 0,
+      errors: result.errors?.length ?? 0,
+      durationMs: Date.now() - startedAt,
+    }),
+  );
+  if (result.errors?.length > 0 || result.boardListFailed) {
     process.exitCode = 1;
   }
 }

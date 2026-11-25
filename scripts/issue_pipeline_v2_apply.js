@@ -255,12 +255,15 @@ async function applyAction({ action: decided, ctx }) {
         break;
       }
       case 'wake-stage-agent':
-        await comment(
-          buildWake({ commentId: action.commentId, agent: action.agent, config: ctx.config }),
-          'comment:wake',
-        );
+        // Hand off before the wake marker: a runner cap must not mark the human reply handled (#2556 P1).
         await assign(action.agent);
         await ring(action.agent, ctx.facts.stage);
+        if (applied.some((line) => line.startsWith('doorbell:'))) {
+          await comment(
+            buildWake({ commentId: action.commentId, agent: action.agent, config: ctx.config }),
+            'comment:wake',
+          );
+        }
         break;
       case 'ring-doorbell': {
         const inReview = action.stage === 'In analysis';

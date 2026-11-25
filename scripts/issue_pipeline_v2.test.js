@@ -483,6 +483,8 @@ function mockListProjectIssues(rows) {
   return async ({ owner, repo } = {}) => filterRowsByRepository(rows, owner, repo);
 }
 
+const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
+
 function boardIo(extra = {}) {
   const issues = {
     1: { number: 1, body: 'a', labels: [{ name: 'task' }], issue_field_values: [{ field_id: 1, single_select_option: { name: 'To do' } }] },
@@ -508,6 +510,7 @@ function boardIo(extra = {}) {
     getIssue: async (n) => issues[n],
     listIssueComments: async () => [],
     listCommentReactions: async () => [],
+    fetchIssueBlockedBy: noopBlockedBy,
     ...extra,
   };
 }
