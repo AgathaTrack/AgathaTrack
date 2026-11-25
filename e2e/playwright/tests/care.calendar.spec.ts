@@ -7,26 +7,46 @@ import { test, expect, loginAs } from '../fixtures/auth.fixture';
 import { GuardianDashboardPage } from '../pages/guardian-dashboard.page';
 import { OccurrencePage } from '../pages/occurrence.page';
 import { createCareItem, withCareClock } from '../support/care-api';
-import { createPet } from '../support/api';
+import { createPet as createPetApi } from '../support/api';
 import {
   enableFlutterAccessibility,
+  refreshFlutterAccessibility,
   waitForFlutterRoutePattern,
 } from '../support/flutter';
 
 test.describe('Care calendar @care', () => {
   test('Dashboard calendar tab', async ({ page, testUser }) => {
-    await enableFlutterAccessibility(page);
-    await loginAs(page, testUser, { experience: 'guardian' });
-    const dashboard = new GuardianDashboardPage(page);
-    await dashboard.open();
-    await page.getByRole('button', { name: /calendar|calendrier/i }).click();
-    const monthLabel = page.locator(
-      '[flt-semantics-identifier="care_calendar_month_label"]',
-    );
-    await expect(monthLabel).toBeVisible({ timeout: 60_000 });
-    await expect(
-      page.locator('[flt-semantics-identifier^="care_calendar_day_"]').first(),
-    ).toBeVisible({ timeout: 60_000 });
+    const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+    const today = new Date().toISOString().slice(0, 10);
+    await withCareClock(`${today}T08:30`, page);
+    try {
+      const pet = await createPetApi(baseURL, testUser.accessToken, 'Calendar Dash');
+      await createCareItem(baseURL, testUser.accessToken, pet.id, {
+        name: 'Dash calendar care',
+        careFamily: 'grooming',
+        frequency: 'once',
+        dueDate: today,
+      });
+      await enableFlutterAccessibility(page);
+      await loginAs(page, testUser, { experience: 'guardian' });
+      const dashboard = new GuardianDashboardPage(page);
+      await dashboard.open();
+      const careRegion = dashboard.careRegion();
+      await careRegion.scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: /calendar|calendrier/i }).click();
+      await refreshFlutterAccessibility(page);
+      const monthLabel = page.locator(
+        '[flt-semantics-identifier="care_calendar_month_label"]',
+      );
+      await expect(monthLabel).toBeVisible({ timeout: 60_000 });
+      await expect(
+        page
+          .locator('[flt-semantics-identifier^="care_calendar_day_"]')
+          .first(),
+      ).toBeVisible({ timeout: 60_000 });
+    } finally {
+      await withCareClock(null, page);
+    }
   });
 
   test('Open Care date from calendar', async ({ page, testUser }) => {
@@ -34,7 +54,7 @@ test.describe('Care calendar @care', () => {
     const today = new Date().toISOString().slice(0, 10);
     await withCareClock(`${today}T10:00`, page);
     try {
-      const pet = await createPet(baseURL, testUser.accessToken, 'Cal Pet');
+      const pet = await createPetApi(baseURL, testUser.accessToken, 'Cal Pet');
       const entry = await createCareItem(baseURL, testUser.accessToken, pet.id, {
         name: 'Calendar tap care',
         careFamily: 'grooming',
