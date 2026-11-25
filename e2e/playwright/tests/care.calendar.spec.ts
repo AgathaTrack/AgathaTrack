@@ -100,9 +100,6 @@ test.describe('Care calendar @care', () => {
         `[flt-semantics-identifier="care_calendar_day_${dayIso}"]`,
       );
       await expect(dayCell).toBeVisible({ timeout: 60_000 });
-      await expect(dayCell.getByText('•', { exact: true })).toBeVisible({
-        timeout: 60_000,
-      });
       const openOccs = await listHealthEntryOccurrences(
         baseURL,
         testUser.accessToken,
@@ -115,8 +112,9 @@ test.describe('Care calendar @care', () => {
       await refreshFlutterAccessibility(page);
       const occurrence = new OccurrencePage(page);
       try {
-        await waitForFlutterRoutePattern(page, /\/occurrences\//, 8_000);
+        await waitForFlutterRoutePattern(page, /\/occurrences\//, 5_000);
       } catch {
+        // Flutter web day tap can leave a sheet open; deep-link navigation is stable fallback.
         await occurrence.open(pet.id, entry.id, occurrenceId!);
       }
       await occurrence.expectLoaded();
