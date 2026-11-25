@@ -48,6 +48,9 @@ class CareItemAttentionOccurrenceRow extends ConsumerWidget {
     required this.muted,
     required this.onChanged,
     required this.onSkip,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onSelectionChanged,
   });
 
   final HealthEntry entry;
@@ -56,6 +59,9 @@ class CareItemAttentionOccurrenceRow extends ConsumerWidget {
   final bool muted;
   final Future<void> Function() onChanged;
   final Future<void> Function() onSkip;
+  final bool selectionMode;
+  final bool selected;
+  final ValueChanged<bool>? onSelectionChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,21 +73,41 @@ class CareItemAttentionOccurrenceRow extends ConsumerWidget {
 
     return Semantics(
       identifier: 'care_item_occurrence_row_${occurrence.id}',
-      label: '$when, ${pill.label}. ${l.careRowOpensDate}',
-      button: true,
+      label: selectionMode
+          ? '$whenSemantic, ${pill.label}'
+          : '$whenSemantic, ${pill.label}. ${l.careRowOpensDate}',
+      button: !selectionMode,
+      checked: selectionMode ? selected : null,
+      enabled: !muted,
+      onTap: selectionMode && !muted
+          ? () => onSelectionChanged?.call(!selected)
+          : null,
       child: InkWell(
         key: Key('care_item_occurrence_${occurrence.id}'),
-        onTap: () => openOccurrenceScreen(
-          context,
-          petId: entry.petId,
-          entryId: entry.id,
-          occurrenceId: occurrence.id,
-          source: 'care_item',
-        ),
+        onTap: selectionMode
+            ? (muted ? null : () => onSelectionChanged?.call(!selected))
+            : () => openOccurrenceScreen(
+                context,
+                petId: entry.petId,
+                entryId: entry.id,
+                occurrenceId: occurrence.id,
+                source: 'care_item',
+              ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 56),
           child: Row(
             children: [
+              if (selectionMode) ...[
+                ExcludeSemantics(
+                  child: Checkbox(
+                    key: Key('care_item_select_${occurrence.id}'),
+                    value: selected,
+                    onChanged: muted
+                        ? null
+                        : (value) => onSelectionChanged?.call(value == true),
+                  ),
+                ),
+              ],
               Expanded(child: ExcludeSemantics(child: Text(when))),
               ExcludeSemantics(
                 child: CareItemStatusPill(

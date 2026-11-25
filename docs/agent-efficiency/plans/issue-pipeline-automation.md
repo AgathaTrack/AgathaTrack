@@ -193,7 +193,7 @@ Ignore markers not on a comment whose author is `pawpet-bot` or `pawpet-claude`.
 
 Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, needs-owner) and the handoff table live in [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine). Compared with the 2026-11-13 draft:
 
-- **Status moves** use Pawpet **Status** field (bot PAT), not `status:*` labels. Org issue field **`Stage`** mirrors Status for agents without Projects scope ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345); `stage-mirror.yml`, default `STAGE_MIRROR=off`).
+- **Status moves** use Pawpet **Status** field (bot PAT), not `status:*` labels. The Stage ↔ Status mirror was cancelled ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)); see ISSUE-PIPELINE-D-010.
 - **Handoffs** use **assignment** with the agent’s PAT, not verdict labels.
 - **Planned** is not a board column: delivery runs in **Ready** while `pawpet-bot` is assignee before the delivery label is applied.
 
@@ -243,7 +243,7 @@ One **dispatcher** (`issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_di
 - Lanes: triage (deterministic), intake, review, delivery, implement, monitor, release (no agent).
 - Kill switch repo variable `ISSUE_PIPELINE`: `off` (default) / `dry-run` / `on`.
 - Consolidate `triage-human-reviewed.yml`, `agent-dispatch.yml`, `agent-monitor.yml` when lanes go live.
-- **Project status writes:** today `issue-agent-handlers.js` and UAT notify also call `updateProjectStatus` with `GH_PROJECTS_PAT`. Migration must route **all** automated Status updates through the dispatcher (or one shared library invoked only from dispatcher + release handlers) so the board has a single writer path per transition.
+- **Stage / Status writes (current on `main`):** merge, UAT, and prod handlers in `issue-agent-handlers.js` set the org **`Stage`** field (`setIssueStage` / `writeIssueFields`), not the Pawpet project **Status** column. Agents must not write project Status for those transitions. Legacy label-flow scripts may still call `updateProjectStatus` on the Pawpet board; the `stage_mirror` workflow was removed ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)). Org **`Stage`** is the pipeline source of truth ([`github-issue-workflow.md`](../github-issue-workflow.md) §Stored state).
 
 Full contract: [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 
@@ -353,7 +353,8 @@ merge (Actions) ──▶ In Main ──▶ In UAT ──▶ In Prod notify ─�
 | ISSUE-PIPELINE-D-006 | To do + agent assignee = pipeline entry; In Analysis = peer review; triage at To do start | Backlog→To do is human go; no extra board column | Proposed | 2026-11-14 |
 | ISSUE-PIPELINE-D-007 | Owner body edit during In Analysis / Ready reopen | GraphQL `userContentEdits` round reset deferred; column-scoped reopen + trust allowlist shipped (repair #2363 §3.3) | **In delivery** (partial) | 2026-11-16 |
 | ISSUE-PIPELINE-D-008 | `agent-paths` gate applies in delivery **and** implement lanes | Review rounds do not re-expand paths; fail-closed before label + before launch (repair #2363 §4.2) | **Live** (integration) | 2026-11-16 |
-| ISSUE-PIPELINE-D-009 | **Stage** org issue field mirrors board **Status** (two-way, board wins on conflict); no `status:*` labels | Step 0: board stays on built-in Status; mirror ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345); `stage-mirror.yml`) | **Live** | 2026-11-16 |
+| ISSUE-PIPELINE-D-009 | **Stage** org issue field mirrors board **Status** (two-way, board wins on conflict); no `status:*` labels | Step 0: board stays on built-in Status; mirror ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)) | **Superseded** by ISSUE-PIPELINE-D-010 | 2026-11-16 |
+| ISSUE-PIPELINE-D-010 | No Stage ↔ Status mirror; the org `Stage` field is pipeline state, not a copy of the board column | Owner cancelled the mirror on [#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345). Workflow, scripts and tests removed; Projects `Synced stage` fields, `STAGE_MIRROR` and mirror secrets retired on the owner side | **Live** | 2026-11-25 |
 
 ---
 
