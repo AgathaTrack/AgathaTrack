@@ -31,7 +31,7 @@ describe('absence pet lifecycle helpers', () => {
     };
     await deleteAbsenceResolutionsForPet(client, 'abs-1', 'pet-1');
     expect(capturedSql).toContain('health_entry_absence_resolutions');
-    expect(capturedSql).toContain('health_entries');
+    expect(capturedSql).toContain('care_items');
   });
 
   it('AP-11 / cancelEmptyActiveAbsences cancels absences with no pets', async () => {

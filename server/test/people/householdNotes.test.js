@@ -99,7 +99,7 @@ describe('Household notes visibility (I10)', () => {
             }],
           };
         }
-        if (sql.includes('listUsages') || sql.includes('health_entries')) return { rows: [] };
+        if (sql.includes('listUsages') || sql.includes('care_items')) return { rows: [] };
         if (sql.includes('usage') || sql.includes('care_occurrences')) return { rows: [{ count: 0 }] };
         if (sql.includes('planned_absence')) return { rows: [] };
         if (sql.includes('pet_contact_relationships')) return { rows: [] };

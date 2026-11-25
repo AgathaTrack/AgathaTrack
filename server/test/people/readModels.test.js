@@ -115,7 +115,7 @@ describe('People read models', () => {
         }
         if (sql.includes('pet_contact_relationships')) return { rows: [] };
         if (sql.includes('planned_absence_pets')) return { rows: [] };
-        if (sql.includes('health_entries')) return { rows: [] };
+        if (sql.includes('care_items')) return { rows: [] };
         if (sql.includes('care_occurrences')) return { rows: [{ count: 0 }] };
         return undefined;
       },

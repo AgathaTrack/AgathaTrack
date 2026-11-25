@@ -14,7 +14,7 @@ describe('listUsages', () => {
         if (sql.includes('planned_absence_pets')) {
           return { rows: [{ id: 'abs-1', pet_id: 'pet-1', starts_on: '2026-06-01', ends_on: '2026-06-10' }] };
         }
-        if (sql.includes('health_entries')) {
+        if (sql.includes('care_items')) {
           return { rows: [{ id: 'he-1', pet_id: 'pet-1', name: 'Vaccine' }] };
         }
         if (sql.includes('planned_absence_carer_invites')) {
