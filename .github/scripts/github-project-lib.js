@@ -112,8 +112,8 @@ function formatStatusOptionNotFoundError(statusName, statusFieldId, optionNames)
     message += ` Closest: ${suggestions.join(', ')}.`;
   }
   message +=
-    ' Pawpet pipeline column names live in `scripts/stage_mirror_config.js` (`PAWPET_COLUMNS`); ' +
-    'org `Stage` spellings use `PAWPET_STAGE_ORG_FIELD_OPTIONS` in the same file.';
+    ' Board column spellings live in `scripts/stage_mirror_config.js` ' +
+    '(`PAWPET_COLUMNS`, `ATSUPPORT_COLUMNS`; org `Stage` options in `PAWPET_STAGE_ORG_FIELD_OPTIONS`).';
   return message;
 }
 
