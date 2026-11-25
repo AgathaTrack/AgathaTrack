@@ -449,6 +449,12 @@ function decide(facts, config) {
   if ((facts.labels || []).includes('manual-only')) {
     return none('manual-only');
   }
+  if (facts.blockedByReadError) {
+    return { type: 'none', row: 'blocked-by.read-failed' };
+  }
+  if (facts.blockedByOpen?.length) {
+    return { type: 'none', row: 'blocked-by', blockers: facts.blockedByOpen };
+  }
   const stage = canonicalStage(facts.stage);
   if (stage === null) {
     return none('unknown-stage');

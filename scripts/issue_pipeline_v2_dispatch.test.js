@@ -69,7 +69,8 @@ test('entry point: mission=analyse without issue_number exits before board read'
     },
   });
   assert.equal(run.status, 1);
-  assert.doesNotMatch(run.stdout, /pipeline_v2_tick/, 'no board tick');
+  assert.doesNotMatch(run.stdout, /"event":"pipeline_v2_tick"/, 'no board tick');
+  assert.match(run.stdout, /pipeline_v2_tick_summary/, 'rejected dispatch still ends with one summary');
   assert.match(run.stderr, /requires a positive issue_number/);
 });
 
@@ -90,6 +91,7 @@ test('entry point: an invalid issue filter exits non-zero before any board read 
     },
   });
   assert.equal(run.status, 1);
-  assert.doesNotMatch(run.stdout, /pipeline_v2_tick|pipeline_v2_action|pipeline_v2_run/, 'no tick, no board decisions');
+  assert.doesNotMatch(run.stdout, /"event":"pipeline_v2_tick"|pipeline_v2_action|pipeline_v2_run/, 'no tick, no board decisions');
+  assert.match(run.stdout, /pipeline_v2_tick_summary/, 'rejected filter still ends with one summary');
   assert.match(run.stderr, /issue_number must be a positive integer/);
 });
