@@ -243,7 +243,7 @@ One **dispatcher** (`issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_di
 - Lanes: triage (deterministic), intake, review, delivery, implement, monitor, release (no agent).
 - Kill switch repo variable `ISSUE_PIPELINE`: `off` (default) / `dry-run` / `on`.
 - Consolidate `triage-human-reviewed.yml`, `agent-dispatch.yml`, `agent-monitor.yml` when lanes go live.
-- **Project status writes:** today `issue-agent-handlers.js` and UAT notify also call `updateProjectStatus` with `GH_PROJECTS_PAT`. Migration must route **all** automated Status updates through the dispatcher (or one shared library invoked only from dispatcher + release handlers) so the board has a single writer path per transition.
+- **Stage / Status writes (current on `main`):** merge, UAT, and prod handlers in `issue-agent-handlers.js` set the org **`Stage`** field (`setIssueStage` / `writeIssueFields`), not the Pawpet project **Status** column. Agents must not write project Status. When the repo variable `STAGE_MIRROR` is `on`, `scripts/stage_mirror.js` mirrors org `Stage` ↔ project **Status** via `updateProjectStatus` (`github-project-lib.js`). A future dispatcher must keep a single writer per transition and not revive direct Status writes from the legacy handler path.
 
 Full contract: [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 

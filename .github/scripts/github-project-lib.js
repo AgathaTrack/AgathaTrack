@@ -72,6 +72,51 @@ async function fetchIssue(owner, repo, issueNumber, token) {
   return issue;
 }
 
+/** @param {string[]} optionNames */
+function suggestStatusOptionNames(statusName, optionNames) {
+  const wanted = String(statusName || '').trim().toLowerCase();
+  if (!wanted) {
+    return [];
+  }
+  const scored = [];
+  for (const name of optionNames) {
+    const candidate = String(name).toLowerCase();
+    if (candidate === wanted) {
+      continue;
+    }
+    let score = 0;
+    if (candidate.includes(wanted) || wanted.includes(candidate)) {
+      score += 3;
+    }
+    for (const word of wanted.split(/\s+/)) {
+      if (word.length >= 3 && candidate.includes(word)) {
+        score += 1;
+      }
+    }
+    if (score > 0) {
+      scored.push({ name, score });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return scored.slice(0, 3).map((entry) => entry.name);
+}
+
+/** @param {string[]} optionNames */
+function formatStatusOptionNotFoundError(statusName, statusFieldId, optionNames) {
+  const available = optionNames.join(', ') || '(none)';
+  const suggestions = suggestStatusOptionNames(statusName, optionNames);
+  let message =
+    `Status option "${statusName}" not found on project field ${statusFieldId}. ` +
+    `Matching is case-insensitive exact. Available (${optionNames.length}): ${available}.`;
+  if (suggestions.length > 0) {
+    message += ` Closest: ${suggestions.join(', ')}.`;
+  }
+  message +=
+    ' Pawpet pipeline column names live in `scripts/stage_mirror_config.js` (`PAWPET_COLUMNS`); ' +
+    'org `Stage` spellings use `PAWPET_STAGE_ORG_FIELD_OPTIONS` in the same file.';
+  return message;
+}
+
 async function getStatusOptionId(projectsPat, statusFieldId, statusName) {
   const data = await graphql(
     projectsPat,
@@ -91,9 +136,11 @@ async function getStatusOptionId(projectsPat, statusFieldId, statusName) {
   );
   if (!match) {
     throw new Error(
-      `Status option "${statusName}" not found on field ${statusFieldId}. Available: ${options
-        .map((o) => o.name)
-        .join(', ')}`,
+      formatStatusOptionNotFoundError(
+        statusName,
+        statusFieldId,
+        options.map((option) => option.name),
+      ),
     );
   }
   return match.id;
@@ -432,6 +479,8 @@ module.exports = {
   rest,
   fetchIssue,
   getStatusOptionId,
+  formatStatusOptionNotFoundError,
+  suggestStatusOptionNames,
   ensureProjectItem,
   updateProjectStatus,
   fetchProjectV2Item,
