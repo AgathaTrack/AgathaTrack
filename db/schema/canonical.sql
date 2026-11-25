@@ -139,6 +139,50 @@ CREATE TABLE public.care_establishments (
     policy_version character varying(20) NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+CREATE TABLE public.care_items (
+    id uuid NOT NULL,
+    pet_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    type character varying(50) NOT NULL,
+    name character varying(255) DEFAULT ''::character varying,
+    dosage character varying(255) DEFAULT ''::character varying,
+    frequency character varying(50) DEFAULT 'once'::character varying,
+    frequency_days integer,
+    frequency_interval integer DEFAULT 1,
+    start_date date,
+    next_due_date date,
+    notes text DEFAULT ''::text,
+    health_issue_id uuid,
+    remind_days_before integer DEFAULT 1,
+    status character varying(50) DEFAULT 'active'::character varying,
+    completed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    completed_on date,
+    recurrence_anchor character varying(50) DEFAULT 'from_completion'::character varying,
+    repeat_end_date date,
+    schedule_times jsonb,
+    care_family character varying(50),
+    care_source character varying(50) DEFAULT 'guardian_defined'::character varying,
+    paused_since date,
+    schedule_policy_version character varying(20),
+    care_setting character varying(20) DEFAULT 'home'::character varying NOT NULL,
+    care_planning character varying(20) DEFAULT 'planned'::character varying NOT NULL,
+    care_importance character varying(20) NOT NULL,
+    importance_overridden boolean DEFAULT false NOT NULL,
+    provider_contact_id uuid,
+    provider_typed_name text,
+    care_blocks jsonb DEFAULT '{}'::jsonb NOT NULL,
+    schedule_anchor_date date,
+    late_completion_choice character varying(16),
+    paused_until date,
+    series_resumed_on date,
+    care_closed_reason character varying(50),
+    CONSTRAINT health_entries_care_closed_reason_check CHECK (((care_closed_reason IS NULL) OR ((care_closed_reason)::text = ANY ((ARRAY['ended'::character varying, 'stopped_by_user'::character varying])::text[])))),
+    CONSTRAINT health_entries_closed_reason_required CHECK ((((status)::text <> 'closed'::text) OR (care_closed_reason IS NOT NULL))),
+    CONSTRAINT health_entries_late_completion_choice_check CHECK (((late_completion_choice IS NULL) OR ((late_completion_choice)::text = ANY ((ARRAY['keep'::character varying, 'skip_next'::character varying, 'shift_following'::character varying])::text[])))),
+    CONSTRAINT health_entries_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'closed'::character varying])::text[])))
+);
 CREATE TABLE public.care_milestone_presentations (
     id uuid NOT NULL,
     milestone_id uuid NOT NULL,
@@ -157,6 +201,31 @@ CREATE TABLE public.care_milestones (
     policy_version character varying(20) NOT NULL,
     bundle_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE public.care_occurrences (
+    id uuid NOT NULL,
+    health_entry_id uuid NOT NULL,
+    scheduled_date date NOT NULL,
+    scheduled_time time without time zone,
+    status character varying(50) DEFAULT 'pending'::character varying NOT NULL,
+    completed_on date,
+    marked_at timestamp with time zone,
+    marked_by_user_id uuid,
+    notes text DEFAULT ''::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    completion_timing character varying(20),
+    performed_by_user_id uuid,
+    performed_by_snapshot jsonb,
+    marked_by_snapshot jsonb,
+    provider_contact_id uuid,
+    provider_typed_name text,
+    provider_contact_snapshot jsonb,
+    origin character varying(16) DEFAULT 'computed'::character varying NOT NULL,
+    series_date date,
+    CONSTRAINT health_occurrences_completion_timing_check CHECK (((completion_timing IS NULL) OR ((completion_timing)::text = ANY ((ARRAY['early'::character varying, 'on_time'::character varying, 'late'::character varying])::text[])))),
+    CONSTRAINT health_occurrences_origin_check CHECK (((origin)::text = ANY ((ARRAY['schedule'::character varying, 'computed'::character varying, 'planned'::character varying])::text[]))),
+    CONSTRAINT health_occurrences_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'completed'::character varying, 'skipped'::character varying, 'not_recorded'::character varying])::text[])))
 );
 CREATE TABLE public.care_recommendations (
     id uuid NOT NULL,
@@ -369,50 +438,47 @@ CREATE TABLE public.foster_requests (
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT foster_requests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'sent'::character varying, 'cancelled'::character varying])::text[])))
 );
-CREATE TABLE public.health_entries (
-    id uuid NOT NULL,
-    pet_id uuid NOT NULL,
-    user_id uuid NOT NULL,
-    type character varying(50) NOT NULL,
-    name character varying(255) DEFAULT ''::character varying,
-    dosage character varying(255) DEFAULT ''::character varying,
-    frequency character varying(50) DEFAULT 'once'::character varying,
-    frequency_days integer,
-    frequency_interval integer DEFAULT 1,
-    start_date date,
-    next_due_date date,
-    notes text DEFAULT ''::text,
-    health_issue_id uuid,
-    remind_days_before integer DEFAULT 1,
-    status character varying(50) DEFAULT 'active'::character varying,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    completed_on date,
-    recurrence_anchor character varying(50) DEFAULT 'from_completion'::character varying,
-    repeat_end_date date,
-    schedule_times jsonb,
-    care_family character varying(50),
-    care_source character varying(50) DEFAULT 'guardian_defined'::character varying,
-    paused_since date,
-    schedule_policy_version character varying(20),
-    care_setting character varying(20) DEFAULT 'home'::character varying NOT NULL,
-    care_planning character varying(20) DEFAULT 'planned'::character varying NOT NULL,
-    care_importance character varying(20) NOT NULL,
-    importance_overridden boolean DEFAULT false NOT NULL,
-    provider_contact_id uuid,
-    provider_typed_name text,
-    care_blocks jsonb DEFAULT '{}'::jsonb NOT NULL,
-    schedule_anchor_date date,
-    late_completion_choice character varying(16),
-    paused_until date,
-    series_resumed_on date,
-    care_closed_reason character varying(50),
-    CONSTRAINT health_entries_care_closed_reason_check CHECK (((care_closed_reason IS NULL) OR ((care_closed_reason)::text = ANY ((ARRAY['ended'::character varying, 'stopped_by_user'::character varying])::text[])))),
-    CONSTRAINT health_entries_closed_reason_required CHECK ((((status)::text <> 'closed'::text) OR (care_closed_reason IS NOT NULL))),
-    CONSTRAINT health_entries_late_completion_choice_check CHECK (((late_completion_choice IS NULL) OR ((late_completion_choice)::text = ANY ((ARRAY['keep'::character varying, 'skip_next'::character varying, 'shift_following'::character varying])::text[])))),
-    CONSTRAINT health_entries_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying, 'closed'::character varying])::text[])))
-);
+CREATE VIEW public.health_entries AS
+ SELECT id,
+    pet_id,
+    user_id,
+    type,
+    name,
+    dosage,
+    frequency,
+    frequency_days,
+    frequency_interval,
+    start_date,
+    next_due_date,
+    notes,
+    health_issue_id,
+    remind_days_before,
+    status,
+    completed_at,
+    created_at,
+    updated_at,
+    completed_on,
+    recurrence_anchor,
+    repeat_end_date,
+    schedule_times,
+    care_family,
+    care_source,
+    paused_since,
+    schedule_policy_version,
+    care_setting,
+    care_planning,
+    care_importance,
+    importance_overridden,
+    provider_contact_id,
+    provider_typed_name,
+    care_blocks,
+    schedule_anchor_date,
+    late_completion_choice,
+    paused_until,
+    series_resumed_on,
+    care_closed_reason
+   FROM public.care_items;
+COMMENT ON VIEW public.health_entries IS 'Deploy-1 compatibility view (#2405). Drop after server SQL cuts over to care_items.';
 CREATE TABLE public.health_entry_absence_resolutions (
     id uuid NOT NULL,
     health_entry_id uuid NOT NULL,
@@ -463,31 +529,29 @@ CREATE TABLE public.health_issues (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE TABLE public.health_occurrences (
-    id uuid NOT NULL,
-    health_entry_id uuid NOT NULL,
-    scheduled_date date NOT NULL,
-    scheduled_time time without time zone,
-    status character varying(50) DEFAULT 'pending'::character varying NOT NULL,
-    completed_on date,
-    marked_at timestamp with time zone,
-    marked_by_user_id uuid,
-    notes text DEFAULT ''::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    completion_timing character varying(20),
-    performed_by_user_id uuid,
-    performed_by_snapshot jsonb,
-    marked_by_snapshot jsonb,
-    provider_contact_id uuid,
-    provider_typed_name text,
-    provider_contact_snapshot jsonb,
-    origin character varying(16) DEFAULT 'computed'::character varying NOT NULL,
-    series_date date,
-    CONSTRAINT health_occurrences_completion_timing_check CHECK (((completion_timing IS NULL) OR ((completion_timing)::text = ANY ((ARRAY['early'::character varying, 'on_time'::character varying, 'late'::character varying])::text[])))),
-    CONSTRAINT health_occurrences_origin_check CHECK (((origin)::text = ANY ((ARRAY['schedule'::character varying, 'computed'::character varying, 'planned'::character varying])::text[]))),
-    CONSTRAINT health_occurrences_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'completed'::character varying, 'skipped'::character varying, 'not_recorded'::character varying])::text[])))
-);
+CREATE VIEW public.health_occurrences AS
+ SELECT id,
+    health_entry_id,
+    scheduled_date,
+    scheduled_time,
+    status,
+    completed_on,
+    marked_at,
+    marked_by_user_id,
+    notes,
+    created_at,
+    updated_at,
+    completion_timing,
+    performed_by_user_id,
+    performed_by_snapshot,
+    marked_by_snapshot,
+    provider_contact_id,
+    provider_typed_name,
+    provider_contact_snapshot,
+    origin,
+    series_date
+   FROM public.care_occurrences;
+COMMENT ON VIEW public.health_occurrences IS 'Deploy-1 compatibility view (#2405). Drop after server SQL cuts over to care_occurrences.';
 CREATE TABLE public.household_invites (
     id uuid NOT NULL,
     household_id uuid NOT NULL,
@@ -1200,7 +1264,7 @@ ALTER TABLE ONLY public.foster_request_targets
     ADD CONSTRAINT foster_request_targets_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.foster_requests
     ADD CONSTRAINT foster_requests_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.health_entries
+ALTER TABLE ONLY public.care_items
     ADD CONSTRAINT health_entries_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.health_entry_absence_resolutions
     ADD CONSTRAINT health_entry_absence_resoluti_health_entry_id_planned_absen_key UNIQUE (health_entry_id, planned_absence_id);
@@ -1214,7 +1278,7 @@ ALTER TABLE ONLY public.health_issue_events
     ADD CONSTRAINT health_issue_events_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.health_issues
     ADD CONSTRAINT health_issues_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.health_occurrences
+ALTER TABLE ONLY public.care_occurrences
     ADD CONSTRAINT health_occurrences_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.household_invites
     ADD CONSTRAINT household_invites_code_key UNIQUE (code);
@@ -1395,19 +1459,19 @@ CREATE INDEX idx_foster_request_pets_request_id ON public.foster_request_pets US
 CREATE INDEX idx_foster_request_responses_request_id ON public.foster_request_responses USING btree (foster_request_id);
 CREATE INDEX idx_foster_request_targets_request_id ON public.foster_request_targets USING btree (foster_request_id);
 CREATE INDEX idx_foster_requests_org_id ON public.foster_requests USING btree (organization_id);
-CREATE INDEX idx_health_entries_care_tick ON public.health_entries USING btree (status, recurrence_anchor) WHERE ((status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying])::text[]));
-CREATE INDEX idx_health_entries_pet_id ON public.health_entries USING btree (pet_id);
-CREATE INDEX idx_health_entries_provider_contact_id ON public.health_entries USING btree (provider_contact_id) WHERE (provider_contact_id IS NOT NULL);
-CREATE INDEX idx_health_entries_user_id ON public.health_entries USING btree (user_id);
+CREATE INDEX idx_health_entries_care_tick ON public.care_items USING btree (status, recurrence_anchor) WHERE ((status)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying])::text[]));
+CREATE INDEX idx_health_entries_pet_id ON public.care_items USING btree (pet_id);
+CREATE INDEX idx_health_entries_provider_contact_id ON public.care_items USING btree (provider_contact_id) WHERE (provider_contact_id IS NOT NULL);
+CREATE INDEX idx_health_entries_user_id ON public.care_items USING btree (user_id);
 CREATE INDEX idx_health_entry_absence_resolutions_absence ON public.health_entry_absence_resolutions USING btree (planned_absence_id);
 CREATE INDEX idx_health_entry_absence_resolutions_entry ON public.health_entry_absence_resolutions USING btree (health_entry_id);
 CREATE INDEX idx_health_event_photos_occurrence ON public.health_event_photos USING btree (health_occurrence_id) WHERE (health_occurrence_id IS NOT NULL);
 CREATE INDEX idx_health_issue_documents_issue_id ON public.health_issue_documents USING btree (health_issue_id);
-CREATE INDEX idx_health_occurrences_entry_id ON public.health_occurrences USING btree (health_entry_id);
-CREATE INDEX idx_health_occurrences_entry_series_slot ON public.health_occurrences USING btree (health_entry_id, COALESCE(series_date, scheduled_date));
-CREATE INDEX idx_health_occurrences_entry_status_date ON public.health_occurrences USING btree (health_entry_id, status, scheduled_date, scheduled_time);
-CREATE UNIQUE INDEX idx_health_occurrences_open_slot ON public.health_occurrences USING btree (health_entry_id, scheduled_date, COALESCE(scheduled_time, '00:00:00'::time without time zone)) WHERE ((status)::text = 'pending'::text);
-CREATE INDEX idx_health_occurrences_provider_contact_id ON public.health_occurrences USING btree (provider_contact_id) WHERE (provider_contact_id IS NOT NULL);
+CREATE INDEX idx_health_occurrences_entry_id ON public.care_occurrences USING btree (health_entry_id);
+CREATE INDEX idx_health_occurrences_entry_series_slot ON public.care_occurrences USING btree (health_entry_id, COALESCE(series_date, scheduled_date));
+CREATE INDEX idx_health_occurrences_entry_status_date ON public.care_occurrences USING btree (health_entry_id, status, scheduled_date, scheduled_time);
+CREATE UNIQUE INDEX idx_health_occurrences_open_slot ON public.care_occurrences USING btree (health_entry_id, scheduled_date, COALESCE(scheduled_time, '00:00:00'::time without time zone)) WHERE ((status)::text = 'pending'::text);
+CREATE INDEX idx_health_occurrences_provider_contact_id ON public.care_occurrences USING btree (provider_contact_id) WHERE (provider_contact_id IS NOT NULL);
 CREATE INDEX idx_household_invites_contact_id ON public.household_invites USING btree (contact_id) WHERE (contact_id IS NOT NULL);
 CREATE INDEX idx_household_invites_household_id ON public.household_invites USING btree (household_id);
 CREATE INDEX idx_household_invites_invitee_email ON public.household_invites USING btree (lower((invitee_email)::text));
@@ -1481,7 +1545,7 @@ CREATE INDEX vet_visit_occurrence_links_visit_idx ON public.vet_visit_occurrence
 CREATE INDEX vet_visits_pet_visited_idx ON public.vet_visits USING btree (pet_id, visited_on DESC);
 CREATE UNIQUE INDEX welfare_suggestions_pet_dedupe_idx ON public.welfare_suggestions USING btree (pet_id, dedupe_key);
 CREATE INDEX welfare_suggestions_pet_status_idx ON public.welfare_suggestions USING btree (pet_id, status);
-CREATE TRIGGER health_entries_normalize_closed_status BEFORE INSERT OR UPDATE OF status, care_closed_reason ON public.health_entries FOR EACH ROW EXECUTE FUNCTION public.health_entries_normalize_closed_status();
+CREATE TRIGGER health_entries_normalize_closed_status BEFORE INSERT OR UPDATE OF status, care_closed_reason ON public.care_items FOR EACH ROW EXECUTE FUNCTION public.health_entries_normalize_closed_status();
 CREATE TRIGGER trg_clear_pinned_org_on_membership_loss AFTER DELETE OR UPDATE OF role ON public.organization_users FOR EACH ROW EXECUTE FUNCTION public.clear_pinned_org_on_membership_loss();
 ALTER TABLE ONLY public.account_device_labels
     ADD CONSTRAINT account_device_labels_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
@@ -1514,7 +1578,7 @@ ALTER TABLE ONLY public.archived_pets
 ALTER TABLE ONLY public.audit_events
     ADD CONSTRAINT audit_events_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.care_establishments
-    ADD CONSTRAINT care_establishments_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.health_entries(id) ON DELETE CASCADE;
+    ADD CONSTRAINT care_establishments_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.care_items(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.care_establishments
     ADD CONSTRAINT care_establishments_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.care_milestone_presentations
@@ -1524,7 +1588,7 @@ ALTER TABLE ONLY public.care_milestone_presentations
 ALTER TABLE ONLY public.care_milestones
     ADD CONSTRAINT care_milestones_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.care_recommendations
-    ADD CONSTRAINT care_recommendations_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.health_entries(id) ON DELETE SET NULL;
+    ADD CONSTRAINT care_recommendations_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.care_items(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.care_recommendations
     ADD CONSTRAINT care_recommendations_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.care_safeguards
@@ -1532,9 +1596,9 @@ ALTER TABLE ONLY public.care_safeguards
 ALTER TABLE ONLY public.care_schedule_events
     ADD CONSTRAINT care_schedule_events_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.care_schedule_events
-    ADD CONSTRAINT care_schedule_events_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.health_entries(id) ON DELETE CASCADE;
+    ADD CONSTRAINT care_schedule_events_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.care_items(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.care_schedule_events
-    ADD CONSTRAINT care_schedule_events_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.health_occurrences(id) ON DELETE SET NULL;
+    ADD CONSTRAINT care_schedule_events_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.care_occurrences(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.custody_transfers
     ADD CONSTRAINT custody_transfers_from_org_id_fkey FOREIGN KEY (from_org_id) REFERENCES public.organizations(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.custody_transfers
@@ -1599,22 +1663,22 @@ ALTER TABLE ONLY public.foster_requests
     ADD CONSTRAINT foster_requests_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.foster_requests
     ADD CONSTRAINT foster_requests_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.health_entries
+ALTER TABLE ONLY public.care_items
     ADD CONSTRAINT health_entries_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.health_entries
+ALTER TABLE ONLY public.care_items
     ADD CONSTRAINT health_entries_provider_contact_id_fkey FOREIGN KEY (provider_contact_id) REFERENCES public.people_contacts(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.health_entries
+ALTER TABLE ONLY public.care_items
     ADD CONSTRAINT health_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.health_entry_absence_resolutions
     ADD CONSTRAINT health_entry_absence_resolutions_carer_user_id_fkey FOREIGN KEY (carer_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.health_entry_absence_resolutions
-    ADD CONSTRAINT health_entry_absence_resolutions_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.health_entries(id) ON DELETE CASCADE;
+    ADD CONSTRAINT health_entry_absence_resolutions_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.care_items(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.health_entry_absence_resolutions
     ADD CONSTRAINT health_entry_absence_resolutions_planned_absence_id_fkey FOREIGN KEY (planned_absence_id) REFERENCES public.planned_absences(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.health_event_photos
-    ADD CONSTRAINT health_event_photos_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.health_entries(id) ON DELETE CASCADE;
+    ADD CONSTRAINT health_event_photos_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.care_items(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.health_event_photos
-    ADD CONSTRAINT health_event_photos_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.health_occurrences(id) ON DELETE SET NULL;
+    ADD CONSTRAINT health_event_photos_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.care_occurrences(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.health_issue_documents
     ADD CONSTRAINT health_issue_documents_health_issue_id_fkey FOREIGN KEY (health_issue_id) REFERENCES public.health_issues(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.health_issue_events
@@ -1625,13 +1689,13 @@ ALTER TABLE ONLY public.health_issues
     ADD CONSTRAINT health_issues_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.health_issues
     ADD CONSTRAINT health_issues_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.health_occurrences
-    ADD CONSTRAINT health_occurrences_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.health_entries(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.health_occurrences
+ALTER TABLE ONLY public.care_occurrences
+    ADD CONSTRAINT health_occurrences_health_entry_id_fkey FOREIGN KEY (health_entry_id) REFERENCES public.care_items(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.care_occurrences
     ADD CONSTRAINT health_occurrences_marked_by_user_id_fkey FOREIGN KEY (marked_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.health_occurrences
+ALTER TABLE ONLY public.care_occurrences
     ADD CONSTRAINT health_occurrences_performed_by_user_id_fkey FOREIGN KEY (performed_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.health_occurrences
+ALTER TABLE ONLY public.care_occurrences
     ADD CONSTRAINT health_occurrences_provider_contact_id_fkey FOREIGN KEY (provider_contact_id) REFERENCES public.people_contacts(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.household_invites
     ADD CONSTRAINT household_invites_contact_id_fkey FOREIGN KEY (contact_id) REFERENCES public.people_contacts(id) ON DELETE SET NULL;
@@ -1846,7 +1910,7 @@ ALTER TABLE ONLY public.support_tickets
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pinned_organization_id_fkey FOREIGN KEY (pinned_organization_id) REFERENCES public.organizations(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.vet_visit_occurrence_links
-    ADD CONSTRAINT vet_visit_occurrence_links_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.health_occurrences(id) ON DELETE CASCADE;
+    ADD CONSTRAINT vet_visit_occurrence_links_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.care_occurrences(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.vet_visit_occurrence_links
     ADD CONSTRAINT vet_visit_occurrence_links_vet_visit_id_fkey FOREIGN KEY (vet_visit_id) REFERENCES public.vet_visits(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.vet_visits
@@ -1858,7 +1922,7 @@ ALTER TABLE ONLY public.vets
 ALTER TABLE ONLY public.vets
     ADD CONSTRAINT vets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.weight_entries
-    ADD CONSTRAINT weight_entries_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.health_occurrences(id) ON DELETE SET NULL;
+    ADD CONSTRAINT weight_entries_health_occurrence_id_fkey FOREIGN KEY (health_occurrence_id) REFERENCES public.care_occurrences(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.weight_entries
     ADD CONSTRAINT weight_entries_pet_id_fkey FOREIGN KEY (pet_id) REFERENCES public.pets(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.weight_entries

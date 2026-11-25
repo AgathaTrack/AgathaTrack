@@ -41,7 +41,10 @@ const FK_SQL = `
 const COLUMN_SQL = `
   SELECT c.table_name, c.column_name
   FROM information_schema.columns c
+  JOIN information_schema.tables t
+    ON t.table_schema = c.table_schema AND t.table_name = c.table_name
   WHERE c.table_schema = 'public'
+    AND t.table_type = 'BASE TABLE'
     AND (
       c.column_name = 'user_id'
       OR c.column_name LIKE '%\\_user_id' ESCAPE '\\'

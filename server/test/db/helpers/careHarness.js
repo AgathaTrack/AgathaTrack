@@ -63,6 +63,23 @@ async function ensureCareDateOutcomeMigration(pool) {
 }
 
 async function ensureCareItemClosedMigration(pool) {
+  const onPhysical = await pool.query(
+    `SELECT 1 FROM information_schema.columns c
+     JOIN information_schema.tables t
+       ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+     WHERE c.table_schema = 'public'
+       AND c.table_name = 'care_items'
+       AND t.table_type = 'BASE TABLE'
+       AND c.column_name = 'care_closed_reason'`,
+  );
+  if (onPhysical.rows.length > 0) return;
+
+  const legacyTable = await pool.query(
+    `SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'health_entries' AND table_type = 'BASE TABLE'`,
+  );
+  if (legacyTable.rows.length === 0) return;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
