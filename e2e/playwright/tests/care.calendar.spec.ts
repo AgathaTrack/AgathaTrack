@@ -8,11 +8,20 @@ import { GuardianDashboardPage } from '../pages/guardian-dashboard.page';
 import { OccurrencePage } from '../pages/occurrence.page';
 import { createCareItem, withCareClock } from '../support/care-api';
 import { createPet as createPetApi } from '../support/api';
+import type { Page } from '@playwright/test';
 import {
   enableFlutterAccessibility,
   refreshFlutterAccessibility,
   waitForFlutterRoutePattern,
 } from '../support/flutter';
+
+async function openCareCalendarTab(page: Page): Promise<void> {
+  const toggle = page.locator(
+    '[flt-semantics-identifier="care_calendar_mode_toggle"]',
+  );
+  await toggle.scrollIntoViewIfNeeded();
+  await toggle.getByRole('button', { name: /^calendar$|^calendrier$/i }).click();
+}
 
 test.describe('Care calendar @care', () => {
   test('Dashboard calendar tab', async ({ page, testUser }) => {
@@ -33,7 +42,7 @@ test.describe('Care calendar @care', () => {
       await dashboard.open();
       const careRegion = dashboard.careRegion();
       await careRegion.scrollIntoViewIfNeeded();
-      await page.getByRole('button', { name: /calendar|calendrier/i }).click();
+      await openCareCalendarTab(page);
       await refreshFlutterAccessibility(page);
       const monthLabel = page.locator(
         '[flt-semantics-identifier="care_calendar_month_label"]',
@@ -65,7 +74,9 @@ test.describe('Care calendar @care', () => {
       await loginAs(page, testUser, { experience: 'guardian' });
       const dashboard = new GuardianDashboardPage(page);
       await dashboard.open();
-      await page.getByRole('button', { name: /calendar|calendrier/i }).click();
+      await dashboard.careRegion().scrollIntoViewIfNeeded();
+      await openCareCalendarTab(page);
+      await refreshFlutterAccessibility(page);
       const dayIso = today;
       const dayCell = page.locator(
         `[flt-semantics-identifier="care_calendar_day_${dayIso}"]`,
