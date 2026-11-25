@@ -201,7 +201,7 @@ async function writeNextDueDate(db, entry) {
   const next = open[0]?.scheduled_date ?? null;
   if (dateToIsoDate(entry.next_due_date) !== next) {
     await db.query(
-      'UPDATE ${careTables().items} SET next_due_date = $1, updated_at = NOW() WHERE id = $2',
+      `UPDATE ${careTables().items} SET next_due_date = $1, updated_at = NOW() WHERE id = $2`,
       [next, entry.id],
     );
   }
