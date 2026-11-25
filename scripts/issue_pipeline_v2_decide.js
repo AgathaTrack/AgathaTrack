@@ -453,6 +453,11 @@ function decide(facts, config) {
   if (stage === null) {
     return none('unknown-stage');
   }
+  // Scoped missions (e.g. analyse) must not reopen closed delivery issues or release holds past Ready.
+  const missionBlock = missionGuard(stage, facts.mission);
+  if (missionBlock) {
+    return missionBlock;
+  }
   if (facts.closed) {
     // Closed while delivery was under way (a merge auto-closed it, for example): an issue must stay
     // open until Done. Once only: a second close is deliberate. `not_planned` is always deliberate.

@@ -41,6 +41,44 @@ const readyFactsBase = () => ({
   launch: {},
 });
 
+test('decide: mission analyse on closed In progress does not reopen', () => {
+  const config = loadConfig();
+  const action = decide(
+    {
+      mode: 'on',
+      onBoard: true,
+      labels: [],
+      stage: 'In progress',
+      blocked: null,
+      closed: true,
+      closeReason: 'completed',
+      reopenedBefore: false,
+      mission: 'analyse',
+    },
+    config,
+  );
+  assert.equal(action.row, 'mission.analyse.post-ready');
+  assert.notEqual(action.type, 'reopen');
+});
+
+test('decide: mission analyse at Ready with engine hold does not release', () => {
+  const config = loadConfig();
+  const action = decide(
+    {
+      mode: 'on',
+      onBoard: true,
+      labels: [],
+      stage: 'Ready',
+      blocked: 'stalled',
+      mission: 'analyse',
+      holds: { hold: { reason: 'stalled' }, releasedAt: null },
+    },
+    config,
+  );
+  assert.equal(action.row, 'mission.analyse.complete');
+  assert.notEqual(action.type, 'release-hold');
+});
+
 test('decide: mission analyse at Ready does not launch; board mission reaches ready.launch', () => {
   const config = loadConfig();
   const facts = readyFactsBase();
