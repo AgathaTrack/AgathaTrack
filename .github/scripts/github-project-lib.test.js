@@ -45,20 +45,19 @@ test('suggestStatusOptionNames picks close pipeline column spellings', () => {
   assert.deepEqual(suggestStatusOptionNames('In Uatt', columns), ['In UAT']);
 });
 
-test('formatStatusOptionNotFoundError names the field, options, and stage_mirror_config', () => {
+test('formatStatusOptionNotFoundError names the field, options, and workflow doc', () => {
   const message = formatStatusOptionNotFoundError('In Mainn', 'FIELD', ['In Main', 'In UAT']);
   assert.match(message, /Status option "In Mainn" not found/);
   assert.match(message, /Closest: In Main/);
-  assert.match(message, /stage_mirror_config\.js/);
-  assert.match(message, /PAWPET_COLUMNS/);
-  assert.match(message, /ATSUPPORT_COLUMNS/);
+  assert.match(message, /github-issue-workflow\.md/);
+  assert.match(message, /Project \*\*Status\*\*/);
 });
 
 test('formatStatusOptionNotFoundError is board-neutral for ATSupport Status lookups', () => {
   const message = formatStatusOptionNotFoundError('Triagee', 'ATSUPPORT_STATUS_FIELD', [
-    'Triage',
+    'Triaged',
     'In progress',
   ]);
-  assert.match(message, /ATSUPPORT_COLUMNS/);
-  assert.match(message, /PAWPET_COLUMNS/);
+  assert.match(message, /github-issue-workflow\.md/);
+  assert.doesNotMatch(message, /PAWPET_COLUMNS/);
 });

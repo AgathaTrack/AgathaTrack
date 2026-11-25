@@ -112,8 +112,8 @@ function formatStatusOptionNotFoundError(statusName, statusFieldId, optionNames)
     message += ` Closest: ${suggestions.join(', ')}.`;
   }
   message +=
-    ' Board column spellings live in `scripts/stage_mirror_config.js` ' +
-    '(`PAWPET_COLUMNS`, `ATSUPPORT_COLUMNS`; org `Stage` options in `PAWPET_STAGE_ORG_FIELD_OPTIONS`).';
+    ' Org `Stage` values are listed in `docs/agent-efficiency/github-issue-workflow.md` (§Stored state). ' +
+    'Project **Status** options are configured on the GitHub board; add or rename options there when this fails.';
   return message;
 }
 

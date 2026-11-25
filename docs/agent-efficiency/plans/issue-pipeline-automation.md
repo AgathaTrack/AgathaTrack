@@ -243,7 +243,7 @@ One **dispatcher** (`issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_di
 - Lanes: triage (deterministic), intake, review, delivery, implement, monitor, release (no agent).
 - Kill switch repo variable `ISSUE_PIPELINE`: `off` (default) / `dry-run` / `on`.
 - Consolidate `triage-human-reviewed.yml`, `agent-dispatch.yml`, `agent-monitor.yml` when lanes go live.
-- **Stage / Status writes (current on `main`):** merge, UAT, and prod handlers in `issue-agent-handlers.js` set the org **`Stage`** field (`setIssueStage` / `writeIssueFields`), not the Pawpet project **Status** column. Agents must not write project Status. When the repo variable `STAGE_MIRROR` is `on`, `scripts/stage_mirror.js` mirrors org `Stage` ↔ project **Status** via `updateProjectStatus` (`github-project-lib.js`). A future dispatcher must keep a single writer per transition and not revive direct Status writes from the legacy handler path.
+- **Stage / Status writes (current on `main`):** merge, UAT, and prod handlers in `issue-agent-handlers.js` set the org **`Stage`** field (`setIssueStage` / `writeIssueFields`), not the Pawpet project **Status** column. Agents must not write project Status for those transitions. Legacy label-flow scripts may still call `updateProjectStatus` on the Pawpet board; the `stage_mirror` workflow was removed ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)). Org **`Stage`** is the pipeline source of truth ([`github-issue-workflow.md`](../github-issue-workflow.md) §Stored state).
 
 Full contract: [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 
