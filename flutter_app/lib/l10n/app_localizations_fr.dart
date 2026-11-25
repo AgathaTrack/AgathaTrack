@@ -6080,6 +6080,15 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String historyPillA11yDoneWithWeight(
+    String due,
+    String close,
+    String weight,
+  ) {
+    return 'Échéance $due, fait le $close, $weight';
+  }
+
+  @override
   String historyPillA11ySkipped(String due, String close) {
     return 'Échéance $due, ignoré le $close';
   }

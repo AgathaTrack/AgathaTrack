@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pet_profile_app/core/weight/weight_unit.dart';
+import 'package:pet_profile_app/core/weight/weight_unit_preference.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:pet_profile_app/features/health_tracking/domain/entities/health_occurrence.dart';
@@ -21,7 +24,11 @@ void main() {
     ];
 
     await tester.pumpWidget(
-      MaterialApp(
+      ProviderScope(
+        overrides: [
+          weightUnitPreferenceProvider.overrideWith((ref) => WeightUnit.kg),
+        ],
+        child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
@@ -37,6 +44,7 @@ void main() {
             ),
           ),
         ),
+      ),
       ),
     );
 
@@ -65,7 +73,11 @@ void main() {
     ];
 
     await tester.pumpWidget(
-      MaterialApp.router(
+      ProviderScope(
+        overrides: [
+          weightUnitPreferenceProvider.overrideWith((ref) => WeightUnit.kg),
+        ],
+        child: MaterialApp.router(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         routerConfig: GoRouter(
@@ -91,6 +103,7 @@ void main() {
             ),
           ],
         ),
+      ),
       ),
     );
 

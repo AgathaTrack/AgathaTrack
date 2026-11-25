@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pet_profile_app/core/weight/weight_unit.dart';
+import 'package:pet_profile_app/core/weight/weight_unit_preference.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pet_profile_app/features/health_tracking/domain/entities/health_occurrence.dart';
 import 'package:pet_profile_app/features/health_tracking/presentation/providers/pet_event_view_providers.dart';
@@ -29,6 +31,7 @@ Widget _wrap({
   final app = ProviderScope(
     overrides: [
       entryPastOccurrencesProvider('entry-1').overrideWith((ref) async => past),
+      weightUnitPreferenceProvider.overrideWith((ref) => WeightUnit.kg),
     ],
     child: MaterialApp.router(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

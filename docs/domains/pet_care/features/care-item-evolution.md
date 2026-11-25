@@ -5,8 +5,8 @@ audience: both
 domain: pet_care
 feature_id: care_item
 status: active
-last_updated: 2026-11-17
-related_prs: [1797, 1805, 1812, 1817, 2129, 2145, 2420]
+last_updated: 2026-11-25
+related_prs: [1797, 1805, 1812, 1817, 2129, 2145, 2420, 2056]
 ---
 
 # Care Item — functional spec
@@ -353,7 +353,7 @@ Instructions are not yet on the wire; defer until the field exists.
 - After Done, Skip, or Undo on the same item, **History** updates as soon as the server confirms (D-CIE-042); no navigation or full reload required.
 - When no resolved past occurrences qualify, the module shows **No history yet** (no **See history**).
 - **No inline shortcuts** (e.g. Unmark done) in the list; changes, including undoing Done, happen on the occurrence's screen (D-CIE-040).
-- Each row is one pill: `{due dd MMM yy}` or `{due} at {HH:mm}` – **icon** `{close dd MMM yy when applicable}` — ✓ (green) for Done, ⏭ (grey) for Skipped / Not given, ? (grey) with no close date for Not recorded. No status words on the row; screen readers get full meaning via semantics (CARE-ITEM-R-023).
+- Each row is one pill: `{due dd MMM yy}` or `{due} at {HH:mm}` (completed weigh-ins append `· {weight}` in the user's unit) – **icon** `{close dd MMM yy when the close calendar day differs from the due day}` — ✓ (green) for Done, ⏭ (grey) for Skipped / Not given, ? (grey) with no close date for Not recorded. No status words on the row; screen readers still hear the close day when it matches the due day (CARE-ITEM-R-023).
 - Attribution (**who recorded, when**) lives on the Care date screen footer (CARE-ITEM-R-022), not on History rows — narrows [#2056](https://github.com/AgathaTrack/AgathaTrack/issues/2056).
 - A row opens that occurrence's record (inline or from the pop-up; pop-up closes first).
 - An unresolved overdue occurrence never appears here.
@@ -494,7 +494,7 @@ BDD: `flutter_app/test/bdd/features/care_date_screen.feature` · E2E: `e2e/playw
 | CARE-ITEM-D-007 | Default completion date `min(due_date, as_of.date)`; scheduled time read-only; R-021 deferred (2026-10-14) | Live |
 | CARE-ITEM-D-008 | Occurrence route builder keys `OccurrenceScreen` by `occurrenceId` so consecutive `replaceOccurrenceScreen` hops reload data (go_router page reuse) | Live |
 | CARE-ITEM-D-009 | **Recorded-by** footer after neighbours: uses server `marked_at` (24h `HH:mm`, calendar `dd MMM yy`) and `marked_by_name`; ✓ for Done, ⏭ for Skipped; no footer for open or system-closed Not recorded; History attribution detail moves off list rows (#2056) | Live | 2026-11-08 | #2145 |
-| CARE-ITEM-D-010 | **History pills:** one due line + status icon + close calendar date; no status words; pop-up lists all `status=past` rows with lazy `ListView`; **See history** only when count exceeds inline cap; title **History** | Live | 2026-11-08 | #2155 |
+| CARE-ITEM-D-010 | **History pills:** one due line (plus linked weigh-in weight on completed rows) + status icon + close calendar date only when the close day differs from the due day; no status words; pop-up lists all `status=past` rows with lazy `ListView`; **See history** only when count exceeds inline cap; title **History** | Live | 2026-11-25 | #2056 |
 
 Historical D-OCC / D-OSM detail (2026-10-06): D-OCC-001 App bar **Care date**; D-OCC-006 Reschedule this occurrence only; D-OCC-014 … D-OCC-015 Away; D-OCC-016 No ⋯ menu; D-OCC-OUT-1 series actions on Care details only. v1 acceptance: plan `occurrence-screen-context-6b05.md`.
 
