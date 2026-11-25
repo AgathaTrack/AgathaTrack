@@ -11,7 +11,7 @@ const { resolvePipelineMode } = require('./issue_pipeline_mode');
 const { bodySha } = require('./issue_pipeline_state');
 const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
-const { resolveDispatchTarget, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
+const { validatePipelineDispatch, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
 const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
@@ -46,7 +46,7 @@ function mode() {
 }
 
 /** Facts available from the issue itself; later phases add comments, reactions and PRs. */
-function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
+function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode, mission }) {
   const facts = {
     mode: runMode,
     now,
@@ -56,6 +56,7 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
     blocked: parsed.blocked,
     bodyHash: bodySha(issue.body),
     wip,
+    mission: mission || 'board',
   };
   if (parsed.acceptance !== undefined) facts.acceptance = parsed.acceptance;
   if (parsed.acceptanceFailReason !== undefined) facts.acceptanceFailReason = parsed.acceptanceFailReason;
@@ -281,7 +282,7 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
   return merged;
 }
 
-async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, io = {} }) {
+async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, mission = 'board', io = {} }) {
   const runMode = mode();
   if (runMode === 'off') {
     return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [] };
@@ -389,6 +390,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           wip,
           now,
           runMode,
+          mission,
         }),
         roundRobinAfter,
         roundRobinOrder,
@@ -501,9 +503,12 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
 
 async function main() {
   // #2553 P4: validate the issue filter and resolve the mode before any board read or write.
-  const target = resolveDispatchTarget(process.env.ISSUE_NUMBER);
-  if (!target.ok) {
-    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: target.reason }));
+  const dispatch = validatePipelineDispatch({
+    issueNumberRaw: process.env.ISSUE_NUMBER,
+    missionRaw: process.env.PIPELINE_V2_MISSION,
+  });
+  if (!dispatch.ok) {
+    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: dispatch.reason }));
     process.exitCode = 1;
     return;
   }
@@ -514,7 +519,14 @@ async function main() {
   });
   process.env.ISSUE_PIPELINE_V2 = run.mode;
   console.log(
-    JSON.stringify({ event: 'pipeline_v2_run', mode: run.mode, source: run.source, target: target.only ?? 'board', writes: run.mode === 'on' }),
+    JSON.stringify({
+      event: 'pipeline_v2_run',
+      mode: run.mode,
+      source: run.source,
+      target: dispatch.only ?? 'board',
+      mission: dispatch.mission,
+      writes: run.mode === 'on',
+    }),
   );
   const { owner, repo } = parseRepo(process.env.GITHUB_REPOSITORY || '');
   const projectsPat = process.env.GH_PROJECTS_PAT;
@@ -523,7 +535,7 @@ async function main() {
   if (mode() !== 'off' && (!projectsPat || !projectId || !statusFieldId)) {
     throw new Error('GH_PROJECTS_PAT, GH_PROJECT_ID and GH_STATUS_FIELD_ID are required');
   }
-  const only = target.only;
+  const only = dispatch.only;
   const result = await tick({
     owner,
     repo,
@@ -532,6 +544,7 @@ async function main() {
     projectId,
     statusFieldId,
     only,
+    mission: dispatch.mission,
   });
   console.log(JSON.stringify({ event: 'pipeline_v2_tick', ...result, actions: result.actions?.length }));
   if (result.errors?.length > 0) {

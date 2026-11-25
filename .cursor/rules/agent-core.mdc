@@ -25,6 +25,7 @@ alwaysApply: true
 | `/e2e-debug` | Pre-UAT remedial → chain babysit-uat |
 | `/ui-design-deep` | Multi-screen design + implementation |
 | `/AgentAcceptance` | Holistic issue/PR acceptance — [`agent-acceptance` skill](../skills/agent-acceptance/SKILL.md) |
+| `/analyse-issue` | Issue pipeline spec + review until **Ready** (no delivery) — [`analyse-issue` skill](../skills/analyse-issue/SKILL.md) |
 
 Each Tier 1 skill runs the **Router** first, then applicable protocols under `.cursor/agent-kernel/protocols/`.
 
