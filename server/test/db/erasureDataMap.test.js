@@ -75,8 +75,8 @@ describe('erasure data map (real PG)', () => {
     const find = (table, column) =>
       bindings.find((row) => row.table === table && row.column === column);
 
-    expect(find('health_occurrences', 'marked_by_user_id')?.erasure_action).toBe('set_null');
-    expect(find('health_occurrences', 'performed_by_user_id')?.erasure_action).toBe('set_null');
+    expect(find('care_occurrences', 'marked_by_user_id')?.erasure_action).toBe('set_null');
+    expect(find('care_occurrences', 'performed_by_user_id')?.erasure_action).toBe('set_null');
     expect(find('care_schedule_events', 'actor_user_id')?.erasure_action).toBe('set_null');
     expect(find('health_entry_absence_resolutions', 'carer_user_id')?.erasure_action).toBe(
       'set_null',

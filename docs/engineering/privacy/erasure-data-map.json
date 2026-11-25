@@ -184,7 +184,7 @@
       "discovery_source": "foreign_key"
     },
     {
-      "table": "health_entries",
+      "table": "care_items",
       "column": "user_id",
       "erasure_action": "cascade",
       "reason": "ON DELETE CASCADE from users(id).",
@@ -216,7 +216,7 @@
       "discovery_source": "foreign_key"
     },
     {
-      "table": "health_occurrences",
+      "table": "care_occurrences",
       "column": "marked_by_user_id",
       "erasure_action": "set_null",
       "reason": "ON DELETE SET NULL from users(id); attribution cleared when account removed.",
@@ -224,7 +224,7 @@
       "discovery_source": "foreign_key"
     },
     {
-      "table": "health_occurrences",
+      "table": "care_occurrences",
       "column": "performed_by_user_id",
       "erasure_action": "set_null",
       "reason": "ON DELETE SET NULL from users(id); attribution cleared when account removed.",
