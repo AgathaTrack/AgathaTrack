@@ -69,6 +69,9 @@ class PetRemoteDataSourceImpl implements PetRemoteDataSource {
 
   Map<String, dynamic> _petCreatePayload(PetModel pet) {
     final payload = pet.toJson(includeWeightEntryDate: true);
+    // R-01a (#1653): the client no longer writes the legacy vet link.
+    // People owns the vet relationship; the server still returns `vetId` on reads.
+    payload.remove('vetId');
     if (isPendingPetPhotoUpload(pet.photoPath)) {
       payload.remove('photoPath');
     }
