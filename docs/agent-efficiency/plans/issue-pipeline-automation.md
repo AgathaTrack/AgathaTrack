@@ -193,7 +193,7 @@ Ignore markers not on a comment whose author is `pawpet-bot` or `pawpet-claude`.
 
 Step-by-step lanes (intake, peer review, delivery, implement, monitor, release, needs-owner) and the handoff table live in [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine). Compared with the 2026-11-13 draft:
 
-- **Status moves** use Pawpet **Status** field (bot PAT), not `status:*` labels. Org issue field **`Stage`** mirrors Status for agents without Projects scope ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345); `stage-mirror.yml`, default `STAGE_MIRROR=off`).
+- **Status moves** use Pawpet **Status** field (bot PAT), not `status:*` labels. The Stage ↔ Status mirror was cancelled ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)); see ISSUE-PIPELINE-D-010.
 - **Handoffs** use **assignment** with the agent’s PAT, not verdict labels.
 - **Planned** is not a board column: delivery runs in **Ready** while `pawpet-bot` is assignee before the delivery label is applied.
 
@@ -353,7 +353,8 @@ merge (Actions) ──▶ In Main ──▶ In UAT ──▶ In Prod notify ─�
 | ISSUE-PIPELINE-D-006 | To do + agent assignee = pipeline entry; In Analysis = peer review; triage at To do start | Backlog→To do is human go; no extra board column | Proposed | 2026-11-14 |
 | ISSUE-PIPELINE-D-007 | Owner body edit during In Analysis / Ready reopen | GraphQL `userContentEdits` round reset deferred; column-scoped reopen + trust allowlist shipped (repair #2363 §3.3) | **In delivery** (partial) | 2026-11-16 |
 | ISSUE-PIPELINE-D-008 | `agent-paths` gate applies in delivery **and** implement lanes | Review rounds do not re-expand paths; fail-closed before label + before launch (repair #2363 §4.2) | **Live** (integration) | 2026-11-16 |
-| ISSUE-PIPELINE-D-009 | **Stage** org issue field mirrors board **Status** (two-way, board wins on conflict); no `status:*` labels | Step 0: board stays on built-in Status; mirror ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345); `stage-mirror.yml`) | **Live** | 2026-11-16 |
+| ISSUE-PIPELINE-D-009 | **Stage** org issue field mirrors board **Status** (two-way, board wins on conflict); no `status:*` labels | Step 0: board stays on built-in Status; mirror ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)) | **Superseded** by ISSUE-PIPELINE-D-010 | 2026-11-16 |
+| ISSUE-PIPELINE-D-010 | No Stage ↔ Status mirror; the org `Stage` field is pipeline state, not a copy of the board column | Owner cancelled the mirror on [#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345). Its workflow, scripts and tests are removed; the Projects `Synced stage` fields, `STAGE_MIRROR` and the mirror secrets are owner clean-up | **Live** (code removal takes effect when it merges) | 2026-11-25 |
 
 ---
 

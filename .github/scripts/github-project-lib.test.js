@@ -34,9 +34,3 @@ test('includeClosed also returns closed issues, with their board Status, and sti
     [5, 'OPEN', null],
   ]);
 });
-
-test('the synced stage text field is carried when asked for', () => {
-  const withText = [item('item-9', 'OPEN', 'Ready', { fieldValues: { nodes: [{ text: 'Ready', field: { id: 'T' } }] } })];
-  const rows = projectRowsFromItems(withText, { statusFieldId: 'S', syncedFieldId: 'T' });
-  assert.equal(rows[0].syncedStage, 'Ready');
-});
