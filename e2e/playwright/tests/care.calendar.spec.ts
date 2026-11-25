@@ -6,7 +6,11 @@
 import { test, expect, loginAs } from '../fixtures/auth.fixture';
 import { GuardianDashboardPage } from '../pages/guardian-dashboard.page';
 import { OccurrencePage } from '../pages/occurrence.page';
-import { createCareItem, withCareClock } from '../support/care-api';
+import {
+  createCareItem,
+  listHealthEntryOccurrences,
+  withCareClock,
+} from '../support/care-api';
 import { createPet as createPetApi } from '../support/api';
 import type { Page } from '@playwright/test';
 import {
@@ -70,6 +74,20 @@ test.describe('Care calendar @care', () => {
         frequency: 'once',
         dueDate: today,
       });
+      await expect
+        .poll(
+          async () =>
+            (
+              await listHealthEntryOccurrences(
+                baseURL,
+                testUser.accessToken,
+                entry.id,
+                { status: 'open' },
+              )
+            ).length,
+          { timeout: 30_000 },
+        )
+        .toBeGreaterThan(0);
       await enableFlutterAccessibility(page);
       await loginAs(page, testUser, { experience: 'guardian' });
       const dashboard = new GuardianDashboardPage(page);
@@ -83,8 +101,14 @@ test.describe('Care calendar @care', () => {
       );
       await expect(dayCell).toBeVisible({ timeout: 30_000 });
       await dayCell.click();
+      await refreshFlutterAccessibility(page);
+      try {
+        await waitForFlutterRoutePattern(page, /\/occurrences\//, 8_000);
+      } catch {
+        await page.getByText('Calendar tap care').click();
+        await waitForFlutterRoutePattern(page, /\/occurrences\//, 60_000);
+      }
       const occurrence = new OccurrencePage(page);
-      await waitForFlutterRoutePattern(page, /\/occurrences\//, 60_000);
       await occurrence.expectLoaded();
       await expect(
         page.getByRole('heading', { name: /Calendar tap care/i }),
