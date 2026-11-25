@@ -3,7 +3,7 @@ title: Care calendar (read-only)
 domain: pet_care
 feature_id: care_calendar
 status: active
-related_prs: []
+related_prs: [2610]
 related_bdd: []
 last_updated: 2026-11-25
 tags: [pet_care, care, calendar]
@@ -25,18 +25,18 @@ EN **Care calendar** / FR **Calendrier de soins** — read-only month view. **Be
 
 | ID | Rule | Status |
 |----|------|--------|
-| CARE-CALENDAR-R-001 | Read-only calendar beside agenda; agenda unchanged as action hub | In delivery |
-| CARE-CALENDAR-R-002 | `GET /api/pets/:petId/care-calendar` with inclusive window ≤ 42 days; `starts_on ≥ account_today − 70`; `ends_on ≤ account_today + 366` | In delivery |
-| CARE-CALENDAR-R-003 | Projection via `projectSchedule` path; statuses via `occurrenceDto` / `occurrenceStatus`; retain `uncertainties` for notices | In delivery |
-| CARE-CALENDAR-R-004 | Materialised open rows may open Care date; projected rows informational only | In delivery |
-| CARE-CALENDAR-R-005 | `HEALTH_VIEW` authorization; foster/org/view-only matrix same as health read | In delivery |
-| CARE-CALENDAR-R-006 | Server excludes paused/ended series and done/skipped occurrences | In delivery |
-| CARE-CALENDAR-R-007 | Month chrome uses account `users.timezone` (fallback UTC); wire dates in pet home TZ | In delivery |
-| CARE-CALENDAR-R-008 | Overdue before window in `before_month` strip; day cells upcoming/future only | In delivery |
-| CARE-CALENDAR-R-009 | Fixed-schedule stack: one day marker with count | In delivery |
-| CARE-CALENDAR-R-010 | Multi-pet dashboard: parallel fetch concurrency 4; cancel on month change; per-pet error chip | In delivery |
-| CARE-CALENDAR-R-011 | Empty/sparse month copy EN+FR + release-note expectation for after-it's-done sparsity | In delivery |
-| CARE-CALENDAR-R-012 | Semantics ids `care_calendar_*` on web | In delivery |
+| CARE-CALENDAR-R-001 | Read-only calendar beside agenda; agenda unchanged as action hub | Live |
+| CARE-CALENDAR-R-002 | `GET /api/pets/:petId/care-calendar` with inclusive window ≤ 42 days; `starts_on ≥ account_today − 70`; `ends_on ≤ account_today + 366` | Live |
+| CARE-CALENDAR-R-003 | Projection via `projectSchedule` path; statuses via `occurrenceDto` / `occurrenceStatus`; retain `uncertainties` for notices | Live |
+| CARE-CALENDAR-R-004 | Materialised open rows may open Care date; projected rows informational only | Live |
+| CARE-CALENDAR-R-005 | `HEALTH_VIEW` authorization; foster/org/view-only matrix same as health read | Live |
+| CARE-CALENDAR-R-006 | Server excludes paused/ended series and done/skipped occurrences | Live |
+| CARE-CALENDAR-R-007 | Month chrome uses account `users.timezone` (fallback UTC); wire dates in pet home TZ | Live |
+| CARE-CALENDAR-R-008 | Overdue before window in `before_month` strip; day cells upcoming/future only | Live |
+| CARE-CALENDAR-R-009 | Fixed-schedule stack: one day marker with count | Live |
+| CARE-CALENDAR-R-010 | Multi-pet dashboard: parallel fetch concurrency 4; cancel on month change; per-pet error chip | Live |
+| CARE-CALENDAR-R-011 | Empty/sparse month copy EN+FR + release-note expectation for after-it's-done sparsity | Live |
+| CARE-CALENDAR-R-012 | Semantics ids `care_calendar_*` on web | Live |
 
 ## Acceptance criteria
 
@@ -46,7 +46,7 @@ EN **Care calendar** / FR **Calendrier de soins** — read-only month view. **Be
 | Given a window > 42 inclusive days When requested Then 400 `care_calendar_window_span` | CARE-CALENDAR-R-002 | test: server/test/care/careCalendarWindow.test.js |
 | Given dashboard pets excluding passed-away When Calendar tab is selected Then each pet loads via care-calendar with concurrency 4 | CARE-CALENDAR-R-010 | bdd: flutter_app/test/bdd/features/care_calendar.feature#Dashboard calendar tab |
 | Given a materialised occurrence When user taps a single-item day Then Care date opens via `openOccurrenceScreen` | CARE-CALENDAR-R-004 | bdd: flutter_app/test/bdd/features/care_calendar.feature#Open Care date from calendar |
-| Given after-it's-done sparse projection When future month has no dated slots Then empty-state copy explains sparsity | CARE-CALENDAR-R-011 | none — #1539 |
+| Given after-it's-done sparse projection When future month has no dated slots Then empty-state copy explains sparsity | CARE-CALENDAR-R-011 | test: flutter_app/test/features/pet_care/calendar/care_calendar_empty_month_test.dart |
 
 ## States & data
 
