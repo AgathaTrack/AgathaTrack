@@ -123,6 +123,12 @@ describe('findTopLevelSqlTransactionViolations: block comments', () => {
   it('reports but never strips a wrapper that shares a line with a block comment', () => {
     expect(stripTopLevelSqlTransactionWrappers('/* x */ COMMIT;\n')).toBe('/* x */ COMMIT;');
   });
+
+  it('treats an unterminated block comment as running to end of input', () => {
+    // PostgreSQL rejects the file at apply time, so the lint staying silent inside it is safe.
+    expect(findTopLevelSqlTransactionViolations('/* open\nCOMMIT;\n')).toEqual([]);
+    expect(stripTopLevelSqlTransactionWrappers('/* open\nCOMMIT;\n')).toBe('/* open\nCOMMIT;');
+  });
 });
 
 describe('findTopLevelSqlTransactionViolations: dollar quotes', () => {
