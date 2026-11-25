@@ -4,7 +4,6 @@
 /**
  * GitHub issue hygiene for autonomous agents (execute-plan, babysit-plus).
  *
- *   node scripts/github_issue_workflow.js set-status --issue <n> --status "In Progress"
  *   node scripts/github_issue_workflow.js comment --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js start-work --issue <n> --body "..."
  *   node scripts/github_issue_workflow.js finish-work --issue <n>
@@ -23,7 +22,6 @@ if (require.main === module) {
 const {
   postIssueComment,
   resolveRepository,
-  updateIssueProjectStatus,
 } = require('./lib/execute_plan_project');
 const { createGitHubClient, resolveToken, MissingToken } = require('./lib/execute_plan_github');
 const { parseFlags, readBody } = require('./lib/github_issue_workflow_lib');
@@ -43,7 +41,6 @@ function usage() {
   node scripts/github_issue_workflow.js start-work --issue <n> [--body text | --body-file path]
   node scripts/github_issue_workflow.js finish-work --issue <n>
   node scripts/github_issue_workflow.js clear-queued --issue <n>
-  node scripts/github_issue_workflow.js set-status --issue <n> --status <name>  # CI/Actions only; agents skip
 
   aat-start --issue <n>
   aat-pass | aat-inconclusive --issue <n> (--body | --body-file) [--merge <40-char-sha>]
@@ -107,13 +104,6 @@ async function main() {
   if (!Number.isInteger(issueNumber) || issueNumber < 1) usage();
 
   switch (cmd) {
-    case 'set-status': {
-      if (!flags.status) usage();
-      const result = await updateIssueProjectStatus(issueNumber, flags.status);
-      printJson(result);
-      process.exit(result.ok || result.skipped ? 0 : 1);
-    }
-
     case 'comment': {
       const body = readBody(flags);
       if (!body) usage();

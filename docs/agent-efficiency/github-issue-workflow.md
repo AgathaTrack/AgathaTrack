@@ -368,11 +368,11 @@ Backlog → In Analysis (+ human-reviewed) → [Auto Check] → Ready → In pro
 
 1. **Backlog** — New issues enter here after filing via a form.
 2. **In Analysis** — A maintainer reviews the issue: confirms clarity, priority, and that it belongs in the backlog. Move Project status to **In Analysis** and add the `human-reviewed` label.
-3. **Auto Check** (process, not a status) — The [triage workflow](/.github/workflows/triage-human-reviewed.yml) runs when `human-reviewed` is applied:
+3. **Auto Check** (process, not a status) — The triage workflow (removed in run D) runs when `human-reviewed` is applied:
    - If the issue is complete and safe → move to **Ready** and apply `agent-approved`.
    - If more information is needed → add `question`, **remove `human-reviewed`** (pauses the workflow), comment on what is missing, and move the issue to **Backlog** until resolved.
    - If the issue must not be automated → add `manual-only` and leave status **In Analysis**.
-4. **Ready** — Issue is approved for implementation. The [agent dispatch workflow](/.github/workflows/agent-dispatch.yml) picks it up automatically when `agent-approved` is present and status is **Ready**.
+4. **Ready** — Issue is approved for implementation. The agent dispatch workflow (removed in run D) picks it up automatically when `agent-approved` is present and status is **Ready**.
 5. **In progress** — Cursor agent dispatched (`busy` added). Stays here while the PR is open. If blocked, add `blocked` + `question`, **remove `human-reviewed`** (pauses dispatch), but keep **In progress**.
 6. **In Main** — After the agent PR merges to `main` ([merge handler](/.github/workflows/issue-agent-pr-merge.yml)).
 7. **In UAT** — After UAT deploy succeeds for the linked `uat-YYMMDD-PR#` tag (`deploy-uat.yml` notify job).
@@ -394,7 +394,7 @@ GitHub remains the source of truth. Cursor Cloud Agents are workers that impleme
 
 | File | Purpose |
 |------|---------|
-| [`.github/workflows/agent-dispatch.yml`](/.github/workflows/agent-dispatch.yml) | Find eligible issues and launch Cursor agents |
+| `.github/workflows/agent-dispatch.yml` (removed in run D) | Find eligible issues and launch Cursor agents |
 | [`.github/workflows/agent-monitor.yml`](/.github/workflows/agent-monitor.yml) | Poll agent runs; comment; apply `blocked` / success handoff |
 | [`.github/workflows/issue-agent-pr-merge.yml`](/.github/workflows/issue-agent-pr-merge.yml) | On merged `cursor/**` PR → **In Main**, record expected UAT tag |
 | [`.github/workflows/promote-uat.yml`](/.github/workflows/promote-uat.yml) | On push to `main` → create `uat-YYMMDD-PR#` tag |
@@ -591,7 +591,7 @@ Planned lane: the same deterministic form checks run at the start of **To do** b
 
 The triage workflow is implemented in:
 
-- [`.github/workflows/triage-human-reviewed.yml`](/.github/workflows/triage-human-reviewed.yml) — GitHub Actions entry point
+- `.github/workflows/triage-human-reviewed.yml` (removed in run D) — GitHub Actions entry point
 - [`.github/scripts/triage-lib.js`](/.github/scripts/triage-lib.js) — rules-based validation logic
 - [`.github/scripts/triage-human-reviewed.js`](/.github/scripts/triage-human-reviewed.js) — applies labels, comments, and Project status updates
 - [`.github/scripts/discover-project-ids.js`](/.github/scripts/discover-project-ids.js) — helper to find Project and Status field IDs
