@@ -5,10 +5,7 @@ import 'care_item_bulk_selection_scope.dart';
 
 /// Viewport-pinned bulk bar while subset selection is active (#1673).
 class CareItemBulkSelectionStickyBar extends StatelessWidget {
-  const CareItemBulkSelectionStickyBar({
-    super.key,
-    required this.selection,
-  });
+  const CareItemBulkSelectionStickyBar({super.key, required this.selection});
 
   final CareItemBulkSelection selection;
 

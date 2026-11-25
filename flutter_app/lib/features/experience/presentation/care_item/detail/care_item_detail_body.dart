@@ -195,7 +195,9 @@ class CareItemDetailBody extends ConsumerWidget {
                   if (closeCareButton != null) closeCareButton,
                 ]);
 
-          final bottomInset = reserveBottomInset ? 0.0 : MediaQuery.paddingOf(context).bottom;
+          final bottomInset = reserveBottomInset
+              ? 0.0
+              : MediaQuery.paddingOf(context).bottom;
           return SingleChildScrollView(
             key: const Key('care_item_detail_body'),
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -73,7 +72,8 @@ class CareItemBulkSelection extends ChangeNotifier {
   Future<void> skipSelected() async => _onSkipSelected?.call();
 }
 
-class CareItemBulkSelectionScope extends InheritedNotifier<CareItemBulkSelection> {
+class CareItemBulkSelectionScope
+    extends InheritedNotifier<CareItemBulkSelection> {
   const CareItemBulkSelectionScope({
     super.key,
     required CareItemBulkSelection selection,

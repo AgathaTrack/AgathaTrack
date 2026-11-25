@@ -39,7 +39,8 @@ class CareItemDetailBodyHost extends ConsumerStatefulWidget {
       _CareItemDetailBodyHostState();
 }
 
-class _CareItemDetailBodyHostState extends ConsumerState<CareItemDetailBodyHost> {
+class _CareItemDetailBodyHostState
+    extends ConsumerState<CareItemDetailBodyHost> {
   late final CareItemBulkSelection _bulkSelection;
 
   @override

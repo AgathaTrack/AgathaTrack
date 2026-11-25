@@ -44,7 +44,9 @@ class _CareItemNeedsAttentionSectionState
   }
 
   void _reconcileSelection(Set<String> openStartedIds) {
-    CareItemBulkSelectionScope.maybeOf(context)?.reconcileOpenIds(openStartedIds);
+    CareItemBulkSelectionScope.maybeOf(
+      context,
+    )?.reconcileOpenIds(openStartedIds);
   }
 
   Future<void> _onRowChanged() async {
@@ -154,9 +156,9 @@ class _CareItemNeedsAttentionSectionState
           );
         }
         _reconcileSelection(
-          sortStartedOpenOccurrences(partitionOpenOccurrences(_s).started)
-              .map((o) => o.id)
-              .toSet(),
+          sortStartedOpenOccurrences(
+            partitionOpenOccurrences(_s).started,
+          ).map((o) => o.id).toSet(),
         );
       case CareFailed(failure: CareNotOpenFailure()):
         messenger.showSnackBar(SnackBar(content: Text(l.careAlreadyUpdated)));
@@ -214,9 +216,7 @@ class _CareItemNeedsAttentionSectionState
                           ? null
                           : selection?.toggleSelectionMode,
                       child: Text(
-                        selectionMode
-                            ? l.cancel
-                            : l.careItemBulkSelectionMode,
+                        selectionMode ? l.cancel : l.careItemBulkSelectionMode,
                       ),
                     )
                   : null,
