@@ -4,6 +4,7 @@
  * Routes: parse → authorise → `runCareCommand` → map → post-commit effects.
  */
 
+import { careTables } from '../../db/careTableScope.js';
 import { withCareItemLock } from './careItemLock.js';
 import { resolveCareAsOf } from './careAsOf.js';
 import { executeCareCommand } from './commandRunner.js';
@@ -107,7 +108,7 @@ export async function runCareCommand(pool, {
  * @param {(ctx: object) => Promise<{ event: object|null, result?: T }>} command
  */
 export async function applyCareCommand(db, { entryId, userId = null, asOf }, command) {
-  const locked = await db.query('SELECT * FROM care_items WHERE id = $1 FOR UPDATE', [entryId]);
+  const locked = await db.query(`SELECT * FROM ${careTables().items} WHERE id = $1 FOR UPDATE`, [entryId]);
   if (!locked.rows[0]) return null;
   const out = await executeCareCommand({ db, entry: locked.rows[0], asOf, userId }, command);
   return { ...out, asOf };

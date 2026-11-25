@@ -2,6 +2,7 @@
  * Persist care item Closed status (CARE-STATUS-R-009, R-010).
  */
 
+import { careTables } from '../../db/careTableScope.js';
 import {
   CARE_CLOSED_REASON_ENDED,
   CARE_ITEM_STATUS_CLOSED,
@@ -19,7 +20,7 @@ export async function closeItemAsEnded(db, entryId, fields = {}) {
   const completedAt = fields.completedAt ?? null;
   const repeatEndDate = fields.repeatEndDate;
   const result = await db.query(
-    `UPDATE care_items SET
+    `UPDATE ${careTables().items} SET
        status = $2,
        care_closed_reason = $3,
        completed_on = COALESCE($4::date, completed_on),

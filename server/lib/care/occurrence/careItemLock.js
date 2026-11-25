@@ -2,6 +2,7 @@
  * One transaction and one row lock per care command (D-CSM-033, INV-6).
  */
 
+import { careTables } from '../../db/careTableScope.js';
 import { withTransaction } from '../../db/withTransaction.js';
 
 class CareItemNotFoundForLock extends Error {
@@ -31,7 +32,7 @@ export async function withCareItemLock(pool, entryId, fn, { beforeLock = null } 
     return await withTransaction(pool, async (client) => {
       if (beforeLock) await beforeLock(client);
       const locked = await client.query(
-        'SELECT * FROM care_items WHERE id = $1 FOR UPDATE',
+        `SELECT * FROM ${careTables().items} WHERE id = $1 FOR UPDATE`,
         [entryId],
       );
       const entry = locked.rows[0];

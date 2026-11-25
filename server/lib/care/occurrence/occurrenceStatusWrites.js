@@ -2,6 +2,7 @@
  * Status transitions on `health_occurrences` (user and system closes).
  */
 
+import { careTables } from '../../db/careTableScope.js';
 import { normalizeOccurrenceRow } from './occurrenceRowNormalize.js';
 
 /**
@@ -15,7 +16,7 @@ export async function confirmNotRecordedAsSkipped(db, {
   entryId, occurrenceId, userId = null, markedAt = new Date(),
 }) {
   const result = await db.query(
-    `UPDATE care_occurrences SET status = 'skipped',
+    `UPDATE ${careTables().occurrences} SET status = 'skipped',
        marked_at = $1, marked_by_user_id = $2, updated_at = NOW()
      WHERE id = $3 AND health_entry_id = $4 AND status = 'not_recorded'
      RETURNING *`,
@@ -35,7 +36,7 @@ export async function markNotRecorded(db, {
   entryId, occurrenceId, userId = null, markedAt = new Date(),
 }) {
   const result = await db.query(
-    `UPDATE care_occurrences SET status = 'not_recorded',
+    `UPDATE ${careTables().occurrences} SET status = 'not_recorded',
        marked_at = $1, marked_by_user_id = $2, updated_at = NOW()
      WHERE id = $3 AND health_entry_id = $4 AND status = 'pending'
      RETURNING *`,
@@ -49,7 +50,7 @@ export async function markSkipped(db, {
   entryId, occurrenceId, userId = null, notes = null, markedAt = new Date(),
 }) {
   const result = await db.query(
-    `UPDATE care_occurrences SET status = 'skipped',
+    `UPDATE ${careTables().occurrences} SET status = 'skipped',
        marked_at = $1, marked_by_user_id = $2, notes = COALESCE($3, notes), updated_at = NOW()
      WHERE id = $4 AND health_entry_id = $5 AND status = 'pending'
      RETURNING *`,
@@ -83,7 +84,7 @@ export async function markCompleted(db, {
     ? "status = 'not_recorded'"
     : "status = 'pending'";
   const result = await db.query(
-    `UPDATE care_occurrences SET status = 'completed',
+    `UPDATE ${careTables().occurrences} SET status = 'completed',
        completed_on = $1, completion_timing = $2, marked_at = $3, marked_by_user_id = $4,
        notes = $5, performed_by_user_id = $6,
        marked_by_snapshot = $7::jsonb, performed_by_snapshot = $8::jsonb,

@@ -17,13 +17,6 @@
       "message": "'VISIT_KEYS' is assigned a value but never used."
     },
     {
-      "file": "server/lib/care/occurrence/syncOpenOccurrences.js",
-      "rule": "no-unused-vars",
-      "line": 19,
-      "column": 3,
-      "message": "'nextSeriesSlotAfter' is defined but never used."
-    },
-    {
       "file": "server/lib/care/planner/planAbsenceCare.js",
       "rule": "no-unused-vars",
       "line": 199,
