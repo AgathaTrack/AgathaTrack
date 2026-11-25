@@ -1915,7 +1915,14 @@
   "dataProcessingAddendum": "Avenant de traitement des données (DPA)",
   "viewAllLegalDocuments": "Voir tous les documents juridiques",
   "legalDocumentLoadError": "Impossible de charger ce document juridique. Veuillez réessayer plus tard.",
-  "appVersion": "Version 1.0.0",
+  "appAboutVersionLine": "Version {version} ({build})",
+  "@appAboutVersionLine": {
+    "placeholders": {
+      "version": { "type": "String" },
+      "build": { "type": "String" }
+    }
+  },
+  "appVersionUnavailable": "Version indisponible",
   "version": "Version",
 
   "ppDataController": "Responsable du traitement",
