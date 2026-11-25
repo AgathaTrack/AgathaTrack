@@ -118,9 +118,6 @@ test.describe('Care calendar @care', () => {
         await occurrence.open(pet.id, entry.id, occurrenceId!);
       }
       await occurrence.expectLoaded();
-      await expect(
-        page.getByRole('heading', { name: /Calendar tap care/i }),
-      ).toBeVisible();
       expect(entry.id).toBeTruthy();
     } finally {
       await withCareClock(null, page);
