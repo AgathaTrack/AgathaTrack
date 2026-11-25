@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 
-import { validateOrgImageMime } from '../../safeUpload.js';
+import { validateOrgImageMime, normalizeMimeType } from '../../safeUpload.js';
 import {
   SUPPORT_SCREENSHOT_EXTENSIONS,
   SUPPORT_SCREENSHOT_MAX_BYTES_PER_FILE,
@@ -53,8 +53,11 @@ export async function reencodeSupportScreenshotBuffer(buffer, mimeType) {
 
   let mime;
   try {
-    mime = validateOrgImageMime(mimeType, encoded, SUPPORT_SCREENSHOT_EXTENSIONS);
+    mime = validateOrgImageMime('application/octet-stream', encoded, SUPPORT_SCREENSHOT_EXTENSIONS);
   } catch {
+    throw new SupportScreenshotEncodeError('Only PNG, JPEG, and WebP screenshots are allowed.');
+  }
+  if (normalizeMimeType(mime) !== normalizeMimeType(mimeType)) {
     throw new SupportScreenshotEncodeError('Only PNG, JPEG, and WebP screenshots are allowed.');
   }
 
