@@ -36,7 +36,7 @@ const PET_DELETE_FAULT_STEPS = [
   'enqueue_jobs',
   'delete_weight_entries',
   'delete_health_issues',
-  'delete_health_entries',
+  'delete_care_items',
   'delete_pet_timeline_entries',
   'delete_pet_activity_events',
   'delete_family_events',
