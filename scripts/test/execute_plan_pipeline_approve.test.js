@@ -97,7 +97,7 @@ test('checkProductConvergence requires green verdicts and body_sha', () => {
   }];
   const fail = checkProductConvergence({ productBody: body, comments });
   assert.equal(fail.ok, false);
-  const { bodySha } = require('../issue_pipeline_state');
+  const { bodySha } = require('../issue_pipeline_v2_hash');
   const sha = bodySha(body);
   const good = [{
     user: { login: 'pawpet-claude' },

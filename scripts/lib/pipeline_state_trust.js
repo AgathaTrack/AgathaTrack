@@ -4,7 +4,7 @@ const {
   parseStateMarker,
   STATE_MARKER,
   PIPELINE_STATE_MARKER,
-} = require('../issue_pipeline_state');
+} = require('./execute_plan_trusted_state');
 
 const TRUSTED_PIPELINE_STATE_AUTHORS = new Set(['pawpet-bot', 'pawpet-claude']);
 

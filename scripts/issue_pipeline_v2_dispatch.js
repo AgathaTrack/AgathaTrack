@@ -10,7 +10,7 @@
  *   the repo switch is `on`. Scheduled ticks keep the repo switch as it is.
  */
 
-const { resolvePipelineMode } = require('./issue_pipeline_mode');
+const { resolvePipelineMode } = require('./issue_pipeline_v2_mode');
 
 const POSITIVE_INTEGER = /^[1-9]\d*$/;
 

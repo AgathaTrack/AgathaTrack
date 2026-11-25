@@ -6,7 +6,7 @@ const {
   findLatestTrustedStateComment,
   isTrustedPipelineStateComment,
 } = require('./pipeline_state_trust');
-const { bodySha } = require('../issue_pipeline_state');
+const { bodySha } = require('../issue_pipeline_v2_hash');
 
 function trustedBody(state) {
   return `<!-- pipeline-state -->\n<!-- agent-state: ${JSON.stringify(state)} -->`;

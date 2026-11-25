@@ -154,7 +154,7 @@ test('pawpet-bot pipeline approve rejected until launch record and bot path rest
     sourceIssue: 100,
   });
   const productBody = 'product issue';
-  const { bodySha } = require('../issue_pipeline_state');
+  const { bodySha } = require('../issue_pipeline_v2_hash');
   const shaProduct = bodySha(productBody);
   const stateComment = {
     user: { login: 'pawpet-bot' },
