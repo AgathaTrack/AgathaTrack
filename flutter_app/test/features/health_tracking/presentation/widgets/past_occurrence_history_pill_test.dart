@@ -48,7 +48,9 @@ void main() {
     expect(find.text('Done'), findsNothing);
     expect(find.textContaining('Skipped'), findsNothing);
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
-    final semantics = tester.getSemantics(find.byType(PastOccurrenceHistoryPill));
+    final semantics = tester.getSemantics(
+      find.byType(PastOccurrenceHistoryPill),
+    );
     expect(semantics.label, contains('done 07 Nov 26'));
   });
 
@@ -94,11 +96,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('10.0 kg'), findsOneWidget);
-    final semantics = tester.getSemantics(find.byType(PastOccurrenceHistoryPill));
-    expect(
-      semantics.label,
-      contains('10.0 kg'),
+    final semantics = tester.getSemantics(
+      find.byType(PastOccurrenceHistoryPill),
     );
+    expect(semantics.label, contains('10.0 kg'));
   });
 
   testWidgets('skipped pill uses marked day for close when near midnight UTC', (

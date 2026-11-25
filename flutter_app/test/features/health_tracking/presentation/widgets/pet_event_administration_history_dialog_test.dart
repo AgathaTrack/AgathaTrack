@@ -29,22 +29,22 @@ void main() {
           weightUnitPreferenceProvider.overrideWith((ref) => WeightUnit.kg),
         ],
         child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => showPetEventPastHistoryDialog(
-                context,
-                occurrences: rows,
-                petId: 'pet-1',
-                muted: false,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showPetEventPastHistoryDialog(
+                  context,
+                  occurrences: rows,
+                  petId: 'pet-1',
+                  muted: false,
+                ),
+                child: const Text('open'),
               ),
-              child: const Text('open'),
             ),
           ),
         ),
-      ),
       ),
     );
 
@@ -78,32 +78,33 @@ void main() {
           weightUnitPreferenceProvider.overrideWith((ref) => WeightUnit.kg),
         ],
         child: MaterialApp.router(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        routerConfig: GoRouter(
-          routes: [
-            GoRoute(
-              path: '/',
-              builder: (context, state) => Scaffold(
-                body: TextButton(
-                  onPressed: () => showPetEventPastHistoryDialog(
-                    context,
-                    occurrences: rows,
-                    petId: 'pet-1',
-                    muted: false,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          routerConfig: GoRouter(
+            routes: [
+              GoRoute(
+                path: '/',
+                builder: (context, state) => Scaffold(
+                  body: TextButton(
+                    onPressed: () => showPetEventPastHistoryDialog(
+                      context,
+                      occurrences: rows,
+                      petId: 'pet-1',
+                      muted: false,
+                    ),
+                    child: const Text('open'),
                   ),
-                  child: const Text('open'),
                 ),
               ),
-            ),
-            GoRoute(
-              path: '/pet/:petId/events/:entryId/occurrences/:occId',
-              builder: (context, state) =>
-                  Scaffold(body: Text('occ ${state.pathParameters['occId']}')),
-            ),
-          ],
+              GoRoute(
+                path: '/pet/:petId/events/:entryId/occurrences/:occId',
+                builder: (context, state) => Scaffold(
+                  body: Text('occ ${state.pathParameters['occId']}'),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
 
