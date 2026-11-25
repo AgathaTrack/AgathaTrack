@@ -114,3 +114,28 @@ test('--pr refuses to push a local PR branch that has commits origin does not ha
   assert.match(res.stderr, /has commits that origin\/feature does not/);
   assert.equal(git(fx.origin, 'rev-parse', 'feature'), featureBefore, 'origin/feature must not change');
 });
+
+test('--pr refuses a dirty tree when already on the PR head', () => {
+  const fx = makeFixture();
+  git(fx.work, 'checkout', '-q', 'feature');
+  fs.writeFileSync(path.join(fx.work, 'scratch.txt'), 'uncommitted\n');
+
+  const res = runSync(fx, ['--pr', '1', '--check']);
+
+  assert.equal(res.status, 2, res.stderr);
+  assert.match(res.stderr, /working tree not clean/);
+  assert.equal(git(fx.work, 'branch', '--show-current'), 'feature');
+});
+
+test('--pr refuses unpushed commits when already on the PR head', () => {
+  const fx = makeFixture();
+  git(fx.work, 'checkout', '-q', 'feature');
+  commitFile(fx.work, 'local-only.txt', 'not pushed\n');
+  const featureBefore = git(fx.origin, 'rev-parse', 'feature');
+
+  const res = runSync(fx, ['--pr', '1', '--push']);
+
+  assert.equal(res.status, 2, res.stderr);
+  assert.match(res.stderr, /has commits that origin\/feature does not/);
+  assert.equal(git(fx.origin, 'rev-parse', 'feature'), featureBefore, 'origin/feature must not change');
+});

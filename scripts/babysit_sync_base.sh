@@ -91,11 +91,12 @@ checkout_pr_head() {
   local head="$1"
   local current
   current="$(git branch --show-current)"
-  if [[ "$current" == "$head" ]]; then
-    return 0
-  fi
   if [[ -n "$(git status --porcelain)" ]]; then
-    echo "babysit_sync_base: working tree not clean — cannot switch from ${current:-detached HEAD} to PR head $head" >&2
+    if [[ "$current" == "$head" ]]; then
+      echo "babysit_sync_base: working tree not clean — cannot sync PR head $head" >&2
+    else
+      echo "babysit_sync_base: working tree not clean — cannot switch from ${current:-detached HEAD} to PR head $head" >&2
+    fi
     exit 2
   fi
   git fetch origin "$head" --quiet
@@ -103,10 +104,12 @@ checkout_pr_head() {
     echo "babysit_sync_base: origin/$head not found after fetch" >&2
     exit 2
   fi
-  if git rev-parse --verify --quiet "refs/heads/$head" >/dev/null; then
-    git checkout --quiet "$head"
-  else
-    git checkout --quiet -b "$head" --track "origin/$head"
+  if [[ "$current" != "$head" ]]; then
+    if git rev-parse --verify --quiet "refs/heads/$head" >/dev/null; then
+      git checkout --quiet "$head"
+    else
+      git checkout --quiet -b "$head" --track "origin/$head"
+    fi
   fi
   if [[ "$(git rev-parse HEAD)" == "$(git rev-parse "origin/$head")" ]]; then
     return 0
