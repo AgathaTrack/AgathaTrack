@@ -83,17 +83,20 @@ class _PetCareSectionState extends ConsumerState<PetCareSection> {
               titleMaxLines: 2,
             ),
             const SizedBox(height: 10),
-            CareListSurfaceCollection(
-              entries: entries,
-              source: CareCommandSource.agenda,
-              layout: CareListSurfaceLayout.petProfileCappedUpcoming,
-              empty: PetCareIllustratedEmptyState(
-                key: const Key('pet_care_section_empty'),
-                title: l.petCareEmptyCareClearTitle,
-                body: l.homeNoDueEvents,
-                actionLabel: l.viewAllCare,
-                actionIcon: Icons.calendar_month_outlined,
-                onAction: _openAllCareForPet,
+            CareCalendarHubSection(
+              pets: [widget.pet],
+              agenda: CareListSurfaceCollection(
+                entries: entries,
+                source: CareCommandSource.agenda,
+                layout: CareListSurfaceLayout.petProfileCappedUpcoming,
+                empty: PetCareIllustratedEmptyState(
+                  key: const Key('pet_care_section_empty'),
+                  title: l.petCareEmptyCareClearTitle,
+                  body: l.homeNoDueEvents,
+                  actionLabel: l.viewAllCare,
+                  actionIcon: Icons.calendar_month_outlined,
+                  onAction: _openAllCareForPet,
+                ),
               ),
             ),
             PetCareDashboardSectionLink(

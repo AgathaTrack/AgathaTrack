@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../calendar/data/models/care_calendar_model.dart';
+import '../../../calendar/domain/entities/care_calendar.dart';
 import '../models/absence_care_plan_model.dart';
 import '../models/away_plan_readiness_model.dart';
 import '../models/care_period_coverage_model.dart';
@@ -64,6 +66,21 @@ class CareContextRemoteDataSource {
       // Keep generic message when body is not JSON.
     }
     return CareContextApiException(response.statusCode, message, code: code);
+  }
+
+  Future<CareCalendarResult> fetchCareCalendar({
+    required String petId,
+    required String startsOn,
+    required String endsOn,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/api/pets/$petId/care-calendar',
+    ).replace(queryParameters: {'starts_on': startsOn, 'ends_on': endsOn});
+    final response = await _client.get(uri, headers: _headers());
+    _check(response);
+    return CareCalendarModel.fromJson(
+      json.decode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<CarePeriodCoverageResult> fetchCarePeriodCoverage({

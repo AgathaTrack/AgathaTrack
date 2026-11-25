@@ -12,6 +12,7 @@
     "away.planning.spec.ts": 81,
     "care-suggestion.spec.ts": 56,
     "care.agenda.spec.ts": 90,
+    "care.calendar.spec.ts": 45,
     "care.schedules.spec.ts": 90,
     "care.a11y.spec.ts": 75,
     "care.item.absence.spec.ts": 44,

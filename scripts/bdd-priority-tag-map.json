@@ -471,6 +471,10 @@
     "Several dates to sort out open the care item": "P1",
     "Upcoming care can be marked as done early": "P1"
   },
+  "care_calendar.feature": {
+    "Dashboard calendar tab": "P2",
+    "Open Care date from calendar": "P2"
+  },
   "care_booster.feature": {
     "PL-1 first dose then booster then yearly recurrence": "P1"
   },

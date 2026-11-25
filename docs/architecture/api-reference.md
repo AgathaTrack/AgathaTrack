@@ -343,6 +343,12 @@ Separate from rhythm `care_recommendations`. Does not create care rhythms on res
 
 Weight monitoring rhythms cannot use generic occurrence complete while pending — use `complete-weight`.
 
+### Care calendar (`/api/pets/:petId/care-calendar`) — CC-CAL
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/care-calendar?starts_on&ends_on` | Read-only month grid projection for dashboard/profile calendar (D-CAL-002). Auth: `401` / `403` without `HEALTH_VIEW` (`hasPetCapability`). Query: required inclusive calendar window — span at most **42** days; `starts_on ≥ account_today − 70` (account TZ from `users.timezone`, fallback UTC); `ends_on ≤ account_today + 366`. **400** `code`: `care_calendar_window_required` \| `care_calendar_window_order` \| `care_calendar_window_span` \| `care_calendar_window_past_floor` \| `care_calendar_window_forward_cap`. Body: `pet_id`, `as_of`, `starts_on`, `ends_on`, `projection_status`, `before_month.items[]`, `days[{ date, items[] }]`, optional `notices[]`. Items use `display_status` from `occurrenceStatus`; excludes paused/ended series and done/skipped rows. Engine: `loadScheduleDataForProjection` + `projectSchedule` (not away-plan `formatProjectionReadContract`). `X-Care-As-Of` honoured like other care reads in dev/test/ci. Canonical: [care-calendar.md](../domains/pet_care/features/care-calendar.md). |
+
 ### Care-period projection (`/api/pets/:petId/care-period-projection`) — CC-2
 
 | Method | Path | Notes |
