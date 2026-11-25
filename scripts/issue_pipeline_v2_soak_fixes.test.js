@@ -135,6 +135,8 @@ test('comments are read once per issue per tick', async () => {
 
 // --- tick: dry-run reporting and the scoped rotation ---------------------------------------------
 
+const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
+
 function tickIo({ issues, comments = {}, scopeLabel = 'pipeline-beta' }) {
   return {
     config,
@@ -151,6 +153,7 @@ function tickIo({ issues, comments = {}, scopeLabel = 'pipeline-beta' }) {
     getIssue: async (n) => issues[n],
     listIssueComments: async ({ issueNumber }) => comments[issueNumber] || [],
     listCommentReactions: async () => [],
+    fetchIssueBlockedBy: noopBlockedBy,
   };
 }
 

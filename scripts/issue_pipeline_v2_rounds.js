@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Review process v3, P4: the round decision function (pure, dry-run only).
+ * Review process v3, P4: the round decision function (pure; callers log dry-run vs live).
  *
  * Model (PIPE-V2-D-REV3-002 to 005, review-process-v3 §5 to §8):
  * - A type (`cursor-a`, `claude-a`, `cursor-b`, `claude-b`) is who gets called. Every call starts
