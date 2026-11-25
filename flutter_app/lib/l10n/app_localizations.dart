@@ -9637,11 +9637,17 @@ abstract class AppLocalizations {
   /// **'Unable to load this legal document. Please try again later.'**
   String get legalDocumentLoadError;
 
-  /// No description provided for @appVersion.
+  /// No description provided for @appAboutVersionLine.
   ///
   /// In en, this message translates to:
-  /// **'Version 1.0.0'**
-  String get appVersion;
+  /// **'Version {version} ({build})'**
+  String appAboutVersionLine(String version, String build);
+
+  /// No description provided for @appVersionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Version unavailable'**
+  String get appVersionUnavailable;
 
   /// No description provided for @version.
   ///

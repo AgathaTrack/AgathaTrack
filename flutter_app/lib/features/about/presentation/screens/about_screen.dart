@@ -3,9 +3,30 @@ import 'package:flutter/material.dart';
 import '../../../../core/widgets/app_logo_title.dart';
 import '../../../../core/widgets/branded_logo.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../core/site_version/fetch_site_version.dart';
+import '../../../../core/site_version/site_version_info.dart';
+import '../widgets/about_version_label.dart';
 
-class AboutScreen extends StatelessWidget {
-  const AboutScreen({super.key});
+typedef SiteVersionLoader = Future<SiteVersionInfo> Function();
+
+class AboutScreen extends StatefulWidget {
+  const AboutScreen({super.key, this.siteVersionLoader});
+
+  /// Override in tests to exercise the real fetch path or failure modes.
+  final SiteVersionLoader? siteVersionLoader;
+
+  @override
+  State<AboutScreen> createState() => _AboutScreenState();
+}
+
+class _AboutScreenState extends State<AboutScreen> {
+  late Future<SiteVersionInfo> _versionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _versionFuture = (widget.siteVersionLoader ?? fetchSiteVersion)();
+  }
 
   Widget _buildLogo({required double size}) {
     return BrandedLogo(size: size, useJpg: true, clipOval: true);
@@ -56,11 +77,18 @@ class AboutScreen extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-                Text(
-                  l10n.appVersion,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                FutureBuilder<SiteVersionInfo>(
+                  future: _versionFuture,
+                  builder: (context, snapshot) {
+                    final info = snapshot.data ?? SiteVersionInfo.empty();
+                    final line = formatAboutVersionLine(l10n, info);
+                    return Text(
+                      line,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
               ],

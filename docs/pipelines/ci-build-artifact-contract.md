@@ -91,11 +91,15 @@ Uploaded path: `flutter_app/build/web/`
 
 ## Verification
 
+`scripts/ci/write-version-json.sh` writes `version.json` beside the web root after
+`flutter build web` (pubspec semver, git short SHA as `build`, full `commit`).
+
 `scripts/ci/verify-web-artifact.sh` runs after every manifest write:
 
 - Compiled output exists
 - PostHog markers present when key was set
 - `build-manifest.json` exists
+- `version.json` present and matches pubspec version + git SHA stamp (no fallback writer)
 
 ## UAT → PROD promotion (Phase 3)
 

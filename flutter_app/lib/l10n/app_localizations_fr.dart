@@ -5585,7 +5585,12 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de charger ce document juridique. Veuillez réessayer plus tard.';
 
   @override
-  String get appVersion => 'Version 1.0.0';
+  String appAboutVersionLine(String version, String build) {
+    return 'Version $version ($build)';
+  }
+
+  @override
+  String get appVersionUnavailable => 'Version indisponible';
 
   @override
   String get version => 'Version';

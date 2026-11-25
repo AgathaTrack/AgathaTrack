@@ -93,7 +93,7 @@ jobs:
         env:
           POSTHOG_SET: ${{ secrets.POSTHOG_API_KEY != '' }}
         run: |
-          echo "key=web-build-v1-${{ runner.os }}-${FLUTTER_VERSION}-ph${POSTHOG_SET}-${{ hashFiles('flutter_app/lib/**', 'flutter_app/web/**', 'flutter_app/assets/**', 'flutter_app/pubspec.yaml', 'flutter_app/pubspec.lock', 'flutter_app/l10n.yaml', 'flutter_app/analysis_options.yaml', 'flutter_app/scripts/inject_posthog_web.sh', 'scripts/ci/build-flutter-web.sh', 'scripts/ci/write-build-manifest.sh', 'scripts/ci/verify-web-artifact.sh') }}" >> "$GITHUB_OUTPUT"
+          echo "key=web-build-v1-${{ runner.os }}-${FLUTTER_VERSION}-ph${POSTHOG_SET}-${{ hashFiles('flutter_app/lib/**', 'flutter_app/web/**', 'flutter_app/assets/**', 'flutter_app/pubspec.yaml', 'flutter_app/pubspec.lock', 'flutter_app/l10n.yaml', 'flutter_app/analysis_options.yaml', 'flutter_app/scripts/inject_posthog_web.sh', 'scripts/ci/build-flutter-web.sh', 'scripts/ci/write-build-manifest.sh', 'scripts/ci/write-version-json.sh', 'scripts/ci/verify-web-artifact.sh') }}" >> "$GITHUB_OUTPUT"
 
       - name: Restore cached web build
         id: web_cache_restore

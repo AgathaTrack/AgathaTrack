@@ -18,7 +18,7 @@ Account help, FAQ, about, and legal surfaces (`help_faq.feature`).
 | ID | Requirement | Status |
 |----|-------------|--------|
 | **HA-1** | Help reachable from Account; FAQ accordion EN+FR. | delivered |
-| **HA-2** | About shows app version and project information (no legal document list — Account **Legal Information** → `/legal`). | delivered |
+| **HA-2** | About shows app version and project information (no legal document list — Account **Legal Information** → `/legal`). Version line comes from site-root `version.json` stamped at web build time (pubspec semver + git short SHA), not a hard-coded l10n string. | delivered |
 | **HA-3** | Legal copy in assets aligned with FAQ where referenced. | delivered |
 
 ## User journeys
@@ -43,7 +43,7 @@ About screens present app version and project information (`flutter_app/lib/feat
 
 ## About
 
-- `flutter_app/lib/features/about/` — app version, project information.
+- `flutter_app/lib/features/about/` — app version from `version.json` (`scripts/ci/write-version-json.sh`), project information.
 - Linked from Account area (D27 global settings, not org-scoped).
 - Legal documents are **not** listed on About or My Details; users open **Legal Information** from Account (`/legal`).
 

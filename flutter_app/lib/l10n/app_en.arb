@@ -2065,7 +2065,14 @@
   "dataProcessingAddendum": "Data Processing Addendum",
   "viewAllLegalDocuments": "View all legal documents",
   "legalDocumentLoadError": "Unable to load this legal document. Please try again later.",
-  "appVersion": "Version 1.0.0",
+  "appAboutVersionLine": "Version {version} ({build})",
+  "@appAboutVersionLine": {
+    "placeholders": {
+      "version": { "type": "String" },
+      "build": { "type": "String" }
+    }
+  },
+  "appVersionUnavailable": "Version unavailable",
   "version": "Version",
 
   "ppDataController": "Data Controller",

@@ -72,6 +72,8 @@ if [[ "$WRITE_MANIFEST" == "true" ]]; then
   bash scripts/ci/write-build-manifest.sh
 fi
 
+bash scripts/ci/write-version-json.sh
+
 if [[ "$VERIFY_ARTIFACT" == "true" ]]; then
   bash scripts/ci/verify-web-artifact.sh
 fi
