@@ -30,7 +30,7 @@ async function loadPetContext(pool, userId, petId) {
   );
   if (petResult.rows.length === 0) return null;
   const entriesResult = await pool.query(
-    `SELECT he.* FROM health_entries he
+    `SELECT he.* FROM care_items he
      WHERE he.pet_id = $1`,
     [petId],
   );
@@ -103,7 +103,7 @@ async function createRhythmFromRecommendation(pool, recommendation, userId, adju
   const startDate = normalizeCalendarDateInput(payload.startDate);
   const nextDueDate = normalizeCalendarDateInput(payload.nextDueDate);
   const insertEntry = (db) => db.query(
-    `INSERT INTO health_entries (
+    `INSERT INTO care_items (
        id, pet_id, user_id, name, type, dosage, frequency, frequency_interval,
        start_date, next_due_date, recurrence_anchor, remind_days_before,
        status, care_family, care_setting, care_planning, care_importance,

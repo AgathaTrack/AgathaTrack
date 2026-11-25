@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * CP-0 report-only audit: care_family coverage on health_entries.
+ * CP-0 report-only audit: care_family coverage ON care_items.
  *
  * Usage: node scripts/care/audit_care_families.js [--json]
  */
@@ -14,21 +14,21 @@ const pool = createAppPool();
 async function main() {
   const recurringNullFamily = await pool.query(`
     SELECT COUNT(*)::int AS count
-    FROM health_entries
+    FROM care_items
     WHERE frequency IS NOT NULL AND frequency <> 'once'
       AND (care_family IS NULL OR care_family = '')
   `);
   const inferredOther = await pool.query(`
     SELECT COUNT(*)::int AS count
-    FROM health_entries
+    FROM care_items
     WHERE care_family = 'other'
   `);
   const recurringWithoutOccurrences = await pool.query(`
     SELECT COUNT(*)::int AS count
-    FROM health_entries he
+    FROM care_items he
     WHERE he.frequency IS NOT NULL AND he.frequency <> 'once'
       AND NOT EXISTS (
-        SELECT 1 FROM health_occurrences ho WHERE ho.health_entry_id = he.id
+        SELECT 1 FROM care_occurrences ho WHERE ho.health_entry_id = he.id
       )
   `);
 

@@ -36,7 +36,7 @@ export async function loadLastClosedOccurrenceDatesByEntryId(pool, entries) {
        health_entry_id,
        scheduled_date,
        completed_on
-     FROM health_occurrences
+     FROM care_occurrences
      WHERE health_entry_id = ANY($1::uuid[])
        AND status IN ('completed', 'skipped')
      ORDER BY health_entry_id, scheduled_date DESC,

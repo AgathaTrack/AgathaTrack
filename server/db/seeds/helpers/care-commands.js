@@ -73,9 +73,9 @@ export async function createSeedCareItem(client, item, clock) {
     careFamily: item.careFamily,
     explicitAnchor: item.scheduleType || null,
   });
-  await client.query('DELETE FROM health_entries WHERE id = $1', [item.id]);
+  await client.query('DELETE FROM care_items WHERE id = $1', [item.id]);
   await client.query(
-    `INSERT INTO health_entries (
+    `INSERT INTO care_items (
        id, pet_id, user_id, type, name, dosage, frequency, frequency_interval,
        start_date, next_due_date, completed_on, status, remind_days_before, notes,
        care_family, care_setting, care_planning, care_importance, recurrence_anchor,

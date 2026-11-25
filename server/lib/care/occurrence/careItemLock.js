@@ -31,7 +31,7 @@ export async function withCareItemLock(pool, entryId, fn, { beforeLock = null } 
     return await withTransaction(pool, async (client) => {
       if (beforeLock) await beforeLock(client);
       const locked = await client.query(
-        'SELECT * FROM health_entries WHERE id = $1 FOR UPDATE',
+        'SELECT * FROM care_items WHERE id = $1 FOR UPDATE',
         [entryId],
       );
       const entry = locked.rows[0];

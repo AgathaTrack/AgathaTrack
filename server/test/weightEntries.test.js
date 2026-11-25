@@ -122,7 +122,7 @@ describe('Weight Entries API', () => {
           return { command: 'ROLLBACK', rows: [] };
         }
 
-        if (sql.includes('UPDATE health_occurrences SET status = \'pending\'')) {
+        if (sql.includes('UPDATE care_occurrences SET status = \'pending\'')) {
           return { rows: [{ health_entry_id: 'he-1' }] };
         }
 
@@ -464,13 +464,13 @@ describe('Weight Entries API', () => {
           if (sql.includes('SELECT pet_id, health_occurrence_id FROM weight_entries WHERE id = $1')) {
             return { rows: [{ pet_id: 'pet-1', health_occurrence_id: 'occ-linked' }] };
           }
-          if (sql.includes('SELECT health_entry_id FROM health_occurrences WHERE id = $1')) {
+          if (sql.includes('SELECT health_entry_id FROM care_occurrences WHERE id = $1')) {
             return { rows: [{ health_entry_id: 'he-weight' }] };
           }
-          if (sql.includes('SELECT * FROM health_entries WHERE id = $1')) {
+          if (sql.includes('SELECT * FROM care_items WHERE id = $1')) {
             return { rows: [{ id: 'he-weight', pet_id: 'pet-1', status: 'active', frequency: 'monthly', care_family: 'weight_monitoring' }] };
           }
-          if (sql.includes('UPDATE health_occurrences SET status = \'pending\'')) {
+          if (sql.includes('UPDATE care_occurrences SET status = \'pending\'')) {
             return { rows: [{ id: 'occ-linked', health_entry_id: 'he-weight', scheduled_date: '2026-09-01' }] };
           }
           if (sql.includes('DELETE FROM weight_entries')) return { rows: [] };
@@ -488,7 +488,7 @@ describe('Weight Entries API', () => {
         .delete('/api/weight-entries/we-linked')
         .set('Authorization', `Bearer ${token}`);
       expect(res.statusCode).toBe(200);
-      expect(queries.some((q) => q.sql.includes('UPDATE health_occurrences SET status = \'pending\''))).toBe(true);
+      expect(queries.some((q) => q.sql.includes('UPDATE care_occurrences SET status = \'pending\''))).toBe(true);
     });
 
     it('refreshes pets.weight after delete', async () => {

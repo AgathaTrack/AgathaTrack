@@ -43,7 +43,7 @@ beforeAll(async () => {
   );
   healthEntryA = randomUUID();
   await pool.query(
-    `INSERT INTO health_entries
+    `INSERT INTO care_items
        (id, pet_id, user_id, name, type, status, care_family, care_planning, care_importance, next_due_date)
      VALUES ($1, $2, $3, 'IdorMeds', 'medication', 'active', 'wellness_review', 'planned', 'essential', '2030-01-01')`,
     [healthEntryA, petA, userA],

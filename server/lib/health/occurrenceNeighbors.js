@@ -37,7 +37,7 @@ export async function occurrenceNeighborsForRead(pool, entry, currentOccId, asOf
   const result = await pool.query(
     `SELECT ho.*,
       TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS marked_by_name
-     FROM health_occurrences ho
+     FROM care_occurrences ho
      LEFT JOIN users u ON u.id = ho.marked_by_user_id
      WHERE ho.health_entry_id = $1
      ORDER BY ho.scheduled_date ASC,

@@ -15,7 +15,7 @@ export async function listHealthEntriesForUser(pool, userId, petId) {
       return { error: 'Forbidden', status: 403 };
     }
     const result = await pool.query(
-      `SELECT he.*, p.name as pet_name, p.home_timezone AS pet_home_timezone FROM health_entries he
+      `SELECT he.*, p.name as pet_name, p.home_timezone AS pet_home_timezone FROM care_items he
        JOIN pets p ON he.pet_id = p.id
        WHERE he.pet_id = $1 AND ${accessiblePetSql('p', '$2')}
        ORDER BY he.next_due_date ASC NULLS LAST, he.created_at DESC`,
@@ -24,7 +24,7 @@ export async function listHealthEntriesForUser(pool, userId, petId) {
     return { rows: result.rows };
   }
   const result = await pool.query(
-    `SELECT he.*, p.name as pet_name, p.home_timezone AS pet_home_timezone FROM health_entries he
+    `SELECT he.*, p.name as pet_name, p.home_timezone AS pet_home_timezone FROM care_items he
      JOIN pets p ON he.pet_id = p.id
      WHERE ${accessiblePetSql('p', '$1')}
      ORDER BY he.next_due_date ASC NULLS LAST, he.created_at DESC`,
@@ -35,7 +35,7 @@ export async function listHealthEntriesForUser(pool, userId, petId) {
 
 export async function exportHealthEntriesCsv(pool, userId) {
   const result = await pool.query(
-    `SELECT he.*, p.name as pet_name FROM health_entries he
+    `SELECT he.*, p.name as pet_name FROM care_items he
      JOIN pets p ON he.pet_id = p.id
      WHERE ${accessiblePetSql('p', '$1')}
      ORDER BY he.created_at DESC`,
@@ -57,7 +57,7 @@ export async function exportHealthEntriesCsv(pool, userId) {
 
 export async function getHealthEntryForUser(pool, userId, entryId) {
   const result = await pool.query(
-    `SELECT he.*, p.name as pet_name FROM health_entries he
+    `SELECT he.*, p.name as pet_name FROM care_items he
      JOIN pets p ON he.pet_id = p.id
      WHERE he.id = $1 AND ${accessiblePetSql('p', '$2')}`,
     [entryId, userId],

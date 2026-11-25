@@ -116,7 +116,7 @@ describe('People read models', () => {
         if (sql.includes('pet_contact_relationships')) return { rows: [] };
         if (sql.includes('planned_absence_pets')) return { rows: [] };
         if (sql.includes('health_entries')) return { rows: [] };
-        if (sql.includes('health_occurrences')) return { rows: [{ count: 0 }] };
+        if (sql.includes('care_occurrences')) return { rows: [{ count: 0 }] };
         return undefined;
       },
     ]);
@@ -138,7 +138,7 @@ describe('People read models', () => {
     const { pool } = makePool([
       (sql) => {
         if (sql.includes('pd.owner_user_id = $2')) return { rows: [{ '?column?': 1 }] };
-        if (sql.includes('health_occurrences')) return { rows: [{ count: 0 }] };
+        if (sql.includes('care_occurrences')) return { rows: [{ count: 0 }] };
         return { rows: [] };
       },
     ]);
@@ -222,7 +222,7 @@ describe('People read models', () => {
             ],
           };
         }
-        if (sql.includes('health_entries he')) return { rows: [] };
+        if (sql.includes('care_items he')) return { rows: [] };
         if (sql.includes('planned_absence_guest_grants')) return { rows: [] };
         return undefined;
       },

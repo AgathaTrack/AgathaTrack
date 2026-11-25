@@ -73,7 +73,7 @@ describe('W2 weigh-in integrity', () => {
     const weightRow = await harness.pool.query('SELECT id FROM weight_entries WHERE id = $1', [weightId]);
     expect(weightRow.rows).toHaveLength(0);
     const occRow = await harness.pool.query(
-      'SELECT status FROM health_occurrences WHERE id = $1',
+      'SELECT status FROM care_occurrences WHERE id = $1',
       [occ.id],
     );
     expect(occRow.rows[0].status).toBe('pending');
@@ -108,7 +108,7 @@ describe('W2 weigh-in integrity', () => {
       [weightId],
     );
     expect(weight.rows[0].health_occurrence_id).toBeNull();
-    const occRow = await harness.pool.query('SELECT status FROM health_occurrences WHERE id = $1', [occ.id]);
+    const occRow = await harness.pool.query('SELECT status FROM care_occurrences WHERE id = $1', [occ.id]);
     expect(occRow.rows[0].status).toBe('pending');
   });
 
@@ -126,7 +126,7 @@ describe('W2 weigh-in integrity', () => {
     expect(updated.statusCode).toBe(200);
     expect(updated.body.undo_token).toBeTruthy();
     const occRow = await harness.pool.query(
-      'SELECT completed_on, completion_timing FROM health_occurrences WHERE id = $1',
+      'SELECT completed_on, completion_timing FROM care_occurrences WHERE id = $1',
       [occ.id],
     );
     expect(dateToIsoDate(occRow.rows[0].completed_on)).toBe('2026-06-08');
@@ -152,7 +152,7 @@ describe('W2 weigh-in integrity', () => {
     const undo = await api.at('2026-07-03T10:05').undo(entry.id, { undo_token: updated.body.undo_token });
     expect(undo.statusCode).toBe(200);
     const occRow = await harness.pool.query(
-      'SELECT completed_on FROM health_occurrences WHERE id = $1',
+      'SELECT completed_on FROM care_occurrences WHERE id = $1',
       [occ.id],
     );
     expect(dateToIsoDate(occRow.rows[0].completed_on)).toBe('2026-07-01');
@@ -247,7 +247,7 @@ describe('W2 weigh-in integrity', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.body.code).toBe('invalid_skip_reason');
-    const row = await harness.pool.query('SELECT status FROM health_occurrences WHERE id = $1', [occ.id]);
+    const row = await harness.pool.query('SELECT status FROM care_occurrences WHERE id = $1', [occ.id]);
     expect(row.rows[0].status).toBe('pending');
   });
 

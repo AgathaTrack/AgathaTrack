@@ -165,7 +165,7 @@ describe('changing when care was done (D-CSM-034)', () => {
     const rows = await occurrenceRows(harness.pool, entry.id);
     expect(rows.find((r) => r.id === first.id).completed_on).toBe('2026-06-01');
     expect(rows.filter((r) => r.id !== first.id)).toEqual(before);
-    const timing = await harness.pool.query('SELECT completion_timing FROM health_occurrences WHERE id = $1', [first.id]);
+    const timing = await harness.pool.query('SELECT completion_timing FROM care_occurrences WHERE id = $1', [first.id]);
     expect(timing.rows[0].completion_timing).toBe('on_time');
     expect(await invariantViolations(harness.pool, entry.id)).toEqual([]);
   });

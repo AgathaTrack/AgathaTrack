@@ -438,47 +438,6 @@ CREATE TABLE public.foster_requests (
     updated_at timestamp with time zone DEFAULT now(),
     CONSTRAINT foster_requests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'sent'::character varying, 'cancelled'::character varying])::text[])))
 );
-CREATE VIEW public.health_entries AS
- SELECT id,
-    pet_id,
-    user_id,
-    type,
-    name,
-    dosage,
-    frequency,
-    frequency_days,
-    frequency_interval,
-    start_date,
-    next_due_date,
-    notes,
-    health_issue_id,
-    remind_days_before,
-    status,
-    completed_at,
-    created_at,
-    updated_at,
-    completed_on,
-    recurrence_anchor,
-    repeat_end_date,
-    schedule_times,
-    care_family,
-    care_source,
-    paused_since,
-    schedule_policy_version,
-    care_setting,
-    care_planning,
-    care_importance,
-    importance_overridden,
-    provider_contact_id,
-    provider_typed_name,
-    care_blocks,
-    schedule_anchor_date,
-    late_completion_choice,
-    paused_until,
-    series_resumed_on,
-    care_closed_reason
-   FROM public.care_items;
-COMMENT ON VIEW public.health_entries IS 'Deploy-1 compatibility view (#2405). Drop after server SQL cuts over to care_items.';
 CREATE TABLE public.health_entry_absence_resolutions (
     id uuid NOT NULL,
     health_entry_id uuid NOT NULL,
@@ -529,29 +488,6 @@ CREATE TABLE public.health_issues (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-CREATE VIEW public.health_occurrences AS
- SELECT id,
-    health_entry_id,
-    scheduled_date,
-    scheduled_time,
-    status,
-    completed_on,
-    marked_at,
-    marked_by_user_id,
-    notes,
-    created_at,
-    updated_at,
-    completion_timing,
-    performed_by_user_id,
-    performed_by_snapshot,
-    marked_by_snapshot,
-    provider_contact_id,
-    provider_typed_name,
-    provider_contact_snapshot,
-    origin,
-    series_date
-   FROM public.care_occurrences;
-COMMENT ON VIEW public.health_occurrences IS 'Deploy-1 compatibility view (#2405). Drop after server SQL cuts over to care_occurrences.';
 CREATE TABLE public.household_invites (
     id uuid NOT NULL,
     household_id uuid NOT NULL,

@@ -11,9 +11,9 @@
 export async function repointProviderContactForPet(db, petId, sourceContactId, targetContactId) {
   if (sourceContactId === targetContactId) return;
   await db.query(
-    `UPDATE health_occurrences ho
+    `UPDATE care_occurrences ho
      SET provider_contact_id = $1, updated_at = NOW()
-     FROM health_entries he
+     FROM care_items he
      WHERE ho.health_entry_id = he.id
        AND he.pet_id = $2
        AND ho.provider_contact_id = $3`,

@@ -29,7 +29,7 @@ export async function runCareTick(pool, { now = new Date(), clock = null } = {})
     if (!locked) return { ...stats, skipped: true };
 
     const candidates = await lockClient.query(
-      `SELECT id FROM health_entries
+      `SELECT id FROM care_items
        WHERE status IN ('active', 'paused')
          AND COALESCE(care_planning, 'planned') <> 'unplanned'
          AND COALESCE(frequency, 'once') <> 'once'
@@ -41,7 +41,7 @@ export async function runCareTick(pool, { now = new Date(), clock = null } = {})
       try {
         const itemStats = await withTransaction(pool, async (client) => {
           const row = await client.query(
-            'SELECT * FROM health_entries WHERE id = $1 FOR UPDATE SKIP LOCKED',
+            'SELECT * FROM care_items WHERE id = $1 FOR UPDATE SKIP LOCKED',
             [id],
           );
           const entry = row.rows[0];

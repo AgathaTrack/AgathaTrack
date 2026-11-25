@@ -211,7 +211,7 @@ describe('next-date choice (D-CSM-026)', () => {
   it('LC-3b a remembered choice that does not fit this case falls back to keep', async () => {
     const entry = await created(twiceDaily('2026-06-05'), '2026-06-05T07:00');
     await harness.pool.query(
-      "UPDATE health_entries SET late_completion_choice = 'shift_following' WHERE id = $1",
+      "UPDATE care_items SET late_completion_choice = 'shift_following' WHERE id = $1",
       [entry.id],
     );
     const [morning, evening] = entry.open_occurrences;

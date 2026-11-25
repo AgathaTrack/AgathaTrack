@@ -19,7 +19,7 @@ let client;
 let dbReady = false;
 
 async function item(id) {
-  const entry = (await client.query('SELECT * FROM health_entries WHERE id = $1', [id])).rows[0];
+  const entry = (await client.query('SELECT * FROM care_items WHERE id = $1', [id])).rows[0];
   const rows = await listOpenRows(client, id);
   return { entry, ...careItemReadAdditions(entry, rows, CLOCK) };
 }
@@ -30,7 +30,7 @@ beforeAll(async () => {
   pool = createDbPool();
   try {
     const ready = await pool.query(
-      "SELECT 1 FROM information_schema.columns WHERE table_name = 'health_occurrences' AND column_name = 'origin'",
+      "SELECT 1 FROM information_schema.columns WHERE table_name = 'care_occurrences' AND column_name = 'origin'",
     );
     if (ready.rows.length === 0) return;
   } catch {
@@ -111,7 +111,7 @@ describe('care occurrences seed (Whiskers)', () => {
     expect(meth.open_occurrences.filter((o) => o.status === 'not_recorded')).toHaveLength(6);
     const closed = await client.query(
       `SELECT to_char(scheduled_date, 'YYYY-MM-DD') AS d, to_char(scheduled_time, 'HH24:MI') AS t
-       FROM health_occurrences WHERE health_entry_id = $1 AND status = 'not_recorded'`,
+       FROM care_occurrences WHERE health_entry_id = $1 AND status = 'not_recorded'`,
       [ids.methimazole],
     );
     expect(closed.rows).toEqual([{ d: '2026-06-06', t: '20:00' }]);
@@ -154,7 +154,7 @@ describe('care occurrences seed invariants', () => {
       }
     }
     const count = await client.query(
-      'SELECT COUNT(*)::int AS n FROM health_entries WHERE pet_id = ANY($1::uuid[]) AND id = ANY($2::uuid[])',
+      'SELECT COUNT(*)::int AS n FROM care_items WHERE pet_id = ANY($1::uuid[]) AND id = ANY($2::uuid[])',
       [[DEMO_IDS.buddyPet, DEMO_IDS.whiskersPet], all],
     );
     expect(count.rows[0].n).toBe(all.length);

@@ -19,7 +19,7 @@ async function lookupHealthFilePetId(pool, fileId) {
   const entryPhoto = await pool.query(
     `SELECT he.pet_id
      FROM health_event_photos hep
-     JOIN health_entries he ON he.id = hep.health_entry_id
+     JOIN care_items he ON he.id = hep.health_entry_id
      WHERE hep.id = $1
      LIMIT 1`,
     [fileId]

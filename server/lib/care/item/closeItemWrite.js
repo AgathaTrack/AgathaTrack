@@ -19,7 +19,7 @@ export async function closeItemAsEnded(db, entryId, fields = {}) {
   const completedAt = fields.completedAt ?? null;
   const repeatEndDate = fields.repeatEndDate;
   const result = await db.query(
-    `UPDATE health_entries SET
+    `UPDATE care_items SET
        status = $2,
        care_closed_reason = $3,
        completed_on = COALESCE($4::date, completed_on),

@@ -37,7 +37,7 @@ export async function findDuplicateScheduleSlots(db) {
             COALESCE(series_date, scheduled_date)::text AS slot_date,
             scheduled_time::text AS scheduled_time,
             COUNT(*)::text AS count
-     FROM health_occurrences
+     FROM care_occurrences
      WHERE origin = 'schedule'
      GROUP BY health_entry_id, COALESCE(series_date, scheduled_date), scheduled_time
      HAVING COUNT(*) > 1
@@ -65,7 +65,7 @@ export async function repairOccurrences(pool, { apply = false } = {}) {
     };
   }
   const entries = await pool.query(
-    `SELECT * FROM health_entries
+    `SELECT * FROM care_items
      WHERE COALESCE(care_planning, 'planned') <> 'unplanned'
      ORDER BY id`,
   );

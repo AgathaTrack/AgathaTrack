@@ -10,7 +10,7 @@ async function loadEntryForPet(pool, entryId, petId, userId) {
     return null;
   }
   const result = await pool.query(
-    `SELECT he.* FROM health_entries he
+    `SELECT he.* FROM care_items he
      WHERE he.id = $1 AND he.pet_id = $2`,
     [entryId, petId],
   );

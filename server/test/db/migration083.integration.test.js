@@ -47,9 +47,9 @@ async function state() {
   const columns = await db.query(
     `SELECT table_name, column_name FROM information_schema.columns
      WHERE table_schema = $1 AND (
-       (table_name = 'health_entries' AND column_name IN (
+       (table_name = 'care_items' AND column_name IN (
          'schedule_anchor_date', 'late_completion_choice', 'paused_until', 'series_resumed_on'))
-       OR (table_name = 'health_occurrences' AND column_name IN (
+       OR (table_name = 'care_occurrences' AND column_name IN (
          'origin', 'close_reason', 'series_date'))
        OR (table_name = 'care_schedule_events' AND column_name IN ('payload', 'undone_at'))
      ) ORDER BY table_name, column_name`,
@@ -57,21 +57,21 @@ async function state() {
   );
   const entries = await db.query(
     `SELECT id, to_char(schedule_anchor_date, 'YYYY-MM-DD') AS anchor
-     FROM health_entries ORDER BY id`,
+     FROM care_items ORDER BY id`,
   ).catch(async (err) => {
     if (err.code !== '42703') throw err; // absent before migration
-    return db.query('SELECT id, NULL::text AS anchor FROM health_entries ORDER BY id');
+    return db.query('SELECT id, NULL::text AS anchor FROM care_items ORDER BY id');
   });
   const occurrences = await db.query(
     `SELECT id, health_entry_id, to_char(scheduled_date, 'YYYY-MM-DD') AS day,
        status, origin, to_char(series_date, 'YYYY-MM-DD') AS series_day
-     FROM health_occurrences ORDER BY health_entry_id, scheduled_date, id`,
+     FROM care_occurrences ORDER BY health_entry_id, scheduled_date, id`,
   ).catch(async (err) => {
     if (err.code !== '42703') throw err;
     return db.query(
       `SELECT id, health_entry_id, to_char(scheduled_date, 'YYYY-MM-DD') AS day,
          status, NULL::text AS origin, NULL::text AS series_day
-       FROM health_occurrences ORDER BY health_entry_id, scheduled_date, id`,
+       FROM care_occurrences ORDER BY health_entry_id, scheduled_date, id`,
     );
   });
   const ledger = await db.query('SELECT name FROM _migrations WHERE name = $1', [migrationName]);
@@ -91,7 +91,7 @@ beforeAll(async () => {
   // prerequisite or the database is absent; these are not mock/skip tests.
   const ready = await admin.query(
     `SELECT count(*)::int AS n FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'health_occurrences'
+     WHERE table_schema = 'public' AND table_name = 'care_occurrences'
        AND column_name = 'origin'`,
   );
   if (ready.rows[0].n !== 1) throw new Error('Migration 083 tests require a migrated PostgreSQL public schema');
@@ -112,12 +112,12 @@ beforeAll(async () => {
   db = createAppPool(config);
   expect((await db.query('SELECT current_schema() AS schema')).rows[0].schema).toBe(schema);
 
-  for (const table of ['pets', 'health_entries', 'health_occurrences', 'care_schedule_events']) {
+  for (const table of ['pets', 'care_items', 'care_occurrences', 'care_schedule_events']) {
     await db.query(`CREATE TABLE ${table} (LIKE public.${table} INCLUDING ALL)`);
   }
   for (const [table, columns] of [
-    ['health_entries', ['schedule_anchor_date', 'late_completion_choice', 'paused_until', 'series_resumed_on']],
-    ['health_occurrences', ['origin', 'series_date']],
+    ['care_items', ['schedule_anchor_date', 'late_completion_choice', 'paused_until', 'series_resumed_on']],
+    ['care_occurrences', ['origin', 'series_date']],
     ['care_schedule_events', ['payload', 'undone_at']],
   ]) {
     for (const column of columns) {
@@ -131,7 +131,7 @@ beforeAll(async () => {
       }
     }
   }
-  await db.query('ALTER TABLE health_occurrences DROP COLUMN IF EXISTS close_reason CASCADE');
+  await db.query('ALTER TABLE care_occurrences DROP COLUMN IF EXISTS close_reason CASCADE');
   await db.query('CREATE TABLE migration083_markers (health_entry_id uuid NOT NULL)');
   await db.query(`
     CREATE FUNCTION migration083_observe() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -142,7 +142,7 @@ beforeAll(async () => {
       INSERT INTO migration083_markers (health_entry_id) VALUES (NEW.health_entry_id);
       RETURN NEW;
     END $$;
-    CREATE TRIGGER migration083_observe_insert AFTER INSERT ON health_occurrences
+    CREATE TRIGGER migration083_observe_insert AFTER INSERT ON care_occurrences
       FOR EACH ROW EXECUTE FUNCTION migration083_observe();
   `);
 
@@ -168,7 +168,7 @@ beforeAll(async () => {
   );
   for (const [id, anchor] of [[firstId, 'from_due_date'], [secondId, 'from_completion']]) {
     await db.query(
-      `INSERT INTO health_entries
+      `INSERT INTO care_items
          (id, pet_id, user_id, type, name, frequency, recurrence_anchor,
           next_due_date, start_date, status, care_planning, care_importance)
        VALUES ($1, $2, $3, 'medication', 'Migration care', 'daily', $4,
@@ -177,7 +177,7 @@ beforeAll(async () => {
     );
   }
   await db.query(
-    `INSERT INTO health_occurrences (id, health_entry_id, scheduled_date, status)
+    `INSERT INTO care_occurrences (id, health_entry_id, scheduled_date, status)
      VALUES ($1, $2, '2030-06-05', 'pending')`,
     [firstOccurrenceId, firstId],
   );
@@ -204,9 +204,9 @@ describe('migration 083 runner transaction', () => {
   }, 90000);
 
   it('retries successfully and stays idempotent at a controlled clock', async () => {
-    await db.query('DROP TRIGGER migration083_observe_insert ON health_occurrences');
+    await db.query('DROP TRIGGER migration083_observe_insert ON care_occurrences');
     await db.query(`
-      CREATE TRIGGER migration083_observe_insert AFTER INSERT ON health_occurrences
+      CREATE TRIGGER migration083_observe_insert AFTER INSERT ON care_occurrences
         FOR EACH ROW WHEN (NEW.health_entry_id = '${firstId}')
         EXECUTE FUNCTION migration083_observe()
     `);

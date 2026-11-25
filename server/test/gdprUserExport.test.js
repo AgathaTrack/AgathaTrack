@@ -30,7 +30,7 @@ describe('gdprUserExport', () => {
     expect(ticketQuery[1]).toEqual([userId, 'user@example.com']);
   });
 
-  it('includes CARE ledger tables scoped via health_entries.user_id', async () => {
+  it('includes CARE ledger tables scoped via care_items.user_id', async () => {
     const occurrence = { id: 'occ-1', health_entry_id: 'he-1' };
     const scheduleEvent = { id: 'cse-1', health_entry_id: 'he-1', event_type: 'completed' };
     const absenceResolution = {
@@ -42,7 +42,8 @@ describe('gdprUserExport', () => {
 
     const pool = poolReturning({
       'SELECT email FROM users': [{ email: 'user@example.com' }],
-      'FROM health_occurrences ho': [occurrence],
+      'FROM care_items WHERE user_id': [{ id: 'he-1' }],
+      'FROM care_occurrences ho': [occurrence],
       'FROM care_schedule_events cse': [scheduleEvent],
       'FROM health_entry_absence_resolutions hear': [absenceResolution],
     });
@@ -54,7 +55,7 @@ describe('gdprUserExport', () => {
     expect(data.health_entry_absence_resolutions).toEqual([absenceResolution]);
 
     const occurrenceQuery = pool.query.mock.calls.find(([sql]) =>
-      sql.includes('FROM health_occurrences ho'),
+      sql.includes('FROM care_occurrences ho'),
     );
     expect(occurrenceQuery[1]).toEqual([userId]);
 

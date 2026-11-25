@@ -154,7 +154,7 @@ export function buildMockPool(overrides = {}) {
       if (sql.includes('DELETE FROM users')) return { ...await handlers.deleteUser(sql, params), rowCount: 1 };
       if (sql.includes('SELECT * FROM pets')) return handlers.selectPets(sql, params);
       if (sql.includes('SELECT * FROM vets')) return handlers.selectVets(sql, params);
-      if (sql.includes('FROM health_entries') || sql.includes('FROM health_issues')
+      if (sql.includes('FROM care_items') || sql.includes('FROM health_issues')
         || sql.includes('FROM health_event_photos')
         || sql.includes('FROM health_issue_documents') || sql.includes('FROM health_issue_events') || sql.includes('FROM weight_entries')
         || sql.includes('FROM notifications') || sql.includes('FROM notification_preferences')

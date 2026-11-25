@@ -23,11 +23,11 @@ const CARE_FIXTURE_WEIGHT_ENTRY_IDS = [
 
 async function countCareFixtureRows(client) {
   const entries = await client.query(
-    `SELECT COUNT(*)::int AS count FROM health_entries WHERE id = ANY($1::uuid[])`,
+    `SELECT COUNT(*)::int AS count FROM care_items WHERE id = ANY($1::uuid[])`,
     [CARE_FIXTURE_ENTRY_IDS],
   );
   const occurrences = await client.query(
-    `SELECT COUNT(*)::int AS count FROM health_occurrences WHERE health_entry_id = $1`,
+    `SELECT COUNT(*)::int AS count FROM care_occurrences WHERE health_entry_id = $1`,
     [DEMO_IDS.careFixtureWeightEntry],
   );
   const weightEntries = await client.query(
@@ -101,7 +101,7 @@ describe('care-item-model-fixture seed database rows (issue #1125)', () => {
 
       const entryRows = await client.query(
         `SELECT id, care_family, care_setting, care_planning, care_importance, status
-         FROM health_entries WHERE id = ANY($1::uuid[]) ORDER BY id`,
+         FROM care_items WHERE id = ANY($1::uuid[]) ORDER BY id`,
         [CARE_FIXTURE_ENTRY_IDS],
       );
       expect(entryRows.rows).toHaveLength(1);
@@ -112,7 +112,7 @@ describe('care-item-model-fixture seed database rows (issue #1125)', () => {
       expect(weightEntry.care_importance).toBe('recommended');
 
       const occRows = await client.query(
-        `SELECT status FROM health_occurrences WHERE health_entry_id = $1`,
+        `SELECT status FROM care_occurrences WHERE health_entry_id = $1`,
         [DEMO_IDS.careFixtureWeightEntry],
       );
       expect(occRows.rows.map((r) => r.status).sort()).toEqual([
@@ -130,7 +130,7 @@ describe('care-item-model-fixture seed database rows (issue #1125)', () => {
       ).toEqual(new Set([DEMO_IDS.buddyPet]));
 
       const pebbleHealth = await client.query(
-        `SELECT COUNT(*)::int AS count FROM health_entries WHERE pet_id = $1`,
+        `SELECT COUNT(*)::int AS count FROM care_items WHERE pet_id = $1`,
         [DEMO_IDS.pebblePet],
       );
       expect(pebbleHealth.rows[0].count).toBe(0);

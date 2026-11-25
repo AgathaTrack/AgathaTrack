@@ -124,7 +124,7 @@ describe('petAccess', () => {
     it('returns true for owner only', async () => {
       const entryId = 'entry-1';
       const pool = mockPool(async (sql) => {
-        if (sql.includes('FROM health_entries WHERE id = $1')) {
+        if (sql.includes('FROM care_items WHERE id = $1')) {
           return { rows: [{ pet_id: petId }] };
         }
         if (sql.includes('FROM pets WHERE id = $1 AND user_id = $2')) {
@@ -138,7 +138,7 @@ describe('petAccess', () => {
     it('returns false for carer', async () => {
       const entryId = 'entry-1';
       const pool = mockPool(async (sql) => {
-        if (sql.includes('FROM health_entries WHERE id = $1')) {
+        if (sql.includes('FROM care_items WHERE id = $1')) {
           return { rows: [{ pet_id: petId }] };
         }
         if (sql.includes('FROM pets WHERE id = $1 AND user_id = $2')) {
