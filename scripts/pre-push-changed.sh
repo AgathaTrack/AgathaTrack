@@ -227,9 +227,6 @@ run_governance() {
   node --test .github/scripts/pipeline-v2-owner.test.js
   node --test .github/scripts/issue-agent-handlers.test.js
   node --test .github/scripts/github-project-lib.test.js
-  node --test scripts/stage_mirror_decide.test.js
-  node --test scripts/stage_mirror_apply.test.js
-  node --test scripts/stage_mirror_fields.test.js
   node --test scripts/db/normalize-schema-dump.test.js
   node --test scripts/db/regenerate-canonical.test.js
   bash scripts/test/require-non-prod-wrappers.test.sh

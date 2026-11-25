@@ -108,69 +108,6 @@ function getIssueProjectStatus(item, statusFieldId) {
   return null;
 }
 
-function getProjectItemTextField(item, textFieldId) {
-  for (const fieldValue of item.fieldValues?.nodes || []) {
-    if (fieldValue.field?.id === textFieldId && typeof fieldValue.text === 'string') {
-      return fieldValue.text;
-    }
-  }
-  return '';
-}
-
-async function updateProjectItemTextField({
-  projectId,
-  itemId,
-  fieldId,
-  text,
-  projectsPat,
-}) {
-  await graphql(
-    projectsPat,
-    `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $text: String!) {
-      updateProjectV2ItemFieldValue(
-        input: {
-          projectId: $projectId
-          itemId: $itemId
-          fieldId: $fieldId
-          value: { text: $text }
-        }
-      ) {
-        projectV2Item { id }
-      }
-    }`,
-    { projectId, itemId, fieldId, text: text ?? '' },
-  );
-}
-
-async function assertProjectTextField(projectsPat, fieldId, expectedName) {
-  const data = await graphql(
-    projectsPat,
-    `query($fieldId: ID!) {
-      node(id: $fieldId) {
-        ... on ProjectV2Field {
-          id
-          name
-          dataType
-        }
-      }
-    }`,
-    { fieldId },
-  );
-  const field = data.node;
-  if (!field?.id) {
-    throw new Error(`Project text field ${fieldId} not found`);
-  }
-  if (field.dataType !== 'TEXT') {
-    throw new Error(`Project field "${field.name}" is not TEXT (got ${field.dataType})`);
-  }
-  if (expectedName && field.name?.toLowerCase() !== expectedName.toLowerCase()) {
-    throw new Error(
-      `Project field name mismatch: expected "${expectedName}", got "${field.name}"`,
-    );
-  }
-  return field;
-}
-
 async function ensureProjectItem(issue, projectId, projectsPat) {
   const existing = issue.projectItems.nodes.find((item) => item.project.id === projectId);
   if (existing) return existing.id;
@@ -273,10 +210,6 @@ const PROJECT_ITEM_FIELD_VALUES_FRAGMENT = `
         name
         field { ... on ProjectV2SingleSelectField { id name } }
       }
-      ... on ProjectV2ItemFieldTextValue {
-        text
-        field { ... on ProjectV2Field { id name } }
-      }
     }
   }
 `;
@@ -285,7 +218,7 @@ const PROJECT_ITEM_FIELD_VALUES_FRAGMENT = `
  * Board rows from raw project items. Open issues only unless `includeClosed`: every legacy caller
  * wants open issues; the v2 engine also reads closed ones to reopen an issue closed before Done.
  */
-function projectRowsFromItems(items, { statusFieldId, syncedFieldId = null, includeClosed = false }) {
+function projectRowsFromItems(items, { statusFieldId, includeClosed = false }) {
   return items
     .map((item) => {
       const issue = item.content;
@@ -295,9 +228,6 @@ function projectRowsFromItems(items, { statusFieldId, syncedFieldId = null, incl
         status: getIssueProjectStatus(item, statusFieldId),
         issue,
       };
-      if (syncedFieldId) {
-        row.syncedStage = getProjectItemTextField(item, syncedFieldId);
-      }
       return row;
     })
     .filter(Boolean);
@@ -307,7 +237,6 @@ async function listProjectIssues({
   projectId,
   statusFieldId,
   projectsPat,
-  syncedFieldId = null,
   includeClosed = false,
 }) {
   const items = [];
@@ -355,7 +284,7 @@ async function listProjectIssues({
     after = page.pageInfo.endCursor;
   }
 
-  return projectRowsFromItems(items, { statusFieldId, syncedFieldId, includeClosed });
+  return projectRowsFromItems(items, { statusFieldId, includeClosed });
 }
 
 async function searchEligibleIssues(owner, repo, token) {
@@ -521,7 +450,4 @@ module.exports = {
   parseRepo,
   hasLabel,
   getIssueProjectStatus,
-  getProjectItemTextField,
-  updateProjectItemTextField,
-  assertProjectTextField,
 };

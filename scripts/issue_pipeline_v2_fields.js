@@ -32,7 +32,7 @@ function findOrgField(fields, name) {
 /**
  * Org issue-field definitions the engine uses. Throws when one is missing, so a renamed field
  * stops the tick instead of silently reading as empty.
- * Token: the Projects PAT, as the stage mirror uses today (#2385 P1 token check).
+ * Token: the Projects PAT (#2385 P1 token check).
  */
 async function loadOrgFields({ org, token, restFn = rest }) {
   const defs = await restFn('GET', `/orgs/${encodeURIComponent(org)}/issue-fields`, token);
