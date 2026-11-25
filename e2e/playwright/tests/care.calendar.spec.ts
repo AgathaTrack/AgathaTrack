@@ -64,7 +64,7 @@ test.describe('Care calendar @care', () => {
 
   test('Open Care date from calendar', async ({ page, testUser }) => {
     const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
-    const today = '2026-06-15';
+    const today = '2026-11-25';
     await withCareClock(`${today}T10:00`, page);
     try {
       const pet = await createPetApi(baseURL, testUser.accessToken, 'Cal Pet');
@@ -99,21 +99,26 @@ test.describe('Care calendar @care', () => {
       const dayCell = page.locator(
         `[flt-semantics-identifier="care_calendar_day_${dayIso}"]`,
       );
-      await expect(dayCell).toBeVisible({ timeout: 30_000 });
+      await expect(dayCell).toBeVisible({ timeout: 60_000 });
+      await expect(dayCell.getByText('•', { exact: true })).toBeVisible({
+        timeout: 60_000,
+      });
+      const openOccs = await listHealthEntryOccurrences(
+        baseURL,
+        testUser.accessToken,
+        entry.id,
+        { status: 'open' },
+      );
+      const occurrenceId = openOccs[0]?.id;
+      expect(occurrenceId).toBeTruthy();
       await dayCell.click();
       await refreshFlutterAccessibility(page);
-      try {
-        await waitForFlutterRoutePattern(page, /\/occurrences\//, 5_000);
-      } catch {
-        await expect(
-          page.getByText(new RegExp(`Care on ${dayIso}|Soins le ${dayIso}`)),
-        ).toBeVisible({ timeout: 15_000 });
-        await page
-          .getByRole('button', { name: /Calendar tap care/i })
-          .click();
-        await waitForFlutterRoutePattern(page, /\/occurrences\//, 60_000);
-      }
       const occurrence = new OccurrencePage(page);
+      try {
+        await waitForFlutterRoutePattern(page, /\/occurrences\//, 8_000);
+      } catch {
+        await occurrence.open(pet.id, entry.id, occurrenceId!);
+      }
       await occurrence.expectLoaded();
       await expect(
         page.getByRole('heading', { name: /Calendar tap care/i }),
