@@ -1,3 +1,4 @@
+import '../../../../core/utils/calendar_date.dart';
 import '../../domain/entities/health_occurrence.dart';
 
 /// Resolved past rows for History inline and pop-up (newest first on wire).
@@ -19,3 +20,14 @@ bool occurrenceIsNotRecorded(HealthOccurrence o) {
 bool occurrenceIsSkipped(HealthOccurrence o) => o.status == 'skipped';
 
 bool occurrenceIsDone(HealthOccurrence o) => o.status == 'completed';
+
+bool pastOccurrenceCloseDayDiffersFromDue(
+  HealthOccurrence o,
+  DateTime closeInstant,
+) {
+  final due = calendarDateOnly(o.scheduledDate);
+  final close = calendarDateOnly(closeInstant);
+  return due.year != close.year ||
+      due.month != close.month ||
+      due.day != close.day;
+}

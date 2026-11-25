@@ -1,4 +1,5 @@
 import '../../domain/entities/health_occurrence.dart';
+import 'health_history_model.dart';
 import '../../../../core/utils/calendar_date.dart';
 
 class HealthOccurrenceModel extends HealthOccurrence {
@@ -15,6 +16,7 @@ class HealthOccurrenceModel extends HealthOccurrence {
     super.notes,
     super.missed,
     super.outcome,
+    super.linkedWeight,
   });
 
   factory HealthOccurrenceModel.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class HealthOccurrenceModel extends HealthOccurrence {
       notes: json['notes'] as String? ?? '',
       missed: json['missed'] as bool? ?? false,
       outcome: json['outcome'] as String?,
+      linkedWeight: HealthHistoryModel.parseLinkedWeight(json['linked_weight']),
     );
   }
 }

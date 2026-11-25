@@ -360,6 +360,25 @@ describe('W3 weight fulfilment endpoints', () => {
     expect(est.rows).toHaveLength(1);
   });
 
+  it('F-25 GET past occurrences includes linked_weight after completed weigh-in', async () => {
+    const entry = await createWeighIn('Past list weight', '2027-07-12');
+    const occ = entry.open_occurrences[0];
+    await w().post({
+      pet_id: owner.petId,
+      weight: 14.1,
+      date: '2027-07-13',
+      fulfils_occurrence_id: occ.id,
+    }, '2027-07-13T10:00');
+    const past = await api.at('2027-07-14T10:00').past(entry.id);
+    expect(past.statusCode).toBe(200);
+    const row = past.body.find((r) => r.id === occ.id);
+    expect(row.linked_weight).toMatchObject({
+      value: 14.1,
+      unit: 'kg',
+      date: '2027-07-13',
+    });
+  });
+
   it('F-24 GET history includes linked_weight after completed weigh-in', async () => {
     const entry = await createWeighIn('History weight', '2027-07-10');
     const occ = entry.open_occurrences[0];

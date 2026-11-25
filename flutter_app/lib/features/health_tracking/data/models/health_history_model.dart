@@ -32,11 +32,11 @@ class HealthHistoryModel extends HealthHistoryEntry {
       notes: json['notes'] as String? ?? '',
       status: json['status'] as String? ?? 'completed',
       outcome: json['outcome'] as String?,
-      linkedWeight: _parseLinkedWeight(json['linked_weight']),
+      linkedWeight: parseLinkedWeight(json['linked_weight']),
     );
   }
 
-  static HealthHistoryLinkedWeight? _parseLinkedWeight(Object? raw) {
+  static HealthHistoryLinkedWeight? parseLinkedWeight(Object? raw) {
     if (raw is! Map<String, dynamic>) return null;
     final value = (raw['value'] as num?)?.toDouble();
     if (value == null) return null;
