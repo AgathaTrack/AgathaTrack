@@ -8,6 +8,7 @@
  *   whole-board run.
  * - A manual dispatch previews (dry-run) unless it asks for live writes with the `live` input and
  *   the repo switch is `on`. Scheduled ticks keep the repo switch as it is.
+ * - Mission scope (`PIPELINE_V2_MISSION`) is validated in `issue_pipeline_mission.js`; see analyse-issue skill.
  */
 
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
