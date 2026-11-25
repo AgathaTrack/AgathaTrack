@@ -2294,6 +2294,14 @@
       "close": { "type": "String" }
     }
   },
+  "historyPillA11yDoneWithWeight": "Due {due}, done {close}, {weight}",
+  "@historyPillA11yDoneWithWeight": {
+    "placeholders": {
+      "due": { "type": "String" },
+      "close": { "type": "String" },
+      "weight": { "type": "String" }
+    }
+  },
   "historyPillA11ySkipped": "Due {due}, skipped {close}",
   "@historyPillA11ySkipped": {
     "placeholders": {

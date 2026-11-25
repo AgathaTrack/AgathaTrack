@@ -9,6 +9,7 @@ import {
   syncCareItemForRead,
 } from '../care/occurrence/index.js';
 import { occurrenceToMap } from '../care/item/index.js';
+import { loadLinkedWeightsForOccurrences } from '../care/observations/weightFulfilmentService.js';
 import { userCanManageHealthEntry } from '../petAccess.js';
 
 const PAST_STATUSES = new Set(['overdue', 'not_recorded']);
@@ -60,5 +61,15 @@ export async function listOccurrencesForEntry(pool, entry, { status, req }) {
        COALESCE(ho.scheduled_time, '00:00:00'::time) DESC`,
     [entry.id],
   );
-  return result.rows.map(occurrenceToMap);
+  const completedIds = result.rows
+    .filter((row) => row.status === 'completed')
+    .map((row) => row.id);
+  const linkedWeights = await loadLinkedWeightsForOccurrences(pool, completedIds);
+  return result.rows.map((row) => {
+    const mapped = occurrenceToMap(row);
+    if (row.status === 'completed') {
+      mapped.linked_weight = linkedWeights.get(row.id) ?? null;
+    }
+    return mapped;
+  });
 }

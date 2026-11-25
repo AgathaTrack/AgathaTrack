@@ -6018,6 +6018,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String historyPillA11yDoneWithWeight(
+    String due,
+    String close,
+    String weight,
+  ) {
+    return 'Due $due, done $close, $weight';
+  }
+
+  @override
   String historyPillA11ySkipped(String due, String close) {
     return 'Due $due, skipped $close';
   }

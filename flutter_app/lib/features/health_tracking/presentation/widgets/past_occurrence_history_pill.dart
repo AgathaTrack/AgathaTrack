@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_color_tokens.dart';
 import '../../../../core/utils/care_instant_format.dart';
+import '../../../../core/weight/weight_unit.dart';
+import '../../../../core/weight/weight_unit_preference.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/entities/health_occurrence.dart';
 import 'health_entry_status.dart';
 import 'past_occurrence_history_utils.dart';
 
 /// One-line History pill (inline module + full-history pop-up).
-class PastOccurrenceHistoryPill extends StatelessWidget {
+class PastOccurrenceHistoryPill extends ConsumerWidget {
   const PastOccurrenceHistoryPill({
     super.key,
     required this.occurrence,
@@ -21,7 +24,7 @@ class PastOccurrenceHistoryPill extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -37,9 +40,20 @@ class PastOccurrenceHistoryPill extends StatelessWidget {
     final isSkipped = occurrenceIsSkipped(occurrence);
     final isDone = occurrenceIsDone(occurrence);
 
+    String leadingLine = dueLine;
+    if (isDone && occurrence.linkedWeight != null) {
+      final displayUnit = ref.watch(weightUnitPreferenceProvider);
+      final weightText = formatWeight(
+        occurrence.linkedWeight!.valueKg,
+        displayUnit,
+      );
+      leadingLine = '$dueLine · $weightText';
+    }
+
     final IconData icon;
     final Color iconColor;
-    String? closeDate;
+    String? a11yCloseDate;
+    String? visibleCloseDate;
     String semanticsLabel;
 
     if (isNotRecorded) {
@@ -50,25 +64,44 @@ class PastOccurrenceHistoryPill extends StatelessWidget {
       icon = Icons.skip_next;
       iconColor = colorScheme.onSurfaceVariant;
       final recorded = occurrence.markedAt;
-      closeDate = recorded != null
-          ? formatCareRecordedCalendarDate(
-              recorded.isUtc ? recorded.toLocal() : recorded,
-            )
-          : (occurrence.completedOn != null
-                ? formatHealthEntryStatusDate(occurrence.completedOn!)
-                : null);
-      semanticsLabel = closeDate != null
-          ? l.historyPillA11ySkipped(dueLine, closeDate)
+      final closeInstant = recorded != null
+          ? (recorded.isUtc ? recorded.toLocal() : recorded)
+          : occurrence.completedOn;
+      if (closeInstant != null) {
+        a11yCloseDate = recorded != null
+            ? formatCareRecordedCalendarDate(closeInstant)
+            : formatHealthEntryStatusDate(closeInstant);
+        if (pastOccurrenceCloseDayDiffersFromDue(occurrence, closeInstant)) {
+          visibleCloseDate = a11yCloseDate;
+        }
+      }
+      semanticsLabel = a11yCloseDate != null
+          ? l.historyPillA11ySkipped(dueLine, a11yCloseDate)
           : l.historyPillA11yNotRecorded(dueLine);
     } else if (isDone) {
       icon = Icons.check_circle;
       iconColor = AppColorTokens.success;
-      closeDate = occurrence.completedOn != null
-          ? formatHealthEntryStatusDate(occurrence.completedOn!)
-          : null;
-      semanticsLabel = closeDate != null
-          ? l.historyPillA11yDone(dueLine, closeDate)
-          : dueLine;
+      final completed = occurrence.completedOn;
+      if (completed != null) {
+        a11yCloseDate = formatHealthEntryStatusDate(completed);
+        if (pastOccurrenceCloseDayDiffersFromDue(occurrence, completed)) {
+          visibleCloseDate = a11yCloseDate;
+        }
+      }
+      final weight = occurrence.linkedWeight;
+      if (weight != null && a11yCloseDate != null) {
+        final displayUnit = ref.watch(weightUnitPreferenceProvider);
+        final weightText = formatWeight(weight.valueKg, displayUnit);
+        semanticsLabel = l.historyPillA11yDoneWithWeight(
+          dueLine,
+          a11yCloseDate,
+          weightText,
+        );
+      } else if (a11yCloseDate != null) {
+        semanticsLabel = l.historyPillA11yDone(dueLine, a11yCloseDate);
+      } else {
+        semanticsLabel = dueLine;
+      }
     } else {
       icon = Icons.help_outline;
       iconColor = colorScheme.onSurfaceVariant;
@@ -80,7 +113,7 @@ class PastOccurrenceHistoryPill extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            dueLine,
+            leadingLine,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: muted ? colorScheme.onSurfaceVariant : null,
             ),
@@ -93,9 +126,9 @@ class PastOccurrenceHistoryPill extends StatelessWidget {
           ),
         ),
         Icon(icon, size: 18, color: iconColor),
-        if (closeDate != null)
+        if (visibleCloseDate != null)
           Text(
-            ' $closeDate',
+            ' $visibleCloseDate',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: muted ? colorScheme.onSurfaceVariant : null,
             ),

@@ -1,3 +1,5 @@
+import 'health_history_entry.dart';
+
 /// A single scheduled dose instant for a [HealthEntry] series.
 class HealthOccurrence {
   const HealthOccurrence({
@@ -13,6 +15,7 @@ class HealthOccurrence {
     this.notes = '',
     this.missed = false,
     this.outcome,
+    this.linkedWeight,
   });
 
   final String id;
@@ -39,6 +42,9 @@ class HealthOccurrence {
   /// Server authority in pet home TZ when listing open occurrences; client
   /// recomputes only when the API omitted `missed`.
   final bool missed;
+
+  /// Completed weigh-in weight when the past-occurrence list includes it.
+  final HealthHistoryLinkedWeight? linkedWeight;
 
   bool get isPending => status == 'pending';
 

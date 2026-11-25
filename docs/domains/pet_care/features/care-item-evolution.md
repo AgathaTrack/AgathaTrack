@@ -5,8 +5,8 @@ audience: both
 domain: pet_care
 feature_id: care_item
 status: active
-last_updated: 2026-11-17
-related_prs: [1797, 1805, 1812, 1817, 2129, 2145, 2420]
+last_updated: 2026-11-25
+related_prs: [1797, 1805, 1812, 1817, 2129, 2145, 2420, 2056]
 ---
 
 # Care Item — functional spec
@@ -47,7 +47,7 @@ Historical profile refactor and 2026-09-13 delivery plan text: [archive/care-ite
 | CARE-ITEM-R-020 | Care date Block 4: server `previous_occurrence` / `next_occurrence`; empty-state copy when none; replace-route navigation | Live |
 | CARE-ITEM-R-021 | Persisted **completion time of day** on occurrences (display + API) | Planned |
 | CARE-ITEM-R-022 | Care date footer for person-closed **Done** / **Skipped**: `Recorded {dd MMM yy} at {HH:mm} by {name}` (`marked_at`, `marked_by_name`); notes on a second line; hidden for open dates and system-closed Not recorded; `Unknown user` when name missing (CARE-ITEM-D-009). Coverage: `test: flutter_app/test/features/experience/presentation/care_item/occurrence/occurrence_recorded_attribution_line_test.dart`, `test: flutter_app/test/features/care_item/presentation/occurrence_screen_test.dart` | Live |
-| CARE-ITEM-R-023 | History one-line pills (inline + pop-up): `dd MMM yy` / `HH:mm`; icons not words; **See history** only over inline cap; pop-up from `status=past` list (CARE-ITEM-D-010). Coverage: `test: past_occurrence_history_pill_test.dart`, `test: pet_event_administration_history_dialog_test.dart`, `test: pet_event_past_occurrences_section_test.dart` | Live |
+| CARE-ITEM-R-023 | History one-line pills (inline + pop-up): `dd MMM yy` / `HH:mm` due line; completed weigh-ins append `· {weight}` in the user's unit; status icons not words; close calendar date shown only when its day differs from the due day (semantics still announce the close day); **See history** only over inline cap; pop-up from `status=past` list with `linked_weight` on completed rows (CARE-ITEM-D-010). Coverage: `test: past_occurrence_history_pill_test.dart`, `test: pet_event_administration_history_dialog_test.dart`, `test: pet_event_past_occurrences_section_test.dart`, `test: server/test/db/weightFulfilment.integration.test.js#F-25` | Live |
 | CARE-ITEM-R-024 | Multi-line care-item cards (**Today** + **Upcoming**, no Due soon): global **All care** (`/pc/events`); guardian **dashboard** (Today only); **pet profile** (Today + Upcoming capped at five cards); Care tab badge counts open Today slots (`care_list_*` semantics). [all-care-by-item delivery](../changes/all-care-by-item-delivery-plan.md) | In delivery |
 | CARE-ITEM-R-025 | Global **All care**: multi-select pet chips synced to `?pet=` on the route | In delivery |
 | CARE-ITEM-R-026 | Paused item: Needs attention on the Care item view shows the paused banner only — no per-occurrence or bulk actions; Resume via the care item menu (D-CIE-043) | Live |
@@ -353,7 +353,7 @@ Instructions are not yet on the wire; defer until the field exists.
 - After Done, Skip, or Undo on the same item, **History** updates as soon as the server confirms (D-CIE-042); no navigation or full reload required.
 - When no resolved past occurrences qualify, the module shows **No history yet** (no **See history**).
 - **No inline shortcuts** (e.g. Unmark done) in the list; changes, including undoing Done, happen on the occurrence's screen (D-CIE-040).
-- Each row is one pill: `{due dd MMM yy}` or `{due} at {HH:mm}` – **icon** `{close dd MMM yy when applicable}` — ✓ (green) for Done, ⏭ (grey) for Skipped / Not given, ? (grey) with no close date for Not recorded. No status words on the row; screen readers get full meaning via semantics (CARE-ITEM-R-023).
+- Each row is one pill: `{due dd MMM yy}` or `{due} at {HH:mm}` (completed weigh-ins append `· {weight}` in the user's unit) – **icon** `{close dd MMM yy when the close calendar day differs from the due day}` — ✓ (green) for Done, ⏭ (grey) for Skipped / Not given, ? (grey) with no close date for Not recorded. No status words on the row; screen readers still hear the close day when it matches the due day (CARE-ITEM-R-023).
 - Attribution (**who recorded, when**) lives on the Care date screen footer (CARE-ITEM-R-022), not on History rows — narrows [#2056](https://github.com/AgathaTrack/AgathaTrack/issues/2056).
 - A row opens that occurrence's record (inline or from the pop-up; pop-up closes first).
 - An unresolved overdue occurrence never appears here.
@@ -494,7 +494,7 @@ BDD: `flutter_app/test/bdd/features/care_date_screen.feature` · E2E: `e2e/playw
 | CARE-ITEM-D-007 | Default completion date `min(due_date, as_of.date)`; scheduled time read-only; R-021 deferred (2026-10-14) | Live |
 | CARE-ITEM-D-008 | Occurrence route builder keys `OccurrenceScreen` by `occurrenceId` so consecutive `replaceOccurrenceScreen` hops reload data (go_router page reuse) | Live |
 | CARE-ITEM-D-009 | **Recorded-by** footer after neighbours: uses server `marked_at` (24h `HH:mm`, calendar `dd MMM yy`) and `marked_by_name`; ✓ for Done, ⏭ for Skipped; no footer for open or system-closed Not recorded; History attribution detail moves off list rows (#2056) | Live | 2026-11-08 | #2145 |
-| CARE-ITEM-D-010 | **History pills:** one due line + status icon + close calendar date; no status words; pop-up lists all `status=past` rows with lazy `ListView`; **See history** only when count exceeds inline cap; title **History** | Live | 2026-11-08 | #2155 |
+| CARE-ITEM-D-010 | **History pills:** one due line (plus linked weigh-in weight on completed rows) + status icon + close calendar date only when the close day differs from the due day; no status words; pop-up lists all `status=past` rows with lazy `ListView`; **See history** only when count exceeds inline cap; title **History** | Live | 2026-11-25 | #2056 |
 
 Historical D-OCC / D-OSM detail (2026-10-06): D-OCC-001 App bar **Care date**; D-OCC-006 Reschedule this occurrence only; D-OCC-014 … D-OCC-015 Away; D-OCC-016 No ⋯ menu; D-OCC-OUT-1 series actions on Care details only. v1 acceptance: plan `occurrence-screen-context-6b05.md`.
 
