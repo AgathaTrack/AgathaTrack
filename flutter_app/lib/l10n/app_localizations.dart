@@ -16502,6 +16502,12 @@ abstract class AppLocalizations {
   /// **'Skip all'**
   String get careSkipAll;
 
+  /// No description provided for @careItemBulkSelectionMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get careItemBulkSelectionMode;
+
   /// No description provided for @careBulkMarkDoneCount.
   ///
   /// In en, this message translates to:

@@ -72,6 +72,51 @@ async function fetchIssue(owner, repo, issueNumber, token) {
   return issue;
 }
 
+/** @param {string[]} optionNames */
+function suggestStatusOptionNames(statusName, optionNames) {
+  const wanted = String(statusName || '').trim().toLowerCase();
+  if (!wanted) {
+    return [];
+  }
+  const scored = [];
+  for (const name of optionNames) {
+    const candidate = String(name).toLowerCase();
+    if (candidate === wanted) {
+      continue;
+    }
+    let score = 0;
+    if (candidate.includes(wanted) || wanted.includes(candidate)) {
+      score += 3;
+    }
+    for (const word of wanted.split(/\s+/)) {
+      if (word.length >= 3 && candidate.includes(word)) {
+        score += 1;
+      }
+    }
+    if (score > 0) {
+      scored.push({ name, score });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return scored.slice(0, 3).map((entry) => entry.name);
+}
+
+/** @param {string[]} optionNames */
+function formatStatusOptionNotFoundError(statusName, statusFieldId, optionNames) {
+  const available = optionNames.join(', ') || '(none)';
+  const suggestions = suggestStatusOptionNames(statusName, optionNames);
+  let message =
+    `Status option "${statusName}" not found on project field ${statusFieldId}. ` +
+    `Matching is case-insensitive exact. Available (${optionNames.length}): ${available}.`;
+  if (suggestions.length > 0) {
+    message += ` Closest: ${suggestions.join(', ')}.`;
+  }
+  message +=
+    ' Org `Stage` values are listed in `docs/agent-efficiency/github-issue-workflow.md` (§Stored state). ' +
+    'Project **Status** options are configured on the GitHub board; add or rename options there when this fails.';
+  return message;
+}
+
 async function getStatusOptionId(projectsPat, statusFieldId, statusName) {
   const data = await graphql(
     projectsPat,
@@ -91,9 +136,11 @@ async function getStatusOptionId(projectsPat, statusFieldId, statusName) {
   );
   if (!match) {
     throw new Error(
-      `Status option "${statusName}" not found on field ${statusFieldId}. Available: ${options
-        .map((o) => o.name)
-        .join(', ')}`,
+      formatStatusOptionNotFoundError(
+        statusName,
+        statusFieldId,
+        options.map((option) => option.name),
+      ),
     );
   }
   return match.id;
@@ -106,69 +153,6 @@ function getIssueProjectStatus(item, statusFieldId) {
     }
   }
   return null;
-}
-
-function getProjectItemTextField(item, textFieldId) {
-  for (const fieldValue of item.fieldValues?.nodes || []) {
-    if (fieldValue.field?.id === textFieldId && typeof fieldValue.text === 'string') {
-      return fieldValue.text;
-    }
-  }
-  return '';
-}
-
-async function updateProjectItemTextField({
-  projectId,
-  itemId,
-  fieldId,
-  text,
-  projectsPat,
-}) {
-  await graphql(
-    projectsPat,
-    `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $text: String!) {
-      updateProjectV2ItemFieldValue(
-        input: {
-          projectId: $projectId
-          itemId: $itemId
-          fieldId: $fieldId
-          value: { text: $text }
-        }
-      ) {
-        projectV2Item { id }
-      }
-    }`,
-    { projectId, itemId, fieldId, text: text ?? '' },
-  );
-}
-
-async function assertProjectTextField(projectsPat, fieldId, expectedName) {
-  const data = await graphql(
-    projectsPat,
-    `query($fieldId: ID!) {
-      node(id: $fieldId) {
-        ... on ProjectV2Field {
-          id
-          name
-          dataType
-        }
-      }
-    }`,
-    { fieldId },
-  );
-  const field = data.node;
-  if (!field?.id) {
-    throw new Error(`Project text field ${fieldId} not found`);
-  }
-  if (field.dataType !== 'TEXT') {
-    throw new Error(`Project field "${field.name}" is not TEXT (got ${field.dataType})`);
-  }
-  if (expectedName && field.name?.toLowerCase() !== expectedName.toLowerCase()) {
-    throw new Error(
-      `Project field name mismatch: expected "${expectedName}", got "${field.name}"`,
-    );
-  }
-  return field;
 }
 
 async function ensureProjectItem(issue, projectId, projectsPat) {
@@ -273,10 +257,6 @@ const PROJECT_ITEM_FIELD_VALUES_FRAGMENT = `
         name
         field { ... on ProjectV2SingleSelectField { id name } }
       }
-      ... on ProjectV2ItemFieldTextValue {
-        text
-        field { ... on ProjectV2Field { id name } }
-      }
     }
   }
 `;
@@ -285,7 +265,7 @@ const PROJECT_ITEM_FIELD_VALUES_FRAGMENT = `
  * Board rows from raw project items. Open issues only unless `includeClosed`: every legacy caller
  * wants open issues; the v2 engine also reads closed ones to reopen an issue closed before Done.
  */
-function projectRowsFromItems(items, { statusFieldId, syncedFieldId = null, includeClosed = false }) {
+function projectRowsFromItems(items, { statusFieldId, includeClosed = false }) {
   return items
     .map((item) => {
       const issue = item.content;
@@ -295,9 +275,6 @@ function projectRowsFromItems(items, { statusFieldId, syncedFieldId = null, incl
         status: getIssueProjectStatus(item, statusFieldId),
         issue,
       };
-      if (syncedFieldId) {
-        row.syncedStage = getProjectItemTextField(item, syncedFieldId);
-      }
       return row;
     })
     .filter(Boolean);
@@ -307,7 +284,6 @@ async function listProjectIssues({
   projectId,
   statusFieldId,
   projectsPat,
-  syncedFieldId = null,
   includeClosed = false,
 }) {
   const items = [];
@@ -355,7 +331,7 @@ async function listProjectIssues({
     after = page.pageInfo.endCursor;
   }
 
-  return projectRowsFromItems(items, { statusFieldId, syncedFieldId, includeClosed });
+  return projectRowsFromItems(items, { statusFieldId, includeClosed });
 }
 
 async function searchEligibleIssues(owner, repo, token) {
@@ -503,6 +479,8 @@ module.exports = {
   rest,
   fetchIssue,
   getStatusOptionId,
+  formatStatusOptionNotFoundError,
+  suggestStatusOptionNames,
   ensureProjectItem,
   updateProjectStatus,
   fetchProjectV2Item,
@@ -521,7 +499,4 @@ module.exports = {
   parseRepo,
   hasLabel,
   getIssueProjectStatus,
-  getProjectItemTextField,
-  updateProjectItemTextField,
-  assertProjectTextField,
 };

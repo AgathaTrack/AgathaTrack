@@ -2,7 +2,7 @@
 
 /**
  * Who writes an issue's `Stage`? (#2385) Once the v2 engine is `on`, it is the only writer for the
- * issues it owns, so the legacy merge / UAT / prod handlers and the Stage mirror must leave those
+ * issues it owns, so the legacy merge / UAT / prod handlers must leave those
  * issues alone: they move the board `Status` after the first merged PR, remove `busy` and reopen,
  * which contradicts the engine's rules (In Main only after the last PR and the Definition of Done).
  *

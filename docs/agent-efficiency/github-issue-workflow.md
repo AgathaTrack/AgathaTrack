@@ -12,7 +12,7 @@ This document describes how issues are filed, triaged, and moved through deliver
 
 It covers two layers:
 
-- **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org field `Stage` is the board column and the only state; an engine moves issues through eight stages. See [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The assignee-driven v1 dispatcher (`issue-pipeline-dispatcher.yml`, `ISSUE_PIPELINE`) is **removed**; history lives in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md) and [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md).
+- **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org issue field **`Stage`** is the engine’s authoritative state; an engine moves issues through eight stages. The Pawpet project **Status** column is separate (humans drag cards; release jobs may update **Status**). There is no automatic two-way sync between **Status** and **`Stage`** ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345) mirror cancelled). See [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The assignee-driven v1 dispatcher (`issue-pipeline-dispatcher.yml`, `ISSUE_PIPELINE`) is **removed**; history lives in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md) and [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md).
 - **Legacy label flow** (until `ISSUE_PIPELINE_V2=on`): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipeline_v2on).
 
 ## Issue forms
@@ -57,7 +57,8 @@ Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the 
 
 | Item | Kind | Values |
 |------|------|--------|
-| `Stage` | org issue field, **is the board column** | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
+| `Stage` | org issue field, **pipeline state** (not mirrored to/from Pawpet **Status**) | Backlog · To do · In analysis · Ready · In progress · In Main · In UAT · Done (case-insensitive; empty reads as Backlog) |
+| Pawpet **Status** | project single-select, **board column** | Same column names as `Stage` on the engineering board; updated by humans and release automation; engine and agents use org `Stage` instead when reading lifecycle state |
 | `Blocked` | org issue field | empty, or `question` · `no-convergence` · `launch-failed` · `decision` · `stalled` · `paused` · `sensitive` |
 | `Attempts` | number | engine retry counter (reassignments, failed launches); reset on every `Stage` change |
 | `busy` | label | an agent is actively working (delivery or a doorbell stage task) |
@@ -86,8 +87,8 @@ The issue-fields `PATCH` replaces an issue's whole value set, so every engine wr
 Before a live field write, `applyAction` and migration re-read the issue so values changed during doorbell or launch are not overwritten by the tick-start snapshot.
 
 **One writer per issue.** While `ISSUE_PIPELINE_V2=on` (within `ISSUE_PIPELINE_V2_LABEL` when it is set), the legacy
-merge, UAT and prod handlers and the Stage ↔ Status mirror skip the issues the engine owns. Left running they would
-move `Status` after the *first* merged PR, remove `busy` and reopen, and the mirror would copy that into `Stage`.
+merge, UAT and prod handlers skip the issues the engine owns. Left running they would
+move `Status` after the *first* merged PR, remove `busy` and reopen.
 `on` without a valid engine identity ends the tick red, because the legacy writers have already stepped aside.
 
 ### Transitions
@@ -479,7 +480,7 @@ Triage already blocks risky issues with `manual-only` before dispatch.
 
 When an agent PR merges to `main`:
 
-1. **[merge handler](/.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets the org `Stage` field to **In Main** (the board column follows through the stage mirror), and posts the expected UAT tag (`uat-YYMMDD-PR#`).
+1. **[merge handler](/.github/workflows/issue-agent-pr-merge.yml)** parses `Refs #<n>` / `Fixes #<n>` from the PR body, removes `busy`, **reopens** the issue, sets the org `Stage` field to **In Main**, and posts the expected UAT tag (`uat-YYMMDD-PR#`).
 2. **[promote-uat.yml](/.github/workflows/promote-uat.yml)** runs on the `main` push, resolves the merged PR, and creates the `uat-YYMMDD-PR#` tag on the merge commit.
 3. Tag push triggers **[deploy-uat.yml](/.github/workflows/deploy-uat.yml)** automatically.
 
@@ -521,38 +522,6 @@ GH_PROJECTS_PAT=ghp_... node .github/scripts/discover-project-ids.js --org Agath
 ```
 
 Pick the **Pawpet** project from the script output (not **ATSupport**). Legacy user-owned boards used `--user <login>`.
-
-### Stage mirror (org `Stage` field)
-
-Board columns stay on built-in Project **Status** (humans drag cards; the pipeline and release jobs keep writing Status). Agents without Projects scope read and write the org issue field **`Stage`** instead, kept in sync by [`stage-mirror.yml`](/.github/workflows/stage-mirror.yml) and `scripts/stage_mirror.js`.
-
-| Switch | Meaning |
-|--------|---------|
-| `STAGE_MIRROR` repo variable `off` | Default — workflow exits immediately |
-| `dry-run` | Logs intended writes only |
-| `on` | Applies writes |
-
-Reconcile uses project **Synced stage** (hidden text field) as the last-applied value. Triggers: **10-minute** schedule, `issues: edited` on this repo (field changes), and `workflow_dispatch` (`dry_run` input). **ATSupport** (`AgathaTrackPrivate`) is poll-only.
-
-**Pawpet** issues sync board **Status** ↔ org **`Stage`**. **ATSupport** issues with type **Support Bug** or **Support Question** sync board **Status** ↔ org **`Support Stage`** (not `Stage`). Other issues on the support board are skipped by the mirror.
-
-A cleared mirror field is restored from the board column (board wins). A card with no `Status` takes its column from a valid org field; with neither, or an invalid field value, the item is skipped, so one empty item never ends the run.
-
-**Write order and failures.** Each item writes its target first (the org `Stage` field, or the board column) and the synced value **last**. If the target write fails, the synced value is unchanged and the next pass retries the same change; a failure never reverts a human edit. Each item runs on its own: a failing item is logged as `[error] <repo>#<number>` (no title), the rest of the board is still mirrored, and the run then exits non-zero so the failure is visible in Actions.
-
-**Option check.** The mirror reads the real option list of each org field at start-up and fails loud on a mismatch with that board's columns. If the projects PAT is refused read access to org issue fields (HTTP 403) and `STAGE_ISSUE_FIELD_ID` / `SUPPORT_STAGE_ISSUE_FIELD_ID` is set, it falls back to that id and the static list in `stage_mirror_config.js` and logs `[warn] org <field> options not verified` on every run. Every other failure fails the run instead of using the static list: a **404** on `GET /orgs/<org>/issue-fields` (the PAT cannot see org issue fields at all) and auth, wrong-org or 5xx errors. The error names `GH_PROJECTS_PAT`, the endpoint and the missing permission (organisation issue fields: read); the owner grants that permission to the `GH_PROJECTS_PAT` identity (or points the workflow at a secret that already has it), then one manual dry run and one scheduled run should be green. If the org field does not exist at all, the run fails naming the field to create (with its options from `stage_mirror_config.js`) and the secret to set to its numeric id. Treat the warning as open until the option list is confirmed on the org field.
-
-**Agents:** on **AgathaTrack/AgathaTrack**, use the REST/GraphQL issue payload `issue_field_values` / set org **`Stage`** when you must move stage without Projects access. On **AgathaTrackPrivate** support issues, set **`Support Stage`**. Invalid values for that board are reverted on the next mirror pass (board wins). Spec and DoD: issue #2345.
-
-| Secret / variable | Purpose |
-|-------------------|---------|
-| `GH_PAWPET_SYNCED_STAGE_FIELD_ID` | Pawpet **Synced stage** text field |
-| `GH_ATSUPPORT_SYNCED_STAGE_FIELD_ID` | ATSupport **Synced stage** text field |
-| `STAGE_ISSUE_FIELD_ID` | Numeric org **Stage** field id (avoids `/orgs/.../issue-fields` on PAT) |
-| `SUPPORT_STAGE_ISSUE_FIELD_ID` | Numeric org **Support Stage** field id (ATSupport mirror) |
-| `STAGE_ATSUPPORT_REPO` | Default `AgathaTrack/AgathaTrackPrivate` |
-
-**Cutover:** after the org field **Support Stage** exists (scoped to Support Bug / Support Question), run `node scripts/support_stage_migrate.js` (dry-run) then `SUPPORT_STAGE_MIGRATE=apply node scripts/support_stage_migrate.js` to copy legacy **Stage** values on support issues, then remove support-only options from **Stage** in GitHub.
 
 ### Monitoring and debugging
 

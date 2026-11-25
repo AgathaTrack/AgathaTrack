@@ -5,8 +5,7 @@
  * Pipeline v2 migration (#2385 run C, P7a): maps each open board issue's legacy state to the v2
  * fields. Dry-run unless `--apply` is passed, and `--apply` writes only as the engine identity.
  *
- *   Stage    empty `Stage` takes the board column (`Status`), which the Stage <-> Status mirror already
- *            keeps in step; with neither it is written as `Backlog` so the issue shows on the board.
+ *   Stage    empty `Stage` takes the board column (`Status`); with neither it is written as `Backlog` so the issue shows on the board.
  *            When both are set and differ the issue is reported, never changed: that is a decision.
  *   Blocked  empty `Blocked` takes a reason from the legacy labels: `question` -> question,
  *            `needs-owner` -> decision (execute-plan control issues keep `needs-owner` as runtime state).
