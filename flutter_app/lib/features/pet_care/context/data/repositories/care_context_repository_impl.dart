@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+
 import '../../../calendar/domain/entities/care_calendar.dart';
 import '../../domain/entities/absence_care_plan.dart';
 import '../../domain/entities/away_plan_readiness.dart';
@@ -19,11 +21,13 @@ class CareContextRepositoryImpl implements CareContextRepository {
     required String petId,
     required String startsOn,
     required String endsOn,
+    http.Client? httpClient,
   }) {
     return _remote.fetchCareCalendar(
       petId: petId,
       startsOn: startsOn,
       endsOn: endsOn,
+      client: httpClient,
     );
   }
 

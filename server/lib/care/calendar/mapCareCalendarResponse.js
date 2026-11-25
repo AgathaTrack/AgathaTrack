@@ -56,7 +56,9 @@ function wireCalendarItem(rawItem, entry, asOf) {
       };
   const displayStatus = rawItem.source === 'materialised'
     ? occurrenceStatus({ occurrence, entry, asOf })
-    : 'coming_up';
+    : rawItem.scheduled_date < asOf.todayIso
+      ? OCCURRENCE_STATUS_OVERDUE
+      : 'coming_up';
 
   return {
     health_entry_id: rawItem.health_entry_id,
