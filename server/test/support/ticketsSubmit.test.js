@@ -34,7 +34,7 @@ function assertResponse(status, body) {
   assertMatchesSchema(spec, schema, body);
 }
 
-function createSupportMockPool() {
+function createSupportMockPool(writes) {
   let ticketCount = 0;
   return createTransactionalMockPool(async (sql, params) => {
     const text = String(sql);
@@ -50,9 +50,11 @@ function createSupportMockPool() {
     }
     if (text.startsWith('INSERT INTO support_tickets')) {
       ticketCount += 1;
+      writes.tickets += 1;
       return { rowCount: 1 };
     }
     if (text.startsWith('INSERT INTO support_outbox')) {
+      writes.outbox += 1;
       return { rowCount: 2 };
     }
     if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') {
@@ -64,9 +66,11 @@ function createSupportMockPool() {
 
 describe('POST /api/support/tickets', () => {
   let app;
+  let writes;
 
   beforeAll(() => {
-    app = createApp(createSupportMockPool());
+    writes = { tickets: 0, outbox: 0 };
+    app = createApp(createSupportMockPool(writes));
   });
 
   it('returns 401 for an invalid bearer token', async () => {
@@ -96,5 +100,16 @@ describe('POST /api/support/tickets', () => {
     expect(res.statusCode).toBe(201);
     expect(res.body.reference).toMatch(/^AT-/);
     assertResponse(201, res.body);
+  });
+
+  it('rejects a signed-out email that is not an email address without writing a ticket or outbox row', async () => {
+    const before = { ...writes };
+    const res = await request(app)
+      .post('/api/support/tickets')
+      .send(validPayload({ email: 'not-an-email' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('Validation failed');
+    expect(res.body.details).toContain('email must be a valid email address');
+    expect(writes).toEqual(before);
   });
 });
