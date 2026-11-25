@@ -33,7 +33,7 @@ Historical profile refactor and 2026-09-13 delivery plan text: [archive/care-ite
 | CARE-ITEM-R-006 | Single **Done** rule on every surface; no `next_choice` on one tap (D-CIE-030) | Live |
 | CARE-ITEM-R-007 | Care date screen per occurrence; open actions Mark as done / Skip / Reschedule (D-CIE-029, D-OCC-001 … D-OCC-017) | Live |
 | CARE-ITEM-R-008 | Stack = two or more **started** open Fixed-schedule slots (D-CIE-034) | Live |
-| CARE-ITEM-R-009 | Needs attention: attention group (started rows) then Coming up (max 3 + show more); bulk Mark/Skip only when ≥2 started rows, labels include count (FR-1 … FR-17) | In delivery |
+| CARE-ITEM-R-009 | Needs attention: attention group (started rows) then Coming up (max 3 + show more); **Select** mode for subset bulk, or Mark/Skip all when ≥2 started rows and not selecting; sticky bar and count labels at ≥2 **selected** started rows (FR-1 … FR-17) | In delivery |
 | CARE-ITEM-R-010 | Row Mark done / Skip use `check_circle` / `skip_next`; per-row semantics name date/time (FR-7, FR-18 … FR-22) | In delivery |
 | CARE-ITEM-R-011 | Reads and commands agree on open occurrences; PostgreSQL `DATE` parsed calendar-safe; catch-up visible on read or heal without user trap (remediation § below) | In delivery |
 | CARE-ITEM-R-012 | Same-day multi-dose: dose selector when multiple pending on one calendar day; do not treat all pending as missed-dose review | Live |
@@ -302,7 +302,7 @@ The area at the top holds what needs doing now. For most items that's one occurr
   - The care item menu (top right) has Edit, Pause or Resume (both through Postpone until), Archive or Restore, and Delete.
 - **Verbs:** "Mark as done" replaces "Mark Completed". "Change date" stays, because it is frozen Away Care Planning copy.
 
-**Bulk scope (In delivery, CARE-ITEM-R-009 … R-010):** Split **started** occurrences (Overdue, Not recorded open, Due once time passed) from **Coming up** (including later today before time). Started rows list latest scheduled instant first; Coming up lists earliest first (D-CIE-038). Bulk **Mark {count} as done** / **Skip {count}** sit directly under the last started row when count ≥2; IDs sent match visible started rows only. Each started row has round Mark done (`check_circle`) and Skip (`skip_next`) with semantics naming the occurrence date/time. Coming up rows have no inline actions (cap 3 + show more). **Plan another date** lives in the care item ⋯ menu (D-BULK-002).
+**Bulk scope (In delivery, CARE-ITEM-R-009 … R-010):** Split **started** occurrences (Overdue, Not recorded open, Due once time passed) from **Coming up** (including later today before time). Started rows list latest scheduled instant first; Coming up lists earliest first (D-CIE-038). When not in **Select** mode, bulk **Mark {count} as done** / **Skip {count}** sit directly under the last started row when count ≥2 and apply to every visible started row. **Select** turns on row checkboxes on started rows only; with **one** row checked, row Mark done / Skip still apply to that row only (D-BULK-002). With **two or more** started rows checked, a sticky bar offers **Mark {count} as done** / **Skip {count}** for the selection only (subset `resolve-stack`). Coming up rows are never selectable and have no inline actions (cap 3 + show more). **Plan another date** lives in the care item ⋯ menu.
 
 ### Schedule
 

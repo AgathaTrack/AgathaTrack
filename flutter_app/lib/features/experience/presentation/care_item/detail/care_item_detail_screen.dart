@@ -12,7 +12,7 @@ import 'package:pet_profile_app/features/health_tracking/health_tracking.dart';
 import 'package:pet_profile_app/features/pet_care/pet_care.dart';
 import 'package:pet_profile_app/features/care_item/care_item.dart';
 import '../care_item_history.dart';
-import 'care_item_detail_body.dart';
+import 'care_item_detail_body_host.dart';
 import 'care_item_menu.dart';
 
 /// Care Item detail at `/pet/:petId/events/:entryId`.
@@ -234,7 +234,7 @@ class CareItemDetailScreen extends ConsumerWidget {
                   onPlanAnotherDate: onPlanAnotherDate,
                 ),
               ],
-              child: CareItemDetailBody(
+              child: CareItemDetailBodyHost(
                 petId: petId,
                 entry: entry,
                 pet: pet,

@@ -9667,6 +9667,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get careSkipAll => 'Tout ignorer';
 
   @override
+  String get careItemBulkSelectionMode => 'Sélectionner';
+
+  @override
   String careBulkMarkDoneCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

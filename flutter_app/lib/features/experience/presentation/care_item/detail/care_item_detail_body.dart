@@ -34,6 +34,7 @@ class CareItemDetailBody extends ConsumerWidget {
     required this.onSeeHistory,
     this.careClosedReason,
     this.onCloseCare,
+    this.reserveBottomInset = false,
   });
 
   final String petId;
@@ -46,6 +47,7 @@ class CareItemDetailBody extends ConsumerWidget {
   final VoidCallback onSeeHistory;
   final String? careClosedReason;
   final VoidCallback? onCloseCare;
+  final bool reserveBottomInset;
 
   static const _sectionGap = SizedBox(height: 16);
 
@@ -193,7 +195,7 @@ class CareItemDetailBody extends ConsumerWidget {
                   if (closeCareButton != null) closeCareButton,
                 ]);
 
-          final bottomInset = MediaQuery.paddingOf(context).bottom;
+          final bottomInset = reserveBottomInset ? 0.0 : MediaQuery.paddingOf(context).bottom;
           return SingleChildScrollView(
             key: const Key('care_item_detail_body'),
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),

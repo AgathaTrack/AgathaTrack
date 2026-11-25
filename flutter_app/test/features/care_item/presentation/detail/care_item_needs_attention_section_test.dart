@@ -10,6 +10,8 @@ import 'package:pet_profile_app/core/widgets/app_undo_snackbar.dart';
 import 'package:pet_profile_app/features/care_item/care_item.dart';
 import 'package:pet_profile_app/features/health_tracking/domain/entities/health_entry.dart';
 import 'package:pet_profile_app/features/health_tracking/presentation/providers/health_providers.dart';
+import 'package:pet_profile_app/features/experience/presentation/care_item/detail/care_item_bulk_selection_scope.dart';
+import 'package:pet_profile_app/features/experience/presentation/care_item/detail/care_item_bulk_selection_sticky_bar.dart';
 import 'package:pet_profile_app/features/experience/presentation/care_item/detail/care_item_needs_attention_section.dart';
 import 'package:pet_profile_app/l10n/app_localizations.dart';
 
@@ -301,6 +303,111 @@ void main() {
       expect(find.byKey(const Key('care_item_bulk_mark_done')), findsNothing);
     },
   );
+
+  testWidgets('selection mode sends only checked started ids to resolve-stack', (
+    tester,
+  ) async {
+    final today = careToday();
+    final entry = scheduledEntry(
+      id: 'pill',
+      name: 'Pill',
+      fixed: true,
+      frequency: HealthFrequency.daily,
+      asOfTime: '14:00',
+      open: [
+        OpenOccurrence(
+          id: 'slot-a',
+          date: today.subtract(const Duration(days: 2)),
+          status: CareOccurrenceStatus.notRecorded,
+          origin: CareOccurrenceOrigin.schedule,
+        ),
+        OpenOccurrence(
+          id: 'slot-b',
+          date: today.subtract(const Duration(days: 1)),
+          status: CareOccurrenceStatus.overdue,
+          origin: CareOccurrenceOrigin.schedule,
+        ),
+        OpenOccurrence(
+          id: 'slot-c',
+          date: today,
+          time: '08:00',
+          status: CareOccurrenceStatus.due,
+          origin: CareOccurrenceOrigin.schedule,
+        ),
+      ],
+    );
+    final requests = <http.Request>[];
+    final client = MockClient((r) async {
+      requests.add(r);
+      return http.Response(
+        json.encode({
+          'undo_token': 'u',
+          'given': ['slot-b', 'slot-c'],
+          'not_given': [],
+          'ignored': [],
+          'entry': {'id': 'pill', 'open_occurrences': []},
+        }),
+        200,
+      );
+    });
+    final selection = CareItemBulkSelection();
+    addTearDown(selection.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          careItemHttpClientProvider.overrideWithValue(client),
+          healthEntriesNotifierProvider.overrideWith(_Notifier.new),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: CareItemBulkSelectionScope(
+                      selection: selection,
+                      child: CareItemNeedsAttentionSection(
+                        entry: entry,
+                        schedule: entry.schedule!,
+                        muted: false,
+                      ),
+                    ),
+                  ),
+                ),
+                CareItemBulkSelectionStickyBar(selection: selection),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('care_item_bulk_selection_toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('Mark 3 as done'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('care_item_select_slot-b')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('care_item_bulk_selection_sticky_bar')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const Key('care_item_select_slot-c')));
+    await tester.pumpAndSettle();
+    expect(find.text('Mark 2 as done'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('care_item_bulk_mark_done')));
+    await tester.pumpAndSettle();
+    expect(requests, hasLength(1));
+    final body = json.decode(requests.single.body) as Map<String, dynamic>;
+    expect(body['given'], ['slot-b', 'slot-c']);
+    expect(find.byKey(const Key('care_item_select_slot-a')), findsNothing);
+  });
 
   testWidgets('single started row has no bulk bar', (tester) async {
     final today = careToday();
