@@ -62,9 +62,10 @@
 
 **Tables CARE created that must appear in export (A2) and erasure verification (D1):**
 
-| Table | Scope in export |
-|-------|-----------------|
-| `health_occurrences` | Rows for user's pets via `health_entries.user_id` |
+| Table (physical) | Scope in export |
+|-----------------|-----------------|
+| `care_occurrences` | Rows for user's pets via `care_items.user_id` (GDPR export JSON key `health_occurrences`) |
+| `care_items` | Care item definitions for user's pets (export key `health_entries`) |
 | `care_schedule_events` | Ledger rows for user's care entries |
 | `health_entry_absence_resolutions` | Absence resolution rows for user's entries/absences |
 

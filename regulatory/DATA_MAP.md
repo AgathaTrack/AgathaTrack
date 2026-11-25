@@ -55,9 +55,11 @@
 | `created_at` | TIMESTAMPTZ | Record creation timestamp | No |
 | `updated_at` | TIMESTAMPTZ | Last update timestamp | No |
 
-### 1.3 Care schedule items (physical `care_items` table; API/GDPR keys `health_entries`)
+### 1.3 Care schedule (physical `care_items` / `care_occurrences`; API/GDPR keys `health_*`)
 
-Scheduled care items (medications, preventive care, vet visits, procedures) per pet. PostgreSQL stores rows in **`care_items`** and **`care_occurrences`** (migrations 107–108, [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)). HTTP paths, DTO field names, and GDPR export JSON keys remain **`health_*`**.
+Scheduled care items (medications, preventive care, vet visits, procedures) per pet. PostgreSQL stores rows in **`care_items`** and **`care_occurrences`** (migrations 107–108, [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)). HTTP paths, DTO field names, and GDPR export JSON keys remain **`health_entries`** / **`health_occurrences`**.
+
+#### 1.3.1 Care items (`care_items`)
 
 | Field | Type | Purpose |
 |-------|------|---------|
@@ -69,6 +71,25 @@ Scheduled care items (medications, preventive care, vet visits, procedures) per 
 | `repeat_end_date` | DATE | End date for recurring entries |
 | `remind_days_before` | INTEGER | Reminder lead time |
 | `health_issue_id` | INTEGER | Linked health issue |
+
+#### 1.3.2 Care occurrences (`care_occurrences`)
+
+| Field | Type | Purpose | Sensitive |
+|-------|------|---------|-----------|
+| `id` | UUID | Occurrence identifier | No |
+| `health_entry_id` | UUID | Parent care item (wire name unchanged) | No |
+| `scheduled_date` | DATE | Scheduled calendar day | No |
+| `scheduled_time` | TIME | Optional time-of-day | No |
+| `status` | VARCHAR | pending / completed / skipped / not_recorded | No |
+| `completed_on` | DATE | Calendar day marked complete | No |
+| `notes` | TEXT | User notes on completion | Yes |
+| `performed_by_user_id` | UUID | User who performed care | No |
+| `performed_by_snapshot` | JSONB | Name snapshot at completion | Yes |
+| `marked_by_user_id` | UUID | User who recorded completion | No |
+| `marked_by_snapshot` | JSONB | Name snapshot at mark time | Yes |
+| `provider_contact_id` | UUID | Linked people contact | No |
+| `provider_typed_name` | TEXT | Free-text provider name | Yes |
+| `provider_contact_snapshot` | JSONB | Provider snapshot | Yes |
 
 ### 1.4 Health Issues (health_issues table)
 
