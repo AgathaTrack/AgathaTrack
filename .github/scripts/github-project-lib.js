@@ -72,6 +72,16 @@ async function fetchIssue(owner, repo, issueNumber, token) {
   return issue;
 }
 
+function formatMissingProjectStatusError(statusName, statusFieldId, optionNames) {
+  const available = (optionNames || []).join(', ') || '(none)';
+  return (
+    `Pawpet project Status option "${statusName}" not found (field ${statusFieldId}). ` +
+    `Available: ${available}. Add the column on the Pawpet board (see scripts/stage_mirror_config.js PAWPET_COLUMNS) ` +
+    `or keep STAGE_MIRROR off if automation should only write org Stage ` +
+    `(docs/agent-efficiency/github-issue-workflow.md §Stage mirror).`
+  );
+}
+
 async function getStatusOptionId(projectsPat, statusFieldId, statusName) {
   const data = await graphql(
     projectsPat,
@@ -91,9 +101,11 @@ async function getStatusOptionId(projectsPat, statusFieldId, statusName) {
   );
   if (!match) {
     throw new Error(
-      `Status option "${statusName}" not found on field ${statusFieldId}. Available: ${options
-        .map((o) => o.name)
-        .join(', ')}`,
+      formatMissingProjectStatusError(
+        statusName,
+        statusFieldId,
+        options.map((o) => o.name),
+      ),
     );
   }
   return match.id;
@@ -502,6 +514,7 @@ module.exports = {
   graphql,
   rest,
   fetchIssue,
+  formatMissingProjectStatusError,
   getStatusOptionId,
   ensureProjectItem,
   updateProjectStatus,

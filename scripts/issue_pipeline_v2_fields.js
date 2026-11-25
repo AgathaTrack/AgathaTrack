@@ -102,7 +102,14 @@ function buildFieldWrites(fields, writes) {
     if (field.options.length > 0) {
       const option = canonicalOption(field, value);
       if (!option) {
-        throw new Error(`"${value}" is not an option of ${field.name}`);
+        const available = field.options.join(', ');
+        const stageHint =
+          field.name === 'Stage'
+            ? ' Expected spellings for pipeline handlers are in scripts/stage_mirror_config.js (PAWPET_STAGE_ORG_FIELD_OPTIONS).'
+            : '';
+        throw new Error(
+          `"${value}" is not an option of ${field.name}. Available: ${available}.${stageHint}`,
+        );
       }
       return { field_id: field.id, value: option };
     }

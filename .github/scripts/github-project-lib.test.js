@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { projectRowsFromItems } = require('./github-project-lib');
+const { formatMissingProjectStatusError, projectRowsFromItems } = require('./github-project-lib');
 
 const item = (id, state, status, extra = {}) => ({
   id,
@@ -33,6 +33,14 @@ test('includeClosed also returns closed issues, with their board Status, and sti
     [3, 'CLOSED', 'Done'],
     [5, 'OPEN', null],
   ]);
+});
+
+test('missing project Status errors name Pawpet columns, STAGE_MIRROR and org Stage path', () => {
+  const message = formatMissingProjectStatusError('In Main', 'PVT_status', ['Todo', 'Done']);
+  assert.match(message, /In Main/);
+  assert.match(message, /PAWPET_COLUMNS/);
+  assert.match(message, /STAGE_MIRROR/);
+  assert.match(message, /Todo, Done/);
 });
 
 test('the synced stage text field is carried when asked for', () => {

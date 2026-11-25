@@ -452,7 +452,10 @@ test('fields: writes use PATCH on the issue with canonical option names; typos f
   assert.deepEqual(calls, [
     ['PATCH', '/repos/o/r/issues/7', 'pat', { issue_field_values: [{ field_id: 1, value: 'In analysis' }, { field_id: 3, value: 0 }] }],
   ]);
-  assert.throws(() => buildFieldWrites(fields, { stage: 'Triage' }), /not an option of Stage/);
+  assert.throws(
+    () => buildFieldWrites(fields, { stage: 'Triage' }),
+    /not an option of Stage.*Available:.*PAWPET_STAGE_ORG_FIELD_OPTIONS/,
+  );
   assert.throws(() => buildFieldWrites(fields, { nope: 1 }), /Unknown engine field/);
 });
 

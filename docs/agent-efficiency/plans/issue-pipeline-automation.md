@@ -243,7 +243,7 @@ One **dispatcher** (`issue-pipeline-dispatcher.yml` + `scripts/issue_pipeline_di
 - Lanes: triage (deterministic), intake, review, delivery, implement, monitor, release (no agent).
 - Kill switch repo variable `ISSUE_PIPELINE`: `off` (default) / `dry-run` / `on`.
 - Consolidate `triage-human-reviewed.yml`, `agent-dispatch.yml`, `agent-monitor.yml` when lanes go live.
-- **Project status writes:** today `issue-agent-handlers.js` and UAT notify also call `updateProjectStatus` with `GH_PROJECTS_PAT`. Migration must route **all** automated Status updates through the dispatcher (or one shared library invoked only from dispatcher + release handlers) so the board has a single writer path per transition.
+- **Stage / Status writes:** merge, UAT and prod notify run `issue-agent-handlers.js`, which sets org **`Stage`** (not project **Status**). Pawpet project **Status** is written by `scripts/stage_mirror.js` when `STAGE_MIRROR=on` (default `off`). A retired v1 dispatcher would consolidate automated transitions; pipeline v2 owns stage moves when `ISSUE_PIPELINE_V2=on` ([#2291](https://github.com/AgathaTrack/AgathaTrack/issues/2291)).
 
 Full contract: [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md).
 
