@@ -55,7 +55,9 @@
 | `created_at` | TIMESTAMPTZ | Record creation timestamp | No |
 | `updated_at` | TIMESTAMPTZ | Last update timestamp | No |
 
-### 1.3 Health Entries (via health_entries table)
+### 1.3 Care schedule items (physical `care_items` table; API/GDPR keys `health_entries`)
+
+Scheduled care items (medications, preventive care, vet visits, procedures) per pet. PostgreSQL stores rows in **`care_items`** and **`care_occurrences`** (migrations 107–108, [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)). HTTP paths, DTO field names, and GDPR export JSON keys remain **`health_*`**.
 
 | Field | Type | Purpose |
 |-------|------|---------|

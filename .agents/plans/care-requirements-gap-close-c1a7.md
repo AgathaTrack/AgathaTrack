@@ -238,7 +238,7 @@
 | DEBT-D-CAL | Calendar (D-CIE-033) | [#1539](https://github.com/KanopeeKa/AgathaCheck/issues/1539) |
 | DEBT-D-NOTIF | Notification deep link | [#1540](https://github.com/KanopeeKa/AgathaCheck/issues/1540) |
 | DEBT-D-FAM | Family completion requirements | [#1541](https://github.com/KanopeeKa/AgathaCheck/issues/1541) |
-| DEBT-D-RENAME | Table renames — **closed Option B** [#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542); deferred Option A [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405) | — |
+| DEBT-D-RENAME | Option A delivered [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405) (PRs [#2611](https://github.com/AgathaTrack/AgathaTrack/pull/2611), [#2630](https://github.com/AgathaTrack/AgathaTrack/pull/2630)); Option B decision [#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542) superseded for persistence | — |
 | DEBT-D-FORM | Close when B1–B4 done | [#1543](https://github.com/KanopeeKa/AgathaCheck/issues/1543) |
 | DEBT-PRIV-DROP | Track until D1 merged | [#1544](https://github.com/KanopeeKa/AgathaCheck/issues/1544) |
 | DEBT-ARCH-CYCLE | Until C1 resolved | [#1545](https://github.com/KanopeeKa/AgathaCheck/issues/1545) |
