@@ -123,6 +123,9 @@ export async function createPet(pool, userId, body, req) {
     return { error: 'Not a member of this organization', status: 403 };
   }
   const homeTimezone = resolveDefaultHomeTimezoneForCreate(req);
+  // R-01a (#1653): clients stop sending vetId on create. A replayed create for an
+  // existing pet must keep its stored vet link when vetId is omitted, as update does.
+  const vetProvided = bodyHas(body, 'vetId') || bodyHas(body, 'vet_id');
   const syncedPet = await withTransaction(pool, async (db) => {
     const result = await db.query(
       `INSERT INTO pets (id, user_id, name, species, breed, age, date_of_birth, weight, gender,
@@ -141,7 +144,9 @@ export async function createPet(pool, userId, body, req) {
         neuter_status_source = EXCLUDED.neuter_status_source,
         identification_status_updated_at = EXCLUDED.identification_status_updated_at,
         neuter_status_updated_at = EXCLUDED.neuter_status_updated_at,
-        photo_path = EXCLUDED.photo_path, vet_id = EXCLUDED.vet_id, color_index = EXCLUDED.color_index,
+        photo_path = EXCLUDED.photo_path,
+        vet_id = CASE WHEN $28 THEN EXCLUDED.vet_id ELSE pets.vet_id END,
+        color_index = EXCLUDED.color_index,
         passed_away = EXCLUDED.passed_away, organization_id = EXCLUDED.organization_id,
         home_timezone = EXCLUDED.home_timezone, updated_at = NOW()
        WHERE pets.user_id = $2 RETURNING *`,
@@ -151,7 +156,7 @@ export async function createPet(pool, userId, body, req) {
         identification_status_source, neuter_status_source,
         identification_status_updated_at, neuter_status_updated_at,
         photoPath, vetId || null, colorValue != null ? colorValue : null,
-        passedAway, organization_id || null, homeTimezone],
+        passedAway, organization_id || null, homeTimezone, vetProvided],
     );
     const pet = result.rows[0];
     if (!pet) {
