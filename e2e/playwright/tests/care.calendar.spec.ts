@@ -64,7 +64,7 @@ test.describe('Care calendar @care', () => {
 
   test('Open Care date from calendar', async ({ page, testUser }) => {
     const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
-    const today = new Date().toISOString().slice(0, 10);
+    const today = '2026-06-15';
     await withCareClock(`${today}T10:00`, page);
     try {
       const pet = await createPetApi(baseURL, testUser.accessToken, 'Cal Pet');
@@ -103,9 +103,14 @@ test.describe('Care calendar @care', () => {
       await dayCell.click();
       await refreshFlutterAccessibility(page);
       try {
-        await waitForFlutterRoutePattern(page, /\/occurrences\//, 8_000);
+        await waitForFlutterRoutePattern(page, /\/occurrences\//, 5_000);
       } catch {
-        await page.getByText('Calendar tap care').click();
+        await expect(
+          page.getByText(new RegExp(`Care on ${dayIso}|Soins le ${dayIso}`)),
+        ).toBeVisible({ timeout: 15_000 });
+        await page
+          .getByRole('button', { name: /Calendar tap care/i })
+          .click();
         await waitForFlutterRoutePattern(page, /\/occurrences\//, 60_000);
       }
       const occurrence = new OccurrencePage(page);
