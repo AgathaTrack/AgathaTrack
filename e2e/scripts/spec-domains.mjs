@@ -43,6 +43,7 @@ export const AREAS = {
     specs: [
       'health.tracking.spec.ts',
       'care.agenda.spec.ts',
+      'care.calendar.spec.ts',
       'care.date.spec.ts',
       'care.schedules.spec.ts',
       'care.item.booster.spec.ts',
@@ -63,6 +64,7 @@ export const AREAS = {
       'absence.per.pet.spec.ts',
       'care.item.absence.spec.ts',
       'care.agenda.spec.ts',
+      'care.calendar.spec.ts',
       'care.date.spec.ts',
       'care.schedules.spec.ts',
       'guardian.dashboard.spec.ts',

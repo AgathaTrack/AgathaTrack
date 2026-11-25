@@ -1,3 +1,6 @@
+import 'package:http/http.dart' as http;
+
+import '../../../calendar/domain/entities/care_calendar.dart';
 import '../../domain/entities/absence_care_plan.dart';
 import '../../domain/entities/away_plan_readiness.dart';
 import '../../domain/entities/care_period_coverage.dart';
@@ -12,6 +15,21 @@ class CareContextRepositoryImpl implements CareContextRepository {
   CareContextRepositoryImpl(this._remote);
 
   final CareContextRemoteDataSource _remote;
+
+  @override
+  Future<CareCalendarResult> getCareCalendar({
+    required String petId,
+    required String startsOn,
+    required String endsOn,
+    http.Client? httpClient,
+  }) {
+    return _remote.fetchCareCalendar(
+      petId: petId,
+      startsOn: startsOn,
+      endsOn: endsOn,
+      client: httpClient,
+    );
+  }
 
   @override
   Future<CarePeriodCoverageResult> getCarePeriodCoverage({

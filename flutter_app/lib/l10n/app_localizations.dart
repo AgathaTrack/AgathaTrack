@@ -2438,6 +2438,60 @@ abstract class AppLocalizations {
   /// **'All care'**
   String get allCare;
 
+  /// No description provided for @careCalendarAgendaTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Agenda'**
+  String get careCalendarAgendaTab;
+
+  /// No description provided for @careCalendarCalendarTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar'**
+  String get careCalendarCalendarTab;
+
+  /// No description provided for @careCalendarSemanticsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Care calendar'**
+  String get careCalendarSemanticsLabel;
+
+  /// No description provided for @careCalendarEmptyMonthTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No care on this month yet'**
+  String get careCalendarEmptyMonthTitle;
+
+  /// No description provided for @careCalendarEmptyMonthBody.
+  ///
+  /// In en, this message translates to:
+  /// **'After-it\'s-done care may show few future dates until you mark care done. Use the agenda for what needs attention today.'**
+  String get careCalendarEmptyMonthBody;
+
+  /// No description provided for @careCalendarBeforeMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Before this month'**
+  String get careCalendarBeforeMonth;
+
+  /// No description provided for @careCalendarSparseMonthNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Some care dates depend on when you last marked care done.'**
+  String get careCalendarSparseMonthNotice;
+
+  /// No description provided for @careCalendarCouldntLoadPet.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load {petName}'**
+  String careCalendarCouldntLoadPet(String petName);
+
+  /// No description provided for @careCalendarDaySheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Care on {date}'**
+  String careCalendarDaySheetTitle(String date);
+
   /// No description provided for @careForPet.
   ///
   /// In en, this message translates to:

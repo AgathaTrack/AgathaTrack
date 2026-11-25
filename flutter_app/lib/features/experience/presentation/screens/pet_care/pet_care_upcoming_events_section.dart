@@ -50,7 +50,10 @@ class PetCareUpcomingEventsSection extends ConsumerWidget {
           const SizedBox(height: 10),
           KeyedSubtree(
             key: const Key('pet_care_dashboard_care_section'),
-            child: _body(context, ref, l, entriesAsync, entries),
+            child: CareCalendarHubSection(
+              pets: pets,
+              agenda: _body(context, ref, l, entriesAsync, entries),
+            ),
           ),
         ],
       ),

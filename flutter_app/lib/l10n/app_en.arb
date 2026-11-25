@@ -605,6 +605,25 @@
   "petsEyebrow": "PETS",
   "petsNavLabel": "Pets",
   "allCare": "All care",
+  "careCalendarAgendaTab": "Agenda",
+  "careCalendarCalendarTab": "Calendar",
+  "careCalendarSemanticsLabel": "Care calendar",
+  "careCalendarEmptyMonthTitle": "No care on this month yet",
+  "careCalendarEmptyMonthBody": "After-it's-done care may show few future dates until you mark care done. Use the agenda for what needs attention today.",
+  "careCalendarBeforeMonth": "Before this month",
+  "careCalendarSparseMonthNotice": "Some care dates depend on when you last marked care done.",
+  "careCalendarCouldntLoadPet": "Couldn't load {petName}",
+  "@careCalendarCouldntLoadPet": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "careCalendarDaySheetTitle": "Care on {date}",
+  "@careCalendarDaySheetTitle": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
   "careForPet": "{petName}'s care",
   "@careForPet": {
     "placeholders": {

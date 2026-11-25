@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:pet_profile_app/features/pet_care/context/data/datasources/care_
 import 'package:pet_profile_app/features/pet_care/context/domain/entities/carer_candidate.dart';
 import 'package:pet_profile_app/features/pet_care/context/domain/entities/absence_care_plan.dart';
 import 'package:pet_profile_app/features/pet_care/context/domain/entities/away_plan_readiness.dart';
+import 'package:pet_profile_app/features/pet_care/calendar/domain/entities/care_calendar.dart';
 import 'package:pet_profile_app/features/pet_care/context/domain/entities/care_period_coverage.dart';
 import 'package:pet_profile_app/features/people/application/people_providers.dart';
 import 'package:pet_profile_app/features/people/domain/entities/contact_summary.dart';
@@ -87,6 +89,16 @@ class _FakeCareContextRepository implements CareContextRepository {
           petIds: ['pet-1'],
           petCarers: [],
         );
+  }
+
+  @override
+  Future<CareCalendarResult> getCareCalendar({
+    required String petId,
+    required String startsOn,
+    required String endsOn,
+    http.Client? httpClient,
+  }) {
+    throw UnimplementedError();
   }
 
   @override

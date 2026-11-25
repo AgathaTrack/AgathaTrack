@@ -530,6 +530,25 @@
   "petsEyebrow": "ANIMAUX",
   "petsNavLabel": "Animaux",
   "allCare": "Tous les soins",
+  "careCalendarAgendaTab": "Ordre du jour",
+  "careCalendarCalendarTab": "Calendrier",
+  "careCalendarSemanticsLabel": "Calendrier de soins",
+  "careCalendarEmptyMonthTitle": "Pas encore de soins ce mois-ci",
+  "careCalendarEmptyMonthBody": "Les soins « après réalisation » peuvent afficher peu de dates futures tant que vous n'avez pas marqué un soin comme fait. L'ordre du jour reste la référence pour aujourd'hui.",
+  "careCalendarBeforeMonth": "Avant ce mois-ci",
+  "careCalendarSparseMonthNotice": "Certaines dates dépendent du dernier soin marqué comme fait.",
+  "careCalendarCouldntLoadPet": "Chargement impossible pour {petName}",
+  "@careCalendarCouldntLoadPet": {
+    "placeholders": {
+      "petName": { "type": "String" }
+    }
+  },
+  "@careCalendarDaySheetTitle": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "careCalendarDaySheetTitle": "Soins le {date}",
   "careForPet": "Soins pour {petName}",
   "@careForPet": {
     "placeholders": {

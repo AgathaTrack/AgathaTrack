@@ -1412,6 +1412,39 @@ class AppLocalizationsFr extends AppLocalizations {
   String get allCare => 'Tous les soins';
 
   @override
+  String get careCalendarAgendaTab => 'Ordre du jour';
+
+  @override
+  String get careCalendarCalendarTab => 'Calendrier';
+
+  @override
+  String get careCalendarSemanticsLabel => 'Calendrier de soins';
+
+  @override
+  String get careCalendarEmptyMonthTitle => 'Pas encore de soins ce mois-ci';
+
+  @override
+  String get careCalendarEmptyMonthBody =>
+      'Les soins « après réalisation » peuvent afficher peu de dates futures tant que vous n\'avez pas marqué un soin comme fait. L\'ordre du jour reste la référence pour aujourd\'hui.';
+
+  @override
+  String get careCalendarBeforeMonth => 'Avant ce mois-ci';
+
+  @override
+  String get careCalendarSparseMonthNotice =>
+      'Certaines dates dépendent du dernier soin marqué comme fait.';
+
+  @override
+  String careCalendarCouldntLoadPet(String petName) {
+    return 'Chargement impossible pour $petName';
+  }
+
+  @override
+  String careCalendarDaySheetTitle(String date) {
+    return 'Soins le $date';
+  }
+
+  @override
   String careForPet(String petName) {
     return 'Soins pour $petName';
   }
