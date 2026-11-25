@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pet_profile_app/features/pet_profile/pet_profile.dart';
 import 'package:pet_profile_app/l10n/app_localizations.dart';
-import '../care_calendar_multi_pet_loader.dart' show
-    careCalendarMultiPetProvider,
-    careCalendarPetScopeKey;
+import '../care_calendar_multi_pet_loader.dart'
+    show careCalendarMultiPetProvider, careCalendarPetScopeKey;
 import 'care_calendar_surface.dart';
 
 enum CareHubViewMode { agenda, calendar }
@@ -28,7 +27,8 @@ class CareCalendarHubSection extends ConsumerStatefulWidget {
       _CareCalendarHubSectionState();
 }
 
-class _CareCalendarHubSectionState extends ConsumerState<CareCalendarHubSection> {
+class _CareCalendarHubSectionState
+    extends ConsumerState<CareCalendarHubSection> {
   late CareHubViewMode _mode = widget.initialMode;
 
   @override

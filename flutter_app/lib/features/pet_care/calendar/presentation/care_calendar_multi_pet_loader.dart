@@ -45,7 +45,8 @@ class CareCalendarMultiPetState {
   }
 }
 
-class CareCalendarMultiPetNotifier extends StateNotifier<CareCalendarMultiPetState> {
+class CareCalendarMultiPetNotifier
+    extends StateNotifier<CareCalendarMultiPetState> {
   CareCalendarMultiPetNotifier(this._ref, this._petLabels)
     : super(_initialState(_petLabels)) {
     unawaited(_reload());
@@ -55,21 +56,16 @@ class CareCalendarMultiPetNotifier extends StateNotifier<CareCalendarMultiPetSta
   final Map<String, String> _petLabels;
   int _loadGeneration = 0;
 
-  static CareCalendarMultiPetState _initialState(Map<String, String> petLabels) {
+  static CareCalendarMultiPetState _initialState(
+    Map<String, String> petLabels,
+  ) {
     final month = DateTime(DateTime.now().year, DateTime.now().month);
     final window = CareCalendarMonthWindow.forMonth(month);
     return CareCalendarMultiPetState(
       month: month,
       window: window,
       perPet: petLabels.entries
-          .map(
-            (e) => (
-              petId: e.key,
-              petName: e.value,
-              data: null,
-              error: null,
-            ),
-          )
+          .map((e) => (petId: e.key, petName: e.value, data: null, error: null))
           .toList(growable: false),
     );
   }
@@ -80,14 +76,7 @@ class CareCalendarMultiPetNotifier extends StateNotifier<CareCalendarMultiPetSta
       month: month,
       window: window,
       perPet: _petLabels.entries
-          .map(
-            (e) => (
-              petId: e.key,
-              petName: e.value,
-              data: null,
-              error: null,
-            ),
-          )
+          .map((e) => (petId: e.key, petName: e.value, data: null, error: null))
           .toList(growable: false),
       generation: _loadGeneration,
     );
@@ -120,7 +109,10 @@ class CareCalendarMultiPetNotifier extends StateNotifier<CareCalendarMultiPetSta
             data: data,
             error: null,
           );
-          state = state.copyWith(perPet: List.of(pending), generation: generation);
+          state = state.copyWith(
+            perPet: List.of(pending),
+            generation: generation,
+          );
         } catch (error) {
           if (generation != _loadGeneration) return;
           pending[i] = (
@@ -129,7 +121,10 @@ class CareCalendarMultiPetNotifier extends StateNotifier<CareCalendarMultiPetSta
             data: null,
             error: error,
           );
-          state = state.copyWith(perPet: List.of(pending), generation: generation);
+          state = state.copyWith(
+            perPet: List.of(pending),
+            generation: generation,
+          );
         }
       }
     }

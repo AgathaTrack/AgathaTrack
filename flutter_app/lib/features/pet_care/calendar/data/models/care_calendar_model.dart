@@ -18,8 +18,7 @@ class CareCalendarModel {
       ),
       startsOn: json['starts_on'] as String? ?? '',
       endsOn: json['ends_on'] as String? ?? '',
-      projectionStatus:
-          json['projection_status'] as String? ?? 'complete',
+      projectionStatus: json['projection_status'] as String? ?? 'complete',
       beforeMonthItems: _items(beforeJson['items']),
       days: dayList
           .map(

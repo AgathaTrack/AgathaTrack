@@ -25,9 +25,7 @@ class CareCalendarSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final monthLabel = DateFormat.yMMMM().format(month);
-    final itemsByDate = {
-      for (final day in result.days) day.date: day.items,
-    };
+    final itemsByDate = {for (final day in result.days) day.date: day.items};
     final hasAny = result.days.any((d) => d.items.isNotEmpty);
 
     return Semantics(
@@ -103,11 +101,7 @@ class CareCalendarSurface extends StatelessWidget {
               ),
             )
           else
-            _MonthGrid(
-              petId: petId,
-              month: month,
-              itemsByDate: itemsByDate,
-            ),
+            _MonthGrid(petId: petId, month: month, itemsByDate: itemsByDate),
         ],
       ),
     );
@@ -125,7 +119,9 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
   });
 
   final DateTime month;
-  final List<({String petId, String petName, CareCalendarResult? data, Object? error})>
+  final List<
+    ({String petId, String petName, CareCalendarResult? data, Object? error})
+  >
   rows;
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
@@ -135,7 +131,11 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final monthLabel = DateFormat.yMMMM().format(month);
-    final merged = <String, List<({String petId, String petName, CareCalendarItem item})>>{};
+    final merged =
+        <
+          String,
+          List<({String petId, String petName, CareCalendarItem item})>
+        >{};
     for (final row in rows) {
       final data = row.data;
       if (data == null) continue;
@@ -171,9 +171,7 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
                 onPressed: onPreviousMonth,
                 icon: const Icon(Icons.chevron_left),
               ),
-              Expanded(
-                child: Text(monthLabel, textAlign: TextAlign.center),
-              ),
+              Expanded(child: Text(monthLabel, textAlign: TextAlign.center)),
               IconButton(
                 key: const Key('care_calendar_next_month'),
                 onPressed: onNextMonth,
@@ -216,7 +214,10 @@ class _BeforeMonthStrip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(l.careCalendarBeforeMonth, style: Theme.of(context).textTheme.labelLarge),
+          Text(
+            l.careCalendarBeforeMonth,
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
           const SizedBox(height: 4),
           for (final item in items)
             ListTile(
@@ -252,7 +253,7 @@ class _MonthGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-  final markers = itemsByDate.map(
+    final markers = itemsByDate.map(
       (key, value) => MapEntry(
         key,
         value
@@ -272,7 +273,10 @@ class _MonthGridMarkers extends StatelessWidget {
   });
 
   final DateTime month;
-  final Map<String, List<({String petId, String petName, CareCalendarItem item})>>
+  final Map<
+    String,
+    List<({String petId, String petName, CareCalendarItem item})>
+  >
   markers;
   final String? petId;
 
@@ -303,15 +307,17 @@ class _MonthGridMarkers extends StatelessWidget {
           Row(
             children: [
               for (var day = 0; day < 7; day++)
-                Expanded(child: _DayCell(
-                  date: gridStart.add(Duration(days: week * 7 + day)),
-                  markers:
-                      markers[DateFormat('yyyy-MM-dd').format(
-                        gridStart.add(Duration(days: week * 7 + day)),
-                      )] ??
-                      const [],
-                  petId: petId,
-                )),
+                Expanded(
+                  child: _DayCell(
+                    date: gridStart.add(Duration(days: week * 7 + day)),
+                    markers:
+                        markers[DateFormat('yyyy-MM-dd').format(
+                          gridStart.add(Duration(days: week * 7 + day)),
+                        )] ??
+                        const [],
+                    petId: petId,
+                  ),
+                ),
             ],
           ),
       ],
@@ -320,11 +326,7 @@ class _MonthGridMarkers extends StatelessWidget {
 }
 
 class _DayCell extends StatelessWidget {
-  const _DayCell({
-    required this.date,
-    required this.markers,
-    this.petId,
-  });
+  const _DayCell({required this.date, required this.markers, this.petId});
 
   final DateTime date;
   final List<({String petId, String petName, CareCalendarItem item})> markers;
@@ -340,18 +342,14 @@ class _DayCell extends StatelessWidget {
       button: count > 0,
       identifier: 'care_calendar_day_$iso',
       child: InkWell(
-        onTap: count == 0
-            ? null
-            : () => _onTap(context, iso, markers),
+        onTap: count == 0 ? null : () => _onTap(context, iso, markers),
         child: Padding(
           padding: const EdgeInsets.all(4),
           child: Column(
             children: [
               Text('${date.day}', style: Theme.of(context).textTheme.bodySmall),
               if (count > 0)
-                Badge(
-                  label: Text(stackCount > 1 ? '$stackCount' : '•'),
-                ),
+                Badge(label: Text(stackCount > 1 ? '$stackCount' : '•')),
             ],
           ),
         ),
@@ -367,7 +365,10 @@ class _DayCell extends StatelessWidget {
       byEntry[row.item.healthEntryId] =
           (byEntry[row.item.healthEntryId] ?? 0) + 1;
     }
-    return byEntry.values.fold<int>(0, (a, b) => a + (b > 1 ? 1 : (b == 1 ? 1 : 0)));
+    return byEntry.values.fold<int>(
+      0,
+      (a, b) => a + (b > 1 ? 1 : (b == 1 ? 1 : 0)),
+    );
   }
 
   void _onTap(
@@ -395,11 +396,7 @@ class _DayCell extends StatelessWidget {
 }
 
 class _DaySheet extends StatelessWidget {
-  const _DaySheet({
-    required this.date,
-    required this.rows,
-    this.fallbackPetId,
-  });
+  const _DaySheet({required this.date, required this.rows, this.fallbackPetId});
 
   final String date;
   final List<({String petId, String petName, CareCalendarItem item})> rows;

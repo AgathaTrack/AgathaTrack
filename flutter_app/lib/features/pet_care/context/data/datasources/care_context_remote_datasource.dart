@@ -73,9 +73,9 @@ class CareContextRemoteDataSource {
     required String startsOn,
     required String endsOn,
   }) async {
-    final uri = Uri.parse('$baseUrl/api/pets/$petId/care-calendar').replace(
-      queryParameters: {'starts_on': startsOn, 'ends_on': endsOn},
-    );
+    final uri = Uri.parse(
+      '$baseUrl/api/pets/$petId/care-calendar',
+    ).replace(queryParameters: {'starts_on': startsOn, 'ends_on': endsOn});
     final response = await _client.get(uri, headers: _headers());
     _check(response);
     return CareCalendarModel.fromJson(
