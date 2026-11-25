@@ -646,7 +646,7 @@ async function handleProdDeployResult({
 
   if (projectsPat && projectId && statusFieldId) {
     const orgFields = await api.loadOrgFields({ org: owner, token: projectsPat });
-    const board = await api.listProjectIssues({ projectId, statusFieldId, projectsPat });
+    const board = await api.listProjectIssues({ projectId, statusFieldId, projectsPat, owner, repo });
     for (const entry of board) {
     const issueNumber = entry.issue?.number;
     if (!issueNumber) {

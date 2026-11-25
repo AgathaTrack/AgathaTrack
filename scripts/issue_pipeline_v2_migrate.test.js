@@ -3,6 +3,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { plan, run } = require('./issue_pipeline_v2_migrate');
+const { filterRowsByRepository } = require('../.github/scripts/github-project-lib');
+
+function mockListProjectIssues(rows) {
+  return async ({ owner, repo } = {}) => filterRowsByRepository(rows, owner, repo);
+}
 
 test('Stage: empty takes the board column, Backlog when there is none, conflicts are only reported', () => {
   assert.deepEqual(plan({ stage: '', status: 'In progress', blocked: '' }).writes, { stage: 'In progress' });
@@ -40,12 +45,12 @@ function boardIo(extra = {}) {
   return {
     config: { engine: { logins: ['pawpet-engine'] }, agents: [] },
     fields,
-    listProjectIssues: async () => [
+    listProjectIssues: mockListProjectIssues([
       { issue: ref(1), status: 'To do' },
       { issue: ref(2), status: 'Ready' },
       { issue: ref(3, { state: 'CLOSED' }), status: 'Done' },
       { issue: ref(4, { repository: { name: 'other', owner: { login: 'o' } } }), status: 'To do' },
-    ],
+    ]),
     getIssue: async (n) => issues[n],
     ...extra,
   };

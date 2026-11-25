@@ -477,12 +477,26 @@ test('fields: dry-run logs and never calls the API', async () => {
   assert.deepEqual(logs[0], { event: 'pipeline_v2_field_write', dry_run: true, issue: 7, writes: { blocked: 'question' } });
 });
 
+const { filterRowsByRepository } = require('../.github/scripts/github-project-lib');
+
+function mockListProjectIssues(rows) {
+  return async ({ owner, repo } = {}) => filterRowsByRepository(rows, owner, repo);
+}
+
 function boardIo(extra = {}) {
   const issues = {
     1: { number: 1, body: 'a', labels: [{ name: 'task' }], issue_field_values: [{ field_id: 1, single_select_option: { name: 'To do' } }] },
     2: { number: 2, body: 'b', labels: [{ name: 'manual-only' }], issue_field_values: [{ field_id: 1, single_select_option: { name: 'In progress' } }] },
     3: { number: 3, body: 'c', labels: [], issue_field_values: [] },
   };
+  const boardRows = [
+    { issue: { number: 1, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+    { issue: { number: 2, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+    { issue: { number: 3, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+    { issue: { number: 9, state: 'CLOSED', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
+    { issue: { number: 8, state: 'OPEN', repository: { name: 'Other', owner: { login: 'AgathaTrack' } } } },
+    { issue: { number: 7, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'SomeoneElse' } } } },
+  ];
   return {
     config,
     fields: {
@@ -490,14 +504,7 @@ function boardIo(extra = {}) {
       blocked: { id: 2, name: 'Blocked', options: [] },
       attempts: { id: 3, name: 'Attempts', options: [] },
     },
-    listProjectIssues: async () => [
-      { issue: { number: 1, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
-      { issue: { number: 2, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
-      { issue: { number: 3, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
-      { issue: { number: 9, state: 'CLOSED', repository: { name: 'AgathaTrack', owner: { login: 'AgathaTrack' } } } },
-      { issue: { number: 8, state: 'OPEN', repository: { name: 'Other', owner: { login: 'AgathaTrack' } } } },
-      { issue: { number: 7, state: 'OPEN', repository: { name: 'AgathaTrack', owner: { login: 'SomeoneElse' } } } },
-    ],
+    listProjectIssues: mockListProjectIssues(boardRows),
     getIssue: async (n) => issues[n],
     listIssueComments: async () => [],
     listCommentReactions: async () => [],

@@ -72,11 +72,15 @@ async function collectCandidates({ owner, repo, promotedSha, token, projectId, s
 
   const engineLogins = config.engine.logins;
   const listedAgents = agentLogins(config);
-  const rows = await listRows({ projectId, statusFieldId, projectsPat: token, includeClosed: true });
-  const numbers = rows
-    .map((row) => row.issue)
-    .filter((issue) => issue && issue.repository?.name === repo && issue.repository?.owner?.login === owner)
-    .map((issue) => issue.number);
+  const rows = await listRows({
+    projectId,
+    statusFieldId,
+    projectsPat: token,
+    includeClosed: true,
+    owner,
+    repo,
+  });
+  const numbers = rows.map((row) => row.issue).filter(Boolean).map((issue) => issue.number);
 
   const candidates = [];
   for (const number of numbers) {

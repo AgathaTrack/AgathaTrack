@@ -53,6 +53,8 @@ async function findEligibleIssues({
       projectId,
       statusFieldId,
       projectsPat,
+      owner,
+      repo,
     });
 
     for (const entry of projectIssues) {
