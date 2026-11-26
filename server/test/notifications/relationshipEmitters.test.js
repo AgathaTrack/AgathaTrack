@@ -32,7 +32,7 @@ describe('relationshipEmitters', () => {
     });
 
     expect(inserts.length).toBe(1);
-    expect(inserts[0].params[8]).toBe(NOTIFICATION_TYPE_SHARE_ACCESS_CHANGED);
+    expect(inserts[0].params[9]).toBe(NOTIFICATION_TYPE_SHARE_ACCESS_CHANGED);
     expect(inserts[0].params[1]).toBe('target-1');
   });
 
@@ -90,8 +90,8 @@ describe('relationshipEmitters', () => {
     });
 
     expect(inserts.length).toBe(1);
-    expect(inserts[0][8]).toBe(NOTIFICATION_TYPE_CARE_ASSIGNMENT_ASSIGNED);
-    expect(inserts[0][7]).toContain('2026-10-12');
-    expect(inserts[0][7]).toContain('2026-10-19');
+    expect(inserts[0][9]).toBe(NOTIFICATION_TYPE_CARE_ASSIGNMENT_ASSIGNED);
+    expect(inserts[0][8]).toContain('2026-10-12');
+    expect(inserts[0][8]).toContain('2026-10-19');
   });
 });

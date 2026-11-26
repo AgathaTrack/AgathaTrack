@@ -2,10 +2,8 @@ import express from 'express';
 import { createApiLimiter } from '../config/rateLimit.js';
 import { publicError } from '../config/security.js';
 import { extractUserId } from '../lib/requireAuth.js';
-import {
-  buildNotificationDeepLink,
-  checkDueNotifications,
-} from '../lib/checkDueNotifications.js';
+import { checkDueNotifications } from '../lib/checkDueNotifications.js';
+import { buildNotificationDeepLink } from '../lib/notifications/deepLink.js';
 import { careClockFromRequest } from '../lib/care/occurrence/careAsOf.js';
 import {
   normaliseKind,
