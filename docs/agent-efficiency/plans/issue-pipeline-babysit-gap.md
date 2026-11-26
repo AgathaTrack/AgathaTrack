@@ -21,7 +21,9 @@ Nothing drove the PR after it opened:
 - Issue #2103 stayed `busy` with `Stage = In progress`.
 - The PR stayed `blocked`.
 
-Another agent has since picked up #2651 by hand. That fixes one PR and not the cause. Every agent-opened PR without another driver has the same problem.
+Another agent picked up #2651 by hand and it merged to `main` as `a838ef5`. That fixes one PR and not the cause. Every agent-opened PR without another driver has the same problem.
+
+> **Revision 2 (2026-11-26).** Applied review comments on PR #2658: decision-rule table moved into the policy (R4); R1 scope aligned to `prAuthors`; R7 added (light-plan end state for `Method: PR`); the claude-prepare line dropped (1d); the guard checks structured markers (1e); the Phase 2 design note made a prerequisite; open questions 2–4 tightened.
 
 ## Root causes
 
@@ -39,12 +41,13 @@ Each row cites the file that causes the gap. All seven were read on `main` at th
 
 ## Requirements
 
-- **R1.** Every PR opened by a pipeline agent login (`pawpet-claude`, `pawpet-bot`) has a babysit driver from the moment it opens until it merges or closes.
-- **R2.** The driver follows the PR's base branch (decision rule below).
+- **R1.** Every PR a pipeline delivery opens has a babysit driver from the moment it opens until it merges or closes. Scope: any PR whose author is a pipeline login (`pawpet-claude`, `pawpet-bot`), or whose author is in the issue's `prAuthors` set (the logins that authored the issue's linked PRs, computed in `scripts/issue_pipeline_v2_decide.js`).
+- **R2.** The driver follows the PR's base branch (decision rule in `autonomous-pr-policy.md`, see Phase 1a).
 - **R3.** A delivery run does not end while the PR has an unresolved review thread or a Copilot review in progress. It either finishes the babysit loop or records a handoff with a `Blocked` reason on the issue.
-- **R4.** The rule is written once, in `autonomous-pr-policy.md` §Babysit skill family. The prompt and the delivery contract refer to that row and do not restate it.
-- **R5.** `scripts/check_babysit_skill_family.js` fails CI if the pipeline row is removed.
+- **R4.** The rule is written once, in `autonomous-pr-policy.md` §Babysit skill family, including the decision-rule table. The prompt and the delivery contract refer to that section and do not restate it. This plan doc keeps the history and is not a dependency of the policy.
+- **R5.** `scripts/check_babysit_skill_family.js` fails CI if the policy section or its decision-rule table is removed (Phase 1e).
 - **R6.** An open pipeline PR that no run is watching is picked up without a person doing it first (fallback, phase 3 below).
+- **R7.** End state for default `Method: PR` matches light-plan: the delivery agent keeps `busy` through the merge and through Pre-UAT green on the merge SHA (for `main`), then ticks the delivery DoD and runs `finish-work`. It does not close the issue and does not write `Stage` while the engine owns it (`docs/agent-efficiency/github-issue-workflow-behaviour.md` §Delivery contract; `.cursor/skills/light-plan/SKILL.md` §Release).
 
 ## Decision rule (driver by base)
 
@@ -64,46 +67,64 @@ Phases are independent and each is one outcome, per `atomic-pr-policy.md`.
 
 ### Phase 1: policy, prompt and guard (docs and scripts only)
 
-**1a. `docs/agent-efficiency/autonomous-pr-policy.md`, §Babysit skill family.** Add this row to the table:
+**1a. `docs/agent-efficiency/autonomous-pr-policy.md`, §Babysit skill family.** Add this family row to the table:
 
 ```markdown
-| Issue-pipeline PR (`Method: PR`, or any PR opened by a pipeline agent login) | Yes — driver per the base-branch rule in `docs/agent-efficiency/plans/issue-pipeline-babysit-gap.md`: `/babysit-uat` on `main`, `/babysit-plus` otherwise. The delivery run does not end while threads or Copilot review are open (R3) |
+| Issue-pipeline delivery PR (`Method: PR`, or any PR in the R1 scope) | Yes — driver per the decision rule below; delivery run keeps `busy` until the driver's gate passes (R3, R7) |
 ```
 
-**1b. `docs/agent-efficiency/github-issue-workflow-behaviour.md`, §Delivery contract.** Add a fifth obligation:
+and add this subsection directly under the table, so the policy is self-contained:
 
 ```markdown
-5. keep a babysit driver on every PR it opens until the PR merges or closes (autonomous-pr-policy §Babysit skill family, issue-pipeline row). Clear `busy` only after the driver's review gate passes, or set `Blocked` with a reason.
+### Issue-pipeline delivery PRs
+
+| PR base | Driver | Ends at |
+|---|---|---|
+| Integration branch (`cursor/*-integration-*`, or an execute-plan `base_branch`) | `/babysit-plus` | Squash merge into the integration branch |
+| `main` | `/babysit-uat` | Pre-UAT E2E green on the merge SHA, then DoD ticks and `finish-work` (light-plan parity, R7) |
+| Anything else | `/babysit-plus` | Squash merge; the run comments the unexpected base on the issue |
+
+Plain `/babysit` is not a driver for agent PRs.
+```
+
+**1b. `docs/agent-efficiency/github-issue-workflow-behaviour.md`, §Delivery contract.** Replace obligation 4 with a fifth and sixth obligation:
+
+```markdown
+4. keep `busy` while the PR it opened is open and a babysit driver (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection) is working it. For `Method: PR` the end state is Pre-UAT green on the merge SHA, then DoD ticks and `finish-work`, as light-plan does (R7).
+5. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
 ```
 
 **1c. `scripts/issue_pipeline_v2_launch.js`, `METHOD_PROMPTS.PR`.** Replace the empty string with:
 
 ```js
 PR:
-  'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from the base branch: ' +
-  '`/babysit-uat` (skill file `.cursor/skills/babysit-uat/SKILL.md`, or `.claude/skills/babysit-uat/SKILL.md` in Claude Code) when the base is `main`, ' +
-  'otherwise `/babysit-plus` (skill file `.cursor/skills/babysit-plus/SKILL.md`, or `.claude/skills/babysit-plus/SKILL.md`). ' +
-  'Read the skill file and follow it to completion. The skill is not invoked through the Skill tool. Clear `busy` only after its review gate passes (docs/agent-efficiency/autonomous-pr-policy.md §Babysit skill family).',
+  'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from the base branch (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection): ' +
+  '`/babysit-uat` (read `.cursor/skills/babysit-uat/SKILL.md`, or `.claude/skills/babysit-uat/SKILL.md` in Claude Code) when the base is `main`, ' +
+  'otherwise `/babysit-plus` (read `.cursor/skills/babysit-plus/SKILL.md`, or `.claude/skills/babysit-plus/SKILL.md`). ' +
+  'Read the skill file and follow it to completion. Do not invoke it through the Skill tool. After the driver ends, tick the DoD and run `finish-work` only when its gate has passed.',
 ```
 
-**1d. `scripts/pipeline_claude_prepare.js`, prompt assembly.** Add one line after "Follow AGENTS.md and CLAUDE.md":
+**1d. Dropped.** The line proposed for `scripts/pipeline_claude_prepare.js` was a checkbox that could invite a checkbox reading of R3. 1c already carries the instruction, and `finish-work` is the gate. No change to `pipeline_claude_prepare.js` in Phase 1.
 
-```text
-Before you finish, confirm the PR you opened has a babysit driver (docs/agent-efficiency/autonomous-pr-policy.md §Babysit skill family).
-```
+**1e. `scripts/lib/babysit_skill_family_policy.js` and `scripts/check_babysit_skill_family.js`.** The guard checks literal and regex markers, not table rows. Add to `POLICY_MARKERS`:
 
-**1e. `scripts/check_babysit_skill_family.js`.** Assert that the policy table contains the issue-pipeline row (R5). The change belongs in `scripts/lib/babysit_skill_family_policy.js` with a test next to `check_babysit_skill_family.test.js`.
+- the literal heading `### Issue-pipeline delivery PRs`,
+- a regex that matches the `main` row naming `/babysit-uat`,
+- a regex that matches the integration row naming `/babysit-plus`.
+
+Add a test next to `check_babysit_skill_family.test.js` that removing any of the three fails the check (R5).
 
 **Docs gate for Phase 1:** `## Docs` lists `docs/agent-efficiency/autonomous-pr-policy.md` and `github-issue-workflow-behaviour.md`, because they describe a behaviour change.
 
-### Phase 2: event-driven trigger (needs owner approval)
+### Phase 2: event-driven trigger (needs owner approval and a design note first)
 
 `.github/workflows/auto-babysit.yml` is a CI workflow change. `AGENTS.md` lists CI gate changes as requiring the owner's approval.
 
-- For PRs whose author is a pipeline login, dispatch `pipeline-claude-run.yml` with a `babysit` stage in place of the dry-run. The dispatch uses the base-branch rule.
+**Design note needed before this phase.** `pipeline-claude-run.yml` takes `stage` as a free-form string ("Canonical Stage name for this doorbell"). `babysit` is not a Stage name, and the prepare step only knows the doorbell and acceptance stages. Phase 2 therefore needs a design note that adds a non-Stage doorbell kind (for example `purpose: babysit`, alongside the existing `purpose: delivery` used by `buildLaunchRecord`), with its prompt from 1c and its launch record. The note goes into `github-issue-workflow-behaviour.md` §Launch before code.
+
+- For PRs in the R1 scope, dispatch `pipeline-claude-run.yml` with the babysit purpose in place of the dry-run. The dispatch uses the base-branch rule.
 - Other PRs keep the current dry-run.
 - Skip fork PRs, since the pipeline token cannot act on them.
-- Add the `babysit` stage to the stage table in `pipeline_claude_prepare.js` and `issue_pipeline_v2_launch.js`, with the prompt from 1c.
 
 ### Phase 3: engine fallback (needs owner approval, separate PR)
 
@@ -118,10 +139,10 @@ When a linked PR is open, has no active run and has an unresolved thread or a pe
 
 ## Open questions for review
 
-1. **Driver on `main`.** Should `Method: PR` on `main` use `/babysit-uat`? The policy runs pre-UAT after every merge to `main`, so a babysit-uat driver fits. Recommendation: yes. Cost: the run waits for the pre-UAT gate.
-2. **`disable-model-invocation`.** Keep the flag and have the prompt read the file (recommended), or remove the flag for the pipeline? Removing it changes how the skills behave when a person types them, so keep it unless the team decides otherwise.
-3. **Order of Phase 2 and Phase 3.** Recommendation: Phase 2 first, since it is event-driven and smaller. Phase 3 covers what Phase 2 misses.
-4. **Handoff.** When a run cannot finish the loop (for example, the pre-UAT gate takes longer than the run), should it hand off to the Phase 3 fallback or set `Blocked=question`? Recommendation: hand off, and let the fallback pick it up.
+1. **Driver on `main`.** Should `Method: PR` on `main` use `/babysit-uat`? The policy runs pre-UAT after every merge to `main`, so a babysit-uat driver fits, and light-plan already ends the same way (R7). Recommendation: yes. Cost: the run waits for the pre-UAT gate.
+2. **`disable-model-invocation`.** Keep the flag, and have the prompt tell the agent to read the skill file (1c). Follow-up to verify: that `claude-code-action` reads files when instructed. Not verified in this proposal.
+3. **Order of Phase 2 and Phase 3.** Recommendation: Phase 2 first, since it is event-driven and smaller. Phase 3 covers what Phase 2 misses. Phase 2 cannot start until its design note exists (see Phase 2).
+4. **Handoff.** Timeouts hand off to the Phase 3 fallback. `Blocked` is for an unrecoverable agent failure only, consistent with the existing `stalled` and `launch-failed` holds.
 
 ## Non-goals
 
