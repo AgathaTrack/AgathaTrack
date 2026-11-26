@@ -39,6 +39,7 @@ test('an acceptance task without a full merge sha is refused', () => {
 
 test('delivery keeps the method prompt and needs no merge sha', () => {
   assert.equal(buildStageTask({ stage: undefined, method: 'PR', prompts: STAGE_PROMPTS, number: 7 }), METHOD_PROMPTS.PR);
+  assert.equal(buildStageTask({ stage: 'babysit', method: 'PR', prompts: STAGE_PROMPTS, number: 7 }), METHOD_PROMPTS.PR);
 });
 
 test('a real stage prompt is filled, never sent with a placeholder', () => {

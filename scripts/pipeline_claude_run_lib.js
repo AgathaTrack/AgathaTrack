@@ -160,6 +160,9 @@ function buildClaudeArgs(agent) {
  * is refused before it starts, so it never verifies a placeholder or a merge it was not given.
  */
 function buildStageTask({ stage, method, prompts, number, mergeSha, mergeDir }) {
+  if (stage === 'babysit') {
+    return METHOD_PROMPTS.PR;
+  }
   if (stage && DOORBELL_STAGES.has(stage)) {
     if (stage === 'acceptance') {
       if (!MERGE_SHA.test(String(mergeSha || ''))) {

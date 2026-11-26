@@ -57,9 +57,20 @@ test('deliveryMethodProgrammeMismatch: phase checklist with Method PR', () => {
   assert.equal(deliveryMethodProgrammeMismatch('### Delivery plan\n\nMethod: PR\n\nOne PR to main.\n'), false);
 });
 
-test('METHOD_PROMPTS.PR names babysit policy', () => {
-  assert.match(METHOD_PROMPTS.PR, /Issue-pipeline delivery PRs|§Babysit skill family/);
-  assert.match(METHOD_PROMPTS.PR, /babysit-uat/);
+test('METHOD_PROMPTS.PR names babysit-plus driver routing', () => {
+  assert.match(METHOD_PROMPTS.PR, /§Driver routing/);
+  assert.match(METHOD_PROMPTS.PR, /babysit-plus/);
+  assert.doesNotMatch(METHOD_PROMPTS.PR, /babysit-uat/);
+});
+
+test('parseLaunchComment accepts purpose=babysit', () => {
+  const comment = note(
+    '<!-- v2:launch run=r1 agent=claude-a purpose=babysit stage=babysit -->',
+    1,
+  );
+  const parsed = require('./issue_pipeline_v2_launch').parseLaunchComment(comment);
+  assert.equal(parsed.purpose, 'babysit');
+  assert.equal(parsed.stage, 'babysit');
 });
 
 test('delivery method comes from the Delivery plan section, defaulting to PR', () => {
@@ -387,7 +398,7 @@ test('launch prompt carries the delivery method; PR names babysit drivers', asyn
       deps,
     });
   }
-  assert.match(prompts[0], /babysit-uat/);
+  assert.match(prompts[0], /babysit-plus/);
   assert.match(prompts[1], /light-plan\/SKILL\.md/);
   assert.match(prompts[2], /execute-plan\/SKILL\.md/);
 });

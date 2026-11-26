@@ -400,6 +400,33 @@ function decideInProgress(facts, config) {
       ? noAgent('progress.no-launchable-agent')
       : { type: 'resume', agent: pickAgent(capable, facts), method, row: 'progress.resume' };
   }
+  const launch = facts.launch || {};
+  const babysitHours = config.limits.babysitFallbackHours ?? 4;
+  const babysitStale =
+    delivery.lastActivityAt != null && facts.now - delivery.lastActivityAt >= babysitHours * HOUR;
+  if (
+    (facts.deliveryMethod || 'PR') === 'PR' &&
+    delivery.busy &&
+    (delivery.openLinkedPrs || 0) > 0 &&
+    (facts.pipelineOpenPrs || 0) > 0 &&
+    !launch.runId &&
+    babysitStale
+  ) {
+    const capable = launchableAgents(config, 'PR').filter(
+      (id) => resolveAgent(config, id)?.runner === 'claude',
+    );
+    if (capable.length === 0) {
+      return noAgent('progress.babysit-no-agent');
+    }
+    return {
+      type: 'launch',
+      agent: pickAgent(capable, facts),
+      method: 'PR',
+      purpose: 'babysit',
+      stage: 'babysit',
+      row: 'progress.babysit-fallback',
+    };
+  }
   return none('progress.working');
 }
 

@@ -64,14 +64,18 @@ Phases are independent and each is one outcome, per `atomic-pr-policy.md`.
 
 **1a. `docs/agent-efficiency/autonomous-pr-policy.md`, §Babysit skill family.** **Delivered** (`cursor/babysit-routing-phase1-b077`) — family row plus §Driver routing (single canonical table). No separate issue-pipeline subsection table.
 
-**1b. `docs/agent-efficiency/github-issue-workflow-behaviour.md`, §Delivery contract.** Replace the current obligation 4 (remove `busy`) with the two obligations below. The old obligation 4 becomes 5 and is kept as written:
+**1b. `docs/agent-efficiency/github-issue-workflow-behaviour.md`, §Delivery contract.** **Delivered** (`cursor/babysit-pipeline-phase4-b077`) — obligation 4 uses §Driver routing rows 10–11 and R7 squash-merge end state; light-plan prose aligned.
+
+Replace the current obligation 4 (remove `busy`) with the two obligations below. The old obligation 4 becomes 5 and is kept as written:
 
 ```markdown
 4. keep `busy` while the PR it opened is open and a babysit driver (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection) is working it. For `Method: PR` the end state is Pre-UAT green on the merge SHA, then DoD ticks and `finish-work`, as light-plan does (R7).
 5. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
 ```
 
-**1c. `scripts/issue_pipeline_v2_launch.js`, `METHOD_PROMPTS.PR`.** Replace the empty string with:
+**1c. `scripts/issue_pipeline_v2_launch.js`, `METHOD_PROMPTS.PR`.** **Delivered** (`cursor/babysit-pipeline-phase4-b077`).
+
+Replace the empty string with:
 
 ```js
 PR:
@@ -113,6 +117,8 @@ Add a test next to `check_babysit_skill_family.test.js` that removing any of the
 - Skip fork PRs, since the pipeline token cannot act on them.
 
 ### Phase 3: engine fallback (needs owner approval, separate PR)
+
+**Partially delivered** (`cursor/babysit-pipeline-phase4-b077`): `progress.babysit-fallback` launches `purpose=babysit` when a pipeline-authored open PR is idle for `babysitFallbackHours` (default 4). Copilot-thread-specific gating remains future work.
 
 When a linked PR is open, has no active run and has an unresolved thread or a pending Copilot review for more than N hours, the engine rings the babysit doorbell (the same mechanism as the existing review and acceptance doorbells). This belongs in `github-issue-workflow-behaviour.md` §Transitions as a new row, and in the `issue_pipeline_v2_decide` code. N is a proposal for review. A starting point is 4 hours, which is less than the 24-hour stall rule.
 
