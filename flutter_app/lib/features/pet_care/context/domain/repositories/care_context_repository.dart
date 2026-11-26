@@ -71,6 +71,13 @@ abstract class CareContextRepository {
     required Map<String, dynamic> body,
   });
 
+  /// AP-18: explicit [petIds] (current pet plus any chosen siblings).
+  Future<Map<String, dynamic>> createAbsenceCarerInvite({
+    required String absenceId,
+    required String contactId,
+    required List<String> petIds,
+  });
+
   Future<PlannedAbsence> updatePetCarers({
     required String absenceId,
     required List<Map<String, dynamic>> petCarers,

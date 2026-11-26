@@ -64,6 +64,7 @@ class AwayPlanPetCarerPanel extends ConsumerWidget {
                             petId: petId,
                             petName: petName,
                             currentCarer: carer,
+                            petNamesById: petNamesById,
                           ),
                         )
                       : null,

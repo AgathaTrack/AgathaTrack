@@ -80,6 +80,7 @@ class AwayPlanCarersSection extends ConsumerWidget {
         petId: petId,
         petName: petNamesById[petId] ?? '',
         currentCarer: carer,
+        petNamesById: petNamesById,
       ),
     );
   }

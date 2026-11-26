@@ -5,6 +5,8 @@ import '../../../../../l10n/app_localizations.dart';
 import '../../../../people/people.dart';
 import '../../data/datasources/care_context_remote_datasource.dart';
 import '../../domain/entities/planned_absence_pet_carer.dart';
+import '../away_plan_carer_invite_offer.dart';
+import '../away_plan_carer_invite_offer_dialog.dart';
 import '../providers/care_context_providers.dart';
 
 /// Per-pet carer editor — assigns a directory contact (People phase 2).
@@ -15,12 +17,16 @@ class AwayPlanCarerEditDialog extends ConsumerStatefulWidget {
     required this.petId,
     required this.petName,
     required this.currentCarer,
+    this.petNamesById = const {},
   });
 
   final String absenceId;
   final String petId;
   final String petName;
   final PlannedAbsencePetCarer currentCarer;
+
+  /// Names for sibling pets listed in the AP-18 invite offer.
+  final Map<String, String> petNamesById;
 
   @override
   ConsumerState<AwayPlanCarerEditDialog> createState() =>
@@ -102,12 +108,72 @@ class _AwayPlanCarerEditDialogState
     }
   }
 
-  void _showFailure(String message) {
+  /// Whether the saved carer on this pet can receive an app invite from here.
+  bool get _showInviteAction {
+    final saved = widget.currentCarer.contactId;
+    return saved != null &&
+        _selectedContactId == saved &&
+        widget.currentCarer.canGrantGuestAccess;
+  }
+
+  /// AP-18: re-read the absence (fresh carer rows), offer eligible sibling
+  /// pets, then send one invite with explicit `pet_ids`.
+  Future<void> _sendInvite() async {
+    final l = AppLocalizations.of(context)!;
+    final contactId = widget.currentCarer.contactId;
+    if (contactId == null) return;
+    setState(() => _saving = true);
+    try {
+      final absence = await ref.refresh(
+        plannedAbsenceDetailProvider(widget.absenceId).future,
+      );
+      if (!mounted) return;
+      if (!canSendCarerInvite(absence: absence, petId: widget.petId)) {
+        _showFailure(l.awayPlanningCarerInviteFailed);
+        return;
+      }
+      var petIds = [widget.petId];
+      final siblings = eligibleSiblingPetIds(
+        absence: absence,
+        currentPetId: widget.petId,
+        contactId: contactId,
+      );
+      if (siblings.isNotEmpty) {
+        final chosen = await showDialog<List<String>>(
+          context: context,
+          builder: (_) => AwayPlanCarerInviteOfferDialog(
+            currentPetId: widget.petId,
+            siblingPetIds: siblings,
+            petNamesById: widget.petNamesById,
+          ),
+        );
+        if (!mounted || chosen == null) return;
+        petIds = chosen;
+      }
+      await ref
+          .read(careContextRepositoryProvider)
+          .createAbsenceCarerInvite(
+            absenceId: widget.absenceId,
+            contactId: contactId,
+            petIds: petIds,
+          );
+      if (!mounted) return;
+      _showMessage(l.awayPlanningCarerInviteSent);
+    } catch (_) {
+      _showFailure(l.awayPlanningCarerInviteFailed);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  void _showFailure(String message) => _showMessage(message);
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +237,12 @@ class _AwayPlanCarerEditDialogState
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: Text(l.cancel),
         ),
+        if (_showInviteAction)
+          TextButton(
+            key: const Key('away_plan_carer_send_invite'),
+            onPressed: _saving ? null : _sendInvite,
+            child: Text(l.awayPlanningCarerInviteSendAction),
+          ),
         FilledButton(
           key: const Key('away_plan_carer_edit_save'),
           onPressed: (_saving || !_canSave) ? null : _save,

@@ -198,6 +198,15 @@ class _FakeCareContextRepository implements CareContextRepository {
   }) async {}
 
   @override
+  Future<Map<String, dynamic>> createAbsenceCarerInvite({
+    required String absenceId,
+    required String contactId,
+    required List<String> petIds,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<PlannedAbsence> updatePetCarers({
     required String absenceId,
     required List<Map<String, dynamic>> petCarers,

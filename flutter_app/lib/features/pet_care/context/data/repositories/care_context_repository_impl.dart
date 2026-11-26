@@ -133,6 +133,17 @@ class CareContextRepositoryImpl implements CareContextRepository {
   );
 
   @override
+  Future<Map<String, dynamic>> createAbsenceCarerInvite({
+    required String absenceId,
+    required String contactId,
+    required List<String> petIds,
+  }) => _remote.createAbsenceCarerInvite(
+    absenceId: absenceId,
+    contactId: contactId,
+    petIds: petIds,
+  );
+
+  @override
   Future<PlannedAbsence> updatePetCarers({
     required String absenceId,
     required List<Map<String, dynamic>> petCarers,
