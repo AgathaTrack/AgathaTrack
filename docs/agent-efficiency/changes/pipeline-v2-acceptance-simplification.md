@@ -28,7 +28,7 @@ agent run without adding evidence.
 | Q1 | Keep the `AAT-progress` / `AAT-passed` / `AAT-failed` labels? | No. Retire them. The `Acceptance` field is the state; the `v2:aat` marker is the record |
 | Q2 | Keep the `in-prod` label? | No. Done plus the close event is the signal, and the engine is the only Done writer |
 | Q3 | Run AAT on every non-follow-up issue? | No. Skip it, per merge, when every merged PR touches only low-risk paths. Keep it for app, API, schema, workflow and security changes |
-| Q4 | Which globs count as low-risk (§Q3 default below)? | Owner picks; start narrow |
+| Q4 | Which globs count as low-risk (§C default below)? | Start with `docs/**`, `scripts/pipeline_runners/**`, `.cursor/skills/**`. Add `scripts/issue_pipeline_v2*` only after a soak shows no regression, because an engine bug could otherwise auto-skip its own fix PR |
 
 ## Findings
 
@@ -47,7 +47,8 @@ All from #2514 unless stated. Times are UTC, 2026-11-26.
 
 **Evidence gap.** Label counts cannot say how often AAT caught a real problem, because fails are resolved by later passes.
 Before Q3 is decided, count `Acceptance=Failed` transitions or `v2:aat verdict=fail` markers across closed issues, split by
-changed paths. The recommendation in Q3 is weaker without that count.
+changed paths. The recommendation in Q3 is weaker without that count, and the count is a **hard gate**: the P3 PR does not
+merge until the census (method, date, result) is attached to it, and `aat.autoSkip.enabled` stays `false` until then.
 
 ## Proposal
 
@@ -77,8 +78,12 @@ path. Default globs for Q4, deliberately narrow:
 | Include | Why |
 |---------|-----|
 | `docs/**` | No runtime behaviour |
-| `scripts/pipeline_runners/**`, `scripts/issue_pipeline_v2*` | Engine internals; verified by unit suites and `pre-push-changed.sh` |
+| `scripts/pipeline_runners/**` | Runner code; verified by unit suites and `pre-push-changed.sh` |
 | `.cursor/skills/**` | Agent instructions; reviewed under `agent-instructions.md` |
+
+Deliberately **not** in the first list: `scripts/issue_pipeline_v2*` (the engine itself). Residual risk even with the narrow
+list: a runner bug can still skip the review of its own fix. The mitigations are the intent doorbell, fail-closed reads and
+the disabled-by-default rollout. Expanding the list is a later decision with its own soak.
 
 Never auto-skipped: `server/**`, `flutter_app/**`, `db/**`, `.github/**`, `.cursor/agent-kernel/**`, `infra/**`, and any
 path `isForbiddenPath` in `.github/scripts/agent-safety-lib.js` reports. `.github/**` is already a protected glob in
@@ -94,7 +99,13 @@ path `isForbiddenPath` in `.github/scripts/agent-safety-lib.js` reports. `.githu
    `aat-reset` (field back to Pending) and AAT runs. This differs deliberately from a human `Skipped`, which persists
    (PIPE-AAT-D-007) and is unchanged.
 5. The non-gating intent-review doorbell runs for auto-skipped issues, so the "what shipped versus the issue" check is kept
-   without an app run. This amends PIPE-AAT-D-005, which currently withholds it whenever AAT is on.
+   without an app run. This amends PIPE-AAT-D-005, which currently withholds it whenever AAT is on. Where it runs: today
+   `decideInMain` returns `acceptanceInMain` whenever `aatGateOn`, so the existing `main.intent-request` and `main.intent`
+   retry rows (and then `main.uat`) are never reached for a non-follow-up. Once an auto-skip waive (`source=paths`) is bound
+   for the latest sha, `decideInMain` skips the `acceptanceInMain` return and falls through to those existing rows. No new
+   intent row is added. The `then: ['request-intent-review']` on the In progress → In Main move
+   (`progress.finished`) stays off for AAT-gated issues: at that point eligibility is not yet known, so the request is made
+   from `main.intent-request` one tick later.
 6. The production guard needs no change: `aatSatisfied` already treats a bound `Skipped` waive as satisfied, so `AAT_GATE`
    does not block an auto-skipped merge.
 
@@ -120,7 +131,7 @@ auto-skip fires only while the field is **unset**, so a human-set `Pending` (or 
 | PIPE-AAT-R-002 | No code path adds `in-prod`. Moving to Done still removes `busy` and closes the issue | P2 |
 | PIPE-AAT-R-003 | Auto-skip lists every changed file of every merged PR linked to the issue and fails closed on any error, overflow or empty list | P3 |
 | PIPE-AAT-R-004 | An auto-skip waive carries `source=paths`, binds to one sha, and is reset by a newer merge that is not eligible. A human `Skipped` keeps PIPE-AAT-D-007 | P3 |
-| PIPE-AAT-R-005 | No auto-skip when any changed path is sensitive or outside `aat.autoSkip.globs`, or when `Acceptance` is already set; `aat.autoSkip` is absent or `enabled: false` by default | P3 |
+| PIPE-AAT-R-005 | No auto-skip when any changed path is sensitive or outside `aat.autoSkip.globs`, or when `Acceptance` has any value, including a stale `Passed` or `Failed` from an older sha (those take the existing `aat.reset` row first, which sets `Pending` and so runs AAT); `aat.autoSkip` is absent or `enabled: false` by default | P3 |
 | PIPE-AAT-R-006 | An auto-skipped non-follow-up still gets the non-gating intent-review doorbell | P3 |
 | PIPE-AAT-R-007 | `aat-launch` records the launched agent; the verdict template names the real run | P4 |
 | PIPE-AAT-R-008 | Every engine write to `Acceptance` is accompanied by a marker comment | P4 |
@@ -139,15 +150,15 @@ Rows to append to the wire doc's decision log on agreement.
 
 ## Phases and implementation
 
-Each phase is one PR to `main` (one outcome, per `atomic-pr-policy.md`). P1, P2 and P4 are independent of each other. P3
-needs the owner's Q3 and Q4 answers, and the evidence-gap count.
+Each phase is one PR to `main` (one outcome, per `atomic-pr-policy.md`). P1, P2 and P4 are independent of each other and can
+start once Q1 or Q2 is answered. P3 needs the owner's Q3 and Q4 answers and the fail-marker census attached to its PR.
 
 ### P1. Retire the AAT labels
 
 | Area | Change |
 |------|--------|
 | `scripts/lib/github_issue_workflow_aat.js` | Remove `AAT_LABELS` and `aatLabelPlan`. Keep the marker helpers and `validateMergeSha` |
-| `scripts/github_issue_workflow.js` | Drop the `aat-start` case, the `AAT-*` entries in the ensure-labels list (line 36), and the label step in the `aat-pass/fail/inconclusive` cases (line 77 onward). Keep command names so the launch prompt (`scripts/issue_pipeline_v2_launch.js:266`) stays valid |
+| `scripts/github_issue_workflow.js` | Drop the `aat-start` case, the `AAT-*` entries in the ensure-labels list (line 36), and the label step in the `aat-pass/fail/inconclusive` cases (line 77 onward). Keep the `aat-pass` / `aat-fail` / `aat-inconclusive` names: the acceptance launch prompt (`scripts/issue_pipeline_v2_launch.js:266`) tells the agent to call exactly those, and it never mentions `aat-start`, so the prompt needs no change. `aat-start` is referenced only by the skill and `github_issue_workflow.js` |
 | Tests | `scripts/github_issue_workflow.test.js` (label plan cases at 42–54, DELETE at 146): replace with "no label calls" assertions; one case that the marker line is unchanged |
 | Skill | `.cursor/skills/agent-acceptance/SKILL.md` Phase 0 (remove the claim step), Phase 6 and Rules (label sentences), Quick reference. Follow `docs/agent-efficiency/agent-instructions.md` before editing an instruction file |
 | Docs | `github-labels.md` §Agent acceptance; behaviour doc §Labels (v2) rows for `AAT-*` and §Agent acceptance item 2; `docs/e2e/pipeline-soak-catalog.md` and `plans/issue-pipeline-automation.md` mentions. Historic `changes/` logs stay as they are |
@@ -172,10 +183,10 @@ Verification: `node --test scripts/github_issue_workflow.test.js scripts/issue_p
 | `.github/pipeline-agents.json` | `aat.autoSkip: { "enabled": false, "globs": [...] }`. Config change is a sensitive path; ships disabled, the owner flips it after a dry-run soak |
 | `scripts/issue_pipeline_v2_config.js` | Validate the new block (booleans, non-empty string globs, none matching a protected glob). Existing `aat` checks are at lines 136–145 |
 | Facts | New `delivery.changedPaths` and `delivery.changedPathsError`, loaded in the runner next to `mergedPrNumbers` (`scripts/issue_pipeline_v2_release.js:174`) using `listPullFiles` from `scripts/lib/execute_plan_github.js` (already paginated and overflow-aware). Load only when `aat.autoSkip.enabled` and the issue is at In Main, so other stages pay no API cost |
-| Decide | In `acceptanceInMain` (`scripts/issue_pipeline_v2_acceptance.js`), a new row `aat.autoskip` before `aat.launch`: eligible → `aat-waive` with `acceptance=skipped`, `source=paths`, plus the field write. A second row `aat.autoskip-reset` when the newest `source=paths` waive is for an older sha and the new merge is not eligible. `deriveAatState` records `source` on waives |
+| Decide | In `acceptanceInMain` (`scripts/issue_pipeline_v2_acceptance.js`), a new row `aat.autoskip`: eligible → `aat-waive` with `acceptance=skipped`, `source=paths`, plus the field write. **Ordering:** after the existing skipped and manual waive rows and the `aat.reset` row (lines 225–259), so a stale `Passed`, `Failed` or `Manual` is reset or honoured first and auto-skip only ever sees an unset field; before the `aat.launch` row. A second row `aat.autoskip-reset` when the newest `source=paths` waive is for an older sha and the new merge is not eligible. `deriveAatState` records `source` on waives, and `waiveBinds` takes it as an explicit argument so a human `Skipped` and a path waive cannot be confused |
 | Eligibility helper | New pure function in `scripts/lib/` using `globToRegExp` (`scripts/lib/execute_plan_schema.js`) and `isForbiddenPath`; no network |
 | Apply | `aat-waive` currently only comments because a human set the field. Add a field write for the auto case, and keep the sha-binding rules |
-| Intent doorbell | Allow `request-intent-review` for a non-follow-up when its waive has `source=paths` (amends the PIPE-AAT-D-005 branch) |
+| Intent doorbell | In `decideInMain` (`scripts/issue_pipeline_v2_decide.js`), change `if (aatGateOn(...)) return acceptanceInMain(...)` so it does not return when a `source=paths` waive is bound for `delivery.lastMergeSha`. The existing `main.intent-request`, `main.intent` retry and `main.uat` rows then run unchanged. Pin the ordering with a `decide` test: auto-skipped → intent request → intent pending → In UAT. Amends PIPE-AAT-D-005 |
 | Tests | Table tests for eligibility (each include glob, each never-skip glob, mixed PRs, empty list, overflow, API error → fail closed); an `acceptance` test that a human `Skipped` still persists and an auto waive resets on an ineligible newer merge; a prod-gate test that an auto-skipped merge is satisfied |
 | Rollout | `enabled: false` → dry-run tick over beta issues and log would-skip decisions → enable. Same pattern as `AAT_GATE` (PIPE-AAT-D-012) |
 
@@ -206,6 +217,15 @@ Verification: `node --test scripts/github_issue_workflow.test.js scripts/issue_p
 
 ## Open questions for the owner
 
-1. Q1 to Q3 as above; Q4 the exact glob list.
-2. Should auto-skip apply to follow-up issues (they already skip AAT and get intent review), or leave them as they are?
-3. Is `PROD_PUBLIC_MODE` on in production? It decides whether the F7 frontend skip was intended.
+1. Q1 to Q4 as above.
+2. Is `PROD_PUBLIC_MODE` on in production? It decides whether the F7 frontend skip was intended.
+
+Settled in review: auto-skip does not apply to follow-up issues. They already skip AAT and get intent review, so it would
+add nothing.
+
+## Next steps
+
+1. Owner answers Q1 to Q4 on this PR.
+2. Run the fail-marker census (`v2:aat verdict=fail` and `Acceptance=Failed`, by changed-path class) and attach it here.
+3. Open one meta-issue for P1 to P4 (`Refs` from each phase PR), once Q1 to Q3 are answered.
+4. Merge this PR as the agreed proposal vehicle, move the decisions to the wire decision log, then start P1.
