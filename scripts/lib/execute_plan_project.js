@@ -1,11 +1,7 @@
 'use strict';
 
 const { execSync } = require('child_process');
-const {
-  fetchIssue,
-  updateProjectStatus,
-  parseRepo,
-} = require('../../.github/scripts/github-project-lib');
+const { parseRepo } = require('../../.github/scripts/github-project-lib');
 const { createGitHubClient } = require('./execute_plan_github');
 
 const STATUS_ALIASES = {
@@ -40,43 +36,6 @@ function makeClient() {
   return createGitHubClient({ repo: `${owner}/${repo}` });
 }
 
-function getProjectConfig() {
-  const projectsPat = process.env.GH_PROJECTS_PAT;
-  const projectId = process.env.GH_PROJECT_ID;
-  const statusFieldId = process.env.GH_STATUS_FIELD_ID;
-  if (!projectsPat || !projectId || !statusFieldId) return null;
-  return { projectsPat, projectId, statusFieldId };
-}
-
-async function updateIssueProjectStatus(issueNumber, statusName) {
-  const status = normalizeStatusName(statusName);
-  const config = getProjectConfig();
-
-  if (!config) {
-    return {
-      ok: false,
-      skipped: true,
-      reason: 'project_secrets_missing',
-      issueNumber,
-      status,
-      message:
-        'Set GH_PROJECTS_PAT, GH_PROJECT_ID, and GH_STATUS_FIELD_ID to enable project status updates.',
-    };
-  }
-
-  const { owner, repo } = resolveRepository();
-  const issue = await fetchIssue(owner, repo, issueNumber, config.projectsPat);
-  await updateProjectStatus({
-    issue,
-    projectId: config.projectId,
-    statusFieldId: config.statusFieldId,
-    statusName: status,
-    projectsPat: config.projectsPat,
-  });
-
-  return { ok: true, issueNumber, status };
-}
-
 async function closeIssueWithComment(issueNumber, comment) {
   const client = makeClient();
   if (comment) {
@@ -94,9 +53,7 @@ async function postIssueComment(issueNumber, comment) {
 
 module.exports = {
   closeIssueWithComment,
-  getProjectConfig,
   normalizeStatusName,
   postIssueComment,
   resolveRepository,
-  updateIssueProjectStatus,
 };
