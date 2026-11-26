@@ -115,7 +115,7 @@ An issue is dispatched when **all** are true:
 - Labels **not** present: `busy`, `manual-only`, `blocked`
 - Labels **required**: `human-reviewed` (workflow pause when removed)
 - `question` is informational and does not block dispatch
-- Passes deterministic preflight (re-checks risky scope)
+- Passes deterministic preflight (labels and blocking checks; no keyword scan, PIPE-V2-D-REV4-004)
 - No active `<!-- cursor-agent-run: ... -->` marker with status `running`
 
 Dispatch is **single-threaded** (`concurrency: agent-dispatch`) — one issue at a time.
@@ -283,7 +283,7 @@ for overrides. See [promotion-contract.md](../pipelines/promotion-contract.md).
 
 ## To do — triage and intake (pawpet-claude)
 
-Planned lane: the same deterministic form checks run at the start of **To do** before delivery dispatch; keyword risk becomes a hint for the delivery-path check.
+Planned lane: the same deterministic form checks run at the start of **To do** before delivery dispatch; keyword risk stays a triage hint and is not a delivery gate (PIPE-V2-D-REV4-004).
 
 ## Deterministic triage automation
 

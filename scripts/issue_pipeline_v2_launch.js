@@ -287,7 +287,7 @@ function stagePromptsForConfig() {
 /**
  * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
  * only launched from Ready, after a converged review. The legacy labels are retired, so the
- * engine supplies them for a delivery launch. The risky-scope and blocking-label checks stay.
+ * engine supplies them for a delivery launch. The blocking-label check stays; the keyword risky-scope scan was removed (PIPE-V2-D-REV4-004).
  * Spec, review and intent-review doorbells start no delivery and skip the preflight; they still set `busy`.
  */
 const V2_APPROVAL_LABELS = ['agent-approved', 'human-reviewed'];

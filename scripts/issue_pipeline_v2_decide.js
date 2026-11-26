@@ -17,7 +17,7 @@
  *   followUp        { depth } when the issue is an intent-review follow-up
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
- *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
+ *   totalVotes      signed review verdicts since entry into In analysis + agent body edits (reactions are not votes)
  *   roundRobinAfter id last assigned on the board (newest v2:launch, then earlier picks this tick)
  *   roundRobinOrder startable ids in config order; the ring the cursor walks
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }

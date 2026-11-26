@@ -65,8 +65,8 @@ function findSpecRequest(comments, engineLogins, editors = {}) {
 }
 
 /**
- * Spec facts for `decide()`. `reactions` are the reactions on the request comment; only a 👍
- * from a listed agent created after the request counts as the DoR pass.
+ * Spec facts for `decide()`. The DoR pass is a signed `spec up` verdict on this body hash, created after
+ * the request (PIPE-V2-D-REV4-001). `reactions` is accepted for the caller's shape and is not read.
  */
 function deriveSpecFacts({
   comments,

@@ -68,7 +68,7 @@ Each issue gets one action per tick, logged as a `pipeline_v2_action` line. Ever
   - **Teardown:** close sandbox issues only when no delivery PR is open and the row’s pass criteria are met or explicitly abandoned; closing early can orphan agent runs ([soak2 sign-off](./changes/pipeline-v2-soak2-findings.md) documents premature close of **#2498** / **#2501** with open PRs).
 - **Soak2 (2026-11-21 – 2026-11-22):** sign-off
   [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) — **To do → Done not proven**; shipped **#2510**, **#2511**, **#2512**, **#2517**. Fixtures **#2493–#2508** closed 2026-11-22. **Soak3:** new fixtures and a new proposal under `changes/`; proposed gates are listed in the findings doc until accepted here.
-- **Preflight:** in-scope sections (including **Acceptance criteria**) still participate in `detectRiskyScope` (**#2517** only excludes **`### Out of scope`**). Soak2 **#2506** showed operator body reword to launch — agents must not do that (**SOAK-008**); treat in-scope keyword trips as an **open finding** until soak3 or a scan change.
+- **Preflight:** superseded by PIPE-V2-D-REV4-004. The keyword risky-scope scan is no longer part of the launch preflight. The soak2 operator reword (**#2506**) is still governed by **SOAK-008** and by review, not by a scan.
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
