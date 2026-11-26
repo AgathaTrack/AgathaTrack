@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-24
+last_updated: 2026-11-26
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -228,6 +228,15 @@ A delivery agent, whatever the method, must:
 
 A PR is linked to an issue when its body says `Refs|Closes|Fixes|Resolves #n` and it appears in the issue's timeline. Only
 merges into `main` count; phase PRs merged into an integration branch are open or closed work, not delivery.
+
+**Light-plan programmes** (body `Method: light-plan`, skill: `.cursor/skills/light-plan/SKILL.md`): the delivery agent ends
+at Pre-UAT green on the release merge SHA — every **Definition of Done** item ticked, then `finish-work`. It does **not** close
+the issue, write **`Stage`**, or run **`/AgentAcceptance`** (the acceptance skill forbids the session that shipped the release).
+With **`ISSUE_PIPELINE_V2=on`**, the engine alone advances **`Stage`**: **In progress → In Main** when `progress.finished`
+facts hold; **In Main → In UAT** only after **`aatSatisfied`** for `delivery.lastMergeSha` (when the AAT gate is on) **and**
+`uatContainsLatestMerge` — not on merge alone. The engine **`launch-aat`** action starts a separate agent that follows
+`.cursor/skills/agent-acceptance/SKILL.md`. Legacy merge/UAT handlers still set **`Stage`** only when the engine does not own
+the issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 
 ### Launch and intent review
 
