@@ -1,9 +1,8 @@
 name: Issue pipeline v2
 
-# Pipeline v2 (#2385). ISSUE_PIPELINE_V2: off | dry-run | on (default off). dry-run logs decisions;
-# only `on`, with ENGINE_PAT belonging to a login in .github/pipeline-agents.json `engine.logins`, writes.
-# Event wakes (#2560 P3): board-wide ticks on issue activity, trusted comments, merged PRs, and deploy / runner completion.
-# Schedule (:11 and :41) is the sweeper when events are missed (PIPE-V2-HT-R-003).
+# Pipeline v2 (#2385). Switches: docs/agent-efficiency/github-issue-workflow.md §Pipeline switches (reference).
+# ISSUE_PIPELINE_V2: off | dry-run | on (default off). dry-run logs; only `on` + ENGINE_PAT in engine.logins writes.
+# Event wakes (#2560 P3); cron :11/:41 sweeper (PIPE-V2-HT-R-003).
 on:
   schedule:
     - cron: '11,41 * * * *'
