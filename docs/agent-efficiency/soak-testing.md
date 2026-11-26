@@ -20,7 +20,7 @@ Live **board soaks** (pipeline v2 ticks, `ISSUE_PIPELINE_V2=on`, often scoped wi
 
 | ID | Decision | Status |
 |---|---|---|
-| PIPE-V2-D-SOAK-010 | **Live board soaks are not Definition of Done items** on delivery issues. They live in the soak catalog and batch in a **soak box** issue. `dodComplete` in `issue_pipeline_v2_release.js` ignores unticked DoD rows that cite **`SOAK-REG-*`**, **`<!-- soak-dod:defer -->`**, or **catalog soak** (see §Deferral markers). Spec/review agents still reject new live-soak DoD rows at convergence | Accepted (owner); evidence: [#2448 owner risk acceptance](https://github.com/AgathaTrack/AgathaTrack/issues/2448#issuecomment-7191295003) (2026-11-26 chat: waive board soak, close #2448 Done) |
+| PIPE-V2-D-SOAK-010 | **Live board soaks are not Definition of Done items** on delivery issues. They live in the soak catalog and batch in a **soak box** issue. `dodComplete` skips unticked rows only when **`SOAK-REG-*`** or **`<!-- soak-dod:defer -->` leads the checkbox line** (see §Deferral markers). Spec/review agents still reject new live-soak DoD rows at convergence | Accepted (owner, 2026-11-26): [#2448](https://github.com/AgathaTrack/AgathaTrack/issues/2448) closed Done ([#2448#issuecomment-7191295003](https://github.com/AgathaTrack/AgathaTrack/issues/2448#issuecomment-7191295003)); owner confirmed gate change in **PR #2655** review (waives scope AAT fail + board soak deferral) |
 
 This policy does **not** grant agents permission to change repo **Actions variables** (`ISSUE_PIPELINE_V2`, `ISSUE_PIPELINE_V2_LABEL`, `WIP_LIMIT`). Only owners/operators set those (AGENTS.md §Escalation — CI / pipeline gate).
 
@@ -38,11 +38,12 @@ At **review convergence**, spec and review agents **reject** a DoD that lists li
 
 ### Deferral markers (engine)
 
-If a legacy or mistaken DoD row still describes a deferred soak, keep it **unchecked** and include one of:
+If a legacy DoD row still describes a deferred soak, keep it **unchecked** and **start the line** with the marker (mentions mid-sentence do not count):
 
-- `SOAK-REG-###` (catalog id), or
-- `<!-- soak-dod:defer -->` on the same line, or
-- the phrase `catalog soak` (case-insensitive)
+```markdown
+- [ ] SOAK-REG-001 …description…
+- [ ] <!-- soak-dod:defer --> …description…
+```
 
 Otherwise `progress.finished` stays blocked on that `- [ ]` row.
 

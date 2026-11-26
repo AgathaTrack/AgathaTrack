@@ -28,7 +28,7 @@ Authoritative **steps and pass criteria** for live pipeline v2 board soaks. Poli
 | **Source** | [#2448](https://github.com/AgathaTrack/AgathaTrack/issues/2448) (gate on `main` via #2479) |
 | **Agent** | **no** (operator must arm live ticks; see §Operator) |
 | **Batch** | TBD — open next `soak-box` issue |
-| **Status** | pending (unit tests green on `main`; board soak waived 2026-11-26) |
+| **Status** | **Waived** 2026-11-26 — [owner risk acceptance on #2448](https://github.com/AgathaTrack/AgathaTrack/issues/2448#issuecomment-7191295003); owner confirmed deferral on PR #2655. Unit tests on `main` are the regression oracle until a future soak box run |
 
 ### Operator (human) — once per soak window
 
@@ -77,7 +77,7 @@ Delivery agents **must not** perform step 1; escalation applies.
 
 1. File follow-up **#B** whose body starts with `<!-- v2:follow-up of=#F -->`; open fix PR with `Refs #F` and `Refs #B`.
 2. On parent **#F** at In Main, post `aat-fail --reason implementation`.
-3. **Pass:** parent **In progress**; while **#B** is open, parent does not get `Blocked=stalled` from implementation-quiet row; merging parent-linked PR to `main` ends suppression.
+3. **Pass:** parent rewinds to **In progress**; while follow-up **#B** is open (`aat.implementation-waiting`), the engine does not set `Blocked=stalled` (`aat.implementation-quiet` applies only when no follow-up and no linked PR remain); a parent-linked merge to `main` ends suppression.
 
 ### Regression trigger
 

@@ -124,7 +124,7 @@ Do not run AAT on issues whose body contains `<!-- v2:follow-up of=#… -->`.
 | `soak-box` | Rolling batch issue listing deferred catalog soaks ([soak-testing.md](./soak-testing.md)) |
 | `soak-human` | Catalog spec requires a human step; agents must not claim an agent-runnable Pass without that step done |
 
-Create `soak-box` and `soak-human` in repo settings when absent. Catalog specs default to **agent-runnable**; add `soak-human` on the fixture when not.
+Labels **`soak-box`** and **`soak-human`** exist in the repo. Catalog specs default to **agent-runnable**; add `soak-human` on the fixture when not.
 
 ---
 

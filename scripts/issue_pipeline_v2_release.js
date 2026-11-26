@@ -62,12 +62,15 @@ async function listLinkedPrs({ owner, repo, issueNumber, token, restFn = rest })
   return prs;
 }
 
-/** Deferred catalog soaks may stay unticked in delivery DoD without blocking In Main (PIPE-V2-D-SOAK-010). */
-const DEFERRED_SOAK_DOOD_LINE =
-  /SOAK-REG-\d+|<!--\s*soak-dod:defer\s*-->|\bcatalog soak\b/i;
+/**
+ * Deferred catalog soaks may stay unticked in delivery DoD without blocking In Main (PIPE-V2-D-SOAK-010).
+ * The marker must lead the checkbox item (not a mention elsewhere on the line).
+ */
+const DEFERRED_SOAK_DOOD_UNTICKED =
+  /^\s*[-*]\s+\[ \]\s*(?:SOAK-REG-\d+\b|<!--\s*soak-dod:defer\s*-->)/i;
 
 function isDeferredSoakDoDLine(line) {
-  return DEFERRED_SOAK_DOOD_LINE.test(String(line || ''));
+  return DEFERRED_SOAK_DOOD_UNTICKED.test(String(line || ''));
 }
 
 /** True when the checklist sections have no unticked box; no boxes at all counts as complete. */
