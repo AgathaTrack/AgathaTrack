@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { evaluatePlannedPathGlobs } = require('./pipeline_path_gate');
+const { evaluatePlannedPathGlobs } = require('./execute_plan_path_globs');
 
 const TRACKED = [
   'flutter_app/lib/main.dart',
