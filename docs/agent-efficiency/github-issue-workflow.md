@@ -231,12 +231,14 @@ merges into `main` count; phase PRs merged into an integration branch are open o
 
 **Light-plan programmes** (body `Method: light-plan`, skill: `.cursor/skills/light-plan/SKILL.md`): the delivery agent ends
 at Pre-UAT green on the release merge SHA — every **Definition of Done** item ticked, then `finish-work`. It does **not** close
-the issue, write **`Stage`**, or run **`/AgentAcceptance`** (the acceptance skill forbids the session that shipped the release).
-With **`ISSUE_PIPELINE_V2=on`**, the engine alone advances **`Stage`**: **In progress → In Main** when `progress.finished`
-facts hold; **In Main → In UAT** only after **`aatSatisfied`** for `delivery.lastMergeSha` (when the AAT gate is on) **and**
-`uatContainsLatestMerge` — not on merge alone. The engine **`launch-aat`** action starts a separate agent that follows
-`.cursor/skills/agent-acceptance/SKILL.md`. Legacy merge/UAT handlers still set **`Stage`** only when the engine does not own
-the issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
+the issue or run **`/AgentAcceptance`** (the acceptance skill forbids the session that shipped the release). While the engine
+**owns** the issue (`v2Owns` in `pipeline-v2-owner.js`: `ISSUE_PIPELINE_V2=on` and no soak scope label, or the issue carries
+`ISSUE_PIPELINE_V2_LABEL` when set), the delivery agent does **not** write **`Stage`**; **bootstrap** (engine off, dry-run, or
+unscoped soak without the label) follows the §Who writes what bootstrap row instead. With ownership on, the engine advances
+**`Stage`**: **In progress → In Main** when `progress.finished` facts hold; the issue stays **In Main** through the
+**agent acceptance gate** (`launch-aat` → `aatSatisfied` when enabled); **In Main → In UAT** only after gate satisfaction **and**
+`uatContainsLatestMerge` — not on merge alone. Legacy merge/UAT handlers still set **`Stage`** when the engine does not own the
+issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 
 ### Launch and intent review
 
