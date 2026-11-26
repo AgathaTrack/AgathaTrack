@@ -80,9 +80,11 @@ test('issue-pipeline-v2 workflow: switch guard and event triggers (#2560)', () =
     /needs\.wake-gate\.outputs\.proceed == 'true'/m,
     'tick must depend on wake gate',
   );
-  assert.match(text, /issues:\s*\n\s+types:/m);
-  assert.match(text, /issue_comment:\s*\n\s+types:/m);
-  assert.match(text, /pull_request:/m);
-  assert.match(text, /workflow_run:/m);
+  assert.match(text, /issues:\s*\n\s+types:\s*\[edited, labeled, closed, reopened\]/m);
+  assert.match(text, /issue_comment:\s*\n\s+types:\s*\[created\]/m);
+  assert.match(text, /pull_request:\s*\n\s+types:\s*\[closed\]\s*\n\s+branches:\s*\n\s+-\s+main/m);
+  assert.match(text, /workflow_run:\s*\n\s+workflows:\s*\n\s+- Deploy UAT \(uat\.agathatrack\.com\)/m);
+  assert.match(text, /- Deploy Production \(agathatrack\.com\)/m);
+  assert.match(text, /- Pipeline Claude run/m);
   assert.match(text, /issue_pipeline_v2_event_wake\.js/m);
 });
