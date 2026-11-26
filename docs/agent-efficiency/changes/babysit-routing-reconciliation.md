@@ -11,6 +11,8 @@ tags: [agent-efficiency, babysit, policy, routing]
 
 # Babysit driver routing — review and fix spec
 
+> **Programme status (2026-11-26).** Phases 1–5 shipped (#2664, #2669, #2670, plus Phase 5 autonomy in #2664). Deferred pipeline work (live `auto-babysit.yml`, Copilot-aware engine fallback) stays in [issue-pipeline-babysit-gap.md](../plans/issue-pipeline-babysit-gap.md). Fold this file into `autonomous-pr-policy.md` when the gap doc closes.
+>
 > **Proposal (2026-11-26), draft for review.** This document changes no behaviour and no canonical text. It reviews the
 > repo-wide babysit reconciliation, corrects it where the repo disagrees, and specifies the fix as a sequence of small PRs.
 >
@@ -184,7 +186,7 @@ Pointers only. No other change to the skill's procedure.
 | 2 | 1e (guard) and light-plan | Guard (§4.8); `merge-policy.mdc` (§4.3); `light-plan/SKILL.md` §Release; spawn pointer (§4.9) | `merge-policy.mdc`, `light-plan`, `spawn-sprint-agents` | Phase 1 |
 | 3 | not in the gap doc | Watchdog (§4.7) and test | `scripts/issue_busy_watchdog.js`, `autonomous-pr-policy.md` (behaviour note) | **Shipped** (`cursor/babysit-routing-phase3-b077`) — watchdog plus/tests already on `main`; policy note added |
 | 4 | 1b and 1c, then gap Phases 2 and 3 | Delivery-contract obligations (revised R7, §8 C2), launch prompt, event trigger, engine fallback | Per gap doc | **Shipped** (`#2670`) — 1b/1c, `purpose=babysit`, engine idle fallback; live `auto-babysit.yml` dispatch and Copilot-aware gating deferred per gap doc |
-| 5 | — | `AGENTS.md` §Autonomy (D2 wording, plus light-plan release) | `AGENTS.md` | Owner approval of the wording |
+| 5 | — | `AGENTS.md` §Autonomy (D2 wording, plus light-plan release) | `AGENTS.md` | **Shipped** (`#2664`) — pipeline and sprint merge scope in §Autonomy |
 
 Phases 1 and 2 cover the policy and guard items of gap Phase 1 (1a and 1e). Phase 4 must not ship them again. Gap item 1d is dropped and needs no work.
 

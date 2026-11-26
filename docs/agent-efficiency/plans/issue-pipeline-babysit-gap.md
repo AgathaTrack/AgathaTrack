@@ -3,7 +3,7 @@ title: Issue pipeline delivery PRs — babysit gap and proposed fix
 owner: Documentation Team
 audience: both
 status: in-delivery
-status_note: Phase 1 shipped 2026-11-26 (policy, METHOD_PROMPTS.PR, delivery contract, guard markers)
+status_note: Gap plan Phase 1 shipped 2026-11-26 (#2664/#2670). Reconciliation programme phases 1–4 also shipped; gap Phases 2–3 (live auto-babysit, Copilot fallback) remain — #2671, #2672.
 last_updated: 2026-11-26
 tags: [agent-efficiency, github-issues, babysit, pipeline]
 ---
@@ -106,11 +106,11 @@ Add a test next to `check_babysit_skill_family.test.js` that removing any of the
 
 **Docs gate for Phase 1:** `## Docs` lists `docs/agent-efficiency/autonomous-pr-policy.md` and `github-issue-workflow-behaviour.md`, because they describe a behaviour change.
 
-### Phase 2: event-driven trigger (needs owner approval and a design note first)
+### Phase 2: event-driven trigger (needs owner approval; design note **done**)
 
 `.github/workflows/auto-babysit.yml` is a CI workflow change. `AGENTS.md` lists CI gate changes as requiring the owner's approval.
 
-**Design note needed before this phase.** `pipeline-claude-run.yml` takes `stage` as a free-form string ("Canonical Stage name for this doorbell"). `babysit` is not a Stage name, and the prepare step only knows the doorbell and acceptance stages. Phase 2 therefore needs a design note that adds a non-Stage doorbell kind (for example `purpose: babysit`, alongside the existing `purpose: delivery` used by `buildLaunchRecord`), with its prompt from 1c and its launch record. The launch record `RECORD` regex in `scripts/issue_pipeline_v2_launch.js` accepts `purpose=delivery|doorbell` only, so a `babysit` marker would be ignored by every reader of the records (launch-success, active-run and busy detection). The record grammar, every reader, and tests are therefore in Phase 2 scope. The note goes into `github-issue-workflow-behaviour.md` §Launch before code.
+**Design note (delivered #2670).** `github-issue-workflow-behaviour.md` §Launch documents `purpose=babysit` launch records, `stage=babysit` on `pipeline-claude-run.yml`, and `METHOD_PROMPTS.PR` as the prompt. Record grammar and readers accept `purpose=babysit` and `stage=babysit`. **Remaining:** wire `auto-babysit.yml` to dispatch live babysit runs (not dry-run) for R1-scope PRs; owner approval required. Tracked: #2671.
 
 - For PRs in the R1 scope, dispatch `pipeline-claude-run.yml` with the babysit purpose in place of the dry-run. The dispatch uses the base-branch rule.
 - Other PRs keep the current dry-run.
@@ -118,7 +118,7 @@ Add a test next to `check_babysit_skill_family.test.js` that removing any of the
 
 ### Phase 3: engine fallback (needs owner approval, separate PR)
 
-**Partially delivered** (`cursor/babysit-pipeline-phase4-b077`): `progress.babysit-fallback` launches `purpose=babysit` when a pipeline-authored open PR is idle for `babysitFallbackHours` (default 4). Copilot-thread-specific gating remains future work.
+**Partially delivered** (`#2670`): `progress.babysit-fallback` launches `purpose=babysit` when a pipeline-authored open PR is idle for `babysitFallbackHours` (default 4). Copilot-thread-specific gating: #2672.
 
 When a linked PR is open, has no active run and has an unresolved thread or a pending Copilot review for more than N hours, the engine rings the babysit doorbell (the same mechanism as the existing review and acceptance doorbells). This belongs in `github-issue-workflow-behaviour.md` §Transitions as a new row, and in the `issue_pipeline_v2_decide` code. N is a proposal for review. A starting point is 4 hours, which is less than the 24-hour stall rule.
 
