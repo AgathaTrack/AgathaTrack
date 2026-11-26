@@ -112,14 +112,14 @@ A delivery agent, whatever the method, must:
 1. set `busy` when it starts (the engine sets it at launch; the agent keeps it while it works);
 2. reference the issue as `Refs #n` in **every** PR it opens, never `Closes` / `Fixes` / `Resolves` (those auto-close the
    issue on merge; an issue must stay open through UAT and prod), including the release PR of a light-plan;
-3. tick the Definition of Done as items land;
+3. tick the **delivery** Definition of Done as items land (mergeable work and automated verification only — **not** live board soaks; see [soak-testing.md](./soak-testing.md). Unticked rows that **start** with `<!-- soak-dod:defer -->` do not block `progress.finished` — `dodComplete` in `issue_pipeline_v2_release.js`);
 4. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
 
 A PR is linked to an issue when its body says `Refs|Closes|Fixes|Resolves #n` and it appears in the issue's timeline. Only
 merges into `main` count; phase PRs merged into an integration branch are open or closed work, not delivery.
 
 **Light-plan programmes** (body `Method: light-plan`, skill: `.cursor/skills/light-plan/SKILL.md`): the delivery agent ends
-at Pre-UAT green on the release merge SHA — every **Definition of Done** item ticked, then `finish-work`. It does **not** close
+at Pre-UAT green on the release merge SHA — every **delivery** Definition of Done item ticked (live soaks excluded per [soak-testing.md](./soak-testing.md)), then `finish-work`. It does **not** close
 the issue or run **`/AgentAcceptance`** (the acceptance skill forbids the session that shipped the release). While the engine
 **owns** the issue (`v2Owns` in `pipeline-v2-owner.js`: `ISSUE_PIPELINE_V2=on` and no soak scope label, or the issue carries
 `ISSUE_PIPELINE_V2_LABEL` when set), the delivery agent does **not** write **`Stage`**; **bootstrap** (engine off, dry-run, or

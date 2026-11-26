@@ -36,6 +36,8 @@ Org field **`Stage`**: Backlog → To do → In analysis → Ready → In progre
 | [atomic-pr-policy.md](./atomic-pr-policy.md) | One outcome per PR |
 | [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) | Review triage, CI cost |
 | [github-labels.md](./github-labels.md) | Label taxonomy (`busy`, `manual-only`, AAT, …) |
+| [soak-testing.md](./soak-testing.md) | Live soaks **not** in delivery DoD; soak box batching; agent-runnable specs |
+| [pipeline-soak-catalog.md](../e2e/pipeline-soak-catalog.md) | Executable pipeline soak steps and regression IDs (`SOAK-REG-*`) |
 | [governance-gates.md](./governance-gates.md) | Repo governance scripts |
 | [scripts/README.md](../../scripts/README.md) | Babysit, validate_docs, pre-push entry points |
 

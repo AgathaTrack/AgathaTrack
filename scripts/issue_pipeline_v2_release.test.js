@@ -54,6 +54,25 @@ test('definition of done: only the checklist sections count, no boxes means comp
   assert.equal(dodComplete('no boxes'), true);
 });
 
+test('definition of done: only <!-- soak-dod:defer --> defers; SOAK-REG id on the line still blocks', () => {
+  const deferred = [
+    '### Definition of Done',
+    '- [x] Tests green',
+    '- [ ] <!-- soak-dod:defer --> SOAK-REG-001 live board soak (catalog)',
+  ].join('\n');
+  assert.equal(dodComplete(deferred), true);
+  assert.equal(dodComplete('### Definition of done\n- [x] a\n- [ ] Live soak with no catalog id'), false);
+  assert.equal(
+    dodComplete('### Definition of Done\n- [x] ok\n- [ ] Implement retry (see SOAK-REG-001 for context)'),
+    false,
+  );
+  assert.equal(dodComplete('### Definition of Done\n- [x] ok\n- [ ] add catalog soak coverage to the CLI'), false);
+  assert.equal(
+    dodComplete('### Definition of Done\n- [x] ok\n- [ ] SOAK-REG-001 add retry to the CLI'),
+    false,
+  );
+});
+
 test('delivery facts: merges into main, open PRs, activity ignores the engine, markers are engine-only', () => {
   const prs = [
     { number: 1, state: 'closed', merged: true, mergedAt: '2026-11-10T00:00:00Z', mergeSha: 'aaa', base: 'main', author: 'pawpet-bot', updatedAt: '2026-11-10T00:00:00Z' },
