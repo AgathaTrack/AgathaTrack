@@ -31,14 +31,6 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNu
   // Before the first review request the spec pass is the body the first review will read.
   const spec = { author: idOf(specProbe.assignedTo), hash: requests[0]?.parsed.hash ?? bodyHash };
 
-  // Signed verdicts on each request's own hash. The verifier accepts a verdict only on the hash given.
-  const verdicts = [];
-  for (const request of requests) {
-    for (const v of findVerifiedVerdicts({ comments, config, engineLogins, issueNumber, bodyHash: request.parsed.hash, limits, kinds: ['review'] })) {
-      verdicts.push({ agentId: v.agentId, value: v.value, hash: v.hash, nonce: v.nonce, at: v.at });
-    }
-  }
-
   // The assignee's edit in its request's window, when it changed the body. The first such claim is the
   // edit; a later one belongs to a later request. A claim by anyone else, or after the next request, is not this round's.
   const claims = findLaunchVerifiedClaims({ comments, config, engineLogins, limits });
@@ -55,18 +47,32 @@ function planRounds({ comments, config, engineLogins, editors, bodyHash, issueNu
       assigned: assignee,
       history: (request.parsed.history || []).map(idOf),
       at: from,
-      edit: edit ? { hash: edit.hash, at: edit.at } : null,
+      edit: edit ? { hash: edit.hash, at: edit.at, commit: edit.commit } : null,
     };
   });
 
-  // Self-votes: a verdict by the run that produced a hash, on that hash. Not counted; logged.
+  // Self-votes: a verdict by the same run that produced a hash, on that hash. The run is identified by its
+  // commitment (sha256 of its nonce, equal to the commit of its launch and of its edit claim), not by its agent id:
+  // a later run of the same identity (fallback) is a different run, and its verdict counts. Not counted; logged.
   const ignored = [];
+  const selfRuns = new Set();
   for (const request of requestsIn) {
     if (!request.edit) continue;
+    selfRuns.add(`${request.edit.hash}|${request.edit.commit}`);
     for (const v of findVerifiedVerdicts({ comments, config, engineLogins, issueNumber, bodyHash: request.edit.hash, limits, kinds: ['review'] })) {
-      if (v.agentId === request.assigned && v.at >= request.edit.at) {
+      if (v.commit === request.edit.commit && v.at >= request.edit.at) {
         ignored.push({ agentId: v.agentId, hash: request.edit.hash, value: v.value, reason: 'self-vote' });
       }
+    }
+  }
+
+  // Signed verdicts on each request's own hash. The verifier accepts a verdict only on the hash given.
+  // A self-vote is dropped here, so the round records never count it.
+  const verdicts = [];
+  for (const request of requests) {
+    for (const v of findVerifiedVerdicts({ comments, config, engineLogins, issueNumber, bodyHash: request.parsed.hash, limits, kinds: ['review'] })) {
+      if (selfRuns.has(`${v.hash}|${v.commit}`)) continue;
+      verdicts.push({ agentId: v.agentId, value: v.value, hash: v.hash, nonce: v.nonce, at: v.at });
     }
   }
 

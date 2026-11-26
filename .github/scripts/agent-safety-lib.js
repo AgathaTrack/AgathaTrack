@@ -1,5 +1,7 @@
 'use strict';
 
+const { detectRiskyScope, parseSections } = require('./triage-lib');
+
 const FORBIDDEN_PATH_PREFIXES = [
   'db/migrations/',
   'server/config/security.js',
@@ -48,7 +50,7 @@ function issueHasBlockingLabels(labels) {
   );
 }
 
-function preflightIssue(issue) {
+function preflightIssue(issue, options = {}) {
   const labels = (issue.labels?.nodes || issue.labels || []).map((l) =>
     typeof l === 'string' ? l : l.name,
   );
@@ -70,6 +72,17 @@ function preflightIssue(issue) {
   const ownerApprovedDelivery = labels.map((l) => l.toLowerCase()).includes('owner-approved-delivery');
   if (ownerApprovedDelivery) {
     return { ok: true };
+  }
+
+  // The keyword risky-scope scan stays for the legacy launchers. The v2 launch passes keywordScan: false, because
+  // its review and escalation decisions replace the scan there (PIPE-V2-D-REV4-004).
+  if (options.keywordScan !== false) {
+    const title = issue.title || '';
+    const body = issue.body || '';
+    const risks = detectRiskyScope(title, body, parseSections(body));
+    if (risks.length > 0) {
+      return { ok: false, reason: `risky scope detected: ${risks.join(', ')}` };
+    }
   }
 
   return { ok: true };

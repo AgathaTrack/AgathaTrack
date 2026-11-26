@@ -33,5 +33,5 @@ You were asked to make an issue **ready**: a reviewer should be able to approve 
 
 - Never write `Stage` (the engine does, or the owner during bootstrap); you may write `Blocked`, the `busy` label and the body.
 - Hit an item on the AGENTS.md escalation list (security, breaking API, production migration, CI gate, product or legal call)? Set `Blocked=decision` with your recommendation instead.
-- Never edit the body to evade escalation or review (the **Security or Sensitive Area** field and AGENTS.md §Escalation); that is SOAK-008 in `docs/agent-efficiency/github-issue-workflow.md`. The keyword scan no longer gates launch (PIPE-V2-D-REV4-004), so this rule is about honest scope, not about passing a check.
+- Never edit the body to evade escalation or review (the **Security or Sensitive Area** field and AGENTS.md §Escalation); that is SOAK-008 in `docs/agent-efficiency/github-issue-workflow.md`. The v2 launch no longer keyword-scans (PIPE-V2-D-REV4-004), so this rule is about honest scope, not about passing a check.
 - Evidence goes on the issue, not only in chat.

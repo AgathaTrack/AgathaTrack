@@ -15,8 +15,8 @@ You were asked to review **one version** of an issue body, identified by the has
 3. **Either edit or vote, never both.**
    - **Edit** when you can fix what is wrong yourself: `node scripts/pipeline_verdict.js edit --from <hash> --file <path>`. The edit is your approval of the new version. It closes your round, another run reviews the new hash, and you post **no verdict** for it. Say what changed in one comment. **Do not** edit to evade launch safety: never reword **Security or Sensitive Area**, titles, or scope text to hide work that still needs AGENTS.md §Escalation (soak2 #2495). Use **`Blocked=decision`** and keep the body truthful (PIPE-V2-D-SOAK-008).
    - **Verdict** when the version is sound as written, or when it is not and you did not edit: `node scripts/pipeline_verdict.js review up --hash <hash>` or `review down --hash <hash>`. A down names the concrete change you want, in a normal comment.
-4. Post at most one verdict, as your last action. It reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it.
-5. Write your reasoning as **one comment**: what you checked, what you changed, what remains. Evidence goes on the issue, not only in chat.
+4. Write your reasoning as **one comment**, before any verdict: what you checked, what you changed, what remains. Evidence goes on the issue, not only in chat.
+5. Post at most one verdict, as your last action. It reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it.
 
 ## Rules
 

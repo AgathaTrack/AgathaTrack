@@ -161,3 +161,26 @@ test('#2103 replay: edits close their rounds; the self-vote is not counted; C1 g
   assert.equal(out.plan.agent, 'cursor-b', 'claude-a wrote h3: the other brand (cursor) is first');
   assert.equal(out.plan.fallback, false);
 });
+
+// Same-identity fallback: the editing run's own up is a self-vote, but a later run of the same identity is a
+// different run, and its verdict on that hash counts. Self-votes are matched by run (commitment), not agent id.
+test('same-identity fallback: the editing run\'s own up is a self-vote; a later run of the same identity counts', () => {
+  const t = NOW - 2 * 60 * 60 * 1000;
+  const n1 = 'f1f1f1f1';
+  const n2 = 'f2f2f2f2';
+  const comments = [
+    requestComment(1, 'h0', 'claude-a', t),
+    launchComment(2, 'claude-a', t + 1000, n1),
+    claimComment(3, 'pawpet-claude', t + 2000, 'claude-a', 'h1', n1),
+    verdictComment(4, 'pawpet-claude', t + 3000, 'claude-a', 'h1', 'up', n1),
+    requestComment(5, 'h1', 'claude-a', t + 4000),
+    launchComment(6, 'claude-a', t + 5000, n2),
+    verdictComment(7, 'pawpet-claude', t + 6000, 'claude-a', 'h1', 'up', n2),
+  ];
+  const out = planRounds({ comments, config, engineLogins: ENGINE, editors: {}, bodyHash: 'h1', issueNumber: 1, limits: config.limits, now: NOW });
+  assert.deepEqual(out.ignored.map((v) => [v.agentId, v.hash, v.value]), [['claude-a', 'h1', 'up']], 'only the editing run\'s own vote is ignored');
+  const r3 = out.derived[2];
+  assert.deepEqual([r3.hashIn, r3.attempts[0].type, r3.attempts[0].result], ['h1', 'claude-a', 'green']);
+  assert.equal(out.plan.type, 'set-stage', 'a green from a different run converges');
+  assert.equal(out.plan.to, 'Ready');
+});

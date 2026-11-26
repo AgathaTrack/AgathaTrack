@@ -115,7 +115,7 @@ An issue is dispatched when **all** are true:
 - Labels **not** present: `busy`, `manual-only`, `blocked`
 - Labels **required**: `human-reviewed` (workflow pause when removed)
 - `question` is informational and does not block dispatch
-- Passes deterministic preflight (labels and blocking checks; no keyword scan, PIPE-V2-D-REV4-004)
+- Passes deterministic preflight (re-checks risky scope; the v2 launch skips the keyword scan, PIPE-V2-D-REV4-004)
 - No active `<!-- cursor-agent-run: ... -->` marker with status `running`
 
 Dispatch is **single-threaded** (`concurrency: agent-dispatch`) — one issue at a time.

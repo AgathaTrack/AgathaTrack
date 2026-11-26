@@ -287,7 +287,7 @@ function stagePromptsForConfig() {
 /**
  * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
  * only launched from Ready, after a converged review. The legacy labels are retired, so the
- * engine supplies them for a delivery launch. The blocking-label check stays; the keyword risky-scope scan was removed (PIPE-V2-D-REV4-004).
+ * engine supplies them for a delivery launch. The blocking-label check stays; the v2 launch runs without the keyword risky-scope scan (PIPE-V2-D-REV4-004).
  * Spec, review and intent-review doorbells start no delivery and skip the preflight; they still set `busy`.
  */
 const V2_APPROVAL_LABELS = ['agent-approved', 'human-reviewed'];
@@ -318,7 +318,11 @@ async function launchIssue({
   const labels = (issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
   if (purpose === 'delivery' && !stage) {
     const preflightLabels = [...new Set([...labels, ...V2_APPROVAL_LABELS])];
-    const preflight = preflightIssue({ title: issue.title, body: issue.body, labels: preflightLabels.map((name) => ({ name })) });
+    // keywordScan: false, PIPE-V2-D-REV4-004. The legacy launchers keep the keyword scan.
+    const preflight = preflightIssue(
+      { title: issue.title, body: issue.body, labels: preflightLabels.map((name) => ({ name })) },
+      { keywordScan: false },
+    );
     if (!preflight.ok) {
       throw new Error(`preflight: ${preflight.reason}`);
     }
