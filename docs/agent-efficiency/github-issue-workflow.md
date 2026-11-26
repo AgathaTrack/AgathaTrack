@@ -42,15 +42,39 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 
 ### Switches and identity
 
+#### Pipeline switches (reference)
+
+One table for every pipeline-related repo variable and JSON limit that used to be scattered across plan docs (#2560 P4). **Cutover** means moving live board writes to pipeline v2 (`ISSUE_PIPELINE_V2=on` with an empty soak label).
+
+| Switch | Where | Read by (on `main`) | Values | Effect by combination |
+|--------|-------|---------------------|--------|------------------------|
+| `ISSUE_PIPELINE` | repo variable (retired) | **Nothing** — safe to delete on GitHub | was `off` / `dry-run` / `on` | v1 assignee dispatcher removed ([#2598](https://github.com/AgathaTrack/AgathaTrack/issues/2598)); history in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md). Never the cutover switch. |
+| `ISSUE_PIPELINE_V2` | repo variable | [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) gate and tick; merge/UAT/prod handlers; `agent-dispatch` / `agent-monitor` / `triage-human-reviewed` job guards; `issue_pipeline_v2.js` | `off` (default), `dry-run`, `on` | `off`: no v2 jobs. `dry-run`: decide + log only. `on`: live writes when `ENGINE_PAT` matches `engine.logins`. Legacy label workflows skip when `on`. |
+| `ISSUE_PIPELINE_V2_LABEL` | repo variable | Same as `ISSUE_PIPELINE_V2` | e.g. `pipeline-beta`, `soak4`, or empty | With `on`: only labelled issues get live writes; others stay dry-run on the same tick. Empty = whole board. |
+| `WIP_LIMIT` | repo variable | `issue_pipeline_v2.js` | `off` or unset | `off` lifts the Ready queue cap (`limits.wip`) for the run. Any other value keeps the JSON limit. |
+| `limits.wip` | `.github/pipeline-agents.json` | `issue_pipeline_v2.js` | positive integer (default 2) | Delivery slot count while `WIP_LIMIT` is not `off`. Not the Stage column. |
+| `STAGE_MIRROR` | repo variable (retired) | **Nothing** | was `on` / `off` | Org `Stage` ↔ board `Status` mirror cancelled ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)). |
+| `WIP_MAX` | repo variable (retired) | **Nothing** | was `2` default on v1 | v1 dispatcher only. |
+| `PIPELINE_IMPLEMENT_LAUNCH` | repo variable (retired) | **Nothing** | was `true` / unset | v1 implement lane only. |
+| `PIPELINE_STUCK_MAX` | repo variable (retired) | **Nothing** | was `3` default on v1 | v1 monitor relaunch cap only. |
+
+**Typical combinations**
+
+| `ISSUE_PIPELINE_V2` | `ISSUE_PIPELINE_V2_LABEL` | What runs |
+|---------------------|---------------------------|-----------|
+| `off` | any | Legacy label flow (until #2411 removes it); handlers use legacy `Stage` rules; v2 workflow skipped. |
+| `dry-run` | e.g. `soak4` | v2 ticks decide and log; scoped issues show what *would* be written; legacy flows still run. |
+| `on` | set | Live v2 writes on labelled issues only; legacy dispatch/triage/monitor skipped; handlers skip v2-owned issues. |
+| `on` | empty | Full board cutover: v2 owns all issues in scope; legacy flows off. |
+
+#### Identity and pool (`pipeline-agents.json`)
+
 | Setting | Where | Meaning |
 |---------|-------|---------|
-| `ISSUE_PIPELINE_V2` | repo variable | `off` (default; the job does not run), `dry-run` (decides and logs, sends nothing), `on` (writes). When `on`, label-flow triage/dispatch/monitor workflows are disabled (same guard as the retired v1 `ISSUE_PIPELINE=on` switch). |
-| `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
-| `WIP_LIMIT` | repo variable | Temporary. `off` lifts the Ready queue cap (`limits.wip`) for every tick, so Ready issues launch without waiting for a free slot. Any other value, or unset, keeps the committed limit. Remove the variable to restore it. |
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
 | `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (boolean; true in this repo), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
 
-The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch. A manual dispatch **previews by default**: it runs as a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. The job itself is still skipped while that switch is `off`, as it is on schedule. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. The optional **`mission`** input scopes stage rows for agent-woken runs: `board` (default, full pipeline) or `analyse` (To do through convergence to **Ready** only — requires `issue_number`, never `ready.launch`). Agents wake the engine with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`. Full spec: [changes/analyse-issue-skill.md](./changes/analyse-issue-skill.md). Each run logs effective mode, target, and mission (`pipeline_v2_run`) before any write (#2553 P4).
+The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) ticks the **whole board** when something relevant happens: issue edit, label, close, or reopen; a trusted issue comment (owner, member, collaborator, or configured agent login — not the engine account); a PR merged to `main`; a successful UAT or production deploy; or a finished Claude pipeline runner. Each event passes through `scripts/issue_pipeline_v2_event_wake.js` before the tick job runs; the :11 and :41 schedule is a **sweeper** for missed events (PIPE-V2-HT-R-003, #2560 P3). Manual dispatch also starts the workflow; it **previews by default**: a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. Both the gate and tick jobs skip while the switch is `off`. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. The optional **`mission`** input scopes stage rows for agent-woken runs: `board` (default, full pipeline) or `analyse` (To do through convergence to **Ready** only — requires `issue_number`, never `ready.launch`). Agents wake the engine with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`. Full spec: [changes/analyse-issue-skill.md](./changes/analyse-issue-skill.md). Each run logs effective mode, target, and mission (`pipeline_v2_run`) before any write (#2553 P4).
 Each issue gets one action per tick, logged as a `pipeline_v2_action` line. Every tick ends with one **`pipeline_v2_tick_summary`** line (`runId`, mode, target, mission, `boardReadComplete`, decision/effect/deferral/error counts, `durationMs`). A failed issue read does not abort other issues; `readFailures` marks a partial board read (#2556 P2). GitHub **blocked by** relationships (`blockedBy` GraphQL) skip stage writes and handoffs while any blocker is open (`pipeline_v2_skip` / row `blocked-by`; #2556 P3).
 
 **`/analyse-issue`:** Cursor skill [`.cursor/skills/analyse-issue/SKILL.md`](../../.cursor/skills/analyse-issue/SKILL.md) — engine-first spec and review until **Ready**, without delivery. Orchestrator may set **`Stage` = To do** at intake only (PIPE-V2-D-ANALYSE-003); lane agents still do not write `Stage`.
