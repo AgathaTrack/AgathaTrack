@@ -29,19 +29,7 @@ export async function seedGuardian(client) {
     bio: 'Indoor cat with regular vet visits',
   });
 
-  await upsertPersonalPet(client, {
-    id: DEMO_IDS.maxPet,
-    userId: DEMO_IDS.alice,
-    name: 'Max',
-    species: 'Dog',
-    breed: 'Mixed breed',
-    dateOfBirth: calendarDaysFromToday(-365 * 2),
-    weight: 12.0,
-    gender: 'Male',
-    bio: 'Young dog — flea prevention care item demo',
-  });
-
   console.log(
-    'seed: guardian scenario ready (Frederique, Carol, Buddy, Whiskers, Max)',
+    'seed: guardian scenario ready (Frederique, Carol, Buddy, Whiskers)',
   );
 }
