@@ -170,6 +170,11 @@ test('PIPE-UMB-D-001: an umbrella with a short sub-issue keeps its Stage at merg
   stubQueue(t, 'syncEnqueueAfterMerge');
   const merged = recordingIo({ title: 'Scripts umbrella', state: 'CLOSED' }, 'Refs #2548');
   merged.io.umbrellaClear = async () => false;
+  const bodies = [];
+  merged.io.upsertMarkerComment = async ({ body }) => {
+    merged.calls.push('comment');
+    bodies.push(body);
+  };
   const mergedResult = await handleMergedPr({
     owner: 'KanopeeKa',
     repo: 'AgathaTrack',
@@ -185,6 +190,7 @@ test('PIPE-UMB-D-001: an umbrella with a short sub-issue keeps its Stage at merg
   assert.equal(merged.calls.includes('stage'), false, 'no In Main write while a sub-issue is short');
   assert.equal(mergedResult.results[0].status, 'In progress');
   assert.equal(merged.calls.includes('comment'), true, 'the merge record is still written');
+  assert.match(bodies[0], /Stage: \*\*In progress\*\* \(an umbrella waits for its sub-issues/);
 
   stubQueue(t, 'syncDeployResult');
   const uat = recordingIo({ title: 'Scripts umbrella', state: 'CLOSED' }, 'Refs #2548');

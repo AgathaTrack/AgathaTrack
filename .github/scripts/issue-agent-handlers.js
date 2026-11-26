@@ -323,6 +323,12 @@ async function handleMergedPr({
       await api.setIssueStage({ owner, repo, issueNumber, stageName: 'In Main', projectsPat });
     }
     const boardStatus = readyForMain ? 'In Main' : 'In progress';
+    // Say why the Stage did not move: the umbrella rule (PIPE-UMB-D-001) or the open-PR / DoD case.
+    const waitNote = readyForMain
+      ? ''
+      : mayMain
+        ? ' (an umbrella waits for its sub-issues; Stage moves to In Main once every one is In Main or later)'
+        : ' (another linked PR is still open or the DoD is not ticked; In Main follows the last merge)';
 
     // Prod notify reads the merge SHA only from a bot-authored comment (#2363 §5.1), so the
     // In Main record is written, and later edited, with the bot token.
@@ -345,7 +351,7 @@ PR #${prNumber} merged for this issue.
 
 - Merge commit: \`${mergeSha}\`
 - Expected UAT tag: \`${expectedTag}\` (created by **Promote UAT** on push to \`main\`)
-- Stage: **${boardStatus}**${readyForMain ? '' : ' (another linked PR is still open or the DoD is not ticked; In Main follows the last merge)'}
+- Stage: **${boardStatus}**${waitNote}
 - Issue reopened for UAT tracking (use **Done** after validation; do not rely on auto-close).
 
 UAT deploy runs automatically when the tag is pushed.`,
