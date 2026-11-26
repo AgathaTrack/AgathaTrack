@@ -11,8 +11,13 @@ tags: [agent-efficiency, babysit, policy, routing]
 
 > **Proposal (2026-11-26), draft for review.** This document changes no behaviour and no canonical text. It reviews the
 > repo-wide babysit reconciliation, corrects it where the repo disagrees, and specifies the fix as a sequence of small PRs.
-> Related: [issue-pipeline-babysit-gap.md](../plans/issue-pipeline-babysit-gap.md) (pipeline PR driver, #2658). That doc owns the
-> pipeline problem; this doc owns the routing table that the pipeline fix depends on.
+>
+> **Revision 2 (2026-11-26).** Applied review of this spec: driver definition (§3); notes on rows 1, 2 and 13 (§3); base-aware
+> watchdog that keeps the light-plan branch (§4.7); gap-doc deduplication (§4.2, §4.6); spawn-sprint pointer (§4.9); gap-doc
+> phase mapping (§5); D1–D3 sharpened (§7); driver lifetime risk (§8).
+>
+> Related: [issue-pipeline-babysit-gap.md](../plans/issue-pipeline-babysit-gap.md) (pipeline PR driver, #2658, merged). That doc
+> owns the pipeline problem; this doc owns the routing table the pipeline fix depends on.
 
 ## 1. Summary
 
@@ -26,6 +31,8 @@ The babysit family is mostly coherent. Its real problems are:
 
 The fix is one routing table in `autonomous-pr-policy.md`, with every skill and rule that names a driver linking to it, plus a checker that fails if the table is removed or contradicted.
 
+**Today's default** for an agent PR to `main` is row 15 (no agent driver; the user merges). Nothing in this spec changes that default unless the owner decides D1 (a).
+
 ## 2. Review of the reconciliation
 
 Each claim was checked against the repo at `63c1b9c`.
@@ -38,12 +45,12 @@ Each claim was checked against the repo at `63c1b9c`.
 | R-3a | `babysit-plus` lines 228–259 teach v1 | **Partly wrong** | The §8 and "Execute-plan (v2)" text at those lines is v2-aware. The stale line is the "Related skills" table row "`/execute-plan` … babysit+ on phases; babysit-uat on final main merge". |
 | R-4 | `merge-policy.mdc` says light-plan phase PRs use "light merge" and not `/babysit-plus` | **Confirmed** | `merge-policy.mdc` light-plan bullet. `light-plan/SKILL.md` line 43 says every phase and sync PR is driven by `/babysit-plus`. |
 | R-5 | Pipeline Ready 2 routes every PR to `/babysit-plus`, whatever the base | **Confirmed; already has a proposed fix** | `issue-pipeline-automation.md` line 81. The reconciliation did not cite #2658, whose §Decision rule table already gives `main` → `/babysit-uat`. |
-| R-6 | `issue_busy_watchdog.js` always says "resume with `/babysit-plus`" | **Confirmed** | `scripts/issue_busy_watchdog.js:58`. |
+| R-6 | `issue_busy_watchdog.js` always says "resume with `/babysit-plus`" | **Confirmed, with a light-plan branch** | `scripts/issue_busy_watchdog.js` lines 55–58 already branch on the `light-plan` label. Only the non-light-plan branch is unconditional. |
 | R-7 | `e2e_debug_status.mjs` requires `/babysit-uat` after a remedial PR | **Confirmed** | `scripts/e2e_debug_status.mjs:575`. |
 | R-8 | `/dependabot-batch`: Phase 3 plus, Phase 5 uat | **Confirmed** | Family table in `autonomous-pr-policy.md`. |
-| R-9 | Default single-agent → `main` should be `/babysit-uat` | **Incorrect as a description of today** | `AGENTS.md` §Autonomy: merge is allowed only when the user asked to merge or babysit that PR, or an active programme owns it. "Otherwise the user merges." Today the default for an unprompted agent PR is **no agent merge**. Making `/babysit-uat` the default is a new proposal with a CI cost (§7, D1). |
+| R-9 | Default single-agent → `main` should be `/babysit-uat` | **Incorrect as a description of today** | `AGENTS.md` §Autonomy: merge is allowed only when the user asked to merge or babysit that PR, or an active programme owns it. "Otherwise the user merges." Today the default for an unprompted agent PR is **no agent merge** (row 15). Making `/babysit-uat` the default is a new proposal with a CI cost (§7, D1). |
 | R-10 | No canonical line says what runs after a `cursor/*` PR goes to `main` | **Partly right** | True for the babysit skills. `AGENTS.md` §Autonomy already answers the merge question. What is missing is the driver choice once a babysit is requested. |
-| R-11 | Sprint row in the matrix is "plus per agent PR?" | **Correct, and left open** | `merge-policy.mdc` names sprint integration branches and agent merges into them. No skill or policy row names a driver for sprint agent PRs. See D3. |
+| R-11 | Sprint row in the matrix is "plus per agent PR?" | **Correct, and left open** | `merge-policy.mdc` names sprint integration branches and agent merges into them. `spawn-sprint-agents/SKILL.md` names no driver. See D3. |
 | R-12 | §5 babysit vs plus vs uat table | **Confirmed** | `babysit/SKILL.md`, `babysit-plus/SKILL.md`, `babysit-uat/SKILL.md`. |
 | R-13 | Pipeline plain `/babysit` is not a driver | **Confirmed (and stronger)** | `babysit` does not triage threads or gate the merge (family table: `gate` only). |
 
@@ -51,18 +58,20 @@ Each claim was checked against the repo at `63c1b9c`.
 
 - **M-1 Autonomy scope.** `AGENTS.md:50` names `/light-plan`, `/e2e-debug` and `/dependabot-batch` as programmes that may merge. It does not name the issue pipeline or sprint integration. The pipeline gap doc's R7 requires a delivery agent to merge and hold through pre-UAT. That is not authorised by the text as it stands. See D2.
 - **M-2 Pre-UAT cost.** Every merge to `main` already triggers `pre-uat-e2e.yml`. `pr-review-cost-efficiency.md` §GitHub Actions minutes lists batching, integration programmes and a cap of four open `cursor/**` PRs with full CI as the levers. A babysit-uat watch can block an agent for up to 90 minutes (`babysit_uat_watch_preuat.sh --timeout-min 90`). Defaulting every agent PR to uat multiplies both.
-- **M-3 Model invocation.** `babysit`, `babysit-plus` and `babysit-uat` set `disable-model-invocation: true`. An unattended run cannot call them through the Skill tool, so a prompt that names them is not a driver. The pipeline fix must give the driver procedure a non-skill entry point, as the gap doc's Phase 2 does.
-- **M-4 No consistency test.** `scripts/lib/babysit_skill_family_policy.js` checks only that resolve-all wording exists. Nothing checks that the routing table, `merge-policy.mdc`, `light-plan`, `babysit-uat` and the watchdog agree.
+- **M-3 Model invocation.** `babysit`, `babysit-plus` and `babysit-uat` set `disable-model-invocation: true`. An unattended run cannot call them through the Skill tool, so a prompt that names them is not a driver. The fix is to define a driver as the skill file's procedure, which an agent reads and follows (§3). The gap doc's 1c prompt does this.
+- **M-4 No consistency test.** `scripts/lib/babysit_skill_family_policy.js` checks only that resolve-all wording exists. Nothing checks that the routing table, `merge-policy.mdc`, `light-plan`, `babysit-uat`, `spawn-sprint-agents` and the watchdog agree.
 - **M-5 Precedence.** The reconciliation's matrix has two axes, base and programme. Real cases collide: a light-plan release PR is programme-owned and targets `main`; a pipeline docs-only PR targets `main`; a remedial PR is both. The matrix needs an explicit order, §3.
 
 ## 3. Routing model
+
+**Driver.** A driver is the procedure in the linked skill file, plus the scripts that file names, followed by an agent in whatever session runs it. `disable-model-invocation: true` only stops the Skill tool from loading the file. It does not change which procedure counts as the driver. An unattended run is told to read the file and follow it (gap doc 1c). Every row below names a file, so a driver can always be checked.
 
 **Precedence.** The first matching row wins. `/babysit-uat` contains all of `/babysit-plus`, so when a row allows either, uat is the choice unless a higher row says plus.
 
 | # | Case | Driver | Ends at |
 |---|------|--------|---------|
 | 1 | Active execute-plan v2 worker or driver on the PR (plan phase, sync, release or remedial) | `tick` and the driver, or the `triage-review` worker. **No babysit skill.** | Per [execute-plan-v2.md](../plans/execute-plan-v2.md) |
-| 2 | Remedial PR from `/e2e-debug` | `/babysit-uat` (mandatory) | Pre-UAT green on the merge SHA |
+| 2 | Remedial PR from `/e2e-debug`, outside a v2 plan | `/babysit-uat` (mandatory) | Pre-UAT green on the merge SHA |
 | 3 | `/dependabot-batch` CI phase | `/babysit-plus` | Squash merge |
 | 4 | `/dependabot-batch` landing on `main` | `/babysit-uat` | Pre-UAT green on the merge SHA |
 | 5 | `/light-plan` phase or sync PR → integration | `/babysit-plus` (the light merge is the integration mechanic, not a lighter driver) | Squash merge, or merge commit for the release-conflict sync only |
@@ -80,6 +89,10 @@ Each claim was checked against the repo at `63c1b9c`.
 
 Row 9 is checked before rows 10–11, so a pipeline docs-only PR to `main` gets plus, not uat. The exception needs the `## Docs` line, as the PR template already requires.
 
+**Rows 1 and 2.** Plan remedials are owned by `tick` under row 1, not row 2. Row 2 covers standalone `/e2e-debug` remedials, and a plan's recovery only when the owner explicitly runs non-plan recovery.
+
+**Row 13.** This is the deliberate path with no agent pre-UAT watch on `main`, under D1 (b). It is user-invoked plus, not pipeline delivery. A user who wants pre-UAT asks for `/babysit-uat` (row 12).
+
 ## 4. Suggested text (for the fix PRs, not applied here)
 
 ### 4.1 `autonomous-pr-policy.md` — §Layering, replace the execute-plan row and the sentence below the table
@@ -90,9 +103,17 @@ Row 9 is checked before rows 10–11, so a pipeline docs-only PR to `main` gets 
 Routing for any PR is in §Driver routing below. Do not restate it elsewhere.
 ```
 
-### 4.2 `autonomous-pr-policy.md` — new §Driver routing
+### 4.2 `autonomous-pr-policy.md` — new §Driver routing, and the gap-doc dedupe
 
-Add the table from §3 of this doc, verbatim, under a `### Driver routing` heading inside §Babysit skill family. This becomes the only copy. The pipeline gap doc's decision table is replaced by a link to it (its R4 already asks for the table to live in the policy).
+Add the table from §3 of this doc, verbatim, under a `### Driver routing` heading inside §Babysit skill family. This becomes the only copy.
+
+Phase 1 also adds one family-table row:
+
+```markdown
+| Issue-pipeline delivery PR (`Method: PR`, or R1 scope) | Yes — driver per §Driver routing rows 9–11 |
+```
+
+The gap doc's proposed §1a (its *Issue-pipeline delivery PRs* subsection with a base-branch table) is changed to a link to §Driver routing rows 9–11. It does not keep a second base-branch table. Gap doc acceptance criterion 3 and guard 1e are re-pointed at the policy table, not the gap doc's table. Otherwise the guard keeps checking a table that no longer exists.
 
 ### 4.3 `merge-policy.mdc` — light-plan bullet
 
@@ -113,22 +134,24 @@ Add a first row: "`/execute-plan` **v2** plan PR (any) → **none; `tick` owns i
 
 ### 4.6 `issue-pipeline-automation.md` — Ready 2, PR path
 
-Replace "PR → `/babysit-plus`" with "PR → driver per `autonomous-pr-policy.md` §Driver routing rows 9–11 (base-dependent)".
+Replace "PR → `/babysit-plus`" with "PR → driver per `autonomous-pr-policy.md` §Driver routing rows 9–11 (base-dependent)". Gap doc 1b (delivery contract obligations 4–5) and 1c (launch prompt) also link to that section and do not restate the table.
 
-### 4.7 `scripts/issue_busy_watchdog.js` — line 58
+### 4.7 `scripts/issue_busy_watchdog.js` — `buildWatchdogComment`
 
-Make the message depend on the PR base. The watchdog must have the base; if it does not, fetch `baseRefName` with the existing GitHub client. If the base cannot be read, use `/babysit-plus` and say the base is unknown (the cheaper choice).
+**Light-plan stays as it is** (lines 55–58: `continue light-plan #n`). Only the non-light-plan branch changes. The watchdog already reads the issue. When the linked PR is known, it fetches `baseRefName` with the existing GitHub client and sets `stale.pr_base`; otherwise `pr_base` is `null`.
 
 ```js
-const driver = prBase === 'main'
-  ? '`/babysit-uat` (base is main: pre-UAT must go green on the merge SHA)'
-  : '`/babysit-plus`';
-const next = prBase
-  ? `Next step: resume the owning PR with ${driver}, or clear \`busy\` and record the state here.`
-  : 'Next step: base unknown; resume the owning PR with `/babysit-plus`, or clear `busy` and record the state here.';
+const isLightPlan = (stale.labels || []).includes('light-plan');
+const next = isLightPlan
+  ? `Next step: resume the light-plan run (\`continue light-plan #${stale.number}\`).`
+  : stale.pr_base === 'main'
+    ? 'Next step: resume the owning PR with `/babysit-uat` (base is main: pre-UAT must go green on the merge SHA), or clear `busy` and record the state here.'
+    : stale.pr_base
+      ? 'Next step: resume the owning PR with `/babysit-plus`, or clear `busy` and record the state here.'
+      : 'Next step: base unknown; resume the owning PR with `/babysit-plus`, or clear `busy` and record the state here.';
 ```
 
-Test: add cases to `scripts/issue_busy_watchdog.test.js` for `main`, an integration branch, and unknown base.
+Test: add cases to `scripts/issue_busy_watchdog.test.js` for light-plan (unchanged text), `main`, an integration branch, and unknown base. The base-unknown case uses plus and says so, as the cheaper choice.
 
 ### 4.8 `scripts/lib/babysit_skill_family_policy.js` — consistency guard
 
@@ -137,29 +160,42 @@ Add invariants, enforced by `scripts/check_babysit_skill_family.js` and its test
 1. `autonomous-pr-policy.md` contains `### Driver routing` with a row for each of `/babysit`, `/babysit-plus`, `/babysit-uat`.
 2. `merge-policy.mdc` does not contain "not `/babysit-plus`" or "not **`/babysit-plus`**".
 3. `babysit-plus/SKILL.md` and `babysit-uat/SKILL.md` mention "v2" in the same section as `execute-plan`.
-4. `issue_busy_watchdog.js` contains no unconditional "`/babysit-plus`" literal outside the unknown-base branch.
+4. In `issue_busy_watchdog.js`, the `/babysit-plus` literal appears only in the non-light-plan branch, and the light-plan branch still names `continue light-plan`.
+5. Only one base-branch table exists in `docs/`: §Driver routing. The row text "Integration branch (`cursor/*-integration-*`" outside the policy is an error (it may appear in a link).
+6. `.cursor/skills/spawn-sprint-agents/SKILL.md` names §Driver routing rows 7 and 8 (see §4.9).
 
 These are text invariants, like the existing resolve-all check. They stop the drift this review found. They do not prove the routing is right.
 
+### 4.9 `.cursor/skills/spawn-sprint-agents/SKILL.md` — driver pointers
+
+- Step 5 (agent branches): "Agent PRs into the integration branch are driven by `/babysit-plus` (policy §Driver routing row 7)."
+- Step 8 (single PR integration → `main`): "The coordinator drives this PR with `/babysit-uat` (policy §Driver routing row 8)." Step 8 currently names no driver.
+
+Pointers only. No other change to the skill's procedure.
+
 ## 5. Phased implementation
 
-| Phase | PR | Scope | Canonical doc touched | Depends on |
-|-------|----|-------|----------------------|-----------|
-| 0 | This PR | This spec | None (proposal in `changes/`) | — |
-| 1 | Docs | §4.1–4.6, §4.2 routing table, gap doc's table replaced by a link | `autonomous-pr-policy.md` (canonical) | Owner review of §3 |
-| 2 | Docs + guard | §4.3–4.5, §4.8 checker and test | `merge-policy.mdc`, two skills | Phase 1 |
-| 3 | Code | §4.7 watchdog and test | `docs/agent-efficiency/autonomous-pr-policy.md` (behaviour note only) | Phase 1 |
-| 4 | Pipeline | [issue-pipeline-babysit-gap.md](../plans/issue-pipeline-babysit-gap.md) Phases 1–3 | Per that doc | Phase 1, D1, D2 |
-| 5 | Owner | D1–D3 decisions, `AGENTS.md` §Autonomy line if D2 is "yes" | `AGENTS.md` (escalation) | Owner |
+| Phase | Gap doc item | PR scope | Canonical doc touched | Depends on |
+|-------|--------------|----------|----------------------|-----------|
+| 0 | — | This spec | None (proposal in `changes/`) | — |
+| 1 | 1a (policy part) | §Driver routing table, family row (§4.2), gap doc §1a subsection replaced by a link | `autonomous-pr-policy.md` (canonical) | Owner review of §3 |
+| 2 | 1e (guard) | Guard (§4.8); skill and rule pointers (§4.3–4.5); spawn pointer (§4.9) | `merge-policy.mdc`, `babysit-plus`, `babysit-uat`, `spawn-sprint-agents` | Phase 1 |
+| 3 | not in the gap doc | Watchdog light-plan-preserving branch (§4.7) and test | `scripts/issue_busy_watchdog.js`, `autonomous-pr-policy.md` (behaviour note) | Phase 1 |
+| 4 | 1b and 1c, then gap Phases 2 and 3 | Delivery-contract obligations, launch prompt, event trigger, engine fallback | Per gap doc | Phase 1, D1, D2 |
+| 5 | — | D1–D3 decisions; `AGENTS.md` §Autonomy line if D2 is yes | `AGENTS.md` (escalation) | Owner |
 
-Each phase is one outcome and one PR, per [atomic-pr-policy.md](../atomic-pr-policy.md). Phase 1 can run before any decision because §3 rows 9, 10 and 11 are marked with their decision.
+Phases 1 and 2 cover the policy and guard items of gap Phase 1 (1a and 1e). Phase 4 must not ship them again. Gap item 1d is dropped and needs no work.
+
+Each phase is one outcome and one PR, per [atomic-pr-policy.md](../atomic-pr-policy.md). Phase 1 can run before any decision because rows 9–11 are marked with their decision and do not change until D1 is decided.
 
 ## 6. Acceptance criteria
 
 - A PR's driver can be read from one table (`autonomous-pr-policy.md` §Driver routing). No other file names a different driver for a case in §3.
 - A v2 plan PR is never given a babysit skill by any skill or rule (grep for `babysit` in `.cursor/skills/execute-plan/` and the babysit skills shows only the v1 notes).
 - `check_babysit_skill_family.js` fails when the routing table is removed or a driver row is deleted.
-- The watchdog picks the driver from the base, with tests for `main`, integration and unknown.
+- The watchdog picks the driver from the base for non-light-plan issues, with tests for light-plan, `main`, integration and unknown base.
+- After Phase 1, `docs/` contains one base-branch table (§Driver routing), and the gap doc's pipeline subsection links to it.
+- After Phase 2, `.cursor/skills/spawn-sprint-agents/SKILL.md` names rows 7 and 8 (steps 5 and 8).
 - A docs-only PR to `main` produces `N/A — <reason>` in `## Docs`, and the driver is plus.
 - No model identifier or user identifier appears in any artifact this change creates.
 
@@ -169,13 +205,18 @@ These are product and CI-cost decisions. The canonical docs do not answer them, 
 
 **D1 — Pre-UAT for agent PRs to `main` (CI cost and gate).**
 - (a) Every driven PR to `main` runs `/babysit-uat`.
-- (b) Only programme, pipeline and remedial PRs run `/babysit-uat`; single-agent plus PRs rely on the async Actions pre-UAT, which still runs.
+- (b) Only programme, pipeline and remedial PRs run `/babysit-uat`. Single-agent plus PRs rely on the async Actions pre-UAT, which still runs.
 - (c) The user chooses per PR.
-- **Recommendation: (b).** It keeps the gate on the paths that must not leave red unattended, and it avoids a 90-minute watch on every agent PR. Confirm that the async Actions run is an acceptable gate for (b).
+- **Recommendation: (b).** It keeps the gate on the paths that must not leave `main` red unattended, and it avoids a 90-minute watch on every agent PR.
+- Under (b), row 13 is the path that gets plus on `main` with no agent watch. State that in the owner's sign-off so it is not confused with pipeline delivery.
+- Under (a), rows 10–11 and gap R7 stay as written, and row 13 still gives plus only when the user asks for plus.
+- Driver lifetime applies under either option: see §8.
 
 **D2 — Merge authority for pipeline and sprint PRs (autonomy).**
-- Should `AGENTS.md` §Autonomy list the issue pipeline (`Method: PR`, Ready 2 → In progress) and sprint integration as programmes that may merge?
-- **Recommendation: yes, for pipeline PRs that the owner has put in Ready 2, limited to the §3 driver rows and not extended to the owner's other work.** Without this line, the gap doc's R7 has no authority behind it.
+- Should `AGENTS.md` §Autonomy list the issue pipeline and sprint integration as programmes that may merge?
+- **Recommendation: yes, narrowly.** Limit it to PRs that an engine-dispatched delivery run opened (a launch record exists for the issue), and to sprint integration PRs the coordinator opened. Not every `pawpet-bot` or `pawpet-claude` PR.
+- Without this line, the gap doc's R7 has no authority behind it.
+- If D2 changes `AGENTS.md`, make the spawn-sprint pointer (§4.9) in the same PR.
 
 **D3 — Sprint agent PR driver.**
 - Who drives an agent PR into `cursor/sprint-*-integration-*`?
@@ -183,9 +224,10 @@ These are product and CI-cost decisions. The canonical docs do not answer them, 
 
 ## 8. Risks
 
-- **Route churn.** Changing rows 9–11 changes CI cost. Ship Phase 1 with D1 recorded as "pending" and rows 9–11 unchanged, then decide.
-- **Guard false positives.** Text invariants can fail on harmless edits. Keep them to the four in §4.8 and say so in the failure message.
-- **Pipeline timing.** The gap doc's Phase 2 needs a non-skill procedure entry point (M-3). Phase 1 here does not change that; it only makes the policy table the one it points to.
+- **Route churn.** Changing rows 9–11 changes CI cost. Ship Phase 1 with D1 recorded as pending and rows 9–11 unchanged, then decide.
+- **Driver lifetime.** `.github/workflows/pipeline-claude-run.yml` has a 45-minute timeout. A row 11 driver (uat) cannot finish in one run: the pre-UAT watch alone can take up to 90 minutes. Under either D1 option, the gap doc's handoff to its Phase 3 fallback is the only route to completion. Raising the timeout is an owner CI decision, not part of this spec.
+- **Guard false positives.** Text invariants can fail on harmless edits. Keep them to the six in §4.8 and say so in the failure message.
+- **Pipeline timing.** The gap doc's Phase 2 needs a non-skill procedure entry point (M-3, and the gap doc's own design note). Phase 1 here does not change that; it only makes the policy table the one it points to.
 
 ## 9. Not in scope
 
