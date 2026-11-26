@@ -8,26 +8,35 @@
  * Usage:
  *   node scripts/issue_pipeline_wake.js --issue <n> --mission analyse [--live]
  *
- * Requires `gh` authenticated with permission to dispatch workflows on this repo.
+ * Unknown arguments are refused, so a typo such as `--lvie` cannot quietly turn a live wake into a
+ * preview. Requires `gh` authenticated with permission to dispatch workflows on this repo.
  */
 
 const { spawnSync } = require('node:child_process');
 const { resolveMission } = require('./issue_pipeline_mission');
 const { resolveDispatchTarget } = require('./issue_pipeline_v2_dispatch');
 
+const USAGE = 'Usage: node scripts/issue_pipeline_wake.js --issue <n> --mission analyse [--live]';
+
+/**
+ * @param {string[]} argv full process.argv
+ * @returns {{ issue: string|null, mission: string, live: boolean, help: boolean, error: string|null }}
+ */
 function parseArgs(argv) {
-  const out = { issue: null, mission: 'analyse', live: false };
+  const out = { issue: null, mission: 'analyse', live: false, help: false, error: null };
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--issue' && argv[i + 1]) {
+    if (arg === '--issue' && argv[i + 1] !== undefined) {
       out.issue = argv[++i];
-    } else if (arg === '--mission' && argv[i + 1]) {
+    } else if (arg === '--mission' && argv[i + 1] !== undefined) {
       out.mission = argv[++i];
     } else if (arg === '--live') {
       out.live = true;
     } else if (arg === '--help' || arg === '-h') {
-      console.log(`Usage: node scripts/issue_pipeline_wake.js --issue <n> --mission analyse [--live]`);
-      process.exit(0);
+      out.help = true;
+    } else {
+      out.error = `unknown or incomplete argument "${arg}"`;
+      return out;
     }
   }
   return out;
@@ -35,6 +44,14 @@ function parseArgs(argv) {
 
 function main() {
   const args = parseArgs(process.argv);
+  if (args.help) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  if (args.error) {
+    console.error(`${args.error}\n${USAGE}`);
+    process.exit(1);
+  }
   const target = resolveDispatchTarget(args.issue);
   if (!target.ok) {
     console.error(target.reason);
@@ -45,7 +62,8 @@ function main() {
     console.error(mission.reason);
     process.exit(1);
   }
-  const repo = process.env.GITHUB_REPOSITORY || spawnSync('gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], { encoding: 'utf8' }).stdout.trim();
+  const repo = process.env.GITHUB_REPOSITORY
+    || (spawnSync('gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'], { encoding: 'utf8' }).stdout || '').trim();
   if (!repo) {
     console.error('GITHUB_REPOSITORY or gh repo view required');
     process.exit(1);

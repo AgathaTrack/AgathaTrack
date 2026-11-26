@@ -50,10 +50,30 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
 | `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (boolean; true in this repo), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
 
-The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch. A manual dispatch **previews by default**: it runs as a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. The job itself is still skipped while that switch is `off`, as it is on schedule. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. The optional **`mission`** input scopes stage rows for agent-woken runs: `board` (default, full pipeline) or `analyse` (To do through convergence to **Ready** only — requires `issue_number`, never `ready.launch`). Agents wake the engine with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`. Full spec: [changes/analyse-issue-skill.md](./changes/analyse-issue-skill.md). Each run logs effective mode, target, and mission (`pipeline_v2_run`) before any write (#2553 P4).
+The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch. A manual dispatch **previews by default**: it runs as a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. The job itself is still skipped while that switch is `off`, as it is on schedule. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. The optional **`mission`** input scopes stage rows for agent-woken runs: `board` (default, full pipeline) or `analyse` (Backlog intake through convergence to **Ready** only — requires `issue_number`, never `ready.launch`; see §Analyse mission). Agents wake the engine with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`. Each run logs effective mode, target, and mission (`pipeline_v2_run`) before any write (#2553 P4).
 Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the tick line reports `errors`.
 
-**`/analyse-issue`:** Cursor skill [`.cursor/skills/analyse-issue/SKILL.md`](../../.cursor/skills/analyse-issue/SKILL.md) — engine-first spec and review until **Ready**, without delivery. Orchestrator may set **`Stage` = To do** at intake only (PIPE-V2-D-ANALYSE-003); lane agents still do not write `Stage`.
+**`/analyse-issue`:** Cursor skill [`.cursor/skills/analyse-issue/SKILL.md`](../../.cursor/skills/analyse-issue/SKILL.md) — engine-first spec and review until **Ready**, without delivery. The skill writes no `Stage`: an analyse wake moves a Backlog issue to To do (PIPE-V2-D-ANALYSE-003). Lane agents never write `Stage`. See §Analyse mission.
+
+### Analyse mission (`/analyse-issue`)
+
+A scoped tick for one issue, so an agent can drive intake through **Ready** without starting delivery. Wake with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live` (omit `--live` to preview). The helper refuses a non-integer issue, an unknown mission, `analyse` without an issue, and unknown flags, all before dispatch.
+
+| Mission | `issue_number` | Stage rows | At Ready |
+|---------|----------------|------------|----------|
+| `board` (default, cron) | optional | all | `ready.launch` (delivery) |
+| `analyse` | required | Backlog, To do, In analysis | `mission.analyse.complete`, no launch |
+
+From In progress onward, `mission=analyse` returns `mission.analyse.post-ready` and changes nothing.
+
+Engine-first flow. The runner takes one action per issue per tick, so intake and the spec request take two wakes:
+
+1. Orchestrator comments that the analysis started, then wakes `mission=analyse`. The engine moves **Backlog → To do** (`analyse.intake`). A To do issue skips this step.
+2. Next wake: the engine posts `v2:spec-request` and doorbells a tier-a agent.
+3. Spec pass: the engine moves To do → In analysis and requests review.
+4. Each reviewer leg is followed by a wake. Convergence sets **Ready**; the next wake logs `mission.analyse.complete`.
+
+Planned, not implemented: `deliver` (Ready → delivery only), `acceptance` and `release`. Each adds rows to `missionGuard` and a choice to the workflow's `mission` input.
 
 ### Stored state
 
@@ -76,12 +96,12 @@ join by configuration.
 |--------|---------|-----------|------------|--------|------|------------|
 | Engine | yes | yes | yes | no | no | no |
 | Agents (lane: spec, review, intent) | no | yes, when giving up or escalating | no | yes | yes | follow-up issues only, without `Stage` |
-| **Analyse orchestrator** (`/analyse-issue`) | **To do intake only** | no | no | no | no | no |
+| **Analyse orchestrator** (`/analyse-issue`) | no (wakes the engine, which does intake) | no | no | no | no | no |
 | Humans | yes | yes | no | yes | yes | yes |
 
 This is a rule, not a permission: agent tokens can write org issue fields. **Bootstrap:** until the engine runs in `on`
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
-From `on`, only the engine writes pipeline `Stage` transitions (To do → In analysis → Ready and delivery/release), except the analyse orchestrator at **To do intake** (PIPE-V2-D-ANALYSE-003). A human hold in `Blocked` means a human is needed; the engine clears only its own engine holds (`stalled`, `launch-failed`) when their cause is gone (§Transitions, Holds).
+From `on`, only the engine writes `Stage`: To do → In analysis → Ready, delivery and release, and Backlog → To do at analyse intake (PIPE-V2-D-ANALYSE-003). A human hold in `Blocked` means a human is needed; the engine clears only its own engine holds (`stalled`, `launch-failed`) when their cause is gone (§Transitions, Holds).
 
 **Merge, UAT and prod handlers (#2394 AAT).** While the engine is not `on` for an issue, the legacy handlers write `Stage` under the same table conditions: `In Main` only when the Definition of Done is ticked, no linked PR is still open, and a linked PR merged into `main` (`mayEnterInMain`); `In UAT` only when the issue's Stage is already `In Main` (an empty Stage keeps the legacy behaviour); `Done` with the prod close. A merge that does not complete the table leaves the issue `In progress`, so a two-PR issue reaches In Main after its last merge.
 
@@ -329,11 +349,11 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-PREFLIGHT-001 | Delivery preflight keyword scan ignores bodies under **`### Out of scope`** / `Out-of-scope`; title, preamble, and all other sections still count. **Security or Sensitive Area: Yes** is unchanged. Soak2 #2507/#2499/#2498/#2508 launch-failed on exclusion-list keywords in whole-body scan | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-PREFLIGHT-002 | Ready delivery: `preflight: risky scope detected` → next tick `Blocked=sensitive` (`ready.risky-scope`); no launch backoff. With label `owner-approved-delivery`, the engine does not set `sensitive` and may `ready.launch`; preflight skips risky-scope. Owner workflow: clear `Blocked`, add the label (or fix the body); manual delivery remains valid | Accepted (owner, 2026-11-23) |
 | PIPE-V2-D-DISPATCH-001 | **Retire v1 pipeline dispatcher.** Delete `issue-pipeline-dispatcher.yml`, `issue-pipeline-todo.yml`, and assignee-driven lane scripts. All stage transitions are pipeline v2 (`issue-pipeline-v2.yml`) or, until `ISSUE_PIPELINE_V2=on`, the legacy label flow. `pipeline_health` schedule staleness is not ported. `<!-- pipeline-state -->` markers and `scripts/lib/pipeline_state_trust.js` stay for execute-plan auto-approve on issues that still carry them | Accepted (2026-11-24) |
-| PIPE-V2-D-ANALYSE-001 | **`mission=analyse`** scoped ticks never apply `ready.launch`; at **Ready** the row is `mission.analyse.complete` | Proposed; implemented in `issue_pipeline_mission.js` |
-| PIPE-V2-D-ANALYSE-002 | **`mission=analyse`** requires **`issue_number`** on dispatch | Proposed; implemented |
-| PIPE-V2-D-ANALYSE-003 | **`/analyse-issue` orchestrator** may write **`Stage` = To do** at intake only | Proposed |
-| PIPE-V2-D-ANALYSE-004 | **Engine-first:** first engine wake precedes spec pass on a `v2:spec-request` | Proposed |
-| PIPE-V2-D-ANALYSE-005 | Agent **wake** = `issue-pipeline-v2` dispatch with `mission`, `issue_number`, `live`; helper `scripts/issue_pipeline_wake.js` | Proposed; implemented |
+| PIPE-V2-D-ANALYSE-001 | **`mission=analyse`** scoped ticks never apply `ready.launch`; at **Ready** the row is `mission.analyse.complete` | Accepted (owner, 2026-11-26); implemented in `issue_pipeline_mission.js` |
+| PIPE-V2-D-ANALYSE-002 | **`mission=analyse`** requires **`issue_number`** on dispatch | Accepted (owner, 2026-11-26); implemented |
+| PIPE-V2-D-ANALYSE-003 | **Engine intake, no agent `Stage` write.** Under `mission=analyse` the engine moves a **Backlog** issue to **To do** (`analyse.intake`). The orchestrator writes no `Stage`. Replaces an earlier proposal that let the orchestrator set To do. Checked 2026-11-26: no skill, lane agent or reviewer needs to write `Stage`; intent-review and spec/review skills already forbid it | Accepted (owner, 2026-11-26); implemented |
+| PIPE-V2-D-ANALYSE-004 | **Engine-first:** the first engine wake (intake) precedes the spec request, which the next wake posts | Accepted (owner, 2026-11-26) |
+| PIPE-V2-D-ANALYSE-005 | Agent **wake** = `issue-pipeline-v2` dispatch with `mission`, `issue_number`, `live`; helper `scripts/issue_pipeline_wake.js` | Accepted (owner, 2026-11-26); implemented |
 | PIPE-V2-D-RUNNER-001 | Claude runner WIP (`limits.runnerWip.claude`, default **3** when unset): counts active `pipeline-claude-run.yml` jobs. On cap, defer with label **`queued`** and `ring-doorbell` while pickup is within `reviewTimeoutMin`; after that, normal timeout/reassign (e.g. Cursor). Real doorbell failures clear **`queued`** so `ringFailed` can reassign. Cursor runners have no repo-side cap. Owner agreed **3** concurrent Claude runs (2026-11-21). Agents remove `queued` via `clear-queued` at doorbell start or `finish-work` when done | Accepted (2026-11-21) |
 | PIPE-V2-D-REV3-001 | Review process v3 (revision 3): proposal in [`changes/pipeline-v2-review-process-v3.md`](./changes/pipeline-v2-review-process-v3.md). When accepted and delivered (P1–P6), replaces In analysis adversarial pickup/convergence (#2385) and review lanes (#2428); identity-based convergence, tier-a/tier-b rounds, challenge label, watchers and event triggers per that doc. Until then, §Review (shipped) and `decideInAnalysis` behaviour remain authoritative | Proposed; P4 live (REV3-012) |
 | PIPE-V2-D-REV3-002 | **Unit of independence is the run.** Every doorbell starts a new agent of a type (`cursor-a`, `claude-a`, `cursor-b`, `claude-b`). A run never comes back: the next call to the same type is a different agent, including when that type wrote the spec. Type (brand and tier) chooses who is called next and nothing else; it never decides whether a vote counts. Shared logins do not matter for independence | Accepted (owner, 2026-11-22) |

@@ -498,6 +498,18 @@ function decide(facts, config) {
   return decideStage(facts, config);
 }
 
+/**
+ * Backlog is human triage. Only an analyse wake moves an issue on: the engine sets To do, so the
+ * `/analyse-issue` orchestrator never writes Stage (PIPE-V2-D-ANALYSE-003). Every other mission and
+ * the scheduled board leave Backlog alone.
+ */
+function decideBacklog(facts) {
+  if (facts.mission === 'analyse') {
+    return setStage('To do', 'analyse.intake');
+  }
+  return none('stage-backlog');
+}
+
 /** The stage rows, for an issue that is not blocked (or an engine hold being re-evaluated). */
 function decideStage(facts, config) {
   const stage = canonicalStage(facts.stage);
@@ -514,6 +526,8 @@ function decideStage(facts, config) {
     return setBlocked('decision', 'any.escalation');
   }
   switch (stage) {
+    case 'Backlog':
+      return decideBacklog(facts);
     case 'To do':
       return decideToDo(facts, config);
     case 'In analysis':

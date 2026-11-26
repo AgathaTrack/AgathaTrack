@@ -17,7 +17,7 @@ on:
         required: false
         default: false
       mission:
-        description: Scope this tick. `board` = full pipeline (default). `analyse` = To do through Ready only (requires issue_number; never ready.launch). Agent skills wake the engine with analyse + issue_number.
+        description: Scope this tick. `board` = full pipeline (default). `analyse` = Backlog intake through Ready only (requires issue_number; never ready.launch). Agent skills wake the engine with analyse + issue_number.
         type: choice
         required: false
         default: board

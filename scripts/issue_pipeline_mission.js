@@ -12,7 +12,7 @@ const MISSIONS = {
     requiresIssue: false,
   },
   analyse: {
-    description: 'To do through convergence to Ready only; never `ready.launch`.',
+    description: 'Backlog intake through convergence to Ready only; never `ready.launch`.',
     requiresIssue: true,
   },
 };
