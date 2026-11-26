@@ -10,15 +10,18 @@
  *   - each `v2:review-request hash=<h>` comment: one round, starting on that hash. A reassignment
  *     edits the same comment, so its `history` lists the attempts that went silent before the
  *     current one;
- *   - verified signed review verdicts (`up` / `down`) on that request's hash: they carry the run's
- *     nonce and identity;
+ *   - the assignee's edit in that round (`edit`, from a launch-verified claim): the new hash it
+ *     produced, and the proof of who produced it;
+ *   - verified signed review verdicts (`up` / `down`) on that request's own hash;
  *   - the engine's doorbell launch records: when the current attempt started (not the nonce).
  *
- * Rules from PIPE-V2-D-REV3-005 and -006:
- *   - a `down` that is followed by a new request on a new hash is a red with an edit: that
- *     attempt's `hashOut` is the new hash, and its run is the author of it;
- *   - a `down` with the body still on the same hash is a red without an edit: it holds the round;
- *   - a body hash that no attempt produced was written by a human.
+ * Rules (PIPE-V2-D-REV4-001, -002):
+ *   - an edit closes the round: the assignee is the run that produced `edit.hash`, and it posts no
+ *     verdict for that version. The round's attempt is `red` with `hashOut` set, which decideRound
+ *     reads as "closed by an edit";
+ *   - a `down` with the body still on the same hash holds the round (`red`, no `hashOut`);
+ *   - an `up` on the request's own hash is `green`;
+ *   - a body hash that no attempt produced was written by a human (no author recorded).
  *
  * Rounds 1 to 3 after the spec are tier a (R2 to R4); later reviews are tier b (C1 to C4).
  */
@@ -26,18 +29,17 @@
 /**
  * @param {object} input
  * @param {{author: string|null, hash: string|null}|null} input.spec   the spec pass; author null = human
- * @param {Array<{hash: string, assigned: string|null, history: string[], at: number}>} input.requests
- *        review requests, oldest first; `assigned` and `history` are agent ids
+ * @param {Array<{hash: string, assigned: string|null, history: string[], at: number, edit: {hash: string, at: number}|null}>} input.requests
+ *        review requests, oldest first; `assigned` and `history` are agent ids; `edit` is the assignee's edit in this round
  * @param {Array<{agentId: string, value: string, hash: string, nonce: string, at: number}>} input.verdicts
- *        verified review verdicts (value 'up' | 'down'); `value` as the verifier returns it
+ *        verified review verdicts on request hashes (value 'up' | 'down')
  * @param {Array<{agentId: string, nonce: string|null, at: number}>} input.launches
  *        doorbell launches for the In analysis stage
- * @param {string} input.bodyHash current body hash
  * @param {number|null} [input.releasedAt] newest `v2:release`: when it is newer than the last request,
  *        that round's earlier silent attempts no longer count, so it gets one more attempt (a retry)
  * @returns {Array<object>} rounds for `decideRound`, oldest first
  */
-function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [], bodyHash, releasedAt = null }) {
+function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [], releasedAt = null }) {
   const rounds = [];
   if (spec && spec.hash) {
     rounds.push({
@@ -63,37 +65,30 @@ function deriveRoundRecords({ spec, requests = [], verdicts = [], launches = [],
     }
 
     if (request.assigned) {
-      // The body this attempt produces: the next request's hash, or the current body if the round
-      // is still the last one and the body has moved since.
-      const producedHash = next ? next.hash : bodyHash;
-      // A verdict on this request's own hash, or a linked verdict (posted on the edited hash through a
-      // confirmed claim, see planRounds): it counts only when it names the hash the attempt produced.
-      const verdict = verdicts
-        .filter((v) => {
-          if (v.agentId !== request.assigned || v.at < request.at) return false;
-          if (v.requestHash !== undefined) return v.requestHash === request.hash && v.hash === producedHash;
-          return v.hash === request.hash;
-        })
-        .sort((a, b) => a.at - b.at)[0];
       const launch = launches
         .filter((l) => l.agentId === request.assigned && l.at >= request.at)
         .sort((a, b) => b.at - a.at)[0];
       const attempt = {
         type: request.assigned,
-        // The nonce comes only from a verdict. Before one, the launch record is not used: the nonce is
-        // the run's identity and is not published until the run votes.
-        nonce: verdict?.nonce ?? null,
+        nonce: null,
         startedAt: launch?.at ?? request.at,
         result: null,
         hashOut: null,
       };
-      if (verdict?.value === 'up') {
-        attempt.result = 'green';
-      } else if (verdict?.value === 'down') {
+      if (request.edit) {
+        // The edit is the approval of the version it produced. It closes the round and posts no verdict.
         attempt.result = 'red';
-        if (producedHash && producedHash !== request.hash) {
-          attempt.hashOut = producedHash;
-        }
+        attempt.hashOut = request.edit.hash;
+      } else {
+        // Only a signed verdict on this request's own hash, from the assignee, counts.
+        const verdict = verdicts
+          .filter((v) => v.agentId === request.assigned && v.at >= request.at && v.hash === request.hash)
+          .sort((a, b) => a.at - b.at)[0];
+        // The nonce comes only from a verdict. Before one, the launch record is not used: the nonce is
+        // the run's identity and is not published until the run votes.
+        attempt.nonce = verdict?.nonce ?? null;
+        if (verdict?.value === 'up') attempt.result = 'green';
+        else if (verdict?.value === 'down') attempt.result = 'red';
       }
       attempts.push(attempt);
     }

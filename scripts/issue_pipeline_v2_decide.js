@@ -310,6 +310,12 @@ function decideReady(facts, config) {
   if (launch.busy) {
     return setStage('In progress', 'ready.launched', { evidence: { runId: launch.runId || null } });
   }
+  // An issue started by /analyse-issue carries `analyse-only` and stops at Ready. Any tick reaches this row
+  // (a board tick woken by a label or an agent comment does not carry the analyse mission), so the label
+  // is what holds it. Removing the label, a human decision, lets the general pipeline launch delivery.
+  if ((facts.labels || []).some((label) => String(label).trim().toLowerCase() === 'analyse-only')) {
+    return { type: 'none', reason: 'mission-analyse-complete', row: 'mission.analyse.complete' };
+  }
   const ownerApprovedDelivery = (facts.labels || []).some(
     (label) => String(label).trim().toLowerCase() === 'owner-approved-delivery',
   );

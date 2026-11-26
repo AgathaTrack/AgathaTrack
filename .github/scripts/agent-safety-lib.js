@@ -1,7 +1,5 @@
 'use strict';
 
-const { detectRiskyScope, parseSections } = require('./triage-lib');
-
 const FORBIDDEN_PATH_PREFIXES = [
   'db/migrations/',
   'server/config/security.js',
@@ -54,9 +52,6 @@ function preflightIssue(issue) {
   const labels = (issue.labels?.nodes || issue.labels || []).map((l) =>
     typeof l === 'string' ? l : l.name,
   );
-  const title = issue.title || '';
-  const body = issue.body || '';
-
   if (!labels.map((l) => l.toLowerCase()).includes('agent-approved')) {
     return { ok: false, reason: 'missing agent-approved label' };
   }
@@ -75,12 +70,6 @@ function preflightIssue(issue) {
   const ownerApprovedDelivery = labels.map((l) => l.toLowerCase()).includes('owner-approved-delivery');
   if (ownerApprovedDelivery) {
     return { ok: true };
-  }
-
-  const sections = parseSections(body);
-  const risks = detectRiskyScope(title, body, sections);
-  if (risks.length > 0) {
-    return { ok: false, reason: `risky scope detected: ${risks.join(', ')}` };
   }
 
   return { ok: true };

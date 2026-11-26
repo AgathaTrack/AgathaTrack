@@ -130,3 +130,12 @@ test('findForbiddenPaths still flags migrations and security config', () => {
     'server/routes/auth/login.js',
   ]);
 });
+
+test('preflight does not keyword-scan the body (PIPE-V2-D-REV4-004): negated or out-of-scope words do not stop a launch', () => {
+  const result = preflightIssue({
+    title: 'Carer invite',
+    body: '### Security or Sensitive Area\n\nNo, no new secrets or privilege model.\n\n### Out of Scope\n\nauth/billing/permissions changes; migrations.\n',
+    labels: [{ name: 'agent-approved' }, { name: 'human-reviewed' }],
+  });
+  assert.equal(result.ok, true);
+});

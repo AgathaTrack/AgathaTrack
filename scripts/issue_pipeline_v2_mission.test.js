@@ -91,3 +91,12 @@ test('decide: mission analyse at Ready does not launch; board mission reaches re
   assert.equal(boardAction.type, 'launch');
   assert.equal(boardAction.row, 'ready.launch');
 });
+test('decide: an analyse-only issue at Ready stops on a board tick; removing the label lets delivery launch (PIPE-V2-D-ANALYSE-004)', () => {
+  const config = loadConfig();
+  const facts = readyFactsBase();
+  const held = decide({ ...facts, labels: [...(facts.labels || []), 'analyse-only'] }, config);
+  assert.equal(held.type, 'none');
+  assert.equal(held.row, 'mission.analyse.complete');
+  const released = decide({ ...facts, labels: (facts.labels || []).filter((label) => label !== 'analyse-only') }, config);
+  assert.equal(released.row, 'ready.launch');
+});

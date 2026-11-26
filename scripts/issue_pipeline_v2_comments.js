@@ -1,7 +1,7 @@
 'use strict';
 
 const { rest } = require('../.github/scripts/github-project-lib');
-const { agentLogins, resolveAgent, isSharedActsAs, entryActsAs } = require('./issue_pipeline_v2_config');
+const { agentLogins, resolveAgent } = require('./issue_pipeline_v2_config');
 const { findVerifiedVerdicts } = require('./issue_pipeline_v2_verdict');
 
 const SPEC_REQUEST = 'v2:spec-request';
@@ -20,8 +20,9 @@ function buildSpecRequest({ assigned, history = [], config }) {
     '## Spec requested',
     '',
     `@${mention}: draft the missing sections, then check the Definition of Ready ` +
-      '(`.cursor/skills/spec-agent/SKILL.md`). React 👍 on this comment when it passes; ' +
-      'if you need the owner, post one consolidated question and set `Blocked=question`.',
+      '(`.cursor/skills/spec-agent/SKILL.md`). When it passes, record the signed verdict ' +
+      '(`node scripts/pipeline_verdict.js spec up --hash <hash>`). Reactions are not votes. ' +
+      'If you need the owner, post one consolidated question and set `Blocked=question`.',
   ].join('\n');
 }
 
@@ -85,38 +86,20 @@ function deriveSpecFacts({
   const since = Date.parse(request.comment.created_at);
   const assignedTo = resolveAgent(config, request.assigned)?.id || request.assigned;
   const timedOut = (request.history || []).map((entry) => resolveAgent(config, entry)?.id || entry);
-  let passedBy = null;
-  const assignedEntry = resolveAgent(config, request.assigned);
-  const assignedActsAs = assignedEntry ? entryActsAs(assignedEntry) : request.assigned;
-  const assigneeNeedsSigned = isSharedActsAs(config, assignedActsAs);
-  if (assigneeNeedsSigned) {
-    // A shared login's spec pass is a signed verdict only; a reaction from that login is not a vote.
-    const specUp = !bodyHash || !issueNumber
-      ? []
-      : findVerifiedVerdicts({
-          comments,
-          config,
-          engineLogins,
-          issueNumber,
-          bodyHash,
-          limits,
-          kinds: ['spec'],
-          sinceMs: since,
-        }).filter((verdict) => verdict.value === 'up');
-    if (specUp.length > 0) {
-      passedBy = specUp.at(-1).actsAs;
-    }
-  } else {
-    const agents = new Set(agentLogins(config));
-    const passed = (reactions || []).find(
-      (reaction) =>
-        reaction.content === '+1' &&
-        agents.has(reaction.user?.login) &&
-        !isSharedActsAs(config, reaction.user?.login) &&
-        Date.parse(reaction.created_at) >= since,
-    );
-    passedBy = passed ? passed.user.login : null;
-  }
+  // Reactions are never votes (PIPE-V2-D-REV4-001): the spec pass is a signed `spec up` verdict on this body.
+  const specUp = !bodyHash || !issueNumber
+    ? []
+    : findVerifiedVerdicts({
+        comments,
+        config,
+        engineLogins,
+        issueNumber,
+        bodyHash,
+        limits,
+        kinds: ['spec'],
+        sinceMs: since,
+      }).filter((verdict) => verdict.value === 'up');
+  const passedBy = specUp.length > 0 ? specUp.at(-1).actsAs : null;
   return {
     requestedAt: Date.parse(request.comment.updated_at || request.comment.created_at),
     assignedTo,

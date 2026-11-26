@@ -134,3 +134,6 @@ Authoritative rows live in [github-issue-workflow-wire.md §Decision log](../git
 - [github-issue-workflow.md §Pipeline v2](../github-issue-workflow.md#pipeline-v2-the-stage-machine)
 - [pipeline-v2-holds-and-ticks.md](./pipeline-v2-holds-and-ticks.md)
 - Skills: [spec-agent](../../../.cursor/skills/spec-agent/SKILL.md), [review-agent](../../../.cursor/skills/review-agent/SKILL.md)
+## Ready boundary (review process v4, #2103)
+
+The first version of this plan scoped Ready with `mission=analyse` alone. #2103 showed that is not enough: an analyse run's own comment woke a board tick with no mission, and that tick launched delivery 37 seconds after the analyse run had finished. The fix is the `analyse-only` label, set at intake and read by the Ready row on every tick (PIPE-V2-D-ANALYSE-004). Removing the label is the owner's decision to let delivery launch.

@@ -1,6 +1,7 @@
 'use strict';
 
 const test = require('node:test');
+const { buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 const assert = require('node:assert/strict');
 const { loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
 const { checkDor, parseSections } = require('./issue_pipeline_v2_dor');
@@ -110,15 +111,36 @@ test('spec facts: only an engine-authored request counts; a forged one is ignore
   assert.equal(findSpecRequest([requestComment()], []), null, 'no engine identity configured trusts nothing');
 });
 
-test('spec facts: a 👍 from a listed agent after the request is the DoR pass', () => {
+test('spec facts: a 👍 reaction is never the DoR pass (PIPE-V2-D-REV4-001)', () => {
   const reaction = (login, content, at) => ({ user: { login }, content, created_at: at });
   const facts = (reactions) =>
     deriveSpecFacts({ comments: [requestComment()], reactions, config, engineLogins: config.engine.logins });
-  assert.equal(facts([reaction('pawpet-bot', '+1', '2026-11-16T11:40:00Z')]).passedBy, 'pawpet-bot');
+  assert.equal(facts([reaction('pawpet-bot', '+1', '2026-11-16T11:40:00Z')]).passedBy, null);
   assert.equal(facts([reaction('KanopeeKa', '+1', '2026-11-16T11:40:00Z')]).passedBy, null, 'the owner is not an agent');
-  assert.equal(facts([reaction('pawpet-bot', '-1', '2026-11-16T11:40:00Z')]).passedBy, null);
-  assert.equal(facts([reaction('pawpet-bot', '+1', '2026-11-16T11:00:00Z')]).passedBy, null, 'older than the request');
   assert.deepEqual(deriveSpecFacts({ comments: [], reactions: [], config, engineLogins: ['KanopeeKa'] }), {});
+});
+
+test('spec facts: a signed spec up on this body is the DoR pass', () => {
+  const req = requestComment();
+  const t = Date.parse(req.created_at);
+  const nonce = 'ab'.repeat(16);
+  const launch = {
+    id: 2,
+    user: { login: config.engine.logins[0] },
+    created_at: new Date(t + 60000).toISOString(),
+    body: buildLaunchRecord({ runId: 'r-spec', agent: 'pawpet-bot', purpose: 'doorbell', stage: 'To do', nonce }),
+  };
+  const verdict = {
+    id: 3,
+    user: { login: 'pawpet-bot' },
+    created_at: new Date(t + 120000).toISOString(),
+    body: `<!-- v2:verdict agent=pawpet-bot nonce=${nonce} kind=spec hash=hb value=up -->`,
+  };
+  const facts = deriveSpecFacts({
+    comments: [req, launch, verdict], reactions: [], config, engineLogins: config.engine.logins,
+    issueNumber: 5, bodyHash: 'hb', limits: config.limits, now: NOW,
+  });
+  assert.equal(facts.passedBy, 'pawpet-bot');
 });
 
 test('spec facts feed decide(): request, wait, reassign, stall and pass', () => {
@@ -140,8 +162,9 @@ test('spec facts feed decide(): request, wait, reassign, stall and pass', () => 
     created_at: '2026-11-16T11:00:00Z',
   });
   assert.equal(decide({ ...base, spec: spec([exhausted]) }, both).reason, 'stalled');
-  const passed = spec([requestComment()], [{ user: { login: 'pawpet-bot' }, content: '+1', created_at: '2026-11-16T11:45:00Z' }]);
-  assert.equal(decide({ ...base, spec: passed }, both).to, 'In analysis');
+  // A reaction is not a pass: the issue does not move to In analysis on it.
+  const reacted = spec([requestComment()], [{ user: { login: 'pawpet-bot' }, content: '+1', created_at: '2026-11-16T11:45:00Z' }]);
+  assert.notEqual(decide({ ...base, spec: reacted }, both).to, 'In analysis');
 });
 
 test('blocked: any write-access human comment after the last agent or engine comment wakes the agent', () => {
@@ -201,7 +224,7 @@ test('config: the engine identity may be empty but never a listed agent', () => 
   assert.throws(() => validateConfig({ ...config, engine: undefined }), /engine\.logins/);
 });
 
-test('runner: a To do issue reads its comments and reactions; Backlog and Done cost no calls', async () => {
+test('runner: a To do issue reads its comments only (reactions are not votes); Backlog and Done cost no calls', async () => {
   const prior = process.env.ISSUE_PIPELINE_V2;
   process.env.ISSUE_PIPELINE_V2 = 'dry-run';
   const calls = [];
@@ -227,9 +250,9 @@ test('runner: a To do issue reads its comments and reactions; Backlog and Done c
         },
       },
     });
-    assert.deepEqual(calls, [['comments', 1], ['reactions', 10]]);
+    assert.deepEqual(calls, [['comments', 1]]);
     const todo = result.actions.find((entry) => entry.issue === 1).action;
-    assert.deepEqual([todo.type, todo.to], ['set-stage', 'In analysis']);
+    assert.notDeepEqual([todo.type, todo.to], ['set-stage', 'In analysis'], 'a reaction does not pass the spec');
   } finally {
     if (prior === undefined) delete process.env.ISSUE_PIPELINE_V2;
     else process.env.ISSUE_PIPELINE_V2 = prior;

@@ -243,18 +243,25 @@ const STAGE_PROMPTS = {
     'question in a comment, and set `Blocked` to `question` (agent-owned write; the engine wakes you when a human replies). ' +
     'If there is enough, write the full spec into the issue body: intent, acceptance criteria, a `## Delivery plan` section ' +
     'with a `Method:` line (`PR`, `light-plan` or `execute-plan`), the planned work, an `agent-paths` block and the ' +
-    'Definition of Done checkboxes. Then react 👍 on the engine\'s latest `v2:spec-request` comment to mark the spec ready; ' +
-    'the engine moves the issue to In analysis for the first adversarial review. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
+    'Definition of Done checkboxes. Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, ' +
+    'and, as your last action, record `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. ' +
+    'Post one verdict only: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it. ' +
+    'Reactions are not votes. The engine moves the issue to In analysis for the first adversarial review. ' +
+    'Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
   'In analysis':
     'Stage task: ADVERSARIAL REVIEW (the engine assigned you this issue; do not implement it). Review the issue body as a spec: ' +
-    'challenge intent, scope, delivery method, acceptance criteria and risks. If it needs changes, edit the body (your edit counts as ' +
-    'your approval; the other agent must then vote) and say what changed in a comment. If it is sound, react 👍 on the engine\'s latest ' +
-    '`v2:review-request` comment; if not, react 👎 with a comment explaining why. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
+    'challenge intent, scope, delivery method, acceptance criteria and risks. Run `node scripts/pipeline_verdict.js read` first. ' +
+    'If the body needs changes, make them with `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` and say what changed in a comment. ' +
+    'An edit is your approval of the new version: it closes your round, another run reviews the new hash, and you post NO verdict after an edit. ' +
+    'If you did not edit and the version is sound as written, record `node scripts/pipeline_verdict.js review up --hash <hash>`. ' +
+    'If it is not sound and you did not edit, record `node scripts/pipeline_verdict.js review down --hash <hash>` and explain why in a comment. ' +
+    'Post at most one verdict, as your last action; it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it. ' +
+    'Reactions are not votes. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
   'In Main':
     'Stage task: INTENT REVIEW (the engine assigned you this issue; do not implement or edit it). Follow ' +
     '`.cursor/skills/intent-review-agent/SKILL.md`: review what shipped (the merged PRs named in the engine\'s latest ' +
     '`v2:intent-review` comment) against the issue\'s original intent, file each real finding as a follow-up issue that ' +
-    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last. ' +
+    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment last. Reactions are not read: intent review is non-gating (PIPE-V2-D-2428-004). ' +
     'When finished, remove the `busy` label (`node scripts/github_issue_workflow.js finish-work --issue <n>`).',
   acceptance:
     'Stage task: AGENT ACCEPTANCE (non-interactive; do not ask questions and do not implement). Follow ' +
@@ -269,27 +276,12 @@ function fillPrompt(template, { number, mergeSha } = {}) {
     .replaceAll('{{mergeSha}}', String(mergeSha ?? ''));
 }
 
-const STAGE_PROMPTS_SIGNED = {
-  ...STAGE_PROMPTS,
-  'To do':
-    STAGE_PROMPTS['To do'].replace(
-      "Then react 👍 on the engine's latest `v2:spec-request` comment to mark the spec ready;",
-      'Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, and, as your last action, record `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. Post one verdict only: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it;',
-    ),
-  'In analysis':
-    STAGE_PROMPTS['In analysis'].replace(
-      'If it is sound, react 👍 on the engine\'s latest `v2:review-request` comment; if not, react 👎 with a comment explaining why.',
-      'If it is sound, run `node scripts/pipeline_verdict.js read`, then `node scripts/pipeline_verdict.js review up|down --hash <hash>`. ' +
-        'If you change the body, use `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` only, before your verdict. Post exactly one verdict, as your last action: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it;',
-    ),
-};
+// Every agent votes with a signed verdict (PIPE-V2-D-REV4-001). Reactions are never votes, so there is one
+// prompt set. The alias keeps the signed name for callers that asked for it.
+const STAGE_PROMPTS_SIGNED = STAGE_PROMPTS;
 
-function stagePromptsForConfig(config, agent) {
-  const { isSharedActsAs, entryActsAs, sharedActsAs } = require('./issue_pipeline_v2_config');
-  if (agent) {
-    return isSharedActsAs(config, entryActsAs(agent)) ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
-  }
-  return sharedActsAs(config).length > 0 ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
+function stagePromptsForConfig() {
+  return STAGE_PROMPTS;
 }
 
 /**

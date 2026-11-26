@@ -57,10 +57,10 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 
 | Stage | Condition | Result |
 |-------|-----------|--------|
-| To do | spec requested from the next tier-a agent in the round robin (`cursor-a`, `claude-a`; tier b waits for the challenge tier); the agent drafts the sections and the Definition of Ready passes (a 👍 on the request) | → In analysis |
+| To do | spec requested from the next tier-a agent in the round robin (`cursor-a`, `claude-a`; tier b waits for the challenge tier); the agent drafts the sections and the Definition of Ready passes (a signed `spec up` verdict on the body; reactions are not votes) | → In analysis |
 | To do | no spec result after every agent timed out once (30 min each) | stays, `Blocked=stalled` |
 | In analysis | one verified green on the current body hash from a pool identity, from a run other than the one that wrote the hash (PIPE-V2-D-REV3-003, live with REV3-012) | → Ready |
-| In analysis | 6 votes (👍, 👎, agent body edits) without convergence | stays, `Blocked=no-convergence` |
+| In analysis | 6 signed verdicts and agent body edits without convergence | stays, `Blocked=no-convergence` |
 | In analysis | no vote after every eligible reviewer timed out | stays, `Blocked=stalled` |
 | Ready | a WIP slot is free (WIP is a slot count, not the Stage column: each issue counts once, as an In progress issue the engine launched, or as a Ready issue with a delivery launch in flight (`busy`, or started inside the ack window); hand-driven and `manual-only` work takes no slot, and an unreadable issue holds one): the engine starts a run for the agreed method | → In progress once the issue is `busy` |
 | Ready | WIP at the limit | stays (Ready is the queue) |
