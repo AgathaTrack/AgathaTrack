@@ -59,6 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: main
           sparse-checkout: |
             scripts/issue_pipeline_v2_event_wake.js
             .github/pipeline-agents.json
