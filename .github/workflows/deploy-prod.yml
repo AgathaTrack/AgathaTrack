@@ -21,6 +21,7 @@ on:
 env:
   FLUTTER_VERSION: '3.44.0'
   PROD_BASE_URL: https://agathatrack.com
+  FTP_DEPLOY_TIMEOUT_MS: '600000'
 
 concurrency:
   group: deploy-prod
@@ -327,6 +328,7 @@ jobs:
           server: ${{ secrets.PROD_FTP_SERVER }}
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
+          timeout: ${{ env.FTP_DEPLOY_TIMEOUT_MS }}
           server-dir: ./
           local-dir: ./flutter_app/build/web/
           exclude: |
@@ -341,6 +343,7 @@ jobs:
           server: ${{ secrets.PROD_FTP_SERVER }}
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
+          timeout: ${{ env.FTP_DEPLOY_TIMEOUT_MS }}
           server-dir: ./
           local-dir: ./public/coming-soon/
           exclude: |
@@ -358,6 +361,7 @@ jobs:
           server: ${{ secrets.PROD_FTP_SERVER }}
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
+          timeout: ${{ env.FTP_DEPLOY_TIMEOUT_MS }}
           server-dir: ./backend/
           local-dir: ${{ steps.stage_backend.outputs.staging_dir }}/
           state-name: .ftp-deploy-sync-state.json
