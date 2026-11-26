@@ -3091,6 +3091,13 @@
   "awayPlanningCarerEditSaveAction": "Enregistrer le soignant",
   "awayPlanningCarerEditSaveFailedForbidden": "Cette personne n'a plus d'accès partagé. Choisissez-en une autre ou ajoutez un nom.",
   "awayPlanningCarerEditSaveFailed": "Impossible d'enregistrer le soignant. Réessayez.",
+  "awayPlanningCarerInviteOfferTitle": "Inviter ce soignant pour d'autres animaux ?",
+  "awayPlanningCarerInviteOfferBody": "Ce soignant est aussi assigné à ces animaux pendant cette absence. Choisissez ceux à inclure dans l'invitation à l'application.",
+  "awayPlanningCarerInviteOnlyThisPet": "Seulement cet animal",
+  "awayPlanningCarerInviteIncludeSelected": "Inclure les animaux sélectionnés",
+  "awayPlanningCarerInviteSendAction": "Envoyer l'invitation à l'application",
+  "awayPlanningCarerInviteSent": "Invitation à l'application envoyée.",
+  "awayPlanningCarerInviteFailed": "Impossible d'envoyer l'invitation à l'application. Réessayez.",
   "awayPlanningCarerEditPetNoteLabel": "Notes pour {petName}",
   "@awayPlanningCarerEditPetNoteLabel": {
     "placeholders": {

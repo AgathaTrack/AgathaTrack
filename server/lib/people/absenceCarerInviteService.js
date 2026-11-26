@@ -3,7 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { createNotification, userDisplayName } from '../notificationHelper.js';
 import { NOTIFICATION_TYPE_ABSENCE_GUEST_GRANTED } from '../notificationKind.js';
-import { isShareLinkExpired, shareExpiryFromNow } from '../shareLinkPolicy.js';
+import {
+  DEFAULT_SHARE_EXPIRY_DAYS,
+  isShareLinkExpired,
+  shareExpiryFromNow,
+} from '../shareLinkPolicy.js';
 import {
   GUEST_GRANT_ACTIVE,
   GUEST_GRANT_REVOKED,
@@ -152,7 +156,7 @@ export async function createAbsenceCarerInvite(pool, {
 
   const inviteId = uuidv4();
   const code = generateInviteCode();
-  const expiresAt = shareExpiryFromNow();
+  const expiresAt = shareExpiryFromNow(DEFAULT_SHARE_EXPIRY_DAYS);
 
   await pool.query(
     `INSERT INTO planned_absence_carer_invites (

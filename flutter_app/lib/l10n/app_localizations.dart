@@ -14477,6 +14477,48 @@ abstract class AppLocalizations {
   /// **'Could not save the carer. Try again.'**
   String get awayPlanningCarerEditSaveFailed;
 
+  /// No description provided for @awayPlanningCarerInviteOfferTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite this carer for other pets too?'**
+  String get awayPlanningCarerInviteOfferTitle;
+
+  /// No description provided for @awayPlanningCarerInviteOfferBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This carer is also assigned to these pets on this absence. Choose which ones to include in the app invite.'**
+  String get awayPlanningCarerInviteOfferBody;
+
+  /// No description provided for @awayPlanningCarerInviteOnlyThisPet.
+  ///
+  /// In en, this message translates to:
+  /// **'Only this pet'**
+  String get awayPlanningCarerInviteOnlyThisPet;
+
+  /// No description provided for @awayPlanningCarerInviteIncludeSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Include selected pets'**
+  String get awayPlanningCarerInviteIncludeSelected;
+
+  /// No description provided for @awayPlanningCarerInviteSendAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send app invite'**
+  String get awayPlanningCarerInviteSendAction;
+
+  /// No description provided for @awayPlanningCarerInviteSent.
+  ///
+  /// In en, this message translates to:
+  /// **'App invite sent.'**
+  String get awayPlanningCarerInviteSent;
+
+  /// No description provided for @awayPlanningCarerInviteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the app invite. Try again.'**
+  String get awayPlanningCarerInviteFailed;
+
   /// No description provided for @awayPlanningCarerEditPetNoteLabel.
   ///
   /// In en, this message translates to:
