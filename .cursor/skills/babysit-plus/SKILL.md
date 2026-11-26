@@ -1,6 +1,6 @@
 ---
 name: babysit-plus
-description: Autonomous PR operator — mandatory pre-PR critical self-review, triage review comments (must-fix / nits / ignore), apply fixes, track debt issues, CI retry loop, and squash merge when gates pass. Use during /execute-plan intermediate phases or when full autonomous PR hygiene is needed without pre-UAT. Policy lives in docs/agent-efficiency/autonomous-pr-policy.md.
+description: Autonomous PR operator — mandatory pre-PR critical self-review, triage, debt issues, CI loop, squash merge when gates pass. Default driver for programme, pipeline, and light-plan release PRs (pre-UAT async on main). Policy driver routing in docs/agent-efficiency/autonomous-pr-policy.md.
 disable-model-invocation: true
 ---
 
@@ -14,9 +14,11 @@ Autonomous PR operator. Extends lightweight `/babysit` with mandatory triage, de
 **Phase exit profiles:** `docs/agent-efficiency/phase-exit-checklists.md`  
 **Labels / dedupe:** `docs/agent-efficiency/github-labels.md`  
 **Lightweight sibling:** `/babysit` (`.cursor/skills/babysit/SKILL.md`) or built-in `/autopilot` for cloud handoff — use when debt tracking and merge automation are not required.  
-**Pre-UAT sibling:** `.cursor/skills/babysit-uat/SKILL.md` — final merge to `main` when pre-UAT E2E must pass.
+**Pre-UAT sibling:** `.cursor/skills/babysit-uat/SKILL.md` — in-session pre-UAT watch on §Driver routing rows 2, 4, 8b and 12 only.
 
-During `/execute-plan`, use **/babysit-plus** for intermediate phase PRs and **/babysit-uat** for the **final** PR to `main` — never plain `/babysit` alone.
+During `/execute-plan` (v1), use **/babysit-plus** for intermediate phase PRs and **/babysit-uat** for the **final** PR to `main` — never plain babysit alone. During v2, see autonomous-pr-policy §Driver routing row 1 (no babysit skill).
+
+`/babysit-plus` is the default driver for `main`-bound programme and pipeline PRs (policy §Driver routing rows 6, 11). Pre-UAT then runs async in Actions.
 
 **Execute-plan v2:** After phase PR merge, return to the tick loop — not a routine babysit+ stop. See autonomous-pr-policy §Execute-plan (v2).
 
@@ -255,6 +257,6 @@ See autonomous-pr-policy §Escalation. Includes security/crypto, breaking API, p
 |-------|------|
 | `/pre-push-verify` | Before every push; full suite before merge |
 | `/spawn-sprint-agents` | Parallel agents inside a phase (when snapshot allows) |
-| `/babysit-uat` | Final merge to `main` — babysit+ plus pre-UAT E2E gate |
-| `/execute-plan` | Multi-phase orchestrator — babysit+ on phases; babysit-uat on final main merge |
+| `/babysit-uat` | Rows 2, 4, 8b, 12 — babysit+ plus in-session pre-UAT watch |
+| `/execute-plan` | Multi-phase orchestrator — v1 only; v2 uses `tick` (policy §Driver routing) |
 | `/canonical-docs` | Mode A before PR open; Mode B consolidate on demand |

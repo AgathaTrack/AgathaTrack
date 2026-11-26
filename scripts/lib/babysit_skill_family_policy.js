@@ -24,6 +24,13 @@ const FAMILY_SKILL_FILES = [
 ];
 
 const POLICY_SECTION_HEADING = '## Babysit skill family';
+const DRIVER_ROUTING_HEADING = '### Driver routing';
+const MERGE_POLICY_REL = '.cursor/rules/merge-policy.mdc';
+const SPAWN_SPRINT_REL = '.cursor/skills/spawn-sprint-agents/SKILL.md';
+const WATCHDOG_REL = 'scripts/issue_busy_watchdog.js';
+const LIGHT_PLAN_REL = '.cursor/skills/light-plan/SKILL.md';
+const BABYSIT_PLUS_REL = '.cursor/skills/babysit-plus/SKILL.md';
+const BABYSIT_UAT_REL = '.cursor/skills/babysit-uat/SKILL.md';
 
 /** Must not match "unresolved thread" without a resolve instruction. */
 const RESOLVE_ALL_RE =
@@ -36,9 +43,6 @@ const POLICY_MARKERS = [
   /babysit_pr_reviews\.js/,
   RESOLVE_ALL_RE,
   /doc drift guard|check_babysit_skill_family/i,
-  '### Issue-pipeline delivery PRs',
-  /`main`[\s\S]*?\/babysit-uat`/,
-  /Integration branch[\s\S]*?\/babysit-plus`/,
 ];
 
 const GATE_SCRIPT_RE = /babysit_pr_reviews\.js\s+gate/i;
@@ -81,6 +85,55 @@ function assertMarkers(text, markers, label) {
   }
 }
 
+/** §Driver routing invariants (babysit-routing-reconciliation spec §4.8). */
+function validateDriverRoutingInvariants(repoRoot) {
+  const policyText = readRepoFile(repoRoot, POLICY_REL);
+  assertMarkers(
+    policyText,
+    [
+      DRIVER_ROUTING_HEADING,
+      '| 2 |',
+      '| 12 |',
+      '`/babysit-uat` is the driver for rows 2, 4, 8b and 12 only',
+    ],
+    `${POLICY_REL} §Driver routing`,
+  );
+
+  const mergePolicy = readRepoFile(repoRoot, MERGE_POLICY_REL);
+  if (mergePolicy.includes('not `/babysit-plus`') || mergePolicy.includes('not **`/babysit-plus`**')) {
+    throw new Error(`${MERGE_POLICY_REL}: stale light-plan "not /babysit-plus" wording`);
+  }
+  if (/\/light-plan`.*\/babysit-uat/i.test(mergePolicy)) {
+    throw new Error(`${MERGE_POLICY_REL}: light-plan release must not name /babysit-uat`);
+  }
+
+  const lightPlan = readRepoFile(repoRoot, LIGHT_PLAN_REL);
+  const releaseIdx = lightPlan.indexOf('## Release');
+  if (releaseIdx === -1) {
+    throw new Error(`${LIGHT_PLAN_REL}: missing ## Release`);
+  }
+  const releaseSection = lightPlan.slice(releaseIdx, releaseIdx + 4000);
+  if (/Read and follow `\[\`\/babysit-uat|follow `\[\`\/babysit-uat/i.test(releaseSection)) {
+    throw new Error(`${LIGHT_PLAN_REL} §Release must not direct to /babysit-uat (row 6 is plus)`);
+  }
+  assertMarkers(releaseSection, ['§Driver routing row 6', '/babysit-plus'], `${LIGHT_PLAN_REL} §Release`);
+
+  const plusText = readRepoFile(repoRoot, BABYSIT_PLUS_REL);
+  const uatText = readRepoFile(repoRoot, BABYSIT_UAT_REL);
+  assertMarkers(plusText, [/v2/i, /execute-plan/i, /Driver routing/i], BABYSIT_PLUS_REL);
+  assertMarkers(uatText, [/v2/i, /tick`/i, /Driver routing/i], BABYSIT_UAT_REL);
+
+  const spawnText = readRepoFile(repoRoot, SPAWN_SPRINT_REL);
+  assertMarkers(spawnText, [/Driver routing row 7/, /row 8b?/], SPAWN_SPRINT_REL);
+
+  const watchdogText = readRepoFile(repoRoot, WATCHDOG_REL);
+  assertMarkers(
+    watchdogText,
+    ['continue light-plan', '`/babysit-plus`'],
+    WATCHDOG_REL,
+  );
+}
+
 /**
  * @param {string} [repoRoot]
  * @returns {{ ok: true, filesChecked: number }}
@@ -95,6 +148,8 @@ function validateBabysitSkillFamily(repoRoot = path.resolve(__dirname, '../..'))
       rel === '.cursor/skills/execute-plan/SKILL.md' ? SKILL_MARKERS_EXECUTE_PLAN : SKILL_MARKERS_WITH_GATE;
     assertMarkers(text, markers, rel);
   }
+
+  validateDriverRoutingInvariants(repoRoot);
 
   return { ok: true, filesChecked: FAMILY_SKILL_FILES.length + 1 };
 }
@@ -112,8 +167,10 @@ module.exports = {
   POLICY_REL,
   FAMILY_SKILL_FILES,
   POLICY_SECTION_HEADING,
+  DRIVER_ROUTING_HEADING,
   RESOLVE_ALL_RE,
   GATE_SCRIPT_RE,
   validateBabysitSkillFamily,
+  validateDriverRoutingInvariants,
   copyFamilyFixturesToDir,
 };
