@@ -1,6 +1,6 @@
 name: Issue pipeline v2
 
-# Pipeline v2 (#2385). Switches: docs/agent-efficiency/github-issue-workflow.md §Pipeline switches (reference).
+# Pipeline v2 (#2385). Switches: docs/agent-efficiency/github-issue-workflow-operations.md §Pipeline switches (reference).
 # ISSUE_PIPELINE_V2: off | dry-run | on (default off). dry-run logs; only `on` + ENGINE_PAT in engine.logins writes.
 # Event wakes (#2560 P3); cron :11/:41 sweeper (PIPE-V2-HT-R-003).
 on:

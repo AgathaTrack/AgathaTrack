@@ -120,7 +120,7 @@ Under `/analyse-issue`, spec-agent and review-agent **must** wake the engine aft
 
 ## Decision log
 
-Authoritative rows live in [github-issue-workflow.md §Decision log](../github-issue-workflow.md#decision-log) (Accepted, owner 2026-11-25): **PIPE-V2-D-ANALYSE-001** through **-005**.
+Authoritative rows live in [github-issue-workflow-wire.md §Decision log](../github-issue-workflow-wire.md#decision-log) (Accepted, owner 2026-11-25): **PIPE-V2-D-ANALYSE-001** through **-005**.
 
 ## Acceptance (when behaviour is exercised in soak)
 

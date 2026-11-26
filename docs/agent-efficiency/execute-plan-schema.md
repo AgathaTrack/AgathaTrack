@@ -13,6 +13,8 @@ tags: [agent-efficiency, policy]
 
 Companion docs:
 
+- **Operating the driver (v2):** [execute-plan-runtime.md](./execute-plan-runtime.md) — CLI, `tick`, pre-push (use this for day-to-day runs)
+- **v2 build spec / work packages:** [plans/execute-plan-v2.md](./plans/execute-plan-v2.md) and `plans/execute-plan-v2/work-packages-*.md` (programme history, not routine ops)
 - Human plan template: [plan-template.md](./plan-template.md)
 - Exit checklist profiles: [phase-exit-checklists.md](./phase-exit-checklists.md)
 - Cross-cutting PR autonomy policy: [autonomous-pr-policy.md](./autonomous-pr-policy.md)
