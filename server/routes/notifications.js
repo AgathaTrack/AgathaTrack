@@ -4,6 +4,7 @@ import { publicError } from '../config/security.js';
 import { extractUserId } from '../lib/requireAuth.js';
 import { checkDueNotifications } from '../lib/checkDueNotifications.js';
 import { buildNotificationDeepLink } from '../lib/notifications/deepLink.js';
+import { enrichNotificationsWithOccurrenceId } from '../lib/notifications/occurrenceDeepLink.js';
 import { careClockFromRequest } from '../lib/care/occurrence/careAsOf.js';
 import {
   normaliseKind,
@@ -79,7 +80,8 @@ export default function notificationsRoutes(pool) {
         `SELECT * FROM notifications WHERE user_id = $1 AND ${NOTIFICATION_INBOX_ACTIVE_WHERE}${petFilter} ORDER BY created_at DESC`,
         params,
       );
-      res.json(result.rows.map(notificationToMap));
+      const enriched = await enrichNotificationsWithOccurrenceId(pool, result.rows);
+      res.json(enriched.map(notificationToMap));
     } catch (err) {
       res.status(500).json({ error: publicError(err) });
     }
@@ -102,7 +104,8 @@ export default function notificationsRoutes(pool) {
          ORDER BY created_at DESC`,
         params,
       );
-      res.json(result.rows.map(notificationToMap));
+      const enriched = await enrichNotificationsWithOccurrenceId(pool, result.rows);
+      res.json(enriched.map(notificationToMap));
     } catch (err) {
       res.status(500).json({ error: publicError(err) });
     }

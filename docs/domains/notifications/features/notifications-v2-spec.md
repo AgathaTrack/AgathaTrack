@@ -1028,7 +1028,7 @@ Source: §0 above.
 | **N1**–**N14** | See §0 decision table. | locked | per §0 |
 | **N15** | For you **suggestion** cards: **Accept** requires `pet_id` and payload `recommendation_id`; otherwise show a localized error snackbar (no silent no-op). Dismiss / not-relevant guard against double-submit and show a localized failure snackbar. Inbox pet group headers use localized `petLabel` when the pet name is missing. | locked | review-followups-programme-9100 phase 5 |
 | **N16** | **Mark all read** (panel + full inbox): success shows `notificationsMarkedRead`; repository failure shows `notificationsMarkReadFailed` (no false success). Shared `performMarkAllRead` helper. | locked | truthful-release-debt P1 |
-| **N17** | Care reminder and care-linked inbox taps deep-link to the **occurrence screen** when `health_occurrence_id` is present (`source=notification`); otherwise care item detail. Refs #1540 / DEBT-D-NOTIF. | locked | notification-occurrence-deeplink |
+| **N17** | Care reminder and care-linked inbox taps deep-link to the **occurrence screen** when an occurrence id is resolved (`health_occurrence_id` on the wire — from `suggestion_payload.health_occurrence_id` or earliest pending occurrence for the entry) with `source=notification`; otherwise care item detail. Refs #1540 / DEBT-D-NOTIF. Dedicated DB column deferred (forbidden-path migration). | locked | notification-occurrence-deeplink |
 
 ## 19. Programme & rollout index
 
