@@ -6,11 +6,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const REPO = path.join(__dirname, '..');
-const GUIDE = path.join(REPO, 'docs/agent-efficiency/github-issue-workflow.md');
+const GUIDE = path.join(REPO, 'docs/agent-efficiency/github-issue-workflow-operations.md');
 const WORKFLOW = path.join(REPO, '.github/workflows/issue-pipeline-v2.yml');
 
 const ACTIVE_DOC_GLOBS = [
   'docs/agent-efficiency/github-issue-workflow.md',
+  'docs/agent-efficiency/github-issue-workflow-operations.md',
   'docs/agent-efficiency/github-labels.md',
   'docs/agent-efficiency/parallel-programmes.md',
   'docs/agent-efficiency/autonomous-pr-policy.md',

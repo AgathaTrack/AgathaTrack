@@ -13,7 +13,7 @@ tags: [agent, pipeline, blocked, ticks]
 
 Plan of record for making `Blocked` mean "a human must act" and for moving the engine off "one action per issue per
 cron tick". Owner decisions 2026-11-24: PIPE-V2-D-HOLD-001 to 005 and PIPE-V2-D-TICK-001 in
-[github-issue-workflow.md §Decision log](../github-issue-workflow.md#decision-log). Trigger: #2554, blocked by two
+[github-issue-workflow-wire.md §Decision log](../github-issue-workflow-wire.md#decision-log). Trigger: #2554, blocked by two
 failed acceptance starts with no agent run, and not recoverable by a newer merge.
 
 ## Findings this plan answers
