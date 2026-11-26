@@ -24,6 +24,51 @@ AppNotification _notification({
 }
 
 void main() {
+  testWidgets('navigates from server deep_link occurrence path', (tester) async {
+    late Uri uri;
+
+    await tester.pumpWidget(
+      MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/pc/home',
+          routes: [
+            GoRoute(
+              path: '/pc/home',
+              builder: (context, state) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () => navigateFromNotification(
+                    context,
+                    _notification(
+                      petId: 'pet-1',
+                      healthEntryId: 'entry-1',
+                    ).copyWith(
+                      deepLink:
+                          '/pet/pet-1/events/entry-1/occurrences/occ-1?source=notification',
+                    ),
+                  ),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/pet/:petId/events/:entryId/occurrences/:occurrenceId',
+              builder: (context, state) {
+                uri = state.uri;
+                return const Scaffold(body: Text('Occurrence'));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(uri.path, '/pet/pet-1/events/entry-1/occurrences/occ-1');
+    expect(uri.queryParameters['source'], 'notification');
+  });
+
   testWidgets('navigates to occurrence screen when occurrence id is present', (
     tester,
   ) async {
