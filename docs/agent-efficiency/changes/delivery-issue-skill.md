@@ -73,6 +73,12 @@ point where the engine's post-delivery rows own the rest:
   orchestrator comments the next step and leaves `busy` set. A later `continue delivery #n` resumes.
 - **Blocked:** a human hold (§4.8) with evidence on the issue.
 
+Two success levels, so the skill does not promise more than the engine delivers:
+
+- **Orchestrator success:** In Main reached, plus a handoff comment stating what the engine owns next. The owner's run ends here.
+- **User success:** Done (issue closed by the engine on prod deploy). The orchestrator keeps monitoring the issue after
+  In Main to handle a `continue delivery #n`, a driver timeout or a stall. It does not wake `release`, because none exists (§3 item 1).
+
 The orchestrator never writes `Stage`, `Acceptance`, or `Acceptance fail reason`, never closes the issue, and never runs
 AAT in the session that shipped.
 
@@ -104,9 +110,12 @@ Intake checklist (orchestrator, before the first wake):
 Label order, enforced by the skill:
 
 1. If `analyse-only` is set, remove it **as the owner's act**, recorded in the issue comment (PIPE-V2-D-ANALYSE-004).
-2. Add `delivery-issue` (new label, §7 D2). It is the visible equivalent of `busy` for the orchestrator.
+2. Add `delivery-issue` (new label, §7 D2). It is set **only** when the owner invokes `/delivery-issue`, and marks an owner-invoked
+   orchestrator holding the issue. Engine-launched runs, including the one-time `aat-relaunch` for an AAT `scope` fail, do
+   not set it, and the orchestrator does not act on them. The label does not mean "a delivery agent is running"; `busy` does that.
 3. Wake: `node scripts/issue_pipeline_wake.js --issue <n> --mission deliver --live`.
-4. Remove `delivery-issue` when the run reaches In Main, Done, or a human hold.
+4. Remove `delivery-issue` when the issue reaches Done, or when the orchestrator stops at a human hold (§4.8). It stays through
+   In Main and In UAT, because the orchestrator monitors until Done.
 
 Wake order matters. A `deliver` wake before step 1 is a no-op at Ready, because the `analyse-only` check runs on every tick.
 
@@ -148,8 +157,9 @@ prompt does not enforce.
 | **In progress, AAT fail `implementation`** (corrected, V8) | Monitor. Do not wake. Run `/delivery-issue` on each follow-up issue the AAT agent filed, as its own run. Its PRs use `Refs <parent>` | Parent returns to In progress and stays until a newer linked merge into `main` |
 | In Main, AAT fail `quality` | Monitor. Small `Refs <parent>` PR is delivered by its own run | Parent stays In Main until a newer merge SHA; AAT re-runs |
 | In Main, AAT pending or inconclusive | Monitor. Clear nothing | `aat.maxInconclusive` budget, then `Blocked=stalled` |
-| In Main, AAT pass | **Nothing** (corrected, V9). Remove `delivery-issue` | `uatContainsLatestMerge` → In UAT |
-| In UAT | Nothing. Remove `delivery-issue` if still set | Prod deploy → Done, `in-prod`, close |
+| In Main, AAT pass | **Nothing** (corrected, V9). `delivery-issue` stays | `uatContainsLatestMerge` → In UAT |
+| In UAT | Nothing. `delivery-issue` stays | Prod deploy → Done, `in-prod`, close |
+| Done | Remove `delivery-issue`; the orchestrator's run is complete | — |
 | Blocked = `launch-failed` or `stalled` (engine hold) | Diagnose only. Re-wake `deliver` after the cause is fixed. Never clear the hold | Engine clears when the stage rule no longer ends in a hold |
 
 Subscriptions (Claude Code mechanics, V14): a PR-activity subscription for the PRs the run opened, and a
@@ -198,7 +208,7 @@ Each step is one outcome (`atomic-pr-policy.md`). Steps 1–2 are prerequisites.
 | 2 | `mission=deliver` | `scripts/issue_pipeline_mission.js` (`MISSIONS`, `missionGuard` branch for deliver), `scripts/issue_pipeline_wake.js` (usage text) | extend `scripts/issue_pipeline_v2_mission.test.js`: Ready allowed; Backlog/To do/In analysis → `premature`; In Main/In UAT/Done → `out-of-scope`; `analyse` unchanged; missing issue → refused | `docs/agent-efficiency/github-issue-workflow-behaviour.md` (mission table), this doc status → `in-delivery` | D1, D2 |
 | 3 | Fail-closed `Method: PR` check (optional) | `scripts/issue_pipeline_v2_launch.js` (`deliveryMethod` or a new validator) | new test cases | `github-issue-workflow-behaviour.md` §Launch | D4 |
 | 4 | Decision rows and label | `docs/agent-efficiency/github-issue-workflow-wire.md` (PIPE-V2-D-DELIVER-*), `docs/agent-efficiency/github-labels.md` (`delivery-issue`) | label list test if one exists | same | D1–D3 |
-| 5 | Skill files | `.cursor/skills/delivery-issue/SKILL.md`; `.claude/skills/delivery-issue/SKILL.md` (same content, Claude mechanics in §4.6) | `scripts/check_babysit_skill_family.js` pattern: a check that the skill points to the policy and does not restate the base-branch table | `docs/agent-efficiency/github-issue-workflow-operations.md` cross-link | Steps 1–4 |
+| 5 | Skill files | `.cursor/skills/delivery-issue/SKILL.md`; `.claude/skills/delivery-issue/SKILL.md` (same procedure; separately authored, Claude mechanics in §4.6) | `scripts/check_babysit_skill_family.js` pattern: a check that the skill points to the policy and does not restate the base-branch table | `docs/agent-efficiency/github-issue-workflow-operations.md` cross-link | Steps 1–4 |
 | 6 | Soak: one Ready issue per method (`PR`, `light-plan`, `execute-plan`) under the soak label | none (evidence in `docs/agent-efficiency/changes/`) | soak log | soak evidence file | Step 5 |
 
 **Engineering notes for step 2:**
@@ -209,7 +219,7 @@ Each step is one outcome (`atomic-pr-policy.md`). Steps 1–2 are prerequisites.
 
 **Engineering notes for step 5:**
 
-- Both mirrors must carry the same procedure. Claude Code waits with a background watch, a PR-activity subscription, or `ScheduleWakeup` (≥1200 s when idle). It never sleeps.
+- The two mirrors carry the same procedure, not identical text. The existing `analyse-issue` pair already differs in its frontmatter description, so keep them in sync by review, not by copying. Claude Code waits with a background watch, a PR-activity subscription, or `ScheduleWakeup` (≥1200 s when idle). It never sleeps.
 - Frontmatter `disable-model-invocation: true`, matching `analyse-issue`.
 
 ## 6. Non-goals (v1)
@@ -227,8 +237,8 @@ Each has a recommendation. Nothing in §5 after step 0 starts until the blocking
 | ID | Decision | Recommendation | Blocks |
 |---|---|---|---|
 | D1 | Single `deliver` mission; drop `acceptance` and `release` | Accept. Both duplicate engine transitions (V9, V10) | Step 2 |
-| D2 | Add a `delivery-issue` label (visible in-flight marker) | Accept. Remove on In Main, Done, or a human hold | Steps 2, 4 |
-| D3 | Does `/delivery-issue <n>` invocation count as the owner's authority to babysit and merge the PRs that run opened? (`AGENTS.md` §Autonomy) | Accept, limited to PRs whose author is a pipeline login or in `prAuthors`. Record it as a decision row | Step 5 |
+| D2 | Add a `delivery-issue` label, set only by owner invocation of `/delivery-issue`, marking an owner-held orchestrator. Engine-launched runs (including the AAT `scope` relaunch) never set it. Removed at Done or a human hold | Accept | Steps 2, 4 |
+| D3 | Does `/delivery-issue <n>` invocation count as the owner's authority to babysit and merge the PRs that run opened? (`AGENTS.md` §Autonomy) | Accept, limited to PRs whose author is a pipeline login or in `prAuthors`. Recorded as its own decision row (PIPE-V2-D-DELIVER-005, below). The policy text lives in `autonomous-pr-policy.md` §Autonomy, and the skill points there, so there is one source | Step 5 |
 | D4 | Fail-closed `Method: PR` on a multi-phase body | Accept as step 3. Until then the skill asks a human through `Blocked=question` on any such body it finds | Step 3 |
 | D5 | Umbrella issues: orchestrator reports blockers only, no delegate on the parent | Accept | Step 5 |
 | D6 | Opt-in command only. No change to cron `ready.launch` until the soak passes | Accept | Step 6 |
@@ -239,10 +249,17 @@ Proposed decision rows (text for `github-issue-workflow-wire.md` once accepted):
 - **PIPE-V2-D-DELIVER-002** — `/delivery-issue` removes `analyse-only` only as the owner's act, recorded in the issue.
 - **PIPE-V2-D-DELIVER-003** — `/delivery-issue` never runs AAT and never writes `Stage`, `Acceptance` or `Acceptance fail reason`.
 - **PIPE-V2-D-DELIVER-004** — After an AAT fail, the orchestrator waits for the engine (`scope`) or the follow-up runs (`implementation`, `quality`). It does not wake delivery itself.
+- **PIPE-V2-D-DELIVER-005** — `/delivery-issue` invocation authorises babysitting and merging only PRs whose author is a pipeline login or in the issue's `prAuthors`. The authority text lives in `autonomous-pr-policy.md` §Autonomy; the skill cites it.
 
 ## 8. Open verification (before step 2)
 
-- V15: locate the `:11/:41` timer policy or drop it.
-- V18: confirm the 45-minute timeout in `.github/workflows/pipeline-claude-run.yml`.
-- Confirm `finish-work` is the real command name in `light-plan/SKILL.md` §Release, since the draft and babysit-gap both use it without a cited path.
-- Confirm that `.claude/skills/*` mirrors are copies (not symlinks) before creating `.claude/skills/delivery-issue/`.
+Closed in review:
+
+- **V18 (closed):** `timeout-minutes: 45` is set at `.github/workflows/pipeline-claude-run.yml` line 49.
+- **`finish-work` (closed):** the command is `node scripts/github_issue_workflow.js finish-work --issue <n>`, per `.cursor/skills/light-plan/SKILL.md` §Pre-UAT green.
+- **Mirror text (closed, changes §5 step 5):** `.claude/skills/analyse-issue/SKILL.md` is not identical to its Cursor counterpart (its description is Claude-specific), so mirrors are separately authored.
+
+Still open:
+
+- **V15:** the `:11/:41` timer policy is not located in `docs/agent-efficiency` or `.github/workflows`. Drop it from the spec unless a citation appears.
+- **Symlink or copy:** the mirror files are not symlinks is unverified. Check with `ls -l` before creating `.claude/skills/delivery-issue/`. Not blocking, since the mirror is written as a new file.
