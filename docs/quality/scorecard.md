@@ -17,7 +17,7 @@ Living metrics for Agatha Track quality. Update when CI or test counts change ma
 ## Live metrics
 
 <!-- scorecard-metrics:begin -->
-**Auto-generated block** — refresh with `node scripts/quality/generate-scorecard-metrics.mjs --write-scorecard` (2026-11-25).
+**Auto-generated block** — refresh with `node scripts/quality/generate-scorecard-metrics.mjs --write-scorecard` (2026-11-26).
 
 | Metric | Value | Enforced by |
 |--------|------:|-------------|
@@ -25,7 +25,7 @@ Living metrics for Agatha Track quality. Update when CI or test counts change ma
 | Flutter frozen / excluded tests | 0 / 2 | frozen-domains manifest |
 | Flutter unowned tests | 0 | `flutter-shards.mjs check` |
 | Flutter integration flows | 1 | `flutter-integration` job |
-| Jest (active / frozen) | 324 / 9 | `jest.config.active.cjs` |
+| Jest (active / frozen) | 325 / 9 | `jest.config.active.cjs` |
 | Playwright (active / frozen) | 43 / 0 | `shard-files.mjs` + frozen list |
 | BDD active scenarios | 249 (16 frozen excluded) | `check_bdd_coverage.js` |
 | BDD mapped (active) | 85.9% (214/249) | gate **169/249 (68%)** |
