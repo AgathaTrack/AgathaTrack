@@ -357,6 +357,9 @@ function decideInProgress(facts, config) {
     (delivery.openLinkedPrs || 0) === 0 &&
     (delivery.mergedIntoMain || 0) >= 1 &&
     !delivery.busy;
+  if (finished && umbrellaBlocked(facts)) {
+    return umbrellaWait('progress.umbrella-waiting', facts);
+  }
   if (finished) {
     return setStage(
       'In Main',
@@ -391,7 +394,18 @@ function decideInProgress(facts, config) {
   return none('progress.working');
 }
 
+/** PIPE-UMB-D-001: an umbrella waits while any sub-issue is still short of In Main. */
+function umbrellaBlocked(facts) {
+  return (facts.umbrella?.blockers || []).length > 0;
+}
+
+function umbrellaWait(reason, facts) {
+  return { type: 'none', reason, blockers: facts.umbrella.blockers };
+}
+
 function decideInMain(facts, config) {
+  // First, so no acceptance run or intent review starts for an umbrella whose sub-issues are not done.
+  if (umbrellaBlocked(facts)) return umbrellaWait('main.umbrella-waiting', facts);
   if (aatGateOn(facts, config)) return acceptanceInMain(facts, config);
   // An issue moved to In Main by hand may have no linked PR merged into `main`. There is then no
   // merge to review or to find in a deploy, and a request could never be satisfied: it would repeat

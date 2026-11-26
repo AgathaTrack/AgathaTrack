@@ -518,6 +518,7 @@ test('a missing acceptance field logs once and keeps intent review; an empty val
   });
   const io = {
     config,
+    umbrellaRollup: async () => ({ children: [], blockers: [] }), // no sub-issues: no network read
     fields: {
       stage: { id: 1, name: 'Stage', options: ['In Main'] },
       blocked: { id: 2, name: 'Blocked', options: ['stalled'] },

@@ -173,6 +173,7 @@ test('runner: release stages read PRs and deploys; In Main waits for UAT, In UAT
         getIssue: async () => stageOf(stage),
         listIssueComments: async () => [{ user: { login: 'pawpet-engine' }, body: `<!-- ${INTENT_REVIEW} agent=a merge=m1 -->`, created_at: '2026-11-10T00:00:00Z' }],
         listLinkedPrs: async () => [{ number: 1, state: 'closed', merged: true, mergedAt: '2026-11-10T00:00:00Z', mergeSha: 'm1', base: 'main', author: 'pawpet-bot', updatedAt: '2026-11-10T00:00:00Z' }],
+        umbrellaRollup: async () => ({ children: [], blockers: [] }), // no sub-issues: no network read
         ...io,
       },
     })).actions[0].action;

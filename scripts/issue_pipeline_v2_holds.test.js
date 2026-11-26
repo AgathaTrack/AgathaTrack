@@ -204,6 +204,7 @@ test('runner: a stalled issue is read in full, so a merged PR moves it out of th
       owner: 'AgathaTrack', repo: 'AgathaTrack', token: 't', projectsPat: 'p', projectId: 'P', statusFieldId: 'S',
       io: {
         config: { ...loaded, engine: { logins: [ENGINE] } },
+        umbrellaRollup: async () => ({ children: [], blockers: [] }), // no sub-issues: no network read
         fields: {
           stage: { id: 1, name: 'Stage', options: [] },
           blocked: { id: 2, name: 'Blocked', options: [] },
