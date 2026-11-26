@@ -329,10 +329,7 @@ Widget buildCarerEditDialog(
   _FakeCareContextRepository repo, {
   required PlannedAbsencePetCarer carer,
   PlannedAbsence? detail,
-  Map<String, String> petNamesById = const {
-    'pet-1': 'Luna',
-    'pet-2': 'Buddy',
-  },
+  Map<String, String> petNamesById = const {'pet-1': 'Luna', 'pet-2': 'Buddy'},
 }) {
   final absenceDetail =
       detail ??
@@ -355,9 +352,9 @@ Widget buildCarerEditDialog(
         FakeHouseholdsRepository(),
       ),
       rosterProvider.overrideWith(_CarerPickerRosterNotifier.new),
-      plannedAbsenceDetailProvider('abs-1').overrideWith(
-        (ref) async => absenceDetail,
-      ),
+      plannedAbsenceDetailProvider(
+        'abs-1',
+      ).overrideWith((ref) async => absenceDetail),
     ],
     child: peopleTestApp(
       child: MaterialApp(
@@ -721,9 +718,7 @@ void main() {
           petCarers: [eligibleCarer],
         ),
       );
-      await tester.pumpWidget(
-        buildCarerEditDialog(repo, carer: eligibleCarer),
-      );
+      await tester.pumpWidget(buildCarerEditDialog(repo, carer: eligibleCarer));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('open_carer_edit_dialog')));
       await tester.pumpAndSettle();
@@ -759,11 +754,7 @@ void main() {
       );
       final repo = _FakeCareContextRepository(detailForFetch: twoPetDetail);
       await tester.pumpWidget(
-        buildCarerEditDialog(
-          repo,
-          carer: eligibleCarer,
-          detail: twoPetDetail,
-        ),
+        buildCarerEditDialog(repo, carer: eligibleCarer, detail: twoPetDetail),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('open_carer_edit_dialog')));
@@ -773,9 +764,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      await tester.tap(find.byKey(const Key('away_plan_carer_invite_offer_pet_pet-2')));
+      await tester.tap(
+        find.byKey(const Key('away_plan_carer_invite_offer_pet_pet-2')),
+      );
       await tester.pump();
-      await tester.tap(find.byKey(const Key('away_plan_carer_invite_include_selected')));
+      await tester.tap(
+        find.byKey(const Key('away_plan_carer_invite_include_selected')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
