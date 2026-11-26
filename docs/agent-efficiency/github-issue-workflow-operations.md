@@ -44,10 +44,33 @@ One table for every pipeline-related repo variable and JSON limit that used to b
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
 | `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (boolean; true in this repo), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
 
-The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) ticks the **whole board** when something relevant happens: issue edit, label, close, or reopen; a trusted issue comment (owner, member, collaborator, or configured agent login — not the engine account); a PR merged to `main`; a successful UAT or production deploy; or a finished Claude pipeline runner. Each event passes through `scripts/issue_pipeline_v2_event_wake.js` before the tick job runs; the :11 and :41 schedule is a **sweeper** for missed events (PIPE-V2-HT-R-003, #2560 P3). Manual dispatch also starts the workflow; it **previews by default**: a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. Both the gate and tick jobs skip while the switch is `off`. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. The optional **`mission`** input scopes stage rows for agent-woken runs: `board` (default, full pipeline) or `analyse` (To do through convergence to **Ready** only — requires `issue_number`, never `ready.launch`). Agents wake the engine with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`. Full spec: [changes/analyse-issue-skill.md](./changes/analyse-issue-skill.md). Each run logs effective mode, target, and mission (`pipeline_v2_run`) before any write (#2553 P4).
+The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) ticks the **whole board** when something relevant happens: issue edit, label, close, or reopen; a trusted issue comment (owner, member, collaborator, or configured agent login — not the engine account); a PR merged to `main`; a successful UAT or production deploy; or a finished Claude pipeline runner. Each event passes through `scripts/issue_pipeline_v2_event_wake.js` before the tick job runs; the :11 and :41 schedule is a **sweeper** for missed events (PIPE-V2-HT-R-003, #2560 P3). Manual dispatch also starts the workflow; it **previews by default**: a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. Both the gate and tick jobs skip while the switch is `off`. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. The optional **`mission`** input scopes stage rows for agent-woken runs: `board` (default, full pipeline) or `analyse` (Backlog intake through convergence to **Ready** only — requires `issue_number`, never `ready.launch`; see §Analyse mission). Agents wake the engine with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`. Each run logs effective mode, target, and mission (`pipeline_v2_run`) before any write (#2553 P4).
 Each issue gets one action per tick, logged as a `pipeline_v2_action` line. Every tick ends with one **`pipeline_v2_tick_summary`** line (`runId`, mode, target, mission, `boardReadComplete`, decision/effect/deferral/error counts, `durationMs`). A failed issue read does not abort other issues; `readFailures` marks a partial board read (#2556 P2). GitHub **blocked by** relationships (`blockedBy` GraphQL) skip stage writes and handoffs while any blocker is open (`pipeline_v2_skip` / row `blocked-by`; #2556 P3).
 
-**`/analyse-issue`:** Cursor skill [`.cursor/skills/analyse-issue/SKILL.md`](../../.cursor/skills/analyse-issue/SKILL.md) — engine-first spec and review until **Ready**, without delivery. Orchestrator may set **`Stage` = To do** at intake only (PIPE-V2-D-ANALYSE-003); lane agents still do not write `Stage`.
+**`/analyse-issue`:** Cursor skill [`.cursor/skills/analyse-issue/SKILL.md`](../../.cursor/skills/analyse-issue/SKILL.md) — engine-first spec and review until **Ready**, without delivery. The skill writes no `Stage`: an analyse wake moves a Backlog issue to To do (PIPE-V2-D-ANALYSE-003). Lane agents never write `Stage`. See §Analyse mission.
+
+### Analyse mission (`/analyse-issue`)
+
+A scoped tick for one issue, so an agent can drive intake through **Ready** without starting delivery. Wake with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live` (omit `--live` to preview). The helper refuses a non-integer issue, an unknown mission, `analyse` without an issue, and unknown flags, all before dispatch.
+
+| Mission | `issue_number` | Stage rows | At Ready |
+|---------|----------------|------------|----------|
+| `board` (default, cron) | optional | all | `ready.launch` (delivery) |
+| `analyse` | required | Backlog, To do, In analysis | `mission.analyse.complete`, no launch |
+
+From In progress onward, `mission=analyse` returns `mission.analyse.post-ready` and changes nothing.
+
+Engine-first flow. The runner takes one action per issue per tick, so intake and the spec request take two wakes:
+
+1. Orchestrator comments that the analysis started, then wakes `mission=analyse`. The engine moves **Backlog → To do** (`analyse.intake`). A To do issue skips this step.
+2. Next wake: the engine posts `v2:spec-request` and doorbells a tier-a agent.
+3. Spec pass: the engine moves To do → In analysis and requests review.
+4. Each reviewer leg is followed by a wake. Convergence sets **Ready**; the next wake logs `mission.analyse.complete`.
+
+Planned, not implemented: `deliver` (Ready → delivery only), `acceptance` and `release`.
+
+**Ready boundary (PIPE-V2-D-ANALYSE-004, label).** The `analyse-only` label is what stops the issue at Ready on every tick. The mission flag only scopes the tick it is dispatched with, and board ticks woken by label or comment events carry no mission, so the skill adds the label at start, before the first wake. Removing the label is the owner's decision to let the general pipeline launch delivery. Each adds rows to `missionGuard` and a choice to the workflow's `mission` input.
+
 ### Operating it
 
 - **Lifting the WIP cap:** `WIP_LIMIT=off` (see the switches table) only changes the Ready gate. In `on` mode it still

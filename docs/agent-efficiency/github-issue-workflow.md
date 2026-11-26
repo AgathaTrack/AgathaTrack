@@ -44,9 +44,9 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 
 | Document | Purpose |
 |----------|---------|
-| [github-issue-workflow-behaviour.md](./github-issue-workflow-behaviour.md) | **Behaviour** — stored state, who writes what, transitions, holds, delivery contract, launch and intent review, blocked reasons, labels, agent acceptance, prod guard |
+| [github-issue-workflow-behaviour.md](./github-issue-workflow-behaviour.md) | **Behaviour** — stored state, who writes what (under `on` only the engine writes `Stage`, including the `/analyse-issue` Backlog → To do intake), transitions, holds, delivery contract, launch and intent review, blocked reasons, labels, agent acceptance, prod guard |
 | [github-issue-workflow-wire.md](./github-issue-workflow-wire.md) | **Wire contract** — review rounds, markers (`v2:*`), hashes, nonces, attempts, decision log (PIPE-* IDs, soak4 outcomes) |
-| [github-issue-workflow-operations.md](./github-issue-workflow-operations.md) | **Operations** — switch reference (#2560), dry-run/preview, migration, soak playbook, board setup |
+| [github-issue-workflow-operations.md](./github-issue-workflow-operations.md) | **Operations** — switch reference (#2560), dry-run/preview, migration, soak playbook, board setup, and the **`/analyse-issue` mission** (`mission=analyse`, engine intake, §Analyse mission; folded from the former `changes/analyse-issue-skill.md`) |
 
 ### Delivery contract
 

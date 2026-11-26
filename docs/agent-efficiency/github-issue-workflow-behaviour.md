@@ -31,12 +31,12 @@ join by configuration.
 |--------|---------|-----------|------------|--------|------|------------|
 | Engine | yes | yes | yes | no | no | no |
 | Agents (lane: spec, review, intent) | no | yes, when giving up or escalating | no | yes | yes | follow-up issues only, without `Stage` |
-| **Analyse orchestrator** (`/analyse-issue`) | **To do intake only** | no | no | no | no | no |
+| **Analyse orchestrator** (`/analyse-issue`) | no (wakes the engine, which does intake) | no | no | no | no | no |
 | Humans | yes | yes | no | yes | yes | yes |
 
 This is a rule, not a permission: agent tokens can write org issue fields. **Bootstrap:** until the engine runs in `on`
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
-From `on`, only the engine writes pipeline `Stage` transitions (To do → In analysis → Ready and delivery/release), except the analyse orchestrator at **To do intake** (PIPE-V2-D-ANALYSE-003). A human hold in `Blocked` means a human is needed; the engine clears only its own engine holds (`stalled`, `launch-failed`) when their cause is gone (§Transitions, Holds).
+From `on`, only the engine writes `Stage`: To do → In analysis → Ready, delivery and release, and the Backlog → To do analyse intake under `mission=analyse` (PIPE-V2-D-ANALYSE-003, revised 2026-11-26). A human hold in `Blocked` means a human is needed; the engine clears only its own engine holds (`stalled`, `launch-failed`) when their cause is gone (§Transitions, Holds).
 
 **Merge, UAT and prod handlers (#2394 AAT).** While the engine is not `on` for an issue, the legacy handlers write `Stage` under the same table conditions: `In Main` only when the Definition of Done is ticked, no linked PR is still open, and a linked PR merged into `main` (`mayEnterInMain`); `In UAT` only when the issue's Stage is already `In Main` (an empty Stage keeps the legacy behaviour); `Done` with the prod close. A merge that does not complete the table leaves the issue `In progress`, so a two-PR issue reaches In Main after its last merge.
 
