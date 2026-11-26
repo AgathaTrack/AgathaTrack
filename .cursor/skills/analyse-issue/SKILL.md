@@ -47,7 +47,7 @@ Preview without writes: omit `--live` (workflow default). Unknown flags are refu
 
 ## Rules
 
-- **Composer-2.5** for orchestration (wake, poll, triage); lane work follows spec-agent / review-agent.
+- **Cursor orchestration:** use **`composer-2.5`** for wake, poll, and triage (see `pr-review-cost-efficiency.md`); lane work follows spec-agent / review-agent.
 - Evidence on the issue, not only in chat.
 - Refs pipeline v2 [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385).
 

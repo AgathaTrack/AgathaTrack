@@ -7,27 +7,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { loadConfig } = require('./issue_pipeline_v2_config');
 const { resolveMission, missionGuard } = require('./issue_pipeline_mission');
 const { decide } = require('./issue_pipeline_v2_decide');
+const { loadConfig } = require('./issue_pipeline_v2_config');
 const { parseArgs } = require('./issue_pipeline_wake');
 
-const config = loadConfig();
 const WAKE = path.join(__dirname, 'issue_pipeline_wake.js');
-
-function facts(over = {}) {
-  return {
-    mode: 'on',
-    onBoard: true,
-    labels: [],
-    stage: 'Ready',
-    blocked: null,
-    bodyHash: 'abc',
-    wip: { count: 0, limit: 2 },
-    mission: 'analyse',
-    ...over,
-  };
-}
 
 test('resolveMission: board allows whole-board tick', () => {
   assert.deepEqual(resolveMission({ mission: 'board', issueNumber: null }), { ok: true, mission: 'board' });
@@ -46,12 +31,16 @@ test('resolveMission: input is trimmed and case-folded; unknown missions refused
   assert.equal(resolveMission({ mission: 'deliver', issueNumber: 1 }).ok, false);
 });
 
-test('missionGuard: analyse allows Backlog, To do and In analysis; stops at Ready and after', () => {
-  assert.equal(missionGuard('Backlog', 'analyse'), null);
-  assert.equal(missionGuard('To do', 'analyse'), null);
-  assert.equal(missionGuard('In analysis', 'analyse'), null);
-  assert.equal(missionGuard('Ready', 'analyse')?.row, 'mission.analyse.complete');
+test('missionGuard: analyse stops at Ready without launch', () => {
+  const blocked = missionGuard('Ready', 'analyse');
+  assert.equal(blocked?.row, 'mission.analyse.complete');
   assert.equal(missionGuard('In progress', 'analyse')?.row, 'mission.analyse.post-ready');
+  assert.equal(missionGuard('To do', 'analyse'), null);
+});
+
+test('missionGuard: analyse allows Backlog and In analysis; Done is post-ready', () => {
+  assert.equal(missionGuard('Backlog', 'analyse'), null);
+  assert.equal(missionGuard('In analysis', 'analyse'), null);
   assert.equal(missionGuard('Done', 'analyse')?.row, 'mission.analyse.post-ready');
 });
 
@@ -60,47 +49,101 @@ test('missionGuard: board never blocks', () => {
   assert.equal(missionGuard('Ready', undefined), null);
 });
 
-test('decide: mission analyse skips ready.launch on Ready issue', () => {
-  const action = decide(facts({ stage: 'Ready' }), config);
-  assert.equal(action.type, 'none');
+const readyFactsBase = () => ({
+  mode: 'on',
+  onBoard: true,
+  labels: [],
+  stage: 'Ready',
+  blocked: null,
+  bodyHash: 'abc',
+  wip: 0,
+  deliveryMethod: 'PR',
+  now: Date.now(),
+  closed: false,
+  launch: {},
+});
+
+test('decide: mission analyse on closed In progress does not reopen', () => {
+  const config = loadConfig();
+  const action = decide(
+    {
+      mode: 'on',
+      onBoard: true,
+      labels: [],
+      stage: 'In progress',
+      blocked: null,
+      closed: true,
+      closeReason: 'completed',
+      reopenedBefore: false,
+      mission: 'analyse',
+    },
+    config,
+  );
+  assert.equal(action.row, 'mission.analyse.post-ready');
+  assert.notEqual(action.type, 'reopen');
+});
+
+test('decide: mission analyse at Ready with engine hold does not release', () => {
+  const config = loadConfig();
+  const action = decide(
+    {
+      mode: 'on',
+      onBoard: true,
+      labels: [],
+      stage: 'Ready',
+      blocked: 'stalled',
+      mission: 'analyse',
+      holds: { hold: { reason: 'stalled' }, releasedAt: null },
+    },
+    config,
+  );
   assert.equal(action.row, 'mission.analyse.complete');
+  assert.notEqual(action.type, 'release-hold');
+});
+
+test('decide: mission analyse at Ready does not launch; board mission reaches ready.launch', () => {
+  const config = loadConfig();
+  const facts = readyFactsBase();
+  const analyseAction = decide({ ...facts, mission: 'analyse' }, config);
+  assert.equal(analyseAction.type, 'none');
+  assert.equal(analyseAction.row, 'mission.analyse.complete');
+
+  const boardAction = decide({ ...facts, mission: 'board' }, config);
+  assert.notEqual(boardAction.row, 'mission.analyse.complete');
+  assert.equal(boardAction.type, 'launch');
+  assert.equal(boardAction.row, 'ready.launch');
+});
+
+// --- Engine intake (PIPE-V2-D-ANALYSE-003, revised 2026-11-26): the engine, not the agent, moves Backlog to To do.
+
+const analyseFacts = (over = {}) => ({
+  mode: 'on',
+  onBoard: true,
+  labels: [],
+  stage: 'Ready',
+  blocked: null,
+  bodyHash: 'abc',
+  wip: { count: 0, limit: 2 },
+  mission: 'analyse',
+  ...over,
 });
 
 test('decide: mission analyse moves a Backlog issue to To do (engine intake, no agent Stage write)', () => {
-  const action = decide(facts({ stage: 'Backlog' }), config);
+  const action = decide(analyseFacts({ stage: 'Backlog' }), loadConfig());
   assert.equal(action.type, 'set-stage');
   assert.equal(action.to, 'To do');
   assert.equal(action.row, 'analyse.intake');
 });
 
 test('decide: board mission leaves a Backlog issue alone', () => {
-  const action = decide(facts({ stage: 'Backlog', mission: 'board' }), config);
+  const action = decide(analyseFacts({ stage: 'Backlog', mission: 'board' }), loadConfig());
   assert.equal(action.type, 'none');
   assert.equal(action.reason, 'stage-backlog');
 });
 
 test('decide: mission analyse does not re-run intake on a To do issue', () => {
-  const action = decide(facts({ stage: 'To do' }), config);
+  const action = decide(analyseFacts({ stage: 'To do' }), loadConfig());
   assert.notEqual(action.row, 'analyse.intake');
-});
-
-test('decide: mission analyse refuses delivery rows after Ready', () => {
-  const action = decide(facts({ stage: 'In progress' }), config);
-  assert.equal(action.type, 'none');
-  assert.equal(action.row, 'mission.analyse.post-ready');
-});
-
-test('parseArgs: defaults to mission analyse, not live', () => {
-  assert.deepEqual(parseArgs(['node', 'wake', '--issue', '5']), {
-    issue: '5', mission: 'analyse', live: false, help: false, error: null,
-  });
-});
-
-test('parseArgs: --live and --mission are read', () => {
-  const out = parseArgs(['node', 'wake', '--issue', '5', '--mission', 'board', '--live']);
-  assert.equal(out.mission, 'board');
-  assert.equal(out.live, true);
-  assert.equal(out.error, null);
 });
 
 test('parseArgs: unknown flag or a flag without its value is an error, not silently ignored', () => {

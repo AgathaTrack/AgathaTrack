@@ -449,9 +449,20 @@ function decide(facts, config) {
   if ((facts.labels || []).includes('manual-only')) {
     return none('manual-only');
   }
+  if (facts.blockedByReadError) {
+    return { type: 'none', row: 'blocked-by.read-failed' };
+  }
+  if (facts.blockedByOpen?.length) {
+    return { type: 'none', row: 'blocked-by', blockers: facts.blockedByOpen };
+  }
   const stage = canonicalStage(facts.stage);
   if (stage === null) {
     return none('unknown-stage');
+  }
+  // Scoped missions (e.g. analyse) must not reopen closed delivery issues or release holds past Ready.
+  const missionBlock = missionGuard(stage, facts.mission);
+  if (missionBlock) {
+    return missionBlock;
   }
   if (facts.closed) {
     // Closed while delivery was under way (a merge auto-closed it, for example): an issue must stay

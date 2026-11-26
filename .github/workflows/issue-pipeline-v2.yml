@@ -1,7 +1,8 @@
 name: Issue pipeline v2
 
-# Pipeline v2 (#2385). ISSUE_PIPELINE_V2: off | dry-run | on (default off). dry-run logs decisions;
-# only `on`, with ENGINE_PAT belonging to a login in .github/pipeline-agents.json `engine.logins`, writes.
+# Pipeline v2 (#2385). Switches: docs/agent-efficiency/github-issue-workflow-operations.md §Pipeline switches (reference).
+# ISSUE_PIPELINE_V2: off | dry-run | on (default off). dry-run logs; only `on` + ENGINE_PAT in engine.logins writes.
+# Event wakes (#2560 P3); cron :11/:41 sweeper (PIPE-V2-HT-R-003).
 on:
   schedule:
     - cron: '11,41 * * * *'
@@ -24,6 +25,20 @@ on:
         options:
           - board
           - analyse
+  issues:
+    types: [edited, labeled, closed, reopened]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+  workflow_run:
+    workflows:
+      - Deploy UAT (uat.agathatrack.com)
+      - Deploy Production (agathatrack.com)
+      - Pipeline Claude run
+    types: [completed]
 
 permissions:
   contents: read
@@ -34,9 +49,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  wake-gate:
+    name: Event wake gate
+    if: vars.ISSUE_PIPELINE_V2 == 'dry-run' || vars.ISSUE_PIPELINE_V2 == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          sparse-checkout: |
+            scripts/issue_pipeline_v2_event_wake.js
+            .github/pipeline-agents.json
+          sparse-checkout-cone-mode: false
+
+      - name: Decide whether this event should tick
+        id: gate
+        run: node scripts/issue_pipeline_v2_event_wake.js
+
   tick:
     name: issue-pipeline-v2
-    if: vars.ISSUE_PIPELINE_V2 == 'dry-run' || vars.ISSUE_PIPELINE_V2 == 'on'
+    needs: wake-gate
+    if: >-
+      needs.wake-gate.outputs.proceed == 'true' &&
+      (vars.ISSUE_PIPELINE_V2 == 'dry-run' || vars.ISSUE_PIPELINE_V2 == 'on')
     runs-on: ubuntu-latest
     environment: automation
     timeout-minutes: 10
@@ -67,4 +105,5 @@ jobs:
           # Manual dispatch previews unless `live` is ticked (scripts/issue_pipeline_v2_dispatch.js).
           ISSUE_PIPELINE_V2_LIVE: ${{ inputs.live && 'true' || 'false' }}
           PIPELINE_V2_MISSION: ${{ inputs.mission || 'board' }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: node scripts/issue_pipeline_v2.js

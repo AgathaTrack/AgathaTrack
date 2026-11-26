@@ -13,7 +13,7 @@ tags: [agent, pipeline, blocked, ticks]
 
 Plan of record for making `Blocked` mean "a human must act" and for moving the engine off "one action per issue per
 cron tick". Owner decisions 2026-11-24: PIPE-V2-D-HOLD-001 to 005 and PIPE-V2-D-TICK-001 in
-[github-issue-workflow.md §Decision log](../github-issue-workflow.md#decision-log). Trigger: #2554, blocked by two
+[github-issue-workflow-wire.md §Decision log](../github-issue-workflow-wire.md#decision-log). Trigger: #2554, blocked by two
 failed acceptance starts with no agent run, and not recoverable by a newer merge.
 
 ## Findings this plan answers
@@ -35,7 +35,7 @@ failed acceptance starts with no agent run, and not recoverable by a newer merge
 | Phase | Outcome | Status |
 |-------|---------|--------|
 | P1 | Hold semantics: engine holds re-evaluated and released by the engine; human clear is a retry; failed starts use the launch backoff; no launchable agent is a board-level error; blocked issues read in full | In delivery (this branch) |
-| P2 | Event wakes: issue edited, labelled, closed or reopened, and new comment; PR closed; UAT and production deploy finished; Claude runner finished. Each dispatches a **board-wide** run in the existing `issue-pipeline-v2` concurrency group. Cron becomes the sweeper | Planned (#2560 P3) |
+| P2 | Event wakes: issue edited, labelled, closed or reopened, and new comment; PR closed; UAT and production deploy finished; Claude runner finished. Each dispatches a **board-wide** run in the existing `issue-pipeline-v2` concurrency group. Cron becomes the sweeper | Delivered (#2560 P3) |
 | P3 | Advance loop: one run repeats decide → apply → re-read for an issue until the answer is a wait or an agent was started (cap about 5 steps) | Planned |
 | P4 | True per-issue run: with `issue_number`, read only that issue, its comments and linked PRs | Planned |
 | P5 | Per-issue concurrency (`issue-pipeline-v2-<number>`) and one serial allocator for the WIP cap, the Claude runner cap and the round-robin cursor | Planned, only if board-wide runs become the bottleneck |

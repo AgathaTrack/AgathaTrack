@@ -12,6 +12,7 @@
  */
 
 const { resolvePipelineMode } = require('./issue_pipeline_mode');
+const { resolveMission } = require('./issue_pipeline_mission');
 
 const POSITIVE_INTEGER = /^[1-9]\d*$/;
 
@@ -59,4 +60,20 @@ function resolveRunMode({ eventName, liveRequested = false, repoMode }) {
   return { mode: 'dry-run', source: 'dispatch-live-downgraded' };
 }
 
-module.exports = { resolveDispatchTarget, resolveRunMode };
+/**
+ * Validates dispatch target and mission before any board read (#2631 / analyse-issue).
+ * @returns {{ ok: true, only: number|null, mission: string } | { ok: false, reason: string }}
+ */
+function validatePipelineDispatch({ issueNumberRaw, missionRaw }) {
+  const target = resolveDispatchTarget(issueNumberRaw);
+  if (!target.ok) {
+    return target;
+  }
+  const mission = resolveMission({ mission: missionRaw, issueNumber: target.only });
+  if (!mission.ok) {
+    return mission;
+  }
+  return { ok: true, only: target.only, mission: mission.mission };
+}
+
+module.exports = { resolveDispatchTarget, resolveRunMode, validatePipelineDispatch };

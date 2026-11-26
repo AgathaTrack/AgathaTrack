@@ -340,7 +340,7 @@ See `docs/e2e/uat-deploy-tiers.md` · `docs/pipelines/ci-cd-gates.md` §3 · `do
 | Pause or question for human | `**Needs you:**`; halt/pause when blocked on human | Short alert: issue link + unblock action (halt-class only) |
 | Plan or task complete | Close with summary (`complete-plan --write` for control issues) | Brief completion note **only after** `complete-plan` |
 
-**Project board status** (the Project `Status` field) is **not** updated by Cloud Agents — GitHub does not grant Projects write on agent tokens. Use comments + `busy`. The org field `Stage` is governed by the who-writes-what table in [github-issue-workflow.md §Pipeline v2](./github-issue-workflow.md#pipeline-v2-the-stage-machine).
+**Project board status** (the Project `Status` field) is **not** updated by Cloud Agents — GitHub does not grant Projects write on agent tokens. Use comments + `busy`. The org field `Stage` is governed by the who-writes-what table in [github-issue-workflow-behaviour.md §Who writes what](./github-issue-workflow-behaviour.md#who-writes-what), the `/analyse-issue` intake is an engine row (**PIPE-V2-D-ANALYSE-003**, revised 2026-11-26), so agents write no `Stage`.
 
 ---
 

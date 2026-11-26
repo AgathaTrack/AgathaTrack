@@ -125,9 +125,13 @@ On **Cursor Cloud**, default `gh`/API identity is **`pawpet-bot`** (dashboard **
 ## GitHub issues
 
 Agents comment, edit issue bodies, set `busy` and write `Blocked` (when giving up or escalating). On
-**AgathaTrack/AgathaTrack**, the org field `Stage` is pipeline state: once `ISSUE_PIPELINE_V2=on` only the engine
-and humans write it; until then (bootstrap) an agent may move it for a transition it satisfied, citing the table row and
-evidence in a comment. Agents cannot write the Project `Status` field (no Projects write on agent tokens). In every PR for an
+**AgathaTrack/AgathaTrack**, the org field `Stage` is pipeline state: once `ISSUE_PIPELINE_V2=on`, the **engine** and
+**humans** own almost all `Stage` transitions; until then (bootstrap) an agent may move `Stage` for a transition it has
+satisfied, citing the table row and evidence in a comment. Under `on` the **engine** makes every `Stage` transition, including the **`/analyse-issue`** intake (Backlog → To do
+under `mission=analyse`; PIPE-V2-D-ANALYSE-003, revised 2026-11-26). Spec, review, and delivery lane agents never write
+`Stage`; In analysis → Ready and all delivery/release stages stay
+engine-only. On **AgathaTrackPrivate** support issues (Support Bug / Support Question), set **`Support Stage`**
+(not `Stage`). Agents cannot write the Project `Status` field (no Projects write on agent tokens). In every PR for an
 issue, write `Refs #n`, never `Closes`.
 
 ```bash

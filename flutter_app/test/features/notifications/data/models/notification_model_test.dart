@@ -38,6 +38,17 @@ void main() {
       expect(model.resolvedAt?.toUtc().hour, 12);
     });
 
+    test('fromJson parses occurrence deep link fields', () {
+      final model = NotificationModel.fromJson({
+        ...fullJson,
+        'health_occurrence_id': 'occ-1',
+        'deep_link':
+            '/pet/pet-1/events/entry-1/occurrences/occ-1?source=notification',
+      });
+      expect(model.healthOccurrenceId, 'occ-1');
+      expect(model.deepLink, contains('/occurrences/occ-1'));
+    });
+
     test('fromJson parses all fields correctly', () {
       final model = NotificationModel.fromJson(fullJson);
 

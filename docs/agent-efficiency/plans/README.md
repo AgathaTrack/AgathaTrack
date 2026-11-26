@@ -16,6 +16,6 @@ tags: [agent-efficiency,plans]
 | [issue-pipeline-automation.md](./issue-pipeline-automation.md) | Target issue pipeline (Pawpet board + assignee model) — proposal |
 | [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md) | Dispatcher implementation contract (companion to issue-pipeline-automation) |
 
-Policies, execute-plan schema, and skills references: [/docs/agent-efficiency/](/docs/agent-efficiency/) (parent folder).
+Index: [../README.md](../README.md) — engines, issue lifecycle split, policies. Execute-plan operating docs: [../execute-plan-runtime.md](../execute-plan-runtime.md) · [../execute-plan-schema.md](../execute-plan-schema.md).
 
 Execute-plan snapshots remain in `.agents/plans/` (link-out only).

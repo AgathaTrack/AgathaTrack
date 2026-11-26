@@ -3,7 +3,7 @@ title: Agatha Track Documentation
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-10-08
+last_updated: 2026-11-26
 tags: [overview,table-of-contents,documentation]
 ---
 
@@ -64,7 +64,7 @@ Product behaviour → `docs/domains/<domain>/`. Platform, CI, agents, and debt �
 | Folder | Index | Contents |
 |--------|-------|----------|
 | **Pipelines** | [/docs/pipelines/README.md](/docs/pipelines/README.md) | CI/CD gates, promotion, canary, deploy runbooks |
-| **Agent efficiency** | [/docs/agent-efficiency/plans/README.md](/docs/agent-efficiency/plans/README.md) | Master agent plan + policies in `docs/agent-efficiency/` |
+| **Agent efficiency** | [/docs/agent-efficiency/README.md](/docs/agent-efficiency/README.md) | Automation engines, issue lifecycle, policies; [plans index](/docs/agent-efficiency/plans/README.md) |
 | **Debt** | [/docs/debt/README.md](/docs/debt/README.md) | Open debt register (`debt.md`) + refactor changelog |
 | **Operations** | [/docs/ops/public-access.md](/docs/ops/public-access.md) | Observability, public access, [backup & restore plan](/docs/ops/prod-backup-restore-plan.md) |
 | **E2E / UAT** | [/docs/e2e/uat-deploy-tiers.md](/docs/e2e/uat-deploy-tiers.md) | Live E2E ops, promotion manuals |
@@ -155,7 +155,9 @@ Navigation shell reversal and phased delivery (formerly `docs/experience-program
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [/docs/agent-efficiency/plans/agent-efficiency-plan.md](/docs/agent-efficiency/plans/agent-efficiency-plan.md) | **Start here** - Master plan for agent improvements | Active |
+| [/docs/agent-efficiency/README.md](/docs/agent-efficiency/README.md) | **Start here** — engines, issue lifecycle (`Stage`), policies | Active |
+| [/docs/agent-efficiency/plans/agent-efficiency-plan.md](/docs/agent-efficiency/plans/agent-efficiency-plan.md) | Master plan for agent improvements | Active |
+| [/docs/agent-efficiency/github-issue-workflow.md](/docs/agent-efficiency/github-issue-workflow.md) | Issue lifecycle entry — [behaviour](/docs/agent-efficiency/github-issue-workflow-behaviour.md) · [wire](/docs/agent-efficiency/github-issue-workflow-wire.md) · [operations](/docs/agent-efficiency/github-issue-workflow-operations.md) | Active |
 | [/docs/agent-efficiency/atomic-pr-policy.md](/docs/agent-efficiency/atomic-pr-policy.md) | One outcome per PR rules | Active |
 | [/docs/agent-efficiency/autonomous-pr-policy.md](/docs/agent-efficiency/autonomous-pr-policy.md) | Multi-phase plan autonomy rules | Active |
 | [/docs/agent-efficiency/execute-plan-runtime.md](/docs/agent-efficiency/execute-plan-runtime.md) | Plan execution engine | Active |
@@ -178,9 +180,10 @@ Navigation shell reversal and phased delivery (formerly `docs/experience-program
 
 ## Project Management
 
+Issue **Stage** lifecycle and triage: [/docs/agent-efficiency/README.md](/docs/agent-efficiency/README.md) → [workflow entry](/docs/agent-efficiency/github-issue-workflow.md).
+
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [/docs/agent-efficiency/github-issue-workflow.md](/docs/agent-efficiency/github-issue-workflow.md) | Issue lifecycle and triage | Active |
 | **Open debt** | [/docs/debt/debt.md](/docs/debt/debt.md) | Single register — OPEN items only |
 | [/docs/debt/refactoring-log.md](/docs/debt/refactoring-log.md) | Sprint refactor history (completed work) | Active |
 | [/docs/debt/README.md](/docs/debt/README.md) | Debt index; legacy stubs redirect here | Active |
@@ -230,7 +233,7 @@ See [/docs/archived/README.md](/docs/archived/README.md) for the full list.
 ### For Agents
 1. Start with [Agent Guide](/AGENTS.md) for agent-specific setup
 2. Use [Architecture Index](/docs/architecture/index.md) for domain mapping
-3. Check [Agent Efficiency Plan](/docs/agent-efficiency/plans/agent-efficiency-plan.md) for workflows
+3. Check [Agent efficiency index](/docs/agent-efficiency/README.md) for engines, issue lifecycle, and policies
 4. Reference [.cursor/skills/](/.cursor/skills/) for reusable skills
 
 ### Quick Links by Task
