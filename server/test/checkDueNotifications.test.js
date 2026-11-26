@@ -7,6 +7,12 @@ describe('buildNotificationDeepLink', () => {
     );
   });
 
+  it('returns occurrence path with source=notification when occurrence id is present', () => {
+    expect(buildNotificationDeepLink('pet-1', 'entry-1', 'occ-1')).toBe(
+      '/pet/pet-1/events/entry-1/occurrences/occ-1?source=notification',
+    );
+  });
+
   it('returns null when pet id is missing', () => {
     expect(buildNotificationDeepLink(null, 'entry-1')).toBeNull();
     expect(buildNotificationDeepLink('', 'entry-1')).toBeNull();

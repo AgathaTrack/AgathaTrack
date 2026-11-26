@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { countEngineWip } = require('./issue_pipeline_v2_tick_facts');
 const { tick } = require('./issue_pipeline_v2');
+const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
 
 const config = loadConfig();
 const ENGINE = config.engine.logins;
@@ -113,6 +114,7 @@ function replayBoard(order) {
       return { applied: [], calls: [] };
     },
     restFn: async () => ({}),
+    fetchIssueBlockedBy: noopBlockedBy,
   };
   return { world, io };
 }

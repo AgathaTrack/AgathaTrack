@@ -22,6 +22,8 @@ on:
 env:
   FLUTTER_VERSION: '3.44.0'
   UAT_BASE_URL: https://uat.agathatrack.com
+  # o2switch FTP can go quiet >30s on large backend trees; SamKirkland default is 30000 ms.
+  FTP_DEPLOY_TIMEOUT_MS: '600000'
 
 concurrency:
   group: deploy-uat
@@ -218,6 +220,7 @@ jobs:
           server: ${{ secrets.UAT_FTP_SERVER }}
           username: ${{ secrets.UAT_FTP_USERNAME }}
           password: ${{ secrets.UAT_FTP_PASSWORD }}
+          timeout: ${{ env.FTP_DEPLOY_TIMEOUT_MS }}
           server-dir: ./
           local-dir: flutter_app/build/web/
           exclude: |
@@ -236,6 +239,7 @@ jobs:
           server: ${{ secrets.UAT_FTP_SERVER }}
           username: ${{ secrets.UAT_FTP_USERNAME }}
           password: ${{ secrets.UAT_FTP_PASSWORD }}
+          timeout: ${{ env.FTP_DEPLOY_TIMEOUT_MS }}
           server-dir: ./backend/
           local-dir: ${{ steps.stage_backend.outputs.staging_dir }}/
           # State file lives inside staging dir (FTP-Deploy joins local-dir + state-name).

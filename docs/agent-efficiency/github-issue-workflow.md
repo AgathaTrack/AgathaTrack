@@ -3,7 +3,7 @@ title: GitHub issue workflow
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-24
+last_updated: 2026-11-26
 tags: [documentation, github-issues, automation]
 ---
 # GitHub issue workflow
@@ -42,16 +42,42 @@ every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/i
 
 ### Switches and identity
 
+#### Pipeline switches (reference)
+
+One table for every pipeline-related repo variable and JSON limit that used to be scattered across plan docs (#2560 P4). **Cutover** means moving live board writes to pipeline v2 (`ISSUE_PIPELINE_V2=on` with an empty soak label).
+
+| Switch | Where | Read by (on `main`) | Values | Effect by combination |
+|--------|-------|---------------------|--------|------------------------|
+| `ISSUE_PIPELINE` | repo variable (retired) | **Nothing** — safe to delete on GitHub | was `off` / `dry-run` / `on` | v1 assignee dispatcher removed ([#2598](https://github.com/AgathaTrack/AgathaTrack/issues/2598)); history in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md). Never the cutover switch. |
+| `ISSUE_PIPELINE_V2` | repo variable | [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) gate and tick; merge/UAT/prod handlers; `agent-dispatch` / `agent-monitor` / `triage-human-reviewed` job guards; `issue_pipeline_v2.js` | `off` (default), `dry-run`, `on` | `off`: no v2 jobs. `dry-run`: decide + log only. `on`: live writes when `ENGINE_PAT` matches `engine.logins`. Legacy label workflows skip when `on`. |
+| `ISSUE_PIPELINE_V2_LABEL` | repo variable | Same as `ISSUE_PIPELINE_V2` | e.g. `pipeline-beta`, `soak4`, or empty | With `on`: only labelled issues get live writes; others stay dry-run on the same tick. Empty = whole board. |
+| `WIP_LIMIT` | repo variable | `issue_pipeline_v2.js` | `off` or unset | `off` lifts the Ready queue cap (`limits.wip`) for the run. Any other value keeps the JSON limit. |
+| `limits.wip` | `.github/pipeline-agents.json` | `issue_pipeline_v2.js` | positive integer (default 2) | Delivery slot count while `WIP_LIMIT` is not `off`. Not the Stage column. |
+| `STAGE_MIRROR` | repo variable (retired) | **Nothing** | was `on` / `off` | Org `Stage` ↔ board `Status` mirror cancelled ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)). |
+| `WIP_MAX` | repo variable (retired) | **Nothing** | was `2` default on v1 | v1 dispatcher only. |
+| `PIPELINE_IMPLEMENT_LAUNCH` | repo variable (retired) | **Nothing** | was `true` / unset | v1 implement lane only. |
+| `PIPELINE_STUCK_MAX` | repo variable (retired) | **Nothing** | was `3` default on v1 | v1 monitor relaunch cap only. |
+
+**Typical combinations**
+
+| `ISSUE_PIPELINE_V2` | `ISSUE_PIPELINE_V2_LABEL` | What runs |
+|---------------------|---------------------------|-----------|
+| `off` | any | Legacy label flow (until #2411 removes it); handlers use legacy `Stage` rules; v2 workflow skipped. |
+| `dry-run` | e.g. `soak4` | v2 ticks decide and log; scoped issues show what *would* be written; legacy flows still run. |
+| `on` | set | Live v2 writes on labelled issues only; legacy dispatch/triage/monitor skipped; handlers skip v2-owned issues. |
+| `on` | empty | Full board cutover: v2 owns all issues in scope; legacy flows off. |
+
+#### Identity and pool (`pipeline-agents.json`)
+
 | Setting | Where | Meaning |
 |---------|-------|---------|
-| `ISSUE_PIPELINE_V2` | repo variable | `off` (default; the job does not run), `dry-run` (decides and logs, sends nothing), `on` (writes). When `on`, label-flow triage/dispatch/monitor workflows are disabled (same guard as the retired v1 `ISSUE_PIPELINE=on` switch). |
-| `ISSUE_PIPELINE_V2_LABEL` | repo variable | Optional soak scope, e.g. `pipeline-beta`. In `on` mode only issues with this label are written to; all others are still decided and logged as dry-run. |
-| `WIP_LIMIT` | repo variable | Temporary. `off` lifts the Ready queue cap (`limits.wip`) for every tick, so Ready issues launch without waiting for a free slot. Any other value, or unset, keeps the committed limit. Remove the variable to restore it. |
 | `engine.logins` | `.github/pipeline-agents.json` | The account(s) the engine writes as (`pawpet-engine`, secret `ENGINE_PAT` / `GH_PROJECTS_PAT` on the v2 tick). It is never a listed agent. With no matching token the tick runs as a dry run whatever the variable says. |
 | `agents`, `limits`, `launchRunners`, `aat` | `.github/pipeline-agents.json` | Pool members: each entry has a logical **`id`** (rotation, timeouts, markers), an **`actsAs`** GitHub login (assignee, `@mention`, reactions), optional **`model`**, **`runner`**, and **`methods`**. Legacy rows with **`login` only** use that login as both `id` and `actsAs`. `engine.logins` must not match any `actsAs`. Limits and `launchRunners` as before. `aat` is `enabled` (boolean; true in this repo), `timeoutMin`, and `maxInconclusive`. A bad edit fails in CI. |
 
-The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) runs at :11 and :41 and on manual dispatch. A manual dispatch **previews by default**: it runs as a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. The job itself is still skipped while that switch is `off`, as it is on schedule. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. Each run logs its effective mode and target (`pipeline_v2_run`) before any write (#2553 P4).
-Each issue gets one action per tick, logged as a `pipeline_v2_action` line; the tick line reports `errors`.
+The workflow [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) ticks the **whole board** when something relevant happens: issue edit, label, close, or reopen; a trusted issue comment (owner, member, collaborator, or configured agent login — not the engine account); a PR merged to `main`; a successful UAT or production deploy; or a finished Claude pipeline runner. Each event passes through `scripts/issue_pipeline_v2_event_wake.js` before the tick job runs; the :11 and :41 schedule is a **sweeper** for missed events (PIPE-V2-HT-R-003, #2560 P3). Manual dispatch also starts the workflow; it **previews by default**: a dry run even when the repo `ISSUE_PIPELINE_V2` is `on`. Both the gate and tick jobs skip while the switch is `off`. It writes only when the `live` input is ticked and the switch is `on`. The `issue_number` input is empty for the whole board or one positive integer; any other value is refused before the board is read. The optional **`mission`** input scopes stage rows for agent-woken runs: `board` (default, full pipeline) or `analyse` (To do through convergence to **Ready** only — requires `issue_number`, never `ready.launch`). Agents wake the engine with `node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live`. Full spec: [changes/analyse-issue-skill.md](./changes/analyse-issue-skill.md). Each run logs effective mode, target, and mission (`pipeline_v2_run`) before any write (#2553 P4).
+Each issue gets one action per tick, logged as a `pipeline_v2_action` line. Every tick ends with one **`pipeline_v2_tick_summary`** line (`runId`, mode, target, mission, `boardReadComplete`, decision/effect/deferral/error counts, `durationMs`). A failed issue read does not abort other issues; `readFailures` marks a partial board read (#2556 P2). GitHub **blocked by** relationships (`blockedBy` GraphQL) skip stage writes and handoffs while any blocker is open (`pipeline_v2_skip` / row `blocked-by`; #2556 P3).
+
+**`/analyse-issue`:** Cursor skill [`.cursor/skills/analyse-issue/SKILL.md`](../../.cursor/skills/analyse-issue/SKILL.md) — engine-first spec and review until **Ready**, without delivery. Orchestrator may set **`Stage` = To do** at intake only (PIPE-V2-D-ANALYSE-003); lane agents still do not write `Stage`.
 
 ### Stored state
 
@@ -73,12 +99,13 @@ join by configuration.
 | Writer | `Stage` | `Blocked` | `Attempts` | `busy` | body | new issues |
 |--------|---------|-----------|------------|--------|------|------------|
 | Engine | yes | yes | yes | no | no | no |
-| Agents | no, except during bootstrap | yes, when giving up or escalating | no | yes | yes | follow-up issues only, without `Stage` |
+| Agents (lane: spec, review, intent) | no | yes, when giving up or escalating | no | yes | yes | follow-up issues only, without `Stage` |
+| **Analyse orchestrator** (`/analyse-issue`) | **To do intake only** | no | no | no | no | no |
 | Humans | yes | yes | no | yes | yes | yes |
 
 This is a rule, not a permission: agent tokens can write org issue fields. **Bootstrap:** until the engine runs in `on`
 mode an agent may move `Stage` for a transition it has satisfied, citing the table row and the evidence in a comment.
-From `on`, only the engine writes `Stage`. A human hold in `Blocked` means a human is needed; the engine clears only its own engine holds (`stalled`, `launch-failed`) when their cause is gone (§Transitions, Holds).
+From `on`, only the engine writes pipeline `Stage` transitions (To do → In analysis → Ready and delivery/release), except the analyse orchestrator at **To do intake** (PIPE-V2-D-ANALYSE-003). A human hold in `Blocked` means a human is needed; the engine clears only its own engine holds (`stalled`, `launch-failed`) when their cause is gone (§Transitions, Holds).
 
 **Merge, UAT and prod handlers (#2394 AAT).** While the engine is not `on` for an issue, the legacy handlers write `Stage` under the same table conditions: `In Main` only when the Definition of Done is ticked, no linked PR is still open, and a linked PR merged into `main` (`mayEnterInMain`); `In UAT` only when the issue's Stage is already `In Main` (an empty Stage keeps the legacy behaviour); `Done` with the prod close. A merge that does not complete the table leaves the issue `In progress`, so a two-PR issue reaches In Main after its last merge.
 
@@ -205,7 +232,13 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 - **Tick log:** each tick logs `pipeline_v2_action` before applying an action and `pipeline_v2_applied` after, with what
   was done (`launch:`, `launch-failed:`, `doorbell:`, `doorbell-failed:<agent>:<reason>`, comments, writes). When the
   action was not written (dry-run mode, no engine identity, or outside the scope label) it logs `pipeline_v2_planned`
-  with the same list instead, so a log line never claims a write that did not happen.
+  with the same list instead, so a log line never claims a write that did not happen. **`runner-queued:`** counts as a
+  **deferral** in the summary, not a confirmed effect. In analysis rounds log **`pipeline_v2_round_plan`** with the
+  **`decision`** row used that tick. **Normal tick (excerpt):** `pipeline_v2_run` → per-issue `pipeline_v2_action` →
+  `pipeline_v2_tick_summary` with `boardReadComplete:true`, `confirmedEffects` > 0 when live. **Recovery (excerpt):**
+  one `readFailures` entry, `boardReadComplete:false`, other issues still logged; a board list failure still emits
+  summary with `errors:1`. **Blocked wake:** on a blocked issue, a human reply wakes the stage agent; the `v2:wake`
+  comment is written only after a confirmed doorbell, so a Claude runner cap does not consume the reply (#2556 P1).
 
 ### Delivery contract
 
@@ -219,6 +252,17 @@ A delivery agent, whatever the method, must:
 
 A PR is linked to an issue when its body says `Refs|Closes|Fixes|Resolves #n` and it appears in the issue's timeline. Only
 merges into `main` count; phase PRs merged into an integration branch are open or closed work, not delivery.
+
+**Light-plan programmes** (body `Method: light-plan`, skill: `.cursor/skills/light-plan/SKILL.md`): the delivery agent ends
+at Pre-UAT green on the release merge SHA — every **Definition of Done** item ticked, then `finish-work`. It does **not** close
+the issue or run **`/AgentAcceptance`** (the acceptance skill forbids the session that shipped the release). While the engine
+**owns** the issue (`v2Owns` in `pipeline-v2-owner.js`: `ISSUE_PIPELINE_V2=on` and no soak scope label, or the issue carries
+`ISSUE_PIPELINE_V2_LABEL` when set), the delivery agent does **not** write **`Stage`**; **bootstrap** (engine off, dry-run, or
+unscoped soak without the label) follows the §Who writes what bootstrap row instead. With ownership on, the engine advances
+**`Stage`**: **In progress → In Main** when `progress.finished` facts hold; the issue stays **In Main** through the
+**agent acceptance gate** (`launch-aat` → `aatSatisfied` when enabled); **In Main → In UAT** only after gate satisfaction **and**
+`uatContainsLatestMerge` — not on merge alone. Legacy merge/UAT handlers still set **`Stage`** when the engine does not own the
+issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 
 ### Launch and intent review
 
@@ -297,6 +341,21 @@ Holistic acceptance on a **parent** issue. With `aat.enabled` false it stays hum
 
 Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md).
 
+### Production-deploy acceptance guard ([#2424](https://github.com/AgathaTrack/AgathaTrack/issues/2424))
+
+After UAT is green and before `deploy-prod` runs, **`scripts/ci/aat-prod-gate.js`** blocks promotion when an engine-owned merge in the promoted SHA still lacks a satisfying acceptance verdict. The rules are shared with the In Main gate (#2448) via `scripts/issue_pipeline_v2_acceptance.js` (`aatGateOn`, `deriveAatState`, `aatSatisfied`, `newestActionable`), so the engine and the prod workflow cannot disagree.
+
+| Control | Where | Meaning |
+|---------|-------|---------|
+| `AAT_GATE` | repo variable | unset / `off` (default): no API calls, step passes. `dry-run`: job summary lists would-block merges, never fails deploy. `on`: fails `resolve-trigger` when any gated merge is unsatisfied. Unknown values run as `dry-run`. |
+| `aat.enabled` | `.github/pipeline-agents.json` | When `false`, the guard makes no API calls. When `true` (repo config since #2448 P4) but either org field `Acceptance` / `Acceptance fail reason` is missing, it may call **`loadOrgFields` only** (field definitions), then returns without reading issues or blocking. Full reads and blocking need both fields present and `AAT_GATE` `dry-run` or `on` (with token). |
+| `AAT_GATE_READ_TOKEN` | repo secret | Read-only token for issue and org Projects field reads. **Required** in `dry-run` and `on`. There is no fallback to workflow `GITHUB_TOKEN` (it cannot read the board fields). `ENGINE_PAT` is never passed to `deploy-prod.yml`. |
+| `aat_override_reason` | `deploy-prod` `workflow_dispatch` input | When set by a login in repo variable **`AAT_OVERRIDE_ACTORS`**, an `on` gate passes and the reason is recorded in the job summary. Automatic UAT dispatch never sets it. |
+
+**Gated set:** parent issues in `In Main` or `In UAT` whose latest merge is an ancestor of the promoted SHA; `In progress` issues whose newest actionable verdict for that merge is a `scope` or `implementation` fail; follow-ups and `manual-only` issues are exempt. Honour `ISSUE_PIPELINE_V2_LABEL` while it is set.
+
+**Enablement (owner):** add `AAT_GATE_READ_TOKEN`, set `AAT_GATE=dry-run`, soak one promotion, then `AAT_GATE=on` when ready. Full promotion flow: [promotion-contract.md](../pipelines/promotion-contract.md) (§Prod deploy behaviour).
+
 ### Decision log
 
 | ID | Decision | Status |
@@ -308,7 +367,12 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-AAT-D-005 | When `aat.enabled` and both fields exist, a non-follow-up does not get the intent-review doorbell. Follow-ups still do | Accepted; `aat.enabled` true in config as of #2448 P4 |
 | PIPE-AAT-D-006 | `implementation` remediation is `bug` follow-up issues whose PRs also `Refs` the parent, with `Priority=Urgent` when that field exists. `scope` relaunches delivery. `quality` is small PRs on the parent | Accepted |
 | PIPE-AAT-D-007 | `Manual` is bound to one merge and cleared on a newer merge. `Skipped` persists: a new sha gets its own skipped waive even when an older sha already has one. A bound `Manual` or `Skipped` is not overwritten by a pass write or a newer fail | Accepted |
-| PIPE-AAT-D-008 | The production-deploy guard is not part of this issue | Accepted |
+| PIPE-AAT-D-008 | The production-deploy guard is not part of **#2448** (In Main engine); it is owned by **#2424** | Accepted; clarified PIPE-AAT-D-014 |
+| PIPE-AAT-D-010 | **Phase 1 token (prod guard):** workflow `GITHUB_TOKEN` cannot read org Projects issue-field values in `deploy-prod`. Use dedicated read-only secret **`AAT_GATE_READ_TOKEN`**; never `ENGINE_PAT` in the deploy workflow (#2473) | Accepted (#2424) |
+| PIPE-AAT-D-011 | **Manual / skip (owner decision 2):** humans set org field `Acceptance` to `Manual` or `Skipped` (engine waive markers). Prod override is `workflow_dispatch` + `aat_override_reason` only for logins in `AAT_OVERRIDE_ACTORS` | Accepted (#2424) |
+| PIPE-AAT-D-012 | **Flag and soak (owner decisions 5–6):** repo variable `AAT_GATE` unset/`off` by default (no prod blocking). Operators add `AAT_GATE_READ_TOKEN`, set `dry-run`, soak, then `on`. Engine flag `aat.enabled` is already `true` in config (#2448 P4); prod enforcement still waits on `AAT_GATE` + token | Accepted (#2424) |
+| PIPE-AAT-D-013 | **Urgent remediation (owner decision 7):** `Priority=Urgent` on implementation follow-ups is enforced by the **#2448** engine rows, not by the prod guard. The guard only evaluates satisfaction at promotion time | Accepted (#2424) |
+| PIPE-AAT-D-014 | **#2424 prod guard** ships in #2473; canonical promotion behaviour in `docs/pipelines/promotion-contract.md` | Accepted (#2424) |
 | PIPE-V2-D-SOAK-001 | An unclaimed body edit by a login that several pool ids share is a human edit (two distinct ids approve). Soak-1 #2480 converged on one signed review from the run that had edited | Proposed (#2385 soak, owner merge) |
 | PIPE-V2-D-SOAK-002 | Pickup is least recently used **per issue**, across ticks, read from that issue's own `v2:launch` records; other issues do not count. Amends #2428 D3 (no persisted LRU): nothing new is stored. Soak-5/6 #2484/#2485 showed config order every tick starves the third agent | Superseded by PIPE-V2-D-SOAK-006 |
 | PIPE-V2-D-SOAK-006 | One board-wide round robin. No launch yet → first startable agent. Every later assignment is the next startable agent, wrapping, including the next pickup on the same issue and the first pickup on the next issue. Cursor is the newest `v2:launch`; in-scope picks in the same tick advance it. Owner 2026-11-21: spread assignments; the start is wherever the ring is, then round robin | Accepted (owner, 2026-11-21) |
@@ -323,9 +387,17 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-V2-D-HOLD-004 | **No launchable agent is a board-level error,** reported once per run with the issue numbers, ending the run red; it is never written on an issue. Covers Ready (was `launch-failed`), In progress resume, acceptance launch and scope relaunch (were `stalled`). An empty spec or review pool still sets `stalled` | Accepted (owner, 2026-11-24) |
 | PIPE-V2-D-HOLD-005 | **A blocked issue is read in full** (except `paused` and `sensitive`), so an engine hold can be re-evaluated and a wake rings the current spec or review holder instead of the next agent in the round robin | Accepted (owner, 2026-11-24) |
 | PIPE-V2-D-TICK-001 | **"One action per issue per tick" is not a rule.** It describes the current runner. The planned advance loop and event wakes may take several actions for one issue in one run ([changes/pipeline-v2-holds-and-ticks.md](./changes/pipeline-v2-holds-and-ticks.md)) | Accepted (owner, 2026-11-24) |
+| PIPE-V2-D-TICK-002 | **`pipeline_v2_tick_summary`** ends every tick (including invalid dispatch and board list failure) with `runId`, mode/target/mission, read completeness, counts, and duration; dry-run reports `confirmedEffects:0` (#2556 P2) | Accepted (#2556, 2026-11-25) |
+| PIPE-V2-D-TICK-003 | **Blocked human wake:** post `v2:wake` only after `doorbell:` succeeds so `queued` retries without a second reply (#2556 P1) | Accepted (#2556, 2026-11-25) |
+| PIPE-V2-D-BLOCKEDBY-001 | **GitHub blocked by:** open blocker issues hold the row (`blocked-by`); no writes or handoff; closed blockers clear the gate; relationship read errors → `blocked-by.read-failed` for that issue only (#2556 P3) | Accepted (#2556, 2026-11-25) |
 | PIPE-V2-D-PREFLIGHT-001 | Delivery preflight keyword scan ignores bodies under **`### Out of scope`** / `Out-of-scope`; title, preamble, and all other sections still count. **Security or Sensitive Area: Yes** is unchanged. Soak2 #2507/#2499/#2498/#2508 launch-failed on exclusion-list keywords in whole-body scan | Accepted (soak2, 2026-11-21) |
 | PIPE-V2-D-PREFLIGHT-002 | Ready delivery: `preflight: risky scope detected` → next tick `Blocked=sensitive` (`ready.risky-scope`); no launch backoff. With label `owner-approved-delivery`, the engine does not set `sensitive` and may `ready.launch`; preflight skips risky-scope. Owner workflow: clear `Blocked`, add the label (or fix the body); manual delivery remains valid | Accepted (owner, 2026-11-23) |
 | PIPE-V2-D-DISPATCH-001 | **Retire v1 pipeline dispatcher.** Delete `issue-pipeline-dispatcher.yml`, `issue-pipeline-todo.yml`, and assignee-driven lane scripts. All stage transitions are pipeline v2 (`issue-pipeline-v2.yml`) or, until `ISSUE_PIPELINE_V2=on`, the legacy label flow. `pipeline_health` schedule staleness is not ported. `<!-- pipeline-state -->` markers and `scripts/lib/pipeline_state_trust.js` stay for execute-plan auto-approve on issues that still carry them | Accepted (2026-11-24) |
+| PIPE-V2-D-ANALYSE-001 | **`mission=analyse`** scoped ticks never apply `ready.launch`; at **Ready** the row is `mission.analyse.complete` | Accepted (owner, 2026-11-25); `issue_pipeline_mission.js` |
+| PIPE-V2-D-ANALYSE-002 | **`mission=analyse`** requires **`issue_number`** on dispatch | Accepted (owner, 2026-11-25) |
+| PIPE-V2-D-ANALYSE-003 | **`/analyse-issue` orchestrator** may write **`Stage` = To do** at intake only (exception to engine-only `Stage`; recorded in `AGENTS.md` §GitHub issues) | Accepted (owner, 2026-11-25) |
+| PIPE-V2-D-ANALYSE-004 | **Engine-first:** first engine wake precedes spec pass on a `v2:spec-request` | Accepted (owner, 2026-11-25) |
+| PIPE-V2-D-ANALYSE-005 | Agent **wake** = `issue-pipeline-v2` dispatch with `mission`, `issue_number`, `live`; helper `scripts/issue_pipeline_wake.js` | Accepted (owner, 2026-11-25) |
 | PIPE-V2-D-RUNNER-001 | Claude runner WIP (`limits.runnerWip.claude`, default **3** when unset): counts active `pipeline-claude-run.yml` jobs. On cap, defer with label **`queued`** and `ring-doorbell` while pickup is within `reviewTimeoutMin`; after that, normal timeout/reassign (e.g. Cursor). Real doorbell failures clear **`queued`** so `ringFailed` can reassign. Cursor runners have no repo-side cap. Owner agreed **3** concurrent Claude runs (2026-11-21). Agents remove `queued` via `clear-queued` at doorbell start or `finish-work` when done | Accepted (2026-11-21) |
 | PIPE-V2-D-REV3-001 | Review process v3 (revision 3): proposal in [`changes/pipeline-v2-review-process-v3.md`](./changes/pipeline-v2-review-process-v3.md). When accepted and delivered (P1–P6), replaces In analysis adversarial pickup/convergence (#2385) and review lanes (#2428); identity-based convergence, tier-a/tier-b rounds, challenge label, watchers and event triggers per that doc. Until then, §Review (shipped) and `decideInAnalysis` behaviour remain authoritative | Proposed; P4 live (REV3-012) |
 | PIPE-V2-D-REV3-002 | **Unit of independence is the run.** Every doorbell starts a new agent of a type (`cursor-a`, `claude-a`, `cursor-b`, `claude-b`). A run never comes back: the next call to the same type is a different agent, including when that type wrote the spec. Type (brand and tier) chooses who is called next and nothing else; it never decides whether a vote counts. Shared logins do not matter for independence | Accepted (owner, 2026-11-22) |

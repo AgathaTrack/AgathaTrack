@@ -10,6 +10,9 @@
 #   ./scripts/babysit_sync_base.sh --no-rebase      # report only, never rebase
 #   ./scripts/babysit_sync_base.sh --push           # force-with-lease push after rebase
 #
+# With --pr, the script first checks out the PR head branch (fast-forwarding it to origin when it is behind),
+# then checks, rebases and pushes that branch. It never rebases or pushes whichever branch happens to be checked out.
+#
 # Exit codes: 0 up to date (or rebase ok), 1 behind (--check / --no-rebase), 2 usage/error, 3 rebase conflict
 set -euo pipefail
 
@@ -82,6 +85,48 @@ if [[ -n "$PR" ]]; then
   IFS=$'\t' read -r BASE HEAD_BRANCH < <(gh pr view "$PR" --json baseRefName,headRefName --jq '[.baseRefName, .headRefName] | @tsv')
 fi
 
+# Switch to the PR head so every later step (compare, rebase, push) acts on the PR's branch.
+# Refuses rather than guessing: a dirty tree, or a local branch with commits origin does not have.
+checkout_pr_head() {
+  local head="$1"
+  local current
+  current="$(git branch --show-current)"
+  if [[ -n "$(git status --porcelain)" ]]; then
+    if [[ "$current" == "$head" ]]; then
+      echo "babysit_sync_base: working tree not clean — cannot sync PR head $head" >&2
+    else
+      echo "babysit_sync_base: working tree not clean — cannot switch from ${current:-detached HEAD} to PR head $head" >&2
+    fi
+    exit 2
+  fi
+  git fetch origin "$head" --quiet
+  if ! git rev-parse --verify "origin/$head" >/dev/null 2>&1; then
+    echo "babysit_sync_base: origin/$head not found after fetch" >&2
+    exit 2
+  fi
+  if [[ "$current" != "$head" ]]; then
+    if git rev-parse --verify --quiet "refs/heads/$head" >/dev/null; then
+      git checkout --quiet "$head"
+    else
+      git checkout --quiet -b "$head" --track "origin/$head"
+    fi
+  fi
+  if [[ "$(git rev-parse HEAD)" == "$(git rev-parse "origin/$head")" ]]; then
+    return 0
+  fi
+  if git merge-base --is-ancestor HEAD "origin/$head"; then
+    git merge --ff-only --quiet "origin/$head"
+    return 0
+  fi
+  echo "babysit_sync_base: local $head has commits that origin/$head does not (or has diverged) — push or reconcile before syncing" >&2
+  exit 2
+}
+
+if [[ -n "$PR" ]]; then
+  checkout_pr_head "$HEAD_BRANCH"
+  echo "babysit_sync_base: PR head $HEAD_BRANCH checked out"
+fi
+
 is_integration_head() {
   [[ "$1" =~ ^cursor/.+-integration- ]]
 }
@@ -131,8 +176,12 @@ if [[ "$PUSH" == true ]]; then
     echo "babysit_sync_base: detached HEAD — cannot --push" >&2
     exit 2
   fi
-  git push --force-with-lease origin "HEAD:$BRANCH"
-  echo "babysit_sync_base: pushed $BRANCH"
+  if [[ "$BRANCH" != "$HEAD_BRANCH" ]]; then
+    echo "babysit_sync_base: checked out $BRANCH, expected $HEAD_BRANCH — refusing to push" >&2
+    exit 2
+  fi
+  git push --force-with-lease origin "HEAD:refs/heads/$HEAD_BRANCH"
+  echo "babysit_sync_base: pushed $HEAD_BRANCH"
 fi
 
 exit 0

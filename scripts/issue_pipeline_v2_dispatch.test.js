@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { resolveDispatchTarget, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
+const { resolveDispatchTarget, resolveRunMode, validatePipelineDispatch } = require('./issue_pipeline_v2_dispatch');
 
 test('issue filter: empty is the whole board; a positive integer targets one issue', () => {
   assert.deepEqual(resolveDispatchTarget(undefined), { ok: true, only: null });
@@ -43,6 +43,37 @@ test('mode: scheduled ticks keep the repo switch unchanged', () => {
   assert.equal(resolveRunMode({ eventName: 'schedule', liveRequested: false, repoMode: 'off' }).mode, 'off');
 });
 
+test('validatePipelineDispatch: analyse without issue_number is refused', () => {
+  assert.equal(validatePipelineDispatch({ issueNumberRaw: '', missionRaw: 'analyse' }).ok, false);
+  const ok = validatePipelineDispatch({ issueNumberRaw: '2631', missionRaw: 'analyse' });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.only, 2631);
+  assert.equal(ok.mission, 'analyse');
+});
+
+test('entry point: mission=analyse without issue_number exits before board read', () => {
+  const script = path.join(__dirname, 'issue_pipeline_v2.js');
+  const run = spawnSync(process.execPath, [script], {
+    encoding: 'utf8',
+    timeout: 20000,
+    env: {
+      PATH: process.env.PATH,
+      ISSUE_PIPELINE_V2: 'on',
+      GITHUB_EVENT_NAME: 'workflow_dispatch',
+      ISSUE_NUMBER: '',
+      PIPELINE_V2_MISSION: 'analyse',
+      GH_PROJECTS_PAT: 'x',
+      GH_PROJECT_ID: 'x',
+      GH_STATUS_FIELD_ID: 'x',
+      GITHUB_TOKEN: 'x',
+    },
+  });
+  assert.equal(run.status, 1);
+  assert.doesNotMatch(run.stdout, /"event":"pipeline_v2_tick"/, 'no board tick');
+  assert.match(run.stdout, /pipeline_v2_tick_summary/, 'rejected dispatch still ends with one summary');
+  assert.match(run.stderr, /requires a positive issue_number/);
+});
+
 test('entry point: an invalid issue filter exits non-zero before any board read or write', () => {
   const script = path.join(__dirname, 'issue_pipeline_v2.js');
   const run = spawnSync(process.execPath, [script], {
@@ -60,6 +91,7 @@ test('entry point: an invalid issue filter exits non-zero before any board read 
     },
   });
   assert.equal(run.status, 1);
-  assert.doesNotMatch(run.stdout, /pipeline_v2_tick|pipeline_v2_action|pipeline_v2_run/, 'no tick, no board decisions');
+  assert.doesNotMatch(run.stdout, /"event":"pipeline_v2_tick"|pipeline_v2_action|pipeline_v2_run/, 'no tick, no board decisions');
+  assert.match(run.stdout, /pipeline_v2_tick_summary/, 'rejected filter still ends with one summary');
   assert.match(run.stderr, /issue_number must be a positive integer/);
 });
