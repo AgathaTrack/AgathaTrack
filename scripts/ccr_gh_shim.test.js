@@ -247,6 +247,8 @@ function syncBaseRepo() {
   git(work, 'push', '-q', 'origin', 'HEAD:main', 'HEAD:release');
   git(work, 'checkout', '-q', '-b', 'feature');
   git(work, 'commit', '-q', '--allow-empty', '-m', 'feature work');
+  // --pr acts on the PR head branch on origin (#2627), so the head must exist there.
+  git(work, 'push', '-q', 'origin', 'feature');
   git(work, 'checkout', '-q', 'main');
   git(work, 'commit', '-q', '--allow-empty', '-m', 'main moves on');
   git(work, 'push', '-q', 'origin', 'main');
