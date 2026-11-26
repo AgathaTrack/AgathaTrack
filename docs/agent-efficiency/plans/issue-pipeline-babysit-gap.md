@@ -41,7 +41,7 @@ Each row cites the file that causes the gap. All seven were read on `main` at th
 
 ## Requirements
 
-- **R1.** Every PR a pipeline delivery opens has a babysit driver from the moment it opens until it merges or closes. Scope: any PR whose author is a pipeline login (`pawpet-claude`, `pawpet-bot`), or whose author is in the issue's `prAuthors` set (the logins that authored the issue's linked PRs, computed in `scripts/issue_pipeline_v2_decide.js`).
+- **R1.** Every PR a pipeline delivery opens has a babysit driver from the moment it opens until it merges or closes. Scope: any PR whose author is a pipeline login (`pawpet-claude`, `pawpet-bot`), or whose author is in the issue's `prAuthors` set. `prAuthors` is produced in `scripts/issue_pipeline_v2_release.js` (about line 185) from the issue's **merged** linked PRs only, so an open PR by a new author is not covered by this set. `scripts/issue_pipeline_v2_decide.js` only consumes it. Phase 1 covers the pipeline logins and the set as it stands. Widening the set to open PRs would change the engine and is a separate decision.
 - **R2.** The driver follows the PR's base branch (decision rule in `autonomous-pr-policy.md`, see Phase 1a).
 - **R3.** A delivery run does not end while the PR has an unresolved review thread or a Copilot review in progress. It either finishes the babysit loop or records a handoff with a `Blocked` reason on the issue.
 - **R4.** The rule is written once, in `autonomous-pr-policy.md` §Babysit skill family, including the decision-rule table. The prompt and the delivery contract refer to that section and do not restate it. This plan doc keeps the history and is not a dependency of the policy.
@@ -87,7 +87,7 @@ and add this subsection directly under the table, so the policy is self-containe
 Plain `/babysit` is not a driver for agent PRs.
 ```
 
-**1b. `docs/agent-efficiency/github-issue-workflow-behaviour.md`, §Delivery contract.** Replace obligation 4 with a fifth and sixth obligation:
+**1b. `docs/agent-efficiency/github-issue-workflow-behaviour.md`, §Delivery contract.** Replace the current obligation 4 (remove `busy`) with the two obligations below. The old obligation 4 becomes 5 and is kept as written:
 
 ```markdown
 4. keep `busy` while the PR it opened is open and a babysit driver (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection) is working it. For `Method: PR` the end state is Pre-UAT green on the merge SHA, then DoD ticks and `finish-work`, as light-plan does (R7).
@@ -101,8 +101,18 @@ PR:
   'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from the base branch (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection): ' +
   '`/babysit-uat` (read `.cursor/skills/babysit-uat/SKILL.md`, or `.claude/skills/babysit-uat/SKILL.md` in Claude Code) when the base is `main`, ' +
   'otherwise `/babysit-plus` (read `.cursor/skills/babysit-plus/SKILL.md`, or `.claude/skills/babysit-plus/SKILL.md`). ' +
-  'Read the skill file and follow it to completion. Do not invoke it through the Skill tool. After the driver ends, tick the DoD and run `finish-work` only when its gate has passed.',
+  'Read the skill file named by the policy subsection (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection) for this PR\'s base branch, and follow it to completion. Do not invoke it through the Skill tool. After the driver ends, tick the DoD and run `finish-work` only when its gate has passed.',
 ```
+
+The prompt names the policy and the skill file. It does not restate the base-branch mapping, so the policy stays the only source of that rule (R4).
+
+**Driver lifetime (must be settled in Phase 1).** `.github/workflows/pipeline-claude-run.yml` sets `timeout-minutes: 45`. A `babysit-uat` driver can wait for CI and reviews, merge, and then run the pre-UAT watch (up to 90 minutes) and up to three remedial rounds. It will not finish inside one run. Phase 1 therefore does not promise the full loop inside one run. When a driver cannot finish, it:
+
+1. comments the next step on the PR and the issue (`Blocked` is not set),
+2. leaves `busy` set on the issue,
+3. hands the open PR to the Phase 3 fallback, which starts a new driver run.
+
+Raising the timeout is a CI workflow change and needs the owner's approval. It is not part of Phase 1.
 
 **1d. Dropped.** The line proposed for `scripts/pipeline_claude_prepare.js` was a checkbox that could invite a checkbox reading of R3. 1c already carries the instruction, and `finish-work` is the gate. No change to `pipeline_claude_prepare.js` in Phase 1.
 
@@ -120,7 +130,7 @@ Add a test next to `check_babysit_skill_family.test.js` that removing any of the
 
 `.github/workflows/auto-babysit.yml` is a CI workflow change. `AGENTS.md` lists CI gate changes as requiring the owner's approval.
 
-**Design note needed before this phase.** `pipeline-claude-run.yml` takes `stage` as a free-form string ("Canonical Stage name for this doorbell"). `babysit` is not a Stage name, and the prepare step only knows the doorbell and acceptance stages. Phase 2 therefore needs a design note that adds a non-Stage doorbell kind (for example `purpose: babysit`, alongside the existing `purpose: delivery` used by `buildLaunchRecord`), with its prompt from 1c and its launch record. The note goes into `github-issue-workflow-behaviour.md` §Launch before code.
+**Design note needed before this phase.** `pipeline-claude-run.yml` takes `stage` as a free-form string ("Canonical Stage name for this doorbell"). `babysit` is not a Stage name, and the prepare step only knows the doorbell and acceptance stages. Phase 2 therefore needs a design note that adds a non-Stage doorbell kind (for example `purpose: babysit`, alongside the existing `purpose: delivery` used by `buildLaunchRecord`), with its prompt from 1c and its launch record. The launch record `RECORD` regex in `scripts/issue_pipeline_v2_launch.js` accepts `purpose=delivery|doorbell` only, so a `babysit` marker would be ignored by every reader of the records (launch-success, active-run and busy detection). The record grammar, every reader, and tests are therefore in Phase 2 scope. The note goes into `github-issue-workflow-behaviour.md` §Launch before code.
 
 - For PRs in the R1 scope, dispatch `pipeline-claude-run.yml` with the babysit purpose in place of the dry-run. The dispatch uses the base-branch rule.
 - Other PRs keep the current dry-run.
@@ -134,7 +144,7 @@ When a linked PR is open, has no active run and has an unresolved thread or a pe
 
 1. A test pipeline PR gets a babysit run within one Phase 2 trigger cycle, verified by a dry run on a test branch.
 2. A delivery run never ends with an unresolved thread and no `Blocked` reason.
-3. Removing the pipeline row from the policy table fails `check_babysit_skill_family`.
+3. Removing the pipeline subsection heading, or either base-branch row, fails `check_babysit_skill_family` (guard markers from 1e).
 4. Existing `light-plan`, `execute-plan` and `dependabot-batch` paths keep their current drivers. Verified by the existing tests.
 
 ## Open questions for review
