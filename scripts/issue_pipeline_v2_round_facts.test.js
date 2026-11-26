@@ -25,14 +25,14 @@ test('spec pass plus one green review: the derived rounds converge through decid
   assert.equal(out.evidence.nonce, 'n2');
 });
 
-test('red with an edit: the next request is the produced hash, authored by the red run', () => {
+test('an edit closes the round: the next request is the produced hash, authored by the editing run (no verdict)', () => {
   const rounds = deriveRoundRecords({
     spec,
     requests: [
-      { hash: 'h0', assigned: 'claude-a', history: [], at: T0 },
-      { hash: 'h1', assigned: 'cursor-a', history: [], at: T0 + 5000 },
+      { hash: 'h0', assigned: 'claude-a', history: [], at: T0, edit: { hash: 'h1', at: T0 + 1000 } },
+      { hash: 'h1', assigned: 'cursor-a', history: [], at: T0 + 5000, edit: null },
     ],
-    verdicts: [{ agentId: 'claude-a', value: 'down', hash: 'h0', nonce: 'n2', at: T0 + 1000 }],
+    verdicts: [],
     launches: [],
     bodyHash: 'h1',
   });

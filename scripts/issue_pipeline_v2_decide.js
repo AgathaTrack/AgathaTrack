@@ -17,7 +17,7 @@
  *   followUp        { depth } when the issue is an intent-review follow-up
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
- *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
+ *   totalVotes      signed review verdicts since entry into In analysis + agent body edits (reactions are not votes)
  *   roundRobinAfter id last assigned on the board (newest v2:launch, then earlier picks this tick)
  *   roundRobinOrder startable ids in config order; the ring the cursor walks
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
@@ -309,6 +309,12 @@ function decideReady(facts, config) {
   // was lost: never launch again over an issue that is already busy.
   if (launch.busy) {
     return setStage('In progress', 'ready.launched', { evidence: { runId: launch.runId || null } });
+  }
+  // An issue started by /analyse-issue carries `analyse-only` and stops at Ready. Any tick reaches this row
+  // (a board tick woken by a label or an agent comment does not carry the analyse mission), so the label
+  // is what holds it. Removing the label, a human decision, lets the general pipeline launch delivery.
+  if ((facts.labels || []).some((label) => String(label).trim().toLowerCase() === 'analyse-only')) {
+    return { type: 'none', reason: 'mission-analyse-complete', row: 'mission.analyse.complete' };
   }
   const ownerApprovedDelivery = (facts.labels || []).some(
     (label) => String(label).trim().toLowerCase() === 'owner-approved-delivery',

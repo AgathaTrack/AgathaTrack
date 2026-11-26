@@ -50,13 +50,10 @@ function issueHasBlockingLabels(labels) {
   );
 }
 
-function preflightIssue(issue) {
+function preflightIssue(issue, options = {}) {
   const labels = (issue.labels?.nodes || issue.labels || []).map((l) =>
     typeof l === 'string' ? l : l.name,
   );
-  const title = issue.title || '';
-  const body = issue.body || '';
-
   if (!labels.map((l) => l.toLowerCase()).includes('agent-approved')) {
     return { ok: false, reason: 'missing agent-approved label' };
   }
@@ -77,10 +74,15 @@ function preflightIssue(issue) {
     return { ok: true };
   }
 
-  const sections = parseSections(body);
-  const risks = detectRiskyScope(title, body, sections);
-  if (risks.length > 0) {
-    return { ok: false, reason: `risky scope detected: ${risks.join(', ')}` };
+  // The keyword risky-scope scan stays for the legacy launchers. The v2 launch passes keywordScan: false, because
+  // its review and escalation decisions replace the scan there (PIPE-V2-D-REV4-004).
+  if (options.keywordScan !== false) {
+    const title = issue.title || '';
+    const body = issue.body || '';
+    const risks = detectRiskyScope(title, body, parseSections(body));
+    if (risks.length > 0) {
+      return { ok: false, reason: `risky scope detected: ${risks.join(', ')}` };
+    }
   }
 
   return { ok: true };

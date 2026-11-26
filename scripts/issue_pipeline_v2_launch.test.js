@@ -205,7 +205,7 @@ test('launchIssue (real preflight): a Ready issue with none of the retired appro
   assert.equal(launches.length, 1);
 });
 
-test('launchIssue (real preflight): the blocking-label and risky-scope checks still stop a delivery', async () => {
+test('launchIssue (real preflight): the blocking-label check still stops a delivery', async () => {
   const launches = [];
   const blocked = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }] };
   await assert.rejects(

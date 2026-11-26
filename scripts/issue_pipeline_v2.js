@@ -32,9 +32,8 @@ const {
   latestHumanComment,
   wokenCommentIds,
   listIssueComments,
-  listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
-const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
+const { deriveReviewFacts } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor, fetchIssueBlockedBy } = require('./issue_pipeline_v2_graphql');
 const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
 const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
@@ -215,13 +214,9 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
     limits: config.limits,
     now,
   };
-  const reactionsOf = (commentId) =>
-    (io.listCommentReactions || listCommentReactions)({ owner, repo, commentId, token });
-
   if (canonical === 'To do') {
-    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, ...verdictCtx });
-    const reactions = probe.commentId ? await reactionsOf(probe.commentId) : [];
-    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins, editors, ...verdictCtx });
+    // Reactions are never votes (PIPE-V2-D-REV4-001): the spec pass is read from signed verdicts only.
+    facts.spec = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, ...verdictCtx });
     if (facts.spec.assignedTo && runMode === 'on') {
       facts.spec.ringFailed = await doorbellRingFailed({
         comments,
@@ -239,11 +234,8 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
     return facts;
   }
 
-  const requests = findReviewRequests(comments, engineLogins, editors);
+  // Reactions are not read: votes are signed verdicts only (PIPE-V2-D-REV4-001).
   const reactionsByComment = {};
-  for (const request of requests) {
-    reactionsByComment[request.comment.id] = await reactionsOf(request.comment.id);
-  }
   const history = await (io.fetchBodyEdits || fetchBodyEdits)({
     owner,
     repo,

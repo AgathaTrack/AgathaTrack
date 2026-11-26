@@ -31,7 +31,7 @@ With `ISSUE_PIPELINE_V2=on`, only the engine and humans normally write `Stage` (
 
 ## Engine-first procedure
 
-1. **Intake** — Read issue and comments. PATCH org **`Stage` = To do** (preserve existing `Blocked` and `Attempts` in the same issue-fields payload). Post one comment: analyse-issue started with evidence link.
+1. **Intake** — Read issue and comments. PATCH org **`Stage` = To do** (preserve existing `Blocked` and `Attempts` in the same issue-fields payload). Add the label **`analyse-only`** (keep the other labels; for example `gh issue edit <n> --add-label analyse-only`; create the label once with `gh label create analyse-only --force` if the repository does not have it yet). It must be on the issue before the first wake, because any board tick can reach Ready. Post one comment: analyse-issue started with evidence link.
 2. **First wake** — Run wake command above. Engine posts **`v2:spec-request`** and doorbells a tier-a agent.
 3. **Spec leg** — If this run is the assignee (spec requested comment / assignee), follow [spec-agent](../spec-agent/SKILL.md). On completion: `finish-work` if `busy`, then **wake engine** again.
 4. **Review loop** — While `Stage` is **In analysis**, when this run holds the review request, follow [review-agent](../review-agent/SKILL.md). After each leg: `finish-work`, **wake engine**.
@@ -39,6 +39,10 @@ With `ISSUE_PIPELINE_V2=on`, only the engine and humans normally write `Stage` (
 6. **Done** — Exit when `Stage` is **Ready** (next wake logs `mission.analyse.complete`) or stop on `Blocked` with reason on the issue.
 
 **Never** set `Stage` to In analysis or Ready yourself — the engine does on spec pass and convergence.
+
+## Ready boundary
+
+The `analyse-only` label is what stops the issue at Ready (PIPE-V2-D-ANALYSE-004). The mission flag only scopes the tick it is dispatched with, and board ticks woken by label or comment events carry no mission. Do not remove the label; removing it is the owner's decision to let the general pipeline launch delivery.
 
 ## Stop conditions
 

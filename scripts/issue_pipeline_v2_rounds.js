@@ -7,13 +7,16 @@
  * - A type (`cursor-a`, `claude-a`, `cursor-b`, `claude-b`) is who gets called. Every call starts
  *   a new run with a new nonce. A run is who voted.
  * - Tier a rounds: R1 is the spec (writes the body and passes the Definition of Ready); R2, R3, R4
- *   are reviews. Tier b rounds: C1 to C4, reviews, after R4 is red.
+ *   are reviews. Tier b rounds: C1 to C4, reviews. The tier follows the review count, not the result:
+ *   the second review (R3) is followed by tier a (R4); after the three tier-a reviews the next is tier b.
+ *   A tier-a review that ends in an edit (its approval) is therefore followed by the first tier-b review.
  * - Alternation: the next type is the least recently used candidate in the tier whose brand differs
  *   from the author of the current body. With no other brand left, the same brand repeats and the
  *   round is `fallback=true`. A human author has no brand, so any candidate is eligible.
  * - One green on the current hash converges when it comes from a run other than the run that wrote
- *   the hash. A red that edits starts the next round on the new hash. A red without an edit holds
- *   the round on the same hash until the reviewer edits or the silence timeout fires.
+ *   the hash. An edit by the reviewer is its approval: it closes the round and the next round starts on
+ *   the edited hash, with another run. A down without an edit holds the round on the same hash until
+ *   the reviewer edits or the silence timeout fires.
  * - Budgets: three reviews in tier a (R2 to R4), then four in tier b (C1 to C4). A red on C4 is
  *   `no-convergence`. A round with two failed attempts is `stalled`.
  * - Authorship comes from the round record (the run that produced each hash), never from a login.
@@ -23,9 +26,9 @@
  *   rounds      ordered list, oldest first. Each round:
  *                 { tier: 'a' | 'b', kind: 'spec' | 'review', hashIn,
  *                   attempts: [{ type, nonce, startedAt, result, hashOut }] }
- *               result is one of 'spec' (spec pass), 'green', 'red' (with hashOut when edited),
- *               or null while the run is pending. `hashOut` is the body hash the attempt produced
- *               (spec and red-with-edit); null otherwise.
+ *               result is one of 'spec' (spec pass), 'green', 'red' (a down hold, or closed by an
+ *               edit when hashOut is set), or null while the run is pending. `hashOut` is the body
+ *               hash the attempt produced (spec and edit); null otherwise.
  *   now         epoch ms
  *   lastUsed    { [type]: epoch ms } of the last doorbell per type (board-wide), for round robin
  *   config      loadConfig() result

@@ -506,3 +506,15 @@ test('launch: a failed record POST after a started run is never retried as a sec
   assert.equal(launches, 1, 'the run is started once; the pending record and busy label remain');
   assert.ok(sent.some((c) => String(c.body?.body).includes('v2:launch-pending')), 'pending record was written first');
 });
+
+test('an edit closes its round on the issue: the superseded round is marked edit-self-vote when its new hash got an ignored self-vote', async () => {
+  const { sent, restFn } = recorder();
+  const roundPlan = {
+    reviews: 1,
+    derived: [{ tier: 'a', kind: 'review', hashIn: 'h2', attempts: [{ type: 'claude-a', nonce: null, startedAt: 0, result: 'red', hashOut: 'h3' }] }],
+    ignored: [{ agentId: 'claude-a', hash: 'h3', value: 'up', reason: 'self-vote' }],
+  };
+  await applyAction({ action: { type: 'request-review', agent: 'cursor-a', hash: 'h3' }, ctx: ctx({ restFn, facts: { roundPlan } }) });
+  const bodies = sent.map((call) => call.body?.body || '').join('\n');
+  assert.match(bodies, /event=close round=R2 tier=a identity=claude-a[^\n]*hash=h3 verdict=edit-self-vote/);
+});

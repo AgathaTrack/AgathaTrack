@@ -57,14 +57,14 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 
 | Stage | Condition | Result |
 |-------|-----------|--------|
-| To do | spec requested from the next tier-a agent in the round robin (`cursor-a`, `claude-a`; tier b waits for the challenge tier); the agent drafts the sections and the Definition of Ready passes (a 👍 on the request) | → In analysis |
+| To do | spec requested from the next tier-a agent in the round robin (`cursor-a`, `claude-a`; tier b waits for the challenge tier); the agent drafts the sections and the Definition of Ready passes (a signed `spec up` verdict on the body; reactions are not votes) | → In analysis |
 | To do | no spec result after every agent timed out once (30 min each) | stays, `Blocked=stalled` |
 | In analysis | one verified green on the current body hash from a pool identity, from a run other than the one that wrote the hash (PIPE-V2-D-REV3-003, live with REV3-012) | → Ready |
-| In analysis | 6 votes (👍, 👎, agent body edits) without convergence | stays, `Blocked=no-convergence` |
+| In analysis | 6 signed verdicts and agent body edits without convergence | stays, `Blocked=no-convergence` |
 | In analysis | no vote after every eligible reviewer timed out | stays, `Blocked=stalled` |
 | Ready | a WIP slot is free (WIP is a slot count, not the Stage column: each issue counts once, as an In progress issue the engine launched, or as a Ready issue with a delivery launch in flight (`busy`, or started inside the ack window); hand-driven and `manual-only` work takes no slot, and an unreadable issue holds one): the engine starts a run for the agreed method | → In progress once the issue is `busy` |
 | Ready | WIP at the limit | stays (Ready is the queue) |
-| Ready | delivery preflight refuses with `risky scope detected` (including declared sensitive area) | stays, `Blocked=sensitive` on the next tick; no launch backoff |
+| Ready | a `risky scope detected` launch failure (the v2 launch no longer produces it, PIPE-V2-D-REV4-004) | stays, `Blocked=sensitive` on the next tick until the owner clears it; no launch backoff |
 | Ready | start failed after 3 retries on the backoff, or a run without `busy` after the acknowledge window counts as a failed start | stays, `Blocked=launch-failed` |
 | In progress | Definition of Done ticked, no open linked PR, at least one linked PR merged into `main`, `busy` released | → In Main. Intent review is requested unless `aat.enabled` is on, both acceptance fields exist, and the issue is not a follow-up |
 | In progress | the newest actionable acceptance verdict for the latest merge into `main` is `fail` with `reason=scope` or `reason=implementation` (`aat.enabled`, both fields, not a follow-up) | stays. `scope` relaunches delivery once; `implementation` waits for a follow-up whose body starts with this issue's marker, or for a linked PR. Neither sets `Blocked` while that work is still open. A newer merge into `main` ends the hold |
@@ -156,7 +156,7 @@ issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 | `launch-failed` | engine | Ready, In progress (resume), In Main (acceptance launch, scope relaunch) | the engine, when the stage rule no longer ends in a hold; or a human clear, which is a retry |
 | `stalled` | engine | To do, In analysis, In progress, In Main | the engine, when the stage rule no longer ends in a hold; or a human clear, which is a retry |
 | `paused` | human (owner) | any | the owner sets and clears it |
-| `sensitive` | human (owner) | Ready (risky preflight) | owner clears `Blocked`, fixes the body or adds `owner-approved-delivery` and retries; or runs delivery manually |
+| `sensitive` | human (owner) | Ready (legacy risky preflight) | owner clears `Blocked`, fixes the body or adds `owner-approved-delivery` and retries; or runs delivery manually |
 
 ### Labels (v2)
 
