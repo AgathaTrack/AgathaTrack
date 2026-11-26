@@ -118,6 +118,8 @@ The **babysit skill family** is every agent entry that opens, updates, or merges
 
 Driver per §Driver routing rows 10–11. Plain `/babysit` is not a driver for agent PRs.
 
+**Busy watchdog.** After long silence on a `busy` issue, `scripts/issue_busy_watchdog.js` comments on the issue. It does not merge anything. Non-light-plan issues are told to resume the owning PR with `/babysit-plus`, or to clear `busy` and record the state on the issue if the run is abandoned. Pipeline and programme drivers still follow §Driver routing rows 10–11 when the agent resumes. Light-plan issues point at `continue light-plan`.
+
 ---
 
 ## Proactive base sync

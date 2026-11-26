@@ -182,7 +182,7 @@ Pointers only. No other change to the skill's procedure.
 | 0 | — | This spec | None (proposal in `changes/`) | — |
 | 1 | 1a (policy part) | §Driver routing table, family row (§4.2), gap doc §1a subsection replaced by a link, babysit-uat table (§4.5), babysit-plus (§4.4) | `autonomous-pr-policy.md` (canonical), two skills | Owner approval of §3 (C1 decided) |
 | 2 | 1e (guard) and light-plan | Guard (§4.8); `merge-policy.mdc` (§4.3); `light-plan/SKILL.md` §Release; spawn pointer (§4.9) | `merge-policy.mdc`, `light-plan`, `spawn-sprint-agents` | Phase 1 |
-| 3 | not in the gap doc | Watchdog (§4.7) and test | `scripts/issue_busy_watchdog.js`, `autonomous-pr-policy.md` (behaviour note) | Phase 1 |
+| 3 | not in the gap doc | Watchdog (§4.7) and test | `scripts/issue_busy_watchdog.js`, `autonomous-pr-policy.md` (behaviour note) | **Shipped** (`cursor/babysit-routing-phase3-b077`) — watchdog plus/tests already on `main`; policy note added |
 | 4 | 1b and 1c, then gap Phases 2 and 3 | Delivery-contract obligations (revised R7, §8 C2), launch prompt, event trigger, engine fallback | Per gap doc | Phase 1, Phase 5 |
 | 5 | — | `AGENTS.md` §Autonomy (D2 wording, plus light-plan release) | `AGENTS.md` | Owner approval of the wording |
 
