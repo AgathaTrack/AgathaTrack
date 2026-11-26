@@ -19,6 +19,7 @@ const { loadOrgFields, parseIssueFields, writeIssueFields } = require('../../scr
 const ASSIGNEE = process.env.AGENT_ASSIGNEE || 'KanopeeKa';
 const { labelNames, v2Owns } = require('./pipeline-v2-owner');
 const { listLinkedPrs, dodComplete } = require('../../scripts/issue_pipeline_v2_release');
+const { umbrellaRollup, makeStageReader, describeBlockers } = require('../../scripts/issue_pipeline_v2_umbrella');
 
 const TRUSTED_UAT_BRANCH_AUTHORS = new Set(['pawpet-bot', 'pawpet-claude']);
 const UAT_BRANCH_MARKER = '<!-- agent-uat-branch -->';
@@ -157,9 +158,33 @@ async function mayEnterInMain({ owner, repo, issueNumber, issue, token }) {
   return someMergedToMain && !someOpen && dodComplete(issue?.body);
 }
 
+/**
+ * PIPE-UMB-D-001: an umbrella (issue with sub-issues) takes In Main or In UAT only when every
+ * sub-issue is at In Main, In UAT or Done. An unreadable sub-issue list or stage fails closed.
+ */
+async function umbrellaClear({ owner, repo, issueNumber, projectsPat }) {
+  try {
+    const { blockers } = await umbrellaRollup({
+      owner,
+      repo,
+      issueNumber,
+      token: projectsPat,
+      readStage: makeStageReader({ owner, repo, token: projectsPat }),
+    });
+    if (blockers.length > 0) {
+      console.log(`Issue #${issueNumber}: umbrella waits for sub-issues ${describeBlockers(blockers)}; Stage left alone`);
+    }
+    return blockers.length === 0;
+  } catch (error) {
+    console.log(`Issue #${issueNumber}: umbrella rollup unreadable (${error.message}); Stage left alone`);
+    return false;
+  }
+}
+
 function ioOr(io) {
   return {
     mayEnterInMain: io?.mayEnterInMain || mayEnterInMain,
+    umbrellaClear: io?.umbrellaClear || umbrellaClear,
     fetchIssue: io?.fetchIssue || fetchIssue,
     fetchAllIssueComments: io?.fetchAllIssueComments || fetchAllIssueComments,
     listProjectIssues: io?.listProjectIssues || listProjectIssues,
@@ -282,13 +307,16 @@ async function handleMergedPr({
     }
 
     const refreshedIssue = await api.fetchIssue(owner, repo, issueNumber, token);
-    const readyForMain = await api.mayEnterInMain({
+    const mayMain = await api.mayEnterInMain({
       owner,
       repo,
       issueNumber,
       issue: refreshedIssue,
       token,
     });
+    // PIPE-UMB-D-001: an umbrella waits for its sub-issues before In Main (only where Stage is written).
+    const readyForMain =
+      mayMain && (!projectsPat || (await api.umbrellaClear({ owner, repo, issueNumber, projectsPat })));
     // Same project-configuration guard as the Stage writes below (#2444): without it the In Main Stage
     // write would run where the legacy handler never wrote Stage.
     if (readyForMain && projectsPat && projectId && statusFieldId) {
@@ -526,6 +554,11 @@ async function handleUatWorkflowResult({
       if (stageNow && !stageIs(stageNow, 'In Main') && !stageIs(stageNow, 'In UAT')) {
         results.push({ issueNumber, status: 'skipped-not-in-main' });
         console.log(`Issue #${issueNumber}: Stage is ${stageNow}, not In Main; UAT notify leaves it alone`);
+        continue;
+      }
+      // PIPE-UMB-D-001: an umbrella moves to In UAT only when every sub-issue is at In Main or later.
+      if (projectsPat && !(await api.umbrellaClear({ owner, repo, issueNumber, projectsPat }))) {
+        results.push({ issueNumber, status: 'skipped-umbrella-waiting' });
         continue;
       }
       if (projectsPat) {

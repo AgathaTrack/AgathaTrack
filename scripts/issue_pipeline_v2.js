@@ -23,6 +23,7 @@ const {
   reopenedByEngine,
 } = require('./issue_pipeline_v2_release');
 const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
+const { umbrellaRollup, makeStageReader } = require('./issue_pipeline_v2_umbrella');
 const { deriveAatState, implementationFailActive, loadImplementationFollowUps } = require('./issue_pipeline_v2_acceptance');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
@@ -94,6 +95,16 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
       engineLogins: config.engine.logins,
     }),
   };
+  if (canonical === 'In progress' || canonical === 'In Main') {
+    // PIPE-UMB-D-001: an umbrella moves only when every sub-issue is at In Main, In UAT or Done.
+    facts.umbrella = await (io.umbrellaRollup || umbrellaRollup)({
+      owner,
+      repo,
+      issueNumber: entry.number,
+      token,
+      readStage: makeStageReader({ owner, repo, token, fields: io.fields || null }),
+    });
+  }
   const environment = { 'In Main': 'UAT', 'In UAT': 'PROD' }[canonical];
   if (environment) {
     const deploySha = await (io.deploySha || ((env) => deploys.get(env, () => latestDeploySha({ owner, repo, environment: env, token }))))(environment);
@@ -375,7 +386,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   }
   // One comment read per issue per tick, shared by the board pass below and the per-issue facts.
   const listComments = memoComments(io.listIssueComments || listIssueComments);
-  const tickIo = { ...io, listIssueComments: listComments };
+  // The org fields are already loaded for this tick; the umbrella stage reads reuse them.
+  const tickIo = { ...io, listIssueComments: listComments, fields };
   const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
   // WIP: In progress issues the engine started, plus Ready issues with a delivery launch in flight,
   // each issue once. Hand-driven work takes no pipeline slot; an unreadable issue holds one.

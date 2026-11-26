@@ -151,6 +151,7 @@ function recordingIo(issue, prBody) {
       calls.push('assign');
     },
     mayEnterInMain: async () => true,
+    umbrellaClear: async () => true, // no sub-issues in these fixtures (PIPE-UMB-D-001)
     readIssueOrgStage: async () => ({ stage: 'In Main', fields: MOCK_ORG_FIELDS }),
   };
   return { calls, io };
@@ -164,6 +165,45 @@ function stubQueue(t, method) {
     mod[method] = original;
   });
 }
+
+test('PIPE-UMB-D-001: an umbrella with a short sub-issue keeps its Stage at merge and at UAT', async (t) => {
+  stubQueue(t, 'syncEnqueueAfterMerge');
+  const merged = recordingIo({ title: 'Scripts umbrella', state: 'CLOSED' }, 'Refs #2548');
+  merged.io.umbrellaClear = async () => false;
+  const mergedResult = await handleMergedPr({
+    owner: 'KanopeeKa',
+    repo: 'AgathaTrack',
+    prNumber: 2635,
+    prBody: 'Docs\n\nRefs #2548',
+    mergeSha: '639cb48148a47a6edfcde28d880a3f582f772e46',
+    token: 'test-token',
+    projectsPat: 'projects-pat',
+    projectId: 'project',
+    statusFieldId: 'status-field',
+    io: merged.io,
+  });
+  assert.equal(merged.calls.includes('stage'), false, 'no In Main write while a sub-issue is short');
+  assert.equal(mergedResult.results[0].status, 'In progress');
+  assert.equal(merged.calls.includes('comment'), true, 'the merge record is still written');
+
+  stubQueue(t, 'syncDeployResult');
+  const uat = recordingIo({ title: 'Scripts umbrella', state: 'CLOSED' }, 'Refs #2548');
+  uat.io.umbrellaClear = async () => false;
+  const uatResult = await handleUatWorkflowResult({
+    owner: 'KanopeeKa',
+    repo: 'AgathaTrack',
+    deployRef: 'uat-261126-2635',
+    conclusion: 'success',
+    workflowUrl: 'https://github.com/AgathaTrack/AgathaTrack/actions/runs/45794967228',
+    token: 'test-token',
+    projectsPat: 'projects-pat',
+    projectId: 'project',
+    statusFieldId: 'status-field',
+    io: uat.io,
+  });
+  assert.equal(uat.calls.includes('stage'), false, 'no In UAT write while a sub-issue is short');
+  assert.equal(uatResult.results[0].status, 'skipped-umbrella-waiting');
+});
 
 test('handleMergedPr sets In Main for light-plan tracking issues', async (t) => {
   stubQueue(t, 'syncEnqueueAfterMerge');
