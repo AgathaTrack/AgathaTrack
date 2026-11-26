@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 - Org **`Stage`** is **Ready** (or **In progress** for `continue delivery #n`).
 - Pawpet board; `ISSUE_PIPELINE_V2` on; not `manual-only`.
-- Parseable **`## Delivery plan`** with **`Method:`** (`PR`, `light-plan`, `execute-plan`).
+- **`Method:`** from **`## Delivery plan`** when present (`PR`, `light-plan`, `execute-plan`); absent section or line defaults to **`PR`** (same as `deliveryMethod()`).
 - Umbrella (sub-issues): report blockers; do not delegate on the parent (PIPE-UMB-D-001).
 
 ## Intake (label order)

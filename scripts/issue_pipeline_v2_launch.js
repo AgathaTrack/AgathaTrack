@@ -234,18 +234,18 @@ function deliveryMethodProgrammeMismatch(body) {
   const section = end < 0 ? rest : rest.slice(0, end);
   const methodField =
     /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\|?\s*[*_]*(?:method|mechanism)[*_]*\s*[:|]/i;
+  let phases = 0;
   for (const line of section) {
     if (methodField.test(line)) {
       continue;
     }
     if (/^\s*[-*+]\s+\[[ xX]\]\s+P\d+\b/i.test(line)) {
-      return true;
-    }
-    if (/^\s*[-*+]\s+P\d+\s+[—–-]/i.test(line)) {
-      return true;
+      phases += 1;
+    } else if (/^\s*[-*+]\s+P\d+\s+[—–-]/i.test(line)) {
+      phases += 1;
     }
   }
-  return false;
+  return phases >= 2;
 }
 
 /**

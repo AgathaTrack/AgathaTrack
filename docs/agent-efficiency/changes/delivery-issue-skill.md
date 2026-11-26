@@ -3,17 +3,16 @@ title: delivery-issue skill — reviewed spec and implementation plan
 owner: Agent efficiency
 audience: agent
 status: in-delivery
+status_since: 2026-11-26
+plan: delivery-issue-v1
 last_updated: 2026-11-26
-folds_into: docs/agent-efficiency/github-issue-workflow-behaviour.md
-tags: [agent, pipeline, skill, delivery-issue, proposal]
+folds_into: docs/domains/cross-domain/features/program-contract.md
+tags: [agent, pipeline, skill, delivery-issue]
 ---
 
 # delivery-issue skill — reviewed spec and implementation plan
 
-> **Proposal, not behaviour.** This doc changes no engine code, workflow, skill or label. It records (1) how the
-> draft spec was checked against `main`, (2) a corrected structured spec, and (3) an ordered implementation plan.
-> Each step lands in its own PR after the owner accepts the decisions in §7. Proposed decision IDs are not in
-> `github-issue-workflow-wire.md` until accepted.
+> **In delivery.** Steps 1–5 shipped in PR #2662 (babysit-gap Phase 1, `mission=deliver`, skills, decision rows). Step 6 soaks are best-effort per owner D6.
 
 ## 1. Outcome of this doc
 

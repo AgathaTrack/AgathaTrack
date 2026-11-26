@@ -48,6 +48,11 @@ test('deliveryMethodProgrammeMismatch: phase checklist with Method PR', () => {
     '### Delivery plan\n\nMethod: PR\n\n- [ ] P1 — first phase\n- [ ] P2 — second phase\n';
   assert.equal(deliveryMethod(body), 'PR');
   assert.equal(deliveryMethodProgrammeMismatch(body), true);
+  assert.equal(
+    deliveryMethodProgrammeMismatch('### Delivery plan\n\nMethod: PR\n\n- [ ] P1 — only phase\n'),
+    false,
+    'single phase is not a programme',
+  );
   assert.equal(deliveryMethodProgrammeMismatch('### Delivery plan\n\nMethod: light-plan\n\n- [ ] P1 — x\n'), false);
   assert.equal(deliveryMethodProgrammeMismatch('### Delivery plan\n\nMethod: PR\n\nOne PR to main.\n'), false);
 });
