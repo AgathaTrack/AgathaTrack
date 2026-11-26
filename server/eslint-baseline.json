@@ -73,20 +73,6 @@
       "message": "'createNotification' is defined but never used."
     },
     {
-      "file": "server/lib/people/absenceCarerInviteService.js",
-      "rule": "no-unused-vars",
-      "line": 115,
-      "column": 9,
-      "message": "'absencePetIds' is assigned a value but never used."
-    },
-    {
-      "file": "server/lib/people/absenceCarerInviteService.js",
-      "rule": "no-unused-vars",
-      "line": 14,
-      "column": 7,
-      "message": "'PLANNED_ABSENCE_STATUS_ACTIVE' is assigned a value but never used."
-    },
-    {
       "file": "server/lib/people/absenceGuestGrants.js",
       "rule": "no-unused-vars",
       "line": 134,

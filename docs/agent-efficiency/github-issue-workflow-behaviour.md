@@ -57,19 +57,21 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 
 | Stage | Condition | Result |
 |-------|-----------|--------|
-| To do | spec requested from the next tier-a agent in the round robin (`cursor-a`, `claude-a`; tier b waits for the challenge tier); the agent drafts the sections and the Definition of Ready passes (a 👍 on the request) | → In analysis |
+| To do | spec requested from the next tier-a agent in the round robin (`cursor-a`, `claude-a`; tier b waits for the challenge tier); the agent drafts the sections and the Definition of Ready passes (a signed `spec up` verdict on the body; reactions are not votes) | → In analysis |
 | To do | no spec result after every agent timed out once (30 min each) | stays, `Blocked=stalled` |
 | In analysis | one verified green on the current body hash from a pool identity, from a run other than the one that wrote the hash (PIPE-V2-D-REV3-003, live with REV3-012) | → Ready |
-| In analysis | 6 votes (👍, 👎, agent body edits) without convergence | stays, `Blocked=no-convergence` |
+| In analysis | 6 signed verdicts and agent body edits without convergence | stays, `Blocked=no-convergence` |
 | In analysis | no vote after every eligible reviewer timed out | stays, `Blocked=stalled` |
 | Ready | a WIP slot is free (WIP is a slot count, not the Stage column: each issue counts once, as an In progress issue the engine launched, or as a Ready issue with a delivery launch in flight (`busy`, or started inside the ack window); hand-driven and `manual-only` work takes no slot, and an unreadable issue holds one): the engine starts a run for the agreed method | → In progress once the issue is `busy` |
 | Ready | WIP at the limit | stays (Ready is the queue) |
-| Ready | delivery preflight refuses with `risky scope detected` (including declared sensitive area) | stays, `Blocked=sensitive` on the next tick; no launch backoff |
+| Ready | a `risky scope detected` launch failure (the v2 launch no longer produces it, PIPE-V2-D-REV4-004) | stays, `Blocked=sensitive` on the next tick until the owner clears it; no launch backoff |
 | Ready | start failed after 3 retries on the backoff, or a run without `busy` after the acknowledge window counts as a failed start | stays, `Blocked=launch-failed` |
 | In progress | Definition of Done ticked, no open linked PR, at least one linked PR merged into `main`, `busy` released | → In Main. Intent review is requested unless `aat.enabled` is on, both acceptance fields exist, and the issue is not a follow-up |
 | In progress | the newest actionable acceptance verdict for the latest merge into `main` is `fail` with `reason=scope` or `reason=implementation` (`aat.enabled`, both fields, not a follow-up) | stays. `scope` relaunches delivery once; `implementation` waits for a follow-up whose body starts with this issue's marker, or for a linked PR. Neither sets `Blocked` while that work is still open. A newer merge into `main` ends the hold |
+| In progress | umbrella (an issue with GitHub sub-issues, PIPE-UMB-D-001): a sub-issue is not In Main, In UAT or Done (one closed as not planned is ignored) | stays, `progress.umbrella-waiting`, and the blockers are logged. Checked before the In Main move |
 | In progress | `busy` gone early or 24 h without activity | one resume (relaunch), then `Blocked=stalled`; issues the engine did not launch are never resumed. A resume that fails to start does not use the one resume: it is retried on the launch backoff, then `Blocked=launch-failed`. Not taken while a scope or implementation acceptance fail still holds |
 | In Main | `aat.enabled` is off, or an acceptance field is missing, or the issue is a follow-up: an agent that did not author the PRs reviews what shipped against the issue's intent (does not gate) | stays |
+| In Main | umbrella: a sub-issue is not In Main, In UAT or Done | stays, `main.umbrella-waiting`. Checked before intent review, acceptance and the UAT check, so none of them runs for it |
 | In Main | that same flag-off path, and the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
 | In Main | `aat.enabled` is on, both fields exist, and the issue is not a follow-up | acceptance must pass for the latest merge into `main` (`aatSatisfied`) and that merge must be in the newest successful UAT deploy. No intent-review doorbell |
 | In UAT | the newest successful `deploy-prod.yml` run's commit contains it | → Done, issue closed, `in-prod` added |
@@ -112,14 +114,14 @@ A delivery agent, whatever the method, must:
 1. set `busy` when it starts (the engine sets it at launch; the agent keeps it while it works);
 2. reference the issue as `Refs #n` in **every** PR it opens, never `Closes` / `Fixes` / `Resolves` (those auto-close the
    issue on merge; an issue must stay open through UAT and prod), including the release PR of a light-plan;
-3. tick the Definition of Done as items land;
+3. tick the **delivery** Definition of Done as items land (mergeable work and automated verification only — **not** live board soaks; see [soak-testing.md](./soak-testing.md). Unticked rows that **start** with `<!-- soak-dod:defer -->` do not block `progress.finished` — `dodComplete` in `issue_pipeline_v2_release.js`);
 4. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
 
 A PR is linked to an issue when its body says `Refs|Closes|Fixes|Resolves #n` and it appears in the issue's timeline. Only
 merges into `main` count; phase PRs merged into an integration branch are open or closed work, not delivery.
 
 **Light-plan programmes** (body `Method: light-plan`, skill: `.cursor/skills/light-plan/SKILL.md`): the delivery agent ends
-at Pre-UAT green on the release merge SHA — every **Definition of Done** item ticked, then `finish-work`. It does **not** close
+at Pre-UAT green on the release merge SHA — every **delivery** Definition of Done item ticked (live soaks excluded per [soak-testing.md](./soak-testing.md)), then `finish-work`. It does **not** close
 the issue or run **`/AgentAcceptance`** (the acceptance skill forbids the session that shipped the release). While the engine
 **owns** the issue (`v2Owns` in `pipeline-v2-owner.js`: `ISSUE_PIPELINE_V2=on` and no soak scope label, or the issue carries
 `ISSUE_PIPELINE_V2_LABEL` when set), the delivery agent does **not** write **`Stage`**; **bootstrap** (engine off, dry-run, or
@@ -154,7 +156,7 @@ issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 | `launch-failed` | engine | Ready, In progress (resume), In Main (acceptance launch, scope relaunch) | the engine, when the stage rule no longer ends in a hold; or a human clear, which is a retry |
 | `stalled` | engine | To do, In analysis, In progress, In Main | the engine, when the stage rule no longer ends in a hold; or a human clear, which is a retry |
 | `paused` | human (owner) | any | the owner sets and clears it |
-| `sensitive` | human (owner) | Ready (risky preflight) | owner clears `Blocked`, fixes the body or adds `owner-approved-delivery` and retries; or runs delivery manually |
+| `sensitive` | human (owner) | Ready (legacy risky preflight) | owner clears `Blocked`, fixes the body or adds `owner-approved-delivery` and retries; or runs delivery manually |
 
 ### Labels (v2)
 
@@ -167,6 +169,17 @@ issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 | `in-prod` | added by the engine when an issue reaches Done |
 | `bug` / `feature` / `task` | issue form type; the Definition of Ready is checked per form |
 | `AAT-progress` / `AAT-passed` / `AAT-failed` | Agent Acceptance (`/AgentAcceptance`); see [github-labels.md](./github-labels.md) |
+
+### Umbrella issues (PIPE-UMB-D-001)
+
+An **umbrella** is an issue that has GitHub sub-issues. Its own delivery is still tracked by its own PRs, but its **Stage** follows its sub-issues:
+
+- It moves **In progress → In Main** and **In Main → In UAT** only when **every** sub-issue is at **In Main**, **In UAT** or **Done**. A sub-issue closed as *not planned* is not a blocker. A sub-issue with an empty Stage counts as Backlog and blocks.
+- A `Refs #n` link from a pull request does **not** move an umbrella on its own. The link still counts for the umbrella's own merges and open PRs, but the Stage move is decided by the rollup. The Refs-versus-Closes split for Done (#2363 §5.1) is unchanged.
+- The rollup never moves an umbrella backwards. If a sub-issue regresses after the umbrella is In Main, the umbrella stays where it is and the engine logs the blockers.
+- A sub-issue list or stage that cannot be read **fails closed**: nothing moves, and the error is logged.
+- The **engine** (`ISSUE_PIPELINE_V2=on`) re-evaluates the umbrella on every tick, so it moves as soon as the last sub-issue reaches In Main. The **legacy handlers** only block: they check the same rule at merge and UAT, but nothing re-runs them when a sub-issue later moves, so the umbrella then needs the engine or a manual move.
+- Implementation: `scripts/issue_pipeline_v2_umbrella.js` (rule and readers), `decideInProgress` and `decideInMain` in `scripts/issue_pipeline_v2_decide.js`, and `umbrellaClear` in `.github/scripts/issue-agent-handlers.js`. Tests: `scripts/issue_pipeline_v2_umbrella.test.js` and the umbrella case in `.github/scripts/issue-agent-handlers.test.js`.
 
 ### Agent acceptance (`/AgentAcceptance`)
 

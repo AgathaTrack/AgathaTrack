@@ -36,7 +36,7 @@
 | R8 | **Server only** | **B1** delivers both booster-at-create and Plan another date on existing item + **UIR-21**. |
 | R9 | **Defect** | **A1** — includes Plan/Record E2E + edit-with-existing-`completed_on` case. |
 | R10 | **Met** | **B2** fixes EN `recurrenceAnchorInfoBody` (“1 day late” nit). **Q3 (FR only):** ~7 keys use “en retard” vs Overdue policy. |
-| R11 | **Split** | Automated met; operational (cron, prod reset, repair dry-run, live UAT) — **DEBT-OPS-R11**. |
+| R11 | **Met (UAT operational)** | Automated met; UAT cron + post-reset `repair_occurrences --dry-run` → 0 violations (**DEBT-OPS-R11** [#1546](https://github.com/AgathaTrack/AgathaTrack/issues/1546), 2026-11-26). Prod cron (WP4) deferred. |
 | R12 | **Partial** | UIR-13 → **B2**; UIR-15 + UIR-21 → **B1**. |
 
 ## Goals

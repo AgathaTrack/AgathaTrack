@@ -25,16 +25,25 @@ node scripts/issue_pipeline_wake.js --issue <n> --mission analyse --live
 
 Preview without writes: omit `--live` (workflow default). Unknown flags are refused.
 
+## Stage writes (policy)
+
+With `ISSUE_PIPELINE_V2=on`, the engine makes every `Stage` transition, including the analyse intake (Backlog → To do under `mission=analyse`; **PIPE-V2-D-ANALYSE-003**, revised 2026-11-26). This skill writes no `Stage`. Adding the `analyse-only` label is not a `Stage` write.
+
 ## Engine-first procedure
 
-1. **Start** — Read the issue and its comments. Post one comment: analyse-issue started, with the evidence link. Then **wake engine**. On a Backlog issue the engine moves it to **To do** (`analyse.intake`). An issue already in To do skips that: its first wake posts the spec request.
-2. **Second wake** — Wake again. The engine posts **`v2:spec-request`** and doorbells a tier-a agent. Wake until that comment exists; the runner takes one action per issue per tick.
-3. **Spec leg** — If this run is the assignee (spec requested comment / assignee), follow [spec-agent](../spec-agent/SKILL.md). On completion: `finish-work` if `busy`, then **wake engine** again.
-4. **Review loop** — While `Stage` is **In analysis**, when this run holds the review request, follow [review-agent](../review-agent/SKILL.md). After each leg: `finish-work`, **wake engine**.
-5. **Orchestrator wait** — When another agent is doorbelled, poll issue `Stage` / `Blocked` and comments, or use subscriptions; re-wake only after stuck timeout if policy allows.
-6. **Done** — Exit when `Stage` is **Ready** (next wake logs `mission.analyse.complete`) or stop on `Blocked` with reason on the issue.
+1. **Start** — Read the issue and its comments. Add the label **`analyse-only`** (keep the other labels; for example `gh issue edit <n> --add-label analyse-only`; create the label once with `gh label create analyse-only --force` if the repository does not have it yet). It must be on the issue before the first wake, because any board tick can reach Ready. Post one comment: analyse-issue started, with the evidence link.
+2. **Wake** — Run the wake command above. On a Backlog issue the engine moves it to **To do** (`analyse.intake`). An issue already in To do skips that step, and its first wake posts the spec request.
+3. **Wake until the spec request exists** — Wake again. The engine posts **`v2:spec-request`** and doorbells a tier-a agent. The runner takes one action per issue per tick, so keep waking until that comment exists.
+4. **Spec leg** — If this run is the assignee (spec requested comment / assignee), follow [spec-agent](../spec-agent/SKILL.md). On completion: `finish-work` if `busy`, then **wake engine** again.
+5. **Review loop** — While `Stage` is **In analysis**, when this run holds the review request, follow [review-agent](../review-agent/SKILL.md). After each leg: `finish-work`, **wake engine**.
+6. **Orchestrator wait** — When another agent is doorbelled, poll issue `Stage` / `Blocked` and comments, or use subscriptions; re-wake only after stuck timeout if policy allows.
+7. **Done** — Exit when `Stage` is **Ready** (next wake logs `mission.analyse.complete`) or stop on `Blocked` with reason on the issue.
 
 **Never** set `Stage` yourself, at any step. The engine does intake, In analysis and Ready.
+
+## Ready boundary
+
+The `analyse-only` label is what stops the issue at Ready (PIPE-V2-D-ANALYSE-004). The mission flag only scopes the tick it is dispatched with, and board ticks woken by label or comment events carry no mission. Do not remove the label; removing it is the owner's decision to let the general pipeline launch delivery.
 
 ## Stop conditions
 

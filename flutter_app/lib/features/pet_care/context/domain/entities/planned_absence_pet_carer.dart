@@ -9,6 +9,7 @@ class PlannedAbsencePetCarer {
     this.carerState = 'unset',
     this.carerRemoved = false,
     this.petNote,
+    this.canGrantGuestAccess = false,
   });
 
   final String petId;
@@ -28,6 +29,11 @@ class PlannedAbsencePetCarer {
   /// [carerKind], unlike [carerNote] which is only ever set for `note_only`
   /// carers and describes the person, not the pet.
   final String? petNote;
+
+  /// AP-18 / R-018: viewer may grant absence guest access for this pet
+  /// (`can_grant_guest_access`, detail payload only). UI hint; the server
+  /// invite route stays authoritative.
+  final bool canGrantGuestAccess;
 
   bool get hasCarer => carerState == 'set';
 

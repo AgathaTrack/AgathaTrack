@@ -618,6 +618,41 @@ describe('planned absence carers', () => {
     expect(res.body.pet_carers[0].carer_removed).toBe(true);
     expect(res.body.pet_carers[0].carer_state).toBe('unavailable');
   });
+
+  it('GET absence includes can_grant_guest_access on visible pet_carers (AP-18)', async () => {
+    const contactId = 'people-contact-carer-1';
+    const app = createTestApp(wrapPoolHandler(async (sql, params) => {
+      const viewerAbsence = mockViewerAbsenceLoad(sql, absenceRow());
+      if (viewerAbsence) return viewerAbsence;
+      const access = mockViewerFullAccessOnPets(sql, params, userId, petId);
+      if (access) return access;
+      if (sql.includes('FROM planned_absences WHERE id = $1 AND user_id = $2')) {
+        return { rows: [absenceRow()] };
+      }
+      if (sql.includes('SELECT pet_id, carer_kind') || sql.includes('SELECT pet_id, contact_id')) {
+        return {
+          rows: [{
+            pet_id: petId,
+            carer_kind: 'contact',
+            carer_user_id: null,
+            carer_name: null,
+            carer_note: null,
+            pet_note: null,
+            contact_id: contactId,
+          }],
+        };
+      }
+      return { rows: [] };
+    }));
+
+    const res = await request(app)
+      .get(`/api/planned-absences/${absenceId}`)
+      .set(authHeader());
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.pet_carers[0].can_grant_guest_access).toBe(true);
+    expect(res.body.pet_carers[0].contact_id).toBe(contactId);
+  });
 });
 
 function createTestApp(handler) {

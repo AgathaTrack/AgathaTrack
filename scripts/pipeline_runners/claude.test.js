@@ -2,7 +2,20 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { launch, status, countActiveClaudeRuns, WORKFLOW_FILE } = require('./claude');
+const { launch, status, countActiveClaudeRuns, resetLocalReservationsForTests, WORKFLOW_FILE } = require('./claude');
+
+test.beforeEach(() => {
+  resetLocalReservationsForTests();
+});
+
+const launchBase = {
+  agent: { id: 'claude-a' },
+  owner: 'o',
+  repo: 'r',
+  stage: 'To do',
+  method: 'PR',
+  deps: { dispatchToken: 'pat' },
+};
 
 test('claude runner dispatches pipeline-claude-run with public inputs only', async () => {
   const calls = [];
@@ -150,4 +163,89 @@ test('an acceptance launch dispatches the merge it judges as merge_sha', async (
   });
   assert.equal(calls[0].inputs.merge_sha, SHA);
   assert.equal(calls[0].inputs.stage, 'acceptance');
+});
+
+test('in-tick reservation: second launch at cap 1 with empty run list throws RUNNER_QUEUED', async () => {
+  const config = { limits: { runnerWip: { claude: 1 } } };
+  const posts = [];
+  const restFn = async (method, path, _token, body) => {
+    if (path.includes('/runs?')) return { workflow_runs: [] };
+    if (method === 'POST') posts.push(body);
+    return {};
+  };
+  const deps = { restFn, dispatchToken: 't', randomRef: () => 'r1' };
+  await launch({ ...launchBase, issue: { number: 1 }, nonce: 'n1', config, deps: { ...deps, randomRef: () => 'r1' } });
+  await assert.rejects(
+    () => launch({ ...launchBase, issue: { number: 2 }, nonce: 'n2', config, deps: { ...deps, randomRef: () => 'r2' } }),
+    (error) => error.code === 'RUNNER_QUEUED',
+  );
+  assert.equal(posts.length, 1);
+});
+
+test('in-tick reservation: cap 2 with one active run allows only one more dispatch', async () => {
+  const config = { limits: { runnerWip: { claude: 2 } } };
+  const posts = [];
+  const restFn = async (method, path) => {
+    if (path.includes('/runs?')) {
+      return { workflow_runs: [{ status: 'in_progress' }] };
+    }
+    if (method === 'POST') posts.push(1);
+    return {};
+  };
+  const deps = { restFn, dispatchToken: 't' };
+  await launch({ ...launchBase, issue: { number: 1 }, nonce: 'n1', config, deps: { ...deps, randomRef: () => 'a1' } });
+  await assert.rejects(
+    () => launch({ ...launchBase, issue: { number: 2 }, nonce: 'n2', config, deps: { ...deps, randomRef: () => 'a2' } }),
+    (error) => error.code === 'RUNNER_QUEUED',
+  );
+  assert.equal(posts.length, 1);
+});
+
+test('failed dispatch releases in-tick reservation', async () => {
+  const config = { limits: { runnerWip: { claude: 1 } } };
+  const posts = [];
+  const restFn = async (method, path) => {
+    if (path.includes('/runs?')) return { workflow_runs: [] };
+    if (method === 'POST') {
+      posts.push(1);
+      if (posts.length === 1) throw new Error('dispatch failed');
+    }
+    return {};
+  };
+  const deps = { restFn, dispatchToken: 't', randomRef: () => 'r1' };
+  await assert.rejects(
+    () => launch({ ...launchBase, issue: { number: 1 }, nonce: 'n1', config, deps }),
+    /dispatch failed/,
+  );
+  await launch({ ...launchBase, issue: { number: 2 }, nonce: 'n2', config, deps: { ...deps, randomRef: () => 'r2' } });
+  assert.equal(posts.length, 2);
+});
+
+test('concurrent launches at cap 1 yield one POST and one RUNNER_QUEUED', async () => {
+  const config = { limits: { runnerWip: { claude: 1 } } };
+  const posts = [];
+  let waitingOnList = 0;
+  let releaseList;
+  const listGate = new Promise((resolve) => {
+    releaseList = resolve;
+  });
+  const restFn = async (method, path) => {
+    if (path.includes('/runs?')) {
+      waitingOnList += 1;
+      if (waitingOnList === 2) releaseList();
+      await listGate;
+      return { workflow_runs: [] };
+    }
+    if (method === 'POST') posts.push(1);
+    return {};
+  };
+  const deps = { restFn, dispatchToken: 't' };
+  const p1 = launch({ ...launchBase, issue: { number: 1 }, nonce: 'n1', config, deps: { ...deps, randomRef: () => 'c1' } });
+  const p2 = launch({ ...launchBase, issue: { number: 2 }, nonce: 'n2', config, deps: { ...deps, randomRef: () => 'c2' } });
+  const [r1, r2] = await Promise.allSettled([p1, p2]);
+  const fulfilled = [r1, r2].filter((r) => r.status === 'fulfilled');
+  const queued = [r1, r2].filter((r) => r.status === 'rejected' && r.reason?.code === 'RUNNER_QUEUED');
+  assert.equal(fulfilled.length, 1);
+  assert.equal(queued.length, 1);
+  assert.equal(posts.length, 1);
 });

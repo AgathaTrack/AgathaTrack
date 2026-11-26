@@ -58,7 +58,8 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 | `owner-programme` | Owner-applied only. A standing programme issue (for example `light-plan:` #2342) whose phase/release PRs may use `/run-as-me` when the session opts in. Bots never add this label. Confirm the `labeled` event actor is an owner in `.github/execute-plan.config.json` → `owners` before relying on it — see [run-as-me skill](../../.cursor/skills/run-as-me/SKILL.md). |
 | `light-plan` | Sequential programme; tracking issue uses a `light-plan:` title and phase checklist |
 | `pipeline-beta` | Soak sandbox for pipeline v2 (`ISSUE_PIPELINE_V2_LABEL` scopes live writes in `on` mode). Clear the variable for whole-board cutover. Open issues titled `[sandbox] soak2-*` that carry this label are v2 fixtures, not product backlog. |
-| `owner-approved-delivery` | Owner only. Ready delivery: bypasses `detectRiskyScope` in launch preflight after the owner clears `Blocked=sensitive` (PIPE-V2-D-PREFLIGHT-002). Does not waive other safety checks (blocking labels, forbidden paths in agent scope). |
+| `owner-approved-delivery` | Owner only. Ready delivery: after the owner clears `Blocked=sensitive` on a legacy launch-failed hold, lets the launch through (the v2 launch no longer runs the keyword scan, PIPE-V2-D-REV4-004). |
+| `analyse-only` | Set by the `/analyse-issue` orchestrator at intake. The issue stops at Ready on every tick. Removing it is the owner's decision to let the general pipeline launch delivery (PIPE-V2-D-ANALYSE-004). |
 | `queued` | Pipeline v2: Claude doorbell deferred at runner WIP cap; `ring-doorbell` retries until pickup timeout, then reassign; cleared on successful launch, doorbell failure, or `finish-work` |
 
 ---
@@ -113,6 +114,18 @@ Labels and comments use the GitHub REST API (`createGitHubClient`); `aat-start` 
 **Procedure:** [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md)
 
 Do not run AAT on issues whose body contains `<!-- v2:follow-up of=#… -->`.
+
+---
+
+## Pipeline soak
+
+| Label | Purpose |
+|-------|---------|
+| `pipeline-beta` | Fixture receives live pipeline v2 writes when `ISSUE_PIPELINE_V2_LABEL` matches (existing soak scope) |
+| `soak-box` | Rolling batch issue listing deferred catalog soaks ([soak-testing.md](./soak-testing.md)) |
+| `soak-human` | Catalog spec requires a human step; agents must not claim an agent-runnable Pass without that step done |
+
+Labels **`soak-box`** and **`soak-human`** exist in the repo. Catalog specs default to **agent-runnable**; add `soak-human` on the fixture when not.
 
 ---
 

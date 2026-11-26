@@ -130,3 +130,20 @@ test('findForbiddenPaths still flags migrations and security config', () => {
     'server/routes/auth/login.js',
   ]);
 });
+
+test('preflight keyword-scans the body by default (legacy launchers keep the scan)', () => {
+  const result = preflightIssue({
+    title: 'Carer invite',
+    body: '### Security or Sensitive Area\n\nYes, stores credentials for the carer.\n',
+    labels: [{ name: 'agent-approved' }, { name: 'human-reviewed' }],
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /risky scope detected/);
+});
+
+test('preflight with keywordScan: false skips the scan (v2 launch, PIPE-V2-D-REV4-004); negated or out-of-scope words pass', () => {
+  const body = '### Security or Sensitive Area\n\nNo, no new secrets or privilege model.\n\n### Out of Scope\n\nauth/billing/permissions changes; migrations.\n';
+  const labels = [{ name: 'agent-approved' }, { name: 'human-reviewed' }];
+  assert.equal(preflightIssue({ title: 'Carer invite', body, labels }, { keywordScan: false }).ok, true);
+  assert.equal(preflightIssue({ title: 'Carer invite', body, labels }).ok, false, 'the default still scans');
+});

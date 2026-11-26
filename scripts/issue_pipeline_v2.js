@@ -23,6 +23,7 @@ const {
   reopenedByEngine,
 } = require('./issue_pipeline_v2_release');
 const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
+const { umbrellaRollup, makeStageReader } = require('./issue_pipeline_v2_umbrella');
 const { deriveAatState, implementationFailActive, loadImplementationFollowUps } = require('./issue_pipeline_v2_acceptance');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
@@ -31,9 +32,8 @@ const {
   latestHumanComment,
   wokenCommentIds,
   listIssueComments,
-  listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
-const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
+const { deriveReviewFacts } = require('./issue_pipeline_v2_review');
 const { fetchBodyEdits, fetchCommentEditor, fetchIssueBlockedBy } = require('./issue_pipeline_v2_graphql');
 const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
 const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
@@ -94,6 +94,16 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
       engineLogins: config.engine.logins,
     }),
   };
+  if (canonical === 'In progress' || canonical === 'In Main') {
+    // PIPE-UMB-D-001: an umbrella moves only when every sub-issue is at In Main, In UAT or Done.
+    facts.umbrella = await (io.umbrellaRollup || umbrellaRollup)({
+      owner,
+      repo,
+      issueNumber: entry.number,
+      token,
+      readStage: makeStageReader({ owner, repo, token, fields: io.fields || null }),
+    });
+  }
   const environment = { 'In Main': 'UAT', 'In UAT': 'PROD' }[canonical];
   if (environment) {
     const deploySha = await (io.deploySha || ((env) => deploys.get(env, () => latestDeploySha({ owner, repo, environment: env, token }))))(environment);
@@ -204,13 +214,9 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
     limits: config.limits,
     now,
   };
-  const reactionsOf = (commentId) =>
-    (io.listCommentReactions || listCommentReactions)({ owner, repo, commentId, token });
-
   if (canonical === 'To do') {
-    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, ...verdictCtx });
-    const reactions = probe.commentId ? await reactionsOf(probe.commentId) : [];
-    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins, editors, ...verdictCtx });
+    // Reactions are never votes (PIPE-V2-D-REV4-001): the spec pass is read from signed verdicts only.
+    facts.spec = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, ...verdictCtx });
     if (facts.spec.assignedTo && runMode === 'on') {
       facts.spec.ringFailed = await doorbellRingFailed({
         comments,
@@ -228,11 +234,8 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
     return facts;
   }
 
-  const requests = findReviewRequests(comments, engineLogins, editors);
+  // Reactions are not read: votes are signed verdicts only (PIPE-V2-D-REV4-001).
   const reactionsByComment = {};
-  for (const request of requests) {
-    reactionsByComment[request.comment.id] = await reactionsOf(request.comment.id);
-  }
   const history = await (io.fetchBodyEdits || fetchBodyEdits)({
     owner,
     repo,
@@ -375,7 +378,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   }
   // One comment read per issue per tick, shared by the board pass below and the per-issue facts.
   const listComments = memoComments(io.listIssueComments || listIssueComments);
-  const tickIo = { ...io, listIssueComments: listComments };
+  // The org fields are already loaded for this tick; the umbrella stage reads reuse them.
+  const tickIo = { ...io, listIssueComments: listComments, fields };
   const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
   // WIP: In progress issues the engine started, plus Ready issues with a delivery launch in flight,
   // each issue once. Hand-driven work takes no pipeline slot; an unreadable issue holds one.

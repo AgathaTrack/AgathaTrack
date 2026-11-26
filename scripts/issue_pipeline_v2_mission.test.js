@@ -171,3 +171,13 @@ test('wake CLI refuses bad input before any dispatch (no gh call needed)', () =>
   assert.equal(typoFlag.status, 1);
   assert.match(typoFlag.stderr, /unknown or incomplete argument/);
 });
+
+test('decide: an analyse-only issue at Ready stops on a board tick; removing the label lets delivery launch (PIPE-V2-D-ANALYSE-004)', () => {
+  const config = loadConfig();
+  const facts = readyFactsBase();
+  const held = decide({ ...facts, labels: [...(facts.labels || []), 'analyse-only'] }, config);
+  assert.equal(held.type, 'none');
+  assert.equal(held.row, 'mission.analyse.complete');
+  const released = decide({ ...facts, labels: (facts.labels || []).filter((label) => label !== 'analyse-only') }, config);
+  assert.equal(released.row, 'ready.launch');
+});

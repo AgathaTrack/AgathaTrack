@@ -22,8 +22,9 @@ function buildReviewRequest({ hash, assigned, history = [], config }) {
       ? `@${mention}: review this version of the issue (\`.cursor/skills/review-agent/SKILL.md\`).`
       : 'Waiting for a reviewer.',
     '',
-    'Listed agents vote with 👍 / 👎 **on this comment** and write their reasoning as a separate comment.',
-    'The owner\'s reactions are not votes.',
+    'Listed agents vote with a signed verdict only: `node scripts/pipeline_verdict.js review up|down --hash <hash>`, ' +
+    'as the last action of a run. An edit to the body is that run\'s approval and takes no verdict. ' +
+    'Reactions are not votes, from anyone, and the owner\'s reactions are not votes either.',
   ].join('\n');
 }
 
@@ -47,29 +48,11 @@ function findReviewRequests(comments, engineLogins, editors = {}) {
 }
 
 /**
- * Votes on one request: the latest 👍 / 👎 per listed agent, ignoring reactions older than the
- * comment. Other reactions and everyone else's reactions (the owner's included) are not votes.
+ * Votes on one request. Reactions are never votes (PIPE-V2-D-REV4-001): a vote is a signed verdict, read by
+ * `findVerifiedVerdicts`. Returns no votes; the signature is kept so the callers' shape does not change.
  */
-function votesOnRequest({ request, reactions, config }) {
-  const agents = new Set(agentLogins(config));
-  const since = Date.parse(request.comment.created_at);
-  const latest = new Map();
-  for (const reaction of reactions || []) {
-    const login = reaction.user?.login;
-    // A shared login cannot name its voter: its reactions are not votes, only signed verdicts are.
-    if (!agents.has(login) || isSharedActsAs(config, login) || !['+1', '-1'].includes(reaction.content)) {
-      continue;
-    }
-    const at = Date.parse(reaction.created_at);
-    if (at < since) {
-      continue;
-    }
-    const prior = latest.get(login);
-    if (!prior || at >= prior.at) {
-      latest.set(login, { at, vote: reaction.content === '+1' ? 'up' : 'down' });
-    }
-  }
-  return [...latest].map(([login, entry]) => ({ login, vote: entry.vote, hash: request.parsed.hash, at: entry.at }));
+function votesOnRequest() {
+  return [];
 }
 
 /**
@@ -109,13 +92,17 @@ function deriveReviewFacts({
       ),
     );
   }
-  if (bodyHash && issueNumber) {
+  // Every signed review verdict since the issue entered In analysis counts toward the vote cap, on whichever
+  // body hash it names ("votes cast since the issue entered In analysis"), not only the current hash.
+  const verdictHashes = [...new Set([...requests.map((request) => request.parsed.hash), bodyHash].filter(Boolean))];
+  for (const hash of verdictHashes) {
+    if (!issueNumber) break;
     for (const verdict of findVerifiedVerdicts({
       comments,
       config,
       engineLogins,
       issueNumber,
-      bodyHash,
+      bodyHash: hash,
       limits,
       kinds: ['review'],
       sinceMs: enteredAt,
