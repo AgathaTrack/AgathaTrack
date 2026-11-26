@@ -32,7 +32,6 @@
  */
 
 const { missionGuard } = require('./issue_pipeline_mission');
-const { deliveryMethodProgrammeMismatch } = require('./issue_pipeline_v2_launch');
 const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
 const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
 const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
