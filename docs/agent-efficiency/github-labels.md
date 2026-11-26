@@ -60,6 +60,7 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 | `pipeline-beta` | Soak sandbox for pipeline v2 (`ISSUE_PIPELINE_V2_LABEL` scopes live writes in `on` mode). Clear the variable for whole-board cutover. Open issues titled `[sandbox] soak2-*` that carry this label are v2 fixtures, not product backlog. |
 | `owner-approved-delivery` | Owner only. Ready delivery: after the owner clears `Blocked=sensitive` on a legacy launch-failed hold, lets the launch through (the v2 launch no longer runs the keyword scan, PIPE-V2-D-REV4-004). |
 | `analyse-only` | Set by the `/analyse-issue` orchestrator at intake. The issue stops at Ready on every tick. Removing it is the owner's decision to let the general pipeline launch delivery (PIPE-V2-D-ANALYSE-004). |
+| `delivery-issue` | Set only when the owner invokes `/delivery-issue`. Marks an owner-held delivery orchestrator run. Engine-launched delivery (including AAT scope relaunch) never sets it. Removed at Done or a human hold (PIPE-V2-D-DELIVER-002). |
 | `queued` | Pipeline v2: Claude doorbell deferred at runner WIP cap; `ring-doorbell` retries until pickup timeout, then reassign; cleared on successful launch, doorbell failure, or `finish-work` |
 
 ---

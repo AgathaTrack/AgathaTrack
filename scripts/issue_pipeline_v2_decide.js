@@ -316,6 +316,9 @@ function decideReady(facts, config) {
   if ((facts.labels || []).some((label) => String(label).trim().toLowerCase() === 'analyse-only')) {
     return { type: 'none', reason: 'mission-analyse-complete', row: 'mission.analyse.complete' };
   }
+  if (facts.deliveryProgrammeMismatch) {
+    return setBlocked('question', 'ready.method-programme-mismatch');
+  }
   const ownerApprovedDelivery = (facts.labels || []).some(
     (label) => String(label).trim().toLowerCase() === 'owner-approved-delivery',
   );

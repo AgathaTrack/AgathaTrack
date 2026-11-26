@@ -36,6 +36,9 @@ const POLICY_MARKERS = [
   /babysit_pr_reviews\.js/,
   RESOLVE_ALL_RE,
   /doc drift guard|check_babysit_skill_family/i,
+  '### Issue-pipeline delivery PRs',
+  /`main`[\s\S]*?\/babysit-uat`/,
+  /Integration branch[\s\S]*?\/babysit-plus`/,
 ];
 
 const GATE_SCRIPT_RE = /babysit_pr_reviews\.js\s+gate/i;

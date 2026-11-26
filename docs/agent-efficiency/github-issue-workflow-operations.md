@@ -67,9 +67,17 @@ Engine-first flow. The runner takes one action per issue per tick, so intake and
 3. Spec pass: the engine moves To do → In analysis and requests review.
 4. Each reviewer leg is followed by a wake. Convergence sets **Ready**; the next wake logs `mission.analyse.complete`.
 
-Planned, not implemented: `deliver` (Ready → delivery only), `acceptance` and `release`.
+**Ready boundary (PIPE-V2-D-ANALYSE-004, label).** The `analyse-only` label is what stops the issue at Ready on every tick. The mission flag only scopes the tick it is dispatched with, and board ticks woken by label or comment events carry no mission, so the skill adds the label at start, before the first wake. Removing the label is the owner's decision to let the general pipeline launch delivery.
 
-**Ready boundary (PIPE-V2-D-ANALYSE-004, label).** The `analyse-only` label is what stops the issue at Ready on every tick. The mission flag only scopes the tick it is dispatched with, and board ticks woken by label or comment events carry no mission, so the skill adds the label at start, before the first wake. Removing the label is the owner's decision to let the general pipeline launch delivery. Each adds rows to `missionGuard` and a choice to the workflow's `mission` input.
+### Deliver mission (`/delivery-issue`)
+
+Scoped delivery for one issue at **Ready** or **In progress** only. Wake with `node scripts/issue_pipeline_wake.js --issue <n> --mission deliver --live`. Skill: [`.cursor/skills/delivery-issue/SKILL.md`](../../.cursor/skills/delivery-issue/SKILL.md).
+
+| Mission | `issue_number` | Stage rows | Otherwise |
+|---------|----------------|------------|-----------|
+| `deliver` | required | Ready (`ready.launch`), In progress (delivery, resume, finished) | Backlog–In analysis → `mission.deliver.premature`; In Main+ → `mission.deliver.out-of-scope` |
+
+Remove **`analyse-only`** before the first deliver wake when present. The engine still checks that label on every Ready tick. Cron ticks stay **`board`** (opt-in `/delivery-issue` only; PIPE-V2-D-DELIVER-002).
 
 ### Operating it
 
