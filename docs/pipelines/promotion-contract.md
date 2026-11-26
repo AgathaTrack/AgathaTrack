@@ -3,7 +3,7 @@ title: UAT promotion contract
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-11
+last_updated: 2026-11-26
 tags: [uat, promotion, pipeline]
 ---
 # Promotion contract

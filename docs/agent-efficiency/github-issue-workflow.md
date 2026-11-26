@@ -317,6 +317,21 @@ Holistic acceptance on a **parent** issue. With `aat.enabled` false it stays hum
 
 Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md).
 
+### Production-deploy acceptance guard ([#2424](https://github.com/AgathaTrack/AgathaTrack/issues/2424))
+
+After UAT is green and before `deploy-prod` runs, **`scripts/ci/aat-prod-gate.js`** blocks promotion when an engine-owned merge in the promoted SHA still lacks a satisfying acceptance verdict. The rules are shared with the In Main gate (#2448) via `scripts/issue_pipeline_v2_acceptance.js` (`aatGateOn`, `deriveAatState`, `aatSatisfied`, `newestActionable`), so the engine and the prod workflow cannot disagree.
+
+| Control | Where | Meaning |
+|---------|-------|---------|
+| `AAT_GATE` | repo variable | unset / `off` (default): no API calls, step passes. `dry-run`: job summary lists would-block merges, never fails deploy. `on`: fails `resolve-trigger` when any gated merge is unsatisfied. Unknown values run as `dry-run`. |
+| `aat.enabled` | `.github/pipeline-agents.json` | When `false`, the guard makes no API calls. When `true` (repo config since #2448 P4) but either org field `Acceptance` / `Acceptance fail reason` is missing, it may call **`loadOrgFields` only** (field definitions), then returns without reading issues or blocking. Full reads and blocking need both fields present and `AAT_GATE` `dry-run` or `on` (with token). |
+| `AAT_GATE_READ_TOKEN` | repo secret | Read-only token for issue and org Projects field reads. **Required** in `dry-run` and `on`. There is no fallback to workflow `GITHUB_TOKEN` (it cannot read the board fields). `ENGINE_PAT` is never passed to `deploy-prod.yml`. |
+| `aat_override_reason` | `deploy-prod` `workflow_dispatch` input | When set by a login in repo variable **`AAT_OVERRIDE_ACTORS`**, an `on` gate passes and the reason is recorded in the job summary. Automatic UAT dispatch never sets it. |
+
+**Gated set:** parent issues in `In Main` or `In UAT` whose latest merge is an ancestor of the promoted SHA; `In progress` issues whose newest actionable verdict for that merge is a `scope` or `implementation` fail; follow-ups and `manual-only` issues are exempt. Honour `ISSUE_PIPELINE_V2_LABEL` while it is set.
+
+**Enablement (owner):** add `AAT_GATE_READ_TOKEN`, set `AAT_GATE=dry-run`, soak one promotion, then `AAT_GATE=on` when ready. Full promotion flow: [promotion-contract.md](../pipelines/promotion-contract.md) (§Prod deploy behaviour).
+
 ### Decision log
 
 | ID | Decision | Status |
@@ -328,7 +343,12 @@ Skill: [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-a
 | PIPE-AAT-D-005 | When `aat.enabled` and both fields exist, a non-follow-up does not get the intent-review doorbell. Follow-ups still do | Accepted; `aat.enabled` true in config as of #2448 P4 |
 | PIPE-AAT-D-006 | `implementation` remediation is `bug` follow-up issues whose PRs also `Refs` the parent, with `Priority=Urgent` when that field exists. `scope` relaunches delivery. `quality` is small PRs on the parent | Accepted |
 | PIPE-AAT-D-007 | `Manual` is bound to one merge and cleared on a newer merge. `Skipped` persists: a new sha gets its own skipped waive even when an older sha already has one. A bound `Manual` or `Skipped` is not overwritten by a pass write or a newer fail | Accepted |
-| PIPE-AAT-D-008 | The production-deploy guard is not part of this issue | Accepted |
+| PIPE-AAT-D-008 | The production-deploy guard is not part of **#2448** (In Main engine); it is owned by **#2424** | Accepted; clarified PIPE-AAT-D-014 |
+| PIPE-AAT-D-010 | **Phase 1 token (prod guard):** workflow `GITHUB_TOKEN` cannot read org Projects issue-field values in `deploy-prod`. Use dedicated read-only secret **`AAT_GATE_READ_TOKEN`**; never `ENGINE_PAT` in the deploy workflow (#2473) | Accepted (#2424) |
+| PIPE-AAT-D-011 | **Manual / skip (owner decision 2):** humans set org field `Acceptance` to `Manual` or `Skipped` (engine waive markers). Prod override is `workflow_dispatch` + `aat_override_reason` only for logins in `AAT_OVERRIDE_ACTORS` | Accepted (#2424) |
+| PIPE-AAT-D-012 | **Flag and soak (owner decisions 5–6):** repo variable `AAT_GATE` unset/`off` by default (no prod blocking). Operators add `AAT_GATE_READ_TOKEN`, set `dry-run`, soak, then `on`. Engine flag `aat.enabled` is already `true` in config (#2448 P4); prod enforcement still waits on `AAT_GATE` + token | Accepted (#2424) |
+| PIPE-AAT-D-013 | **Urgent remediation (owner decision 7):** `Priority=Urgent` on implementation follow-ups is enforced by the **#2448** engine rows, not by the prod guard. The guard only evaluates satisfaction at promotion time | Accepted (#2424) |
+| PIPE-AAT-D-014 | **#2424 prod guard** ships in #2473; canonical promotion behaviour in `docs/pipelines/promotion-contract.md` | Accepted (#2424) |
 | PIPE-V2-D-SOAK-001 | An unclaimed body edit by a login that several pool ids share is a human edit (two distinct ids approve). Soak-1 #2480 converged on one signed review from the run that had edited | Proposed (#2385 soak, owner merge) |
 | PIPE-V2-D-SOAK-002 | Pickup is least recently used **per issue**, across ticks, read from that issue's own `v2:launch` records; other issues do not count. Amends #2428 D3 (no persisted LRU): nothing new is stored. Soak-5/6 #2484/#2485 showed config order every tick starves the third agent | Superseded by PIPE-V2-D-SOAK-006 |
 | PIPE-V2-D-SOAK-006 | One board-wide round robin. No launch yet → first startable agent. Every later assignment is the next startable agent, wrapping, including the next pickup on the same issue and the first pickup on the next issue. Cursor is the newest `v2:launch`; in-scope picks in the same tick advance it. Owner 2026-11-21: spread assignments; the start is wherever the ring is, then round robin | Accepted (owner, 2026-11-21) |
