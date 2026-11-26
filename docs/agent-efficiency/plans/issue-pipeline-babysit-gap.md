@@ -3,7 +3,7 @@ title: Issue pipeline delivery PRs — babysit gap and proposed fix
 owner: Documentation Team
 audience: both
 status: in-delivery
-status_note: Phases 1 and 4 shipped 2026-11-26 (#2664, #2670). Event-driven auto-babysit live dispatch and Copilot-aware fallback remain open (see Phase 2–3 below).
+status_note: Gap plan Phase 1 shipped 2026-11-26 (#2664/#2670). Reconciliation programme phases 1–4 also shipped; gap Phases 2–3 (live auto-babysit, Copilot fallback) remain — #2671, #2672.
 last_updated: 2026-11-26
 tags: [agent-efficiency, github-issues, babysit, pipeline]
 ---
