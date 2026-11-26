@@ -324,7 +324,7 @@ After UAT is green and before `deploy-prod` runs, **`scripts/ci/aat-prod-gate.js
 | Control | Where | Meaning |
 |---------|-------|---------|
 | `AAT_GATE` | repo variable | unset / `off` (default): no API calls, step passes. `dry-run`: job summary lists would-block merges, never fails deploy. `on`: fails `resolve-trigger` when any gated merge is unsatisfied. Unknown values run as `dry-run`. |
-| `aat.enabled` | `.github/pipeline-agents.json` | When `false`, or either org field `Acceptance` / `Acceptance fail reason` is missing, the guard makes no API calls and blocks nothing (even if `AAT_GATE=on`). |
+| `aat.enabled` | `.github/pipeline-agents.json` | When `false`, the guard makes no API calls. When `true` (repo config since #2448 P4) but either org field `Acceptance` / `Acceptance fail reason` is missing, it may call **`loadOrgFields` only** (field definitions), then returns without reading issues or blocking. Full reads and blocking need both fields present and `AAT_GATE` `dry-run` or `on` (with token). |
 | `AAT_GATE_READ_TOKEN` | repo secret | Read-only token for issue and org Projects field reads. **Required** in `dry-run` and `on`. There is no fallback to workflow `GITHUB_TOKEN` (it cannot read the board fields). `ENGINE_PAT` is never passed to `deploy-prod.yml`. |
 | `aat_override_reason` | `deploy-prod` `workflow_dispatch` input | When set by a login in repo variable **`AAT_OVERRIDE_ACTORS`**, an `on` gate passes and the reason is recorded in the job summary. Automatic UAT dispatch never sets it. |
 
@@ -346,7 +346,7 @@ After UAT is green and before `deploy-prod` runs, **`scripts/ci/aat-prod-gate.js
 | PIPE-AAT-D-008 | The production-deploy guard is not part of **#2448** (In Main engine); it is owned by **#2424** | Accepted; clarified PIPE-AAT-D-014 |
 | PIPE-AAT-D-010 | **Phase 1 token (prod guard):** workflow `GITHUB_TOKEN` cannot read org Projects issue-field values in `deploy-prod`. Use dedicated read-only secret **`AAT_GATE_READ_TOKEN`**; never `ENGINE_PAT` in the deploy workflow (#2473) | Accepted (#2424) |
 | PIPE-AAT-D-011 | **Manual / skip (owner decision 2):** humans set org field `Acceptance` to `Manual` or `Skipped` (engine waive markers). Prod override is `workflow_dispatch` + `aat_override_reason` only for logins in `AAT_OVERRIDE_ACTORS` | Accepted (#2424) |
-| PIPE-AAT-D-012 | **Flag and soak (owner decisions 5–6):** `AAT_GATE` unset/`off` by default; operators enable `dry-run` first, then `on` after soak. `aat.enabled` in config stays off until #2448 soak completes | Accepted (#2424) |
+| PIPE-AAT-D-012 | **Flag and soak (owner decisions 5–6):** repo variable `AAT_GATE` unset/`off` by default (no prod blocking). Operators add `AAT_GATE_READ_TOKEN`, set `dry-run`, soak, then `on`. Engine flag `aat.enabled` is already `true` in config (#2448 P4); prod enforcement still waits on `AAT_GATE` + token | Accepted (#2424) |
 | PIPE-AAT-D-013 | **Urgent remediation (owner decision 7):** `Priority=Urgent` on implementation follow-ups is enforced by the **#2448** engine rows, not by the prod guard. The guard only evaluates satisfaction at promotion time | Accepted (#2424) |
 | PIPE-AAT-D-014 | **#2424 prod guard** ships in #2473; canonical promotion behaviour in `docs/pipelines/promotion-contract.md` | Accepted (#2424) |
 | PIPE-V2-D-SOAK-001 | An unclaimed body edit by a login that several pool ids share is a human edit (two distinct ids approve). Soak-1 #2480 converged on one signed review from the run that had edited | Proposed (#2385 soak, owner merge) |
