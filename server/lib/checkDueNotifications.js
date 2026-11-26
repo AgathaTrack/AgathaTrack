@@ -58,7 +58,12 @@ async function loadUserPrefs(pool, userId) {
  * @param {Record<string, string>} [petNamesFromClient]
  * @param {{ clock?: { todayIso: string, nowTimeIso: string }|null }} [options] test clock
  */
-export async function checkDueNotifications(pool, userId, petNamesFromClient = {}, { clock = null } = {}) {
+export async function checkDueNotifications(
+  pool,
+  userId,
+  _petNamesFromClient = {},
+  { clock = null } = {},
+) {
   const entries = await pool.query(
     `SELECT he.id, he.pet_id, he.name, he.next_due_date, he.remind_days_before,
             p.name AS pet_name, p.home_timezone AS pet_home_timezone
