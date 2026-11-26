@@ -15,7 +15,6 @@ import {
 } from './absenceGuestGrants.js';
 import { linkContactToUser as linkContactToUserRepo } from './contactsRepo.js';
 
-const PLANNED_ABSENCE_STATUS_ACTIVE = 'active';
 const PLANNED_ABSENCE_STATUS_CANCELLED = 'cancelled';
 
 export const INVITE_PENDING = 'pending';
@@ -116,7 +115,6 @@ export async function createAbsenceCarerInvite(pool, {
   }
 
   const petRows = await loadAbsencePetRows(pool, absenceId);
-  const absencePetIds = petRows.map((row) => row.pet_id);
   const contactPetIds = petRows
     .filter((row) => row.contact_id === contactId)
     .map((row) => row.pet_id);

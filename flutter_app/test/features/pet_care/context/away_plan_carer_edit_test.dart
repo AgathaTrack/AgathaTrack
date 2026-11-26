@@ -26,20 +26,26 @@ import 'package:pet_profile_app/features/pet_care/context/domain/repositories/ca
 import 'package:pet_profile_app/features/pet_care/context/presentation/providers/care_context_providers.dart';
 import 'package:pet_profile_app/features/pet_care/context/domain/entities/per_pet_away_plan_status.dart';
 import 'package:pet_profile_app/features/pet_care/context/presentation/screens/pet_away_plan_screen.dart';
+import 'package:pet_profile_app/features/pet_care/context/presentation/widgets/away_plan_carer_edit_dialog.dart';
 import 'package:pet_profile_app/features/pet_profile/domain/entities/pet.dart';
 import 'package:pet_profile_app/features/pet_profile/presentation/providers/pet_providers.dart';
 import 'package:pet_profile_app/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 class _FakeCareContextRepository implements CareContextRepository {
-  _FakeCareContextRepository({this.candidates = const [], this.updateThrows})
-    : updateResult = null;
+  _FakeCareContextRepository({
+    this.candidates = const [],
+    this.updateThrows,
+    this.detailForFetch,
+  }) : updateResult = null;
 
   List<CarerCandidate> candidates;
   PlannedAbsence? Function(String absenceId)? updateResult;
   Object? Function()? updateThrows;
+  PlannedAbsence? detailForFetch;
   List<Map<String, dynamic>> savedPetCarers = [];
   List<Map<String, dynamic>> savedPerPetPatches = [];
+  List<({String contactId, List<String> petIds})> inviteCalls = [];
   int updateCallCount = 0;
   int patchPerPetCallCount = 0;
   int getCarerCandidatesCallCount = 0;
@@ -74,7 +80,8 @@ class _FakeCareContextRepository implements CareContextRepository {
     required String contactId,
     required List<String> petIds,
   }) async {
-    throw UnimplementedError();
+    inviteCalls.add((contactId: contactId, petIds: List<String>.from(petIds)));
+    return const {'status': 'pending'};
   }
 
   @override
@@ -137,6 +144,7 @@ class _FakeCareContextRepository implements CareContextRepository {
 
   @override
   Future<PlannedAbsence> getPlannedAbsence(String absenceId) async =>
+      detailForFetch ??
       const PlannedAbsence(
         id: 'abs-1',
         userId: 'user-1',
@@ -315,6 +323,68 @@ Future<void> _clearCarerContact(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('people_picker_option_none')));
   await tester.pumpAndSettle();
+}
+
+Widget buildCarerEditDialog(
+  _FakeCareContextRepository repo, {
+  required PlannedAbsencePetCarer carer,
+  PlannedAbsence? detail,
+  Map<String, String> petNamesById = const {
+    'pet-1': 'Luna',
+    'pet-2': 'Buddy',
+  },
+}) {
+  final absenceDetail =
+      detail ??
+      PlannedAbsence(
+        id: absence.id,
+        userId: absence.userId,
+        startsOn: absence.startsOn,
+        endsOn: absence.endsOn,
+        provenance: absence.provenance,
+        status: absence.status,
+        petIds: absence.petIds,
+        petCarers: [carer],
+      );
+  repo.detailForFetch = absenceDetail;
+  return ProviderScope(
+    overrides: [
+      careContextRepositoryProvider.overrideWith((ref) => repo),
+      peopleRepositoryProvider.overrideWithValue(FakePeopleRepository()),
+      householdsRepositoryProvider.overrideWithValue(
+        FakeHouseholdsRepository(),
+      ),
+      rosterProvider.overrideWith(_CarerPickerRosterNotifier.new),
+      plannedAbsenceDetailProvider('abs-1').overrideWith(
+        (ref) async => absenceDetail,
+      ),
+    ],
+    child: peopleTestApp(
+      child: MaterialApp(
+        theme: AppTheme.lightTheme,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const Key('open_carer_edit_dialog'),
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => AwayPlanCarerEditDialog(
+                  absenceId: 'abs-1',
+                  petId: 'pet-1',
+                  petName: 'Luna',
+                  currentCarer: carer,
+                  petNamesById: petNamesById,
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 Widget buildScreen(_FakeCareContextRepository repo, {PlannedAbsence? detail}) {
@@ -626,5 +696,91 @@ void main() {
       find.byKey(const Key('away_plan_download_pet_pet-1')),
     );
     expect(downloadButton.onPressed, isNotNull);
+  });
+
+  group('carer app invite (AP-18)', () {
+    const eligibleCarer = PlannedAbsencePetCarer(
+      petId: 'pet-1',
+      contactId: 'contact-1',
+      carerState: 'set',
+      canGrantGuestAccess: true,
+    );
+
+    testWidgets('send invite posts explicit pet_ids for current pet only', (
+      tester,
+    ) async {
+      final repo = _FakeCareContextRepository(
+        detailForFetch: const PlannedAbsence(
+          id: 'abs-1',
+          userId: 'user-1',
+          startsOn: '2026-10-01',
+          endsOn: '2026-10-05',
+          provenance: 'user_declared',
+          status: 'active',
+          petIds: ['pet-1'],
+          petCarers: [eligibleCarer],
+        ),
+      );
+      await tester.pumpWidget(
+        buildCarerEditDialog(repo, carer: eligibleCarer),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('open_carer_edit_dialog')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('away_plan_carer_send_invite')));
+      await tester.pumpAndSettle();
+
+      expect(repo.inviteCalls, hasLength(1));
+      expect(repo.inviteCalls.single.contactId, 'contact-1');
+      expect(repo.inviteCalls.single.petIds, ['pet-1']);
+    });
+
+    testWidgets('send invite with sibling choice includes selected pets', (
+      tester,
+    ) async {
+      const twoPetDetail = PlannedAbsence(
+        id: 'abs-1',
+        userId: 'user-1',
+        startsOn: '2026-10-01',
+        endsOn: '2026-10-05',
+        provenance: 'user_declared',
+        status: 'active',
+        petIds: ['pet-1', 'pet-2'],
+        petCarers: [
+          eligibleCarer,
+          PlannedAbsencePetCarer(
+            petId: 'pet-2',
+            contactId: 'contact-1',
+            carerState: 'set',
+            canGrantGuestAccess: true,
+          ),
+        ],
+      );
+      final repo = _FakeCareContextRepository(detailForFetch: twoPetDetail);
+      await tester.pumpWidget(
+        buildCarerEditDialog(
+          repo,
+          carer: eligibleCarer,
+          detail: twoPetDetail,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('open_carer_edit_dialog')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('away_plan_carer_send_invite')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.tap(find.byKey(const Key('away_plan_carer_invite_offer_pet_pet-2')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('away_plan_carer_invite_include_selected')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(repo.inviteCalls, hasLength(1));
+      expect(repo.inviteCalls.single.petIds, ['pet-1', 'pet-2']);
+    });
   });
 }
