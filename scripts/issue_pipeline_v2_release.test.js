@@ -54,12 +54,11 @@ test('definition of done: only the checklist sections count, no boxes means comp
   assert.equal(dodComplete('no boxes'), true);
 });
 
-test('definition of done: unticked deferred catalog soak rows do not block progress.finished', () => {
+test('definition of done: only <!-- soak-dod:defer --> defers; SOAK-REG id on the line still blocks', () => {
   const deferred = [
     '### Definition of Done',
     '- [x] Tests green',
-    '- [ ] SOAK-REG-001 live board soak (deferred to catalog)',
-    '- [ ] <!-- soak-dod:defer --> pipeline-beta soak window',
+    '- [ ] <!-- soak-dod:defer --> SOAK-REG-001 live board soak (catalog)',
   ].join('\n');
   assert.equal(dodComplete(deferred), true);
   assert.equal(dodComplete('### Definition of done\n- [x] a\n- [ ] Live soak with no catalog id'), false);
@@ -68,6 +67,10 @@ test('definition of done: unticked deferred catalog soak rows do not block progr
     false,
   );
   assert.equal(dodComplete('### Definition of Done\n- [x] ok\n- [ ] add catalog soak coverage to the CLI'), false);
+  assert.equal(
+    dodComplete('### Definition of Done\n- [x] ok\n- [ ] SOAK-REG-001 add retry to the CLI'),
+    false,
+  );
 });
 
 test('delivery facts: merges into main, open PRs, activity ignores the engine, markers are engine-only', () => {

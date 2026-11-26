@@ -63,11 +63,11 @@ async function listLinkedPrs({ owner, repo, issueNumber, token, restFn = rest })
 }
 
 /**
- * Deferred catalog soaks may stay unticked in delivery DoD without blocking In Main (PIPE-V2-D-SOAK-010).
- * The marker must lead the checkbox item (not a mention elsewhere on the line).
+ * Deferred live soaks may stay unticked in delivery DoD without blocking In Main (PIPE-V2-D-SOAK-010).
+ * Only the explicit engine marker at the start of the checkbox line counts (not SOAK-REG-* ids — those are catalog metadata).
  */
 const DEFERRED_SOAK_DOOD_UNTICKED =
-  /^\s*[-*]\s+\[ \]\s*(?:SOAK-REG-\d+\b|<!--\s*soak-dod:defer\s*-->)/i;
+  /^\s*[-*]\s+\[ \]\s*<!--\s*soak-dod:defer\s*-->/i;
 
 function isDeferredSoakDoDLine(line) {
   return DEFERRED_SOAK_DOOD_UNTICKED.test(String(line || ''));
