@@ -24,7 +24,9 @@ AppNotification _notification({
 }
 
 void main() {
-  testWidgets('navigates from server deep_link occurrence path', (tester) async {
+  testWidgets('navigates from server deep_link occurrence path', (
+    tester,
+  ) async {
     late Uri uri;
 
     await tester.pumpWidget(

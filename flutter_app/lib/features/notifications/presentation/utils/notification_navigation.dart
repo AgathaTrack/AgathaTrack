@@ -15,9 +15,7 @@ final _occurrenceDeepLinkPath = RegExp(
 
 /// Opens an occurrence screen from an API [deepLink] path (push + in-app inbox).
 bool _navigateOccurrenceDeepLink(BuildContext context, String deepLink) {
-  final uri = Uri.parse(
-    deepLink.startsWith('/') ? deepLink : '/$deepLink',
-  );
+  final uri = Uri.parse(deepLink.startsWith('/') ? deepLink : '/$deepLink');
   final match = _occurrenceDeepLinkPath.firstMatch(uri.path);
   if (match == null) return false;
 
