@@ -74,7 +74,7 @@ function buildLaunchAcked({ runId }) {
 const RECORD = new RegExp(
   '<!--\\s*v2:(launch|launch-pending|launch-failed|launch-acked)' +
     '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell|babysit))?' +
-    '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done))?' +
+    '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done|babysit))?' +
     '(?:\\s+nonce=([a-f0-9]+))?(?:\\s+commit=([a-f0-9]{64}))?\\s*-->',
   'i',
 );

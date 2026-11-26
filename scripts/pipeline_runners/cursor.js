@@ -52,7 +52,12 @@ async function launch({
     repoUrl,
   );
   const prompts = stagePromptsForConfig(config, agent);
-  const template = stage ? prompts[stage] : METHOD_PROMPTS[method];
+  const template =
+    stage === 'babysit'
+      ? METHOD_PROMPTS[method] || METHOD_PROMPTS.PR
+      : stage
+        ? prompts[stage]
+        : METHOD_PROMPTS[method];
   const extra = fillPrompt(template, { number: issue.number, mergeSha });
   const scopeNote = scopeRelaunchSha
     ? `This run continues the existing programme after an acceptance scope fail for merge ${scopeRelaunchSha}. It must not open a second plan or a second integration branch.`

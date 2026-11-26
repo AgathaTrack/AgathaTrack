@@ -351,7 +351,7 @@ test('In progress: working, resume once, stalled, finished', () => {
     pipelineOpenPrs: 1,
     launch: {},
   };
-  const babysitAction = rowOf(babysitStale);
+  const babysitAction = rowOfBoth(babysitStale);
   assert.equal(babysitAction.type, 'launch');
   assert.equal(babysitAction.purpose, 'babysit');
   assert.equal(babysitAction.row, 'progress.babysit-fallback');

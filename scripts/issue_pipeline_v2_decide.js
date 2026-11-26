@@ -412,7 +412,9 @@ function decideInProgress(facts, config) {
     !launch.runId &&
     babysitStale
   ) {
-    const capable = launchableAgents(config, 'PR');
+    const capable = launchableAgents(config, 'PR').filter(
+      (id) => resolveAgent(config, id)?.runner === 'claude',
+    );
     if (capable.length === 0) {
       return noAgent('progress.babysit-no-agent');
     }

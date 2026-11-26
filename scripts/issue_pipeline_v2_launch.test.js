@@ -65,11 +65,12 @@ test('METHOD_PROMPTS.PR names babysit-plus driver routing', () => {
 
 test('parseLaunchComment accepts purpose=babysit', () => {
   const comment = note(
-    '<!-- v2:launch run=r1 agent=claude-a purpose=babysit -->',
+    '<!-- v2:launch run=r1 agent=claude-a purpose=babysit stage=babysit -->',
     1,
   );
   const parsed = require('./issue_pipeline_v2_launch').parseLaunchComment(comment);
   assert.equal(parsed.purpose, 'babysit');
+  assert.equal(parsed.stage, 'babysit');
 });
 
 test('delivery method comes from the Delivery plan section, defaulting to PR', () => {
