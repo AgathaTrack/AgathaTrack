@@ -2,7 +2,7 @@
 title: delivery-issue soak evidence (step 6)
 owner: Agent efficiency
 audience: agent
-status: active
+status: in-delivery
 status_since: 2026-11-26
 plan: delivery-issue-v1
 folds_into: docs/domains/cross-domain/features/program-contract.md

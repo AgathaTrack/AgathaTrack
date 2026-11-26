@@ -55,3 +55,16 @@ test('FORBIDDEN_RESTATE matches driver table rows only', () => {
   assert.equal(FORBIDDEN_RESTATE.test('| PR base | Driver |'), true);
   assert.equal(FORBIDDEN_RESTATE.test('autonomous-pr-policy.md'), false);
 });
+
+test('validateDeliveryIssueSkill fails when Claude delegation link is broken', () => {
+  withCopiedSkills((tmp) => {
+    const skillPath = path.join(tmp, '.claude/skills/delivery-issue/SKILL.md');
+    const text = fs.readFileSync(skillPath, 'utf8');
+    const broken = text.replace(
+      '[`.cursor/skills/delivery-issue/SKILL.md`](../../../.cursor/skills/delivery-issue/SKILL.md)',
+      '../../../.cursor/skills/delivery-issue/SKILL.md',
+    );
+    fs.writeFileSync(skillPath, broken);
+    assert.throws(() => validateDeliveryIssueSkill(tmp), /must link-delegate/);
+  });
+});

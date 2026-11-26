@@ -24,10 +24,11 @@ const CURSOR_MARKERS = [
 /** The skill must point at policy, not copy the base-branch driver table. */
 const FORBIDDEN_RESTATE = /\|\s*PR base\s*\|\s*Driver\s*\|/;
 
-const CLAUDE_MARKERS = [
-  '../../../.cursor/skills/delivery-issue/SKILL.md',
-  'ScheduleWakeup',
-];
+/** Claude mirror must delegate via one canonical markdown link, not loose substrings. */
+const CLAUDE_DELEGATE_LINK =
+  /\[[^\]]*\]\(\.\.\/\.\.\/\.\.\/\.cursor\/skills\/delivery-issue\/SKILL\.md\)/;
+
+const CLAUDE_MARKERS = ['Read and follow', 'ScheduleWakeup'];
 
 function markerLabel(marker) {
   if (typeof marker === 'string') return `literal:${marker}`;
@@ -69,6 +70,11 @@ function validateDeliveryIssueSkill(repoRoot = path.resolve(__dirname, '../..'))
 
   const claudeText = readRepoFile(repoRoot, CLAUDE_SKILL);
   assertMarkers(claudeText, CLAUDE_MARKERS, CLAUDE_SKILL);
+  if (!CLAUDE_DELEGATE_LINK.test(claudeText)) {
+    throw new Error(
+      `${CLAUDE_SKILL}: must link-delegate to ${CURSOR_SKILL} via ../../../.cursor/skills/delivery-issue/SKILL.md`,
+    );
+  }
 
   return { ok: true };
 }
@@ -76,6 +82,7 @@ function validateDeliveryIssueSkill(repoRoot = path.resolve(__dirname, '../..'))
 module.exports = {
   CURSOR_SKILL,
   CLAUDE_SKILL,
+  CLAUDE_DELEGATE_LINK,
   FORBIDDEN_RESTATE,
   validateDeliveryIssueSkill,
 };
