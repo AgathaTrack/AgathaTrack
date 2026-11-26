@@ -72,7 +72,6 @@ describe('withTransaction', () => {
   it('reuses an already checked-out PoolClient without nested BEGIN', async () => {
     const queryLog = [];
     const checkedOut = {
-      _pool: {},
       query: async (sql) => {
         queryLog.push(String(sql).trim());
         return { rows: [] };
