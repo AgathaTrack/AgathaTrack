@@ -36,7 +36,7 @@ Check PR status, comments, and latest CI and resolve any issues until the PR is 
 
 **After merge to `main`:** CI runs Pre-UAT E2E and promotion automatically — babysit+ does not spawn agents or poll deploy (babysit-plus §8).
 
-**Heavier workflows:** `/babysit-plus` (phase PRs, merge automation) · `/babysit-uat` (final merge to `main` + pre-UAT) — see `docs/agent-efficiency/autonomous-pr-policy.md`.
+**Heavier workflows:** `/babysit-plus` (default driver for programme/pipeline `main` PRs) · `/babysit-uat` (rows 2, 4, 8b, 12 only — in-session pre-UAT) — see `docs/agent-efficiency/autonomous-pr-policy.md` §Driver routing.
 
 Escalate to human when: security/crypto changes, breaking API contracts, migration risk, or product/legal decisions.
 

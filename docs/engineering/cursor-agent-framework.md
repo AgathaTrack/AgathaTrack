@@ -19,10 +19,10 @@ Normal day-to-day workflows:
 | Command | Purpose |
 |---------|---------|
 | `/execute-plan` | Multi-phase plans — skill + `AGENTS.md` §Execute-plan; platform deltas: [instruction stack](../agent-efficiency/execute-plan-instruction-stack.md) |
-| `/light-plan` | 2–4 phase sequential programme — tracking issue, integration + light merge, release via `/babysit-uat` — [skill](../../.cursor/skills/light-plan/SKILL.md) |
+| `/light-plan` | 2–4 phase sequential programme — tracking issue, integration + light merge, release via `/babysit-plus` (policy row 6) — [skill](../../.cursor/skills/light-plan/SKILL.md) |
 | `/babysit` or `/autopilot` | Lightweight PR merge-ready loop — `.cursor/skills/babysit/SKILL.md`; cloud handoff via built-in `/autopilot` |
 | `/babysit-plus` | Bounded autonomous work: implement or PR triage → CI → merge |
-| `/babysit-uat` | Final merge to `main` + pre-UAT E2E watch + remedial loop |
+| `/babysit-uat` | Policy rows 2, 4, 8b, 12 — merge + in-session pre-UAT watch + remedial loop |
 | `/e2e-debug` | Pre-UAT forensic fix on one remedial branch (hands off to babysit-uat) |
 | `/ui-design-deep` | Design + production UI for flows, theme, multi-screen work |
 | `/AgentAcceptance` | Final holistic acceptance on a parent issue or linked PR — [skill](../../.cursor/skills/agent-acceptance/SKILL.md) |

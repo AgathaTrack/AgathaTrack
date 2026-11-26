@@ -3,7 +3,7 @@ title: Autonomous PR Policy
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-16
+last_updated: 2026-11-26
 tags: [agent-efficiency, policy]
 ---
 # Autonomous PR policy (canonical)
@@ -21,6 +21,7 @@ Whether an agent may merge is defined in [`AGENTS.md`](../../AGENTS.md) §Autono
 | GitHub labels | [github-labels.md](./github-labels.md) |
 | Lightweight PR loop | `.cursor/skills/babysit/SKILL.md` (cloud handoff: built-in `/autopilot`) |
 | Babysit+ skill | `.cursor/skills/babysit-plus/SKILL.md` |
+| Babysit-UAT skill | `.cursor/skills/babysit-uat/SKILL.md` |
 | Execute-plan skill | `.cursor/skills/execute-plan/SKILL.md` |
 | Runtime CLI | [execute-plan-runtime.md](./execute-plan-runtime.md) |
 
@@ -32,10 +33,10 @@ Whether an agent may merge is defined in [`AGENTS.md`](../../AGENTS.md) §Autono
 |-------|------|
 | `/babysit` | Lightweight: sync, conflicts, comments, CI, push (skill; optional cloud handoff via `/autopilot`) |
 | `/babysit-plus` | Autonomous PR operator: triage, fixes, debt issues, CI budget, **always merge** |
-| `/babysit-uat` | Babysit+ + pre-UAT E2E gate on final merge to `main` |
-| `/execute-plan` | Multi-phase orchestrator; babysit+ on phases; babysit-uat on final main merge |
+| `/babysit-uat` | Babysit+ through merge, then in-session pre-UAT watch — only on routes in §Driver routing rows 2, 4, 8b and 12 |
+| `/execute-plan` (v1 schema-only plans) | Multi-phase orchestrator; babysit+ on phases, babysit-uat on final main merge. **v2:** `tick` and the driver own merge, pre-UAT and promotion; no babysit skill runs on plan PRs. |
 
-During `/execute-plan`, use **babysit-plus** for intermediate phase PRs and **babysit-uat** for the final PR to `main` — never plain babysit alone.
+Routing for any PR is in §Driver routing below. Other entry points may summarize it but must not contradict it. **Execute-plan v1 (historical):** intermediate phase PRs use **babysit-plus**; final PR to `main` uses **babysit-uat**. v2 uses row 1 only.
 
 ### Execute-plan (v2)
 
@@ -73,25 +74,49 @@ The **babysit skill family** is every agent entry that opens, updates, or merges
 | `/babysit` | Yes — merge-ready = `gate` exit `0`; `/autopilot` handoff does not waive reply+resolve when you remain in session |
 | `/babysit-plus` | Yes — §7 review gate; exit `2` → triage and resolve |
 | `/babysit-uat` | Yes — babysit+ §0–7 on every merge, including remedial PRs |
-| `/light-plan` phase and sync PRs | Yes — every one is driven by `/babysit-plus` (§7 `gate` exit `0` before merge); the release PR goes to `/babysit-uat` |
+| `/light-plan` phase and sync PRs | Yes — every one is driven by `/babysit-plus` (§7 `gate` exit `0` before merge); the release PR uses `/babysit-plus` (§Driver routing row 6) |
+| Issue-pipeline delivery PR (`Method: PR`, or R1 scope in [issue-pipeline-babysit-gap.md](./plans/issue-pipeline-babysit-gap.md)) | Yes — driver per §Driver routing rows 10–11; delivery run keeps `busy` until the driver's gate passes |
 | `/dependabot-batch` | Yes — Phase 3 babysit+ (wait, reply+resolve, `gate`) + Phase 5 `/babysit-uat` |
 | `/execute-plan` workers (`triage-review`) | Yes — reply and resolve every listed conversation; `tick` relaunches while any stay unresolved |
 | `/execute-plan` driver | Yes — `tick` PR-ladder 5 blocks on `unresolved_threads` (GraphQL; CCR route in Claude Code cloud sessions); ladder 9 waits for Copilot on young PRs to **`main` only**; driver arms auto-merge when the ladder passes (does **not** invoke `babysit_pr_reviews.js`; workers + ruleset enforce resolve-all) |
-| Issue-pipeline delivery PR (`Method: PR`, or any PR in the R1 scope in `docs/agent-efficiency/plans/issue-pipeline-babysit-gap.md`) | Yes — driver per the decision rule below; delivery run keeps `busy` until the driver's gate passes |
 | `.cursor/rules/pr-hygiene.mdc` | Points agents at §Babysit skill family and §Automatic reviews |
 | Claude **steward** skill | Same pointers for Claude-driven PRs |
 
+**Doc drift guard:** `node scripts/check_babysit_skill_family.js` (pre-push and CI governance — see `_reusable-test.yml`).
+
+**Driver.** A driver is the procedure in the linked skill file, plus the scripts that file names, followed by an agent in whatever session runs it. `disable-model-invocation: true` only stops the Skill tool from loading the file; it does not change which procedure counts as the driver. Unattended runs are told to read the skill file and follow it ([issue-pipeline-babysit-gap.md](./plans/issue-pipeline-babysit-gap.md) §1c).
+
+### Driver routing
+
+**Precedence.** The first matching row wins. `/babysit-uat` contains all of `/babysit-plus`; where a row says uat, uat is the driver.
+
+| # | Case | Driver | Ends at |
+|---|------|--------|---------|
+| 1 | Active execute-plan v2 worker or driver on the PR (plan phase, sync, release or remedial) | `tick` and the driver, or the `triage-review` worker. **No babysit skill.** | Per [execute-plan-v2.md](./plans/execute-plan-v2.md) |
+| 2 | Remedial PR from `/e2e-debug`, outside a v2 plan | `/babysit-uat` (mandatory) | Pre-UAT green on the merge SHA |
+| 3 | `/dependabot-batch` CI phase | `/babysit-plus` | Squash merge |
+| 4 | `/dependabot-batch` landing on `main` | `/babysit-uat` | Pre-UAT green on the merge SHA |
+| 5 | `/light-plan` phase or sync PR → integration | `/babysit-plus` (the light merge is the integration mechanic) | Squash merge, or merge commit for the release-conflict sync only |
+| 6 | `/light-plan` release PR → `main` | `/babysit-plus` | Squash merge; pre-UAT runs async in Actions |
+| 7 | Sprint agent PR → `cursor/sprint-*-integration-*` | `/babysit-plus` | Squash merge into integration |
+| 8 | Sprint integration PR → `main`, no flagged shard | `/babysit-plus` | Squash merge; pre-UAT runs async |
+| 8b | Sprint integration PR → `main`, touches a shard flagged by `babysit_uat_shard_risk.mjs` | `/babysit-uat` | Pre-UAT green on the merge SHA |
+| 9 | Narrow CI-only or docs-only PR to `main`, `## Docs` states pre-UAT `N/A — <reason>` | `/babysit-plus` | Squash merge |
+| 10 | Pipeline delivery (`Method: PR`) → integration base | `/babysit-plus` | Squash merge |
+| 11 | Pipeline delivery → `main` | `/babysit-plus` | Squash merge; pre-UAT runs async |
+| 12 | User invokes `/babysit-uat` on a PR | `/babysit-uat` | Pre-UAT green on the merge SHA |
+| 13 | User invokes `/babysit-plus` on a PR | `/babysit-plus` | Squash merge |
+| 14 | User invokes `/babysit`, or asks for merge-ready only | `/babysit` | Gate exit `0`, no merge |
+| 15 | Agent PR, no invocation, no programme | **None. The user merges** ([`AGENTS.md`](../../AGENTS.md) §Autonomy and merging) | — |
+| — | Any base not listed above, for a programme or pipeline PR | `/babysit-plus`; comment the unexpected base on the issue | Squash merge |
+
+`/babysit-uat` is the driver for rows 2, 4, 8b and 12 only. Plan remedials are owned by row 1 (`tick`), not row 2. Row 2 covers standalone `/e2e-debug` remedials.
+
+**Execute-plan v1 (historical).** Not in the table above: intermediate phase PRs → `/babysit-plus`; final programme PR to `main` → `/babysit-uat`. Skills mark these "v1 only". v2 supersedes them with row 1.
+
 ### Issue-pipeline delivery PRs
 
-| PR base | Driver | Ends at |
-|---|---|---|
-| Integration branch (`cursor/*-integration-*`, or an execute-plan `base_branch`) | `/babysit-plus` | Squash merge into the integration branch |
-| `main` | `/babysit-uat` | Pre-UAT E2E green on the merge SHA, then DoD ticks and `finish-work` (light-plan parity) |
-| Anything else | `/babysit-plus` | Squash merge; the run comments the unexpected base on the issue |
-
-Plain `/babysit` is not a driver for agent PRs.
-
-**Doc drift guard:** `node scripts/check_babysit_skill_family.js` (pre-push and CI governance — see `_reusable-test.yml`).
+Driver per §Driver routing rows 10–11. Plain `/babysit` is not a driver for agent PRs.
 
 ---
 
@@ -138,7 +163,7 @@ Linux runner usage scales with **open PR count**, **pushes per PR**, and **jobs 
 | **Programme integration branch** (`cursor/*-integration-*`) | One CI-heavy line; single release PR to `main` |
 | **Merge-lease (§Merge coordination)** | Reduces thundering-herd rebase + duplicate CI on the same base |
 | **Babysit+ push batching** | `.cursor/skills/babysit-plus/SKILL.md` §5 — one push per logical fix batch |
-| **`/babysit-plus` on phase PRs; `/babysit-uat` on release to `main` only** | Pre-UAT runs only after merge to `main` |
+| **§Driver routing** | One table for which skill owns each PR — most `main` landings use plus; pre-UAT async unless rows 2, 4, 8b or 12 |
 
 See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) § GitHub Actions minutes.
 
@@ -319,21 +344,20 @@ Verify merge commit is ancestor of `origin/<base_branch>` before next phase.
 
 ## Post-merge pre-UAT
 
-| Skill | When |
-|-------|------|
-| **`/babysit-plus`** | Intermediate execute-plan merges (integration branch); ends at merge |
-| **`/babysit-uat`** | **Final** PR to `main` — babysit+ merge + pre-UAT E2E gate on merge SHA |
+**CI always runs** `pre-uat-e2e.yml` on every merge to `main`. Most programme and pipeline PRs use `/babysit-plus` only (§Driver routing rows 6, 8, 11): the agent session ends at squash merge; pre-UAT is asynchronous.
+
+**In-session pre-UAT watch** (`/babysit-uat`) applies only on §Driver routing rows 2, 4, 8b and 12. See `.cursor/skills/babysit-uat/SKILL.md`.
 
 **CI owns promotion** after pre-UAT green: `pre-uat-e2e.yml` → `promote-uat.yml` →
 `deploy-uat.yml` → `prod-ready`. Neither babysit+ nor babysit-uat polls deploy.
 
-After merge to `main`:
+After merge to `main` when `/babysit-uat` is the driver:
 
 1. Record merge SHA.
-2. **Babysit+** — done (intermediate phases).
-3. **Babysit-uat** — watch `pre-uat-e2e.yml` for **that merge SHA**; remedial loop per `.cursor/skills/babysit-uat/SKILL.md`.
-4. **Do not poll** `deploy-uat.yml` or prod-ready from the main session.
-5. Applies only on **final merge to `main`**, not intermediate integration-branch merges.
+2. Watch `pre-uat-e2e.yml` for **that merge SHA**; remedial loop per `.cursor/skills/babysit-uat/SKILL.md`.
+3. **Do not poll** `deploy-uat.yml` or prod-ready from the main session.
+
+A red pre-UAT on an async path is handled outside the delivery session (for example a standalone `/e2e-debug` run). See [babysit-routing-reconciliation.md](./changes/babysit-routing-reconciliation.md) §8 C1.
 
 See `docs/e2e/uat-deploy-tiers.md` · `docs/pipelines/ci-cd-gates.md` §3 · `docs/e2e/uat-promote-manual.md`.
 

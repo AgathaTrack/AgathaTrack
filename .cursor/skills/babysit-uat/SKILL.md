@@ -1,6 +1,6 @@
 ---
 name: babysit-uat
-description: Babysit+ through merge, then gate on pre-UAT E2E on main. On failure delegates remedial work to /e2e-debug, then merges remedial PR and re-watches. Does not poll promote-uat or deploy-uat.
+description: Babysit+ through merge, then in-session pre-UAT watch — only on autonomous-pr-policy Driver routing rows 2, 4, 8b and 12. On failure delegates to /e2e-debug. Does not poll promote-uat or deploy-uat.
 disable-model-invocation: true
 ---
 
@@ -31,15 +31,18 @@ Agent merge on the PR under babysit-uat is permitted when [`AGENTS.md`](../../..
 
 ## When to use
 
+Canonical routing: autonomous-pr-policy §Driver routing. **`/babysit-uat` is the driver only for rows 2, 4, 8b and 12.**
+
 | Caller | Skill |
 |--------|-------|
-| Standalone PR → `main` needing pre-UAT confidence | `/babysit-uat` |
-| **Remedial PR from `/e2e-debug`** (standalone or delegated) | **`/babysit-uat` — mandatory same-session follow-up; merge + watch** |
-| `/execute-plan` **intermediate** phase PR (integration parent) | `/babysit-plus` only |
-| `/execute-plan` **final** PR → `main` | `/babysit-uat` |
-| `/light-plan` **release** PR → `main` | `/babysit-uat` |
-| `/light-plan` phase or sync PR → integration | Light merge in [light-plan skill](../light-plan/SKILL.md) (not this skill) |
-| Narrow PR CI-only / docs | `/babysit-plus` (avoids pre-UAT queue pressure) |
+| `/execute-plan` **v2** plan PR (any) | **None — `tick` owns it** (policy row 1) |
+| **Remedial PR from `/e2e-debug`** (standalone, outside v2 plan) | **`/babysit-uat` — mandatory same-session follow-up; merge + watch** (row 2) |
+| `/dependabot-batch` landing on `main` | `/babysit-uat` (row 4) |
+| Sprint integration PR → `main` with shard flagged by `babysit_uat_shard_risk.mjs` | `/babysit-uat` (row 8b) |
+| User invokes `/babysit-uat` on a PR | `/babysit-uat` (row 12) |
+| `/execute-plan` **v1** intermediate phase PR | `/babysit-plus` only |
+| `/execute-plan` **v1** final PR → `main` | `/babysit-uat` |
+| Programme, pipeline, light-plan release, or other `main` PRs | `/babysit-plus` — pre-UAT async (policy rows 6, 8, 11; see policy §Post-merge pre-UAT) |
 
 ---
 

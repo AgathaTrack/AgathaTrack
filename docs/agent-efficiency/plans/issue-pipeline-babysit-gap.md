@@ -48,19 +48,13 @@ Each row cites the file that causes the gap. All seven were read on `main` at th
 - **R4.** The rule is written once, in `autonomous-pr-policy.md` §Babysit skill family, including the decision-rule table. The prompt and the delivery contract refer to that section and do not restate it. This plan doc keeps the history and is not a dependency of the policy.
 - **R5.** `scripts/check_babysit_skill_family.js` fails CI if the policy section or its decision-rule table is removed (Phase 1e).
 - **R6.** An open pipeline PR that no run is watching is picked up without a person doing it first (fallback, phase 3 below).
-- **R7.** End state for default `Method: PR` matches light-plan: the delivery agent keeps `busy` through the merge and through Pre-UAT green on the merge SHA (for `main`), then ticks the delivery DoD and runs `finish-work`. It does not close the issue and does not write `Stage` while the engine owns it (`docs/agent-efficiency/github-issue-workflow-behaviour.md` §Delivery contract; `.cursor/skills/light-plan/SKILL.md` §Release).
+- **R7.** End state for default `Method: PR`: the delivery agent keeps `busy` through squash merge (driver `/babysit-plus` per [autonomous-pr-policy.md](../autonomous-pr-policy.md) §Driver routing row 11), then ticks the delivery DoD and runs `finish-work`. Pre-UAT runs asynchronously in Actions. It does not close the issue and does not write `Stage` while the engine owns it. Supersedes the pre-UAT-green end state from revision 2 ([babysit-routing-reconciliation.md](../changes/babysit-routing-reconciliation.md) §8 C2).
 
 ## Decision rule (driver by base)
 
-| PR base | Driver | Ends at |
-|---|---|---|
-| Integration branch (`cursor/*-integration-*`, or an execute-plan `base_branch`) | `/babysit-plus` | Squash merge into the integration branch |
-| `main` | `/babysit-uat` | Pre-UAT E2E green on the merge SHA |
-| Anything else | `/babysit-plus` | Squash merge; the run comments the unexpected base on the issue |
+**Canonical table:** [autonomous-pr-policy.md](../autonomous-pr-policy.md) §Driver routing rows 10–11. This doc does not duplicate it.
 
-Plain `/babysit` is not a driver for agent PRs. It does not triage threads, apply fixes or gate the merge.
-
-For a pipeline delivery with `Method: PR` the base is `main`, so the driver is `/babysit-uat`. Its remedial loop (`/e2e-debug`, at most 3 rounds) then applies to the delivery run.
+For `Method: PR` with base `main`, the driver is `/babysit-plus`; pre-UAT is async. A red `main` is handled outside the delivery session (policy §Post-merge pre-UAT; routing spec §8 C1).
 
 ## Proposed changes (not applied)
 
@@ -68,25 +62,7 @@ Phases are independent and each is one outcome, per `atomic-pr-policy.md`.
 
 ### Phase 1: policy, prompt and guard (docs and scripts only)
 
-**1a. `docs/agent-efficiency/autonomous-pr-policy.md`, §Babysit skill family.** Add this family row to the table:
-
-```markdown
-| Issue-pipeline delivery PR (`Method: PR`, or any PR in the R1 scope) | Yes — driver per the decision rule below; delivery run keeps `busy` until the driver's gate passes (R3, R7) |
-```
-
-and add this subsection directly under the table, so the policy is self-contained:
-
-```markdown
-### Issue-pipeline delivery PRs
-
-| PR base | Driver | Ends at |
-|---|---|---|
-| Integration branch (`cursor/*-integration-*`, or an execute-plan `base_branch`) | `/babysit-plus` | Squash merge into the integration branch |
-| `main` | `/babysit-uat` | Pre-UAT E2E green on the merge SHA, then DoD ticks and `finish-work` (light-plan parity, R7) |
-| Anything else | `/babysit-plus` | Squash merge; the run comments the unexpected base on the issue |
-
-Plain `/babysit` is not a driver for agent PRs.
-```
+**1a. `docs/agent-efficiency/autonomous-pr-policy.md`, §Babysit skill family.** **Delivered** (`cursor/babysit-routing-phase1-b077`) — family row plus §Driver routing (single canonical table). No separate issue-pipeline subsection table.
 
 **1b. `docs/agent-efficiency/github-issue-workflow-behaviour.md`, §Delivery contract.** Replace the current obligation 4 (remove `busy`) with the two obligations below. The old obligation 4 becomes 5 and is kept as written:
 
@@ -99,10 +75,9 @@ Plain `/babysit` is not a driver for agent PRs.
 
 ```js
 PR:
-  'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from the base branch (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection): ' +
-  '`/babysit-uat` (read `.cursor/skills/babysit-uat/SKILL.md`, or `.claude/skills/babysit-uat/SKILL.md` in Claude Code) when the base is `main`, ' +
-  'otherwise `/babysit-plus` (read `.cursor/skills/babysit-plus/SKILL.md`, or `.claude/skills/babysit-plus/SKILL.md`). ' +
-  'Read the skill file named by the policy subsection (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection) for this PR\'s base branch, and follow it to completion. Do not invoke it through the Skill tool. After the driver ends, tick the DoD and run `finish-work` only when its gate has passed.',
+  'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from autonomous-pr-policy §Driver routing (rows 10–11; both `/babysit-plus`). ' +
+  'Read `.cursor/skills/babysit-plus/SKILL.md` (or `.claude/skills/babysit-plus/SKILL.md` in Claude Code) and follow it to completion. Do not invoke it through the Skill tool. ' +
+  'After squash merge, tick the DoD and run `finish-work`. Pre-UAT runs async in Actions.',
 ```
 
 The prompt names the policy and the skill file. It does not restate the base-branch mapping, so the policy stays the only source of that rule (R4).

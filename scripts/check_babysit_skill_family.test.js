@@ -83,11 +83,11 @@ test('GATE_SCRIPT_RE requires babysit_pr_reviews.js gate subcommand', () => {
   assert.equal(GATE_SCRIPT_RE.test('gate --pr <url> only'), false);
 });
 
-test('validateBabysitSkillFamily fails when issue-pipeline subsection is removed', () => {
+test('validateBabysitSkillFamily fails when Driver routing heading is removed', () => {
   withCopiedRepo((tmp) => {
     const policyPath = path.join(tmp, POLICY_REL);
-    const stripped = fs.readFileSync(policyPath, 'utf8').replace('### Issue-pipeline delivery PRs', '');
+    const stripped = fs.readFileSync(policyPath, 'utf8').replace('### Driver routing', '');
     fs.writeFileSync(policyPath, stripped);
-    assert.throws(() => validateBabysitSkillFamily(tmp), /Issue-pipeline delivery PRs/);
+    assert.throws(() => validateBabysitSkillFamily(tmp), /Driver routing/);
   });
 });
