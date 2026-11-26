@@ -28,7 +28,9 @@ test('resolveMission: analyse requires issue_number', () => {
 test('resolveMission: input is trimmed and case-folded; unknown missions refused', () => {
   assert.deepEqual(resolveMission({ mission: '  ANALYSE ', issueNumber: 7 }), { ok: true, mission: 'analyse' });
   assert.deepEqual(resolveMission({ mission: '', issueNumber: null }), { ok: true, mission: 'board' });
-  assert.equal(resolveMission({ mission: 'deliver', issueNumber: 1 }).ok, false);
+  assert.equal(resolveMission({ mission: 'deliver', issueNumber: null }).ok, false);
+  assert.deepEqual(resolveMission({ mission: 'deliver', issueNumber: 1 }), { ok: true, mission: 'deliver' });
+  assert.equal(resolveMission({ mission: 'release', issueNumber: 1 }).ok, false);
 });
 
 test('missionGuard: analyse stops at Ready without launch', () => {
@@ -36,6 +38,13 @@ test('missionGuard: analyse stops at Ready without launch', () => {
   assert.equal(blocked?.row, 'mission.analyse.complete');
   assert.equal(missionGuard('In progress', 'analyse')?.row, 'mission.analyse.post-ready');
   assert.equal(missionGuard('To do', 'analyse'), null);
+});
+
+test('missionGuard: deliver allows Ready and In progress only', () => {
+  assert.equal(missionGuard('Ready', 'deliver'), null);
+  assert.equal(missionGuard('In progress', 'deliver'), null);
+  assert.equal(missionGuard('To do', 'deliver')?.row, 'mission.deliver.premature');
+  assert.equal(missionGuard('In Main', 'deliver')?.row, 'mission.deliver.out-of-scope');
 });
 
 test('missionGuard: analyse allows Backlog and In analysis; Done is post-ready', () => {
@@ -163,9 +172,13 @@ test('wake CLI refuses bad input before any dispatch (no gh call needed)', () =>
   assert.equal(analyseWithoutIssue.status, 1);
   assert.match(analyseWithoutIssue.stderr, /requires a positive issue_number/);
 
-  const unknownMission = run('--issue', '5', '--mission', 'deliver');
+  const unknownMission = run('--issue', '5', '--mission', 'release');
   assert.equal(unknownMission.status, 1);
   assert.match(unknownMission.stderr, /mission must be one of/);
+
+  const deliverWithoutIssue = run('--mission', 'deliver');
+  assert.equal(deliverWithoutIssue.status, 1);
+  assert.match(deliverWithoutIssue.stderr, /requires a positive issue_number/);
 
   const typoFlag = run('--issue', '5', '--lvie');
   assert.equal(typoFlag.status, 1);
@@ -180,4 +193,30 @@ test('decide: an analyse-only issue at Ready stops on a board tick; removing the
   assert.equal(held.row, 'mission.analyse.complete');
   const released = decide({ ...facts, labels: (facts.labels || []).filter((label) => label !== 'analyse-only') }, config);
   assert.equal(released.row, 'ready.launch');
+});
+
+test('decide: mission deliver at Ready launches; at To do is premature', () => {
+  const config = loadConfig();
+  const ready = decide({ ...readyFactsBase(), mission: 'deliver' }, config);
+  assert.equal(ready.type, 'launch');
+  assert.equal(ready.row, 'ready.launch');
+  const premature = decide(
+    { mode: 'on', onBoard: true, stage: 'To do', mission: 'deliver', now: Date.now() },
+    config,
+  );
+  assert.equal(premature.row, 'mission.deliver.premature');
+});
+
+test('decide: programme mismatch at Ready blocks with question (PIPE-V2-D-DELIVER-006)', () => {
+  const config = loadConfig();
+  const action = decide(
+    {
+      ...readyFactsBase(),
+      deliveryProgrammeMismatch: true,
+    },
+    config,
+  );
+  assert.equal(action.type, 'set-blocked');
+  assert.equal(action.reason, 'question');
+  assert.equal(action.row, 'ready.method-programme-mismatch');
 });

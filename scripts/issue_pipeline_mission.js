@@ -15,9 +15,15 @@ const MISSIONS = {
     description: 'Backlog intake through convergence to Ready only; never `ready.launch`.',
     requiresIssue: true,
   },
+  deliver: {
+    description: 'Ready and In progress delivery only.',
+    requiresIssue: true,
+  },
 };
 
 const ANALYSE_ALLOWED_STAGES = new Set(['Backlog', 'To do', 'In analysis']);
+const DELIVER_ALLOWED_STAGES = new Set(['Ready', 'In progress']);
+const DELIVER_PREMATURE_STAGES = new Set(['Backlog', 'To do', 'In analysis']);
 const POST_DELIVERY_STAGES = new Set(['In progress', 'In Main', 'In UAT', 'Done']);
 
 /**
@@ -56,6 +62,14 @@ function missionGuard(stage, mission) {
     }
     if (!ANALYSE_ALLOWED_STAGES.has(stage)) {
       return { type: 'none', reason: 'mission-analyse-out-of-scope', row: 'mission.analyse.out-of-scope' };
+    }
+  }
+  if (mission === 'deliver') {
+    if (DELIVER_PREMATURE_STAGES.has(stage)) {
+      return { type: 'none', reason: 'mission-deliver-premature', row: 'mission.deliver.premature' };
+    }
+    if (!DELIVER_ALLOWED_STAGES.has(stage)) {
+      return { type: 'none', reason: 'mission-deliver-out-of-scope', row: 'mission.deliver.out-of-scope' };
     }
   }
   return null;

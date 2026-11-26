@@ -219,12 +219,45 @@ function deliveryMethod(body) {
   return 'PR';
 }
 
+/** True when `Method:` is `PR` but the Delivery plan section looks like a multi-phase programme (PIPE-V2-D-DELIVER-006). */
+function deliveryMethodProgrammeMismatch(body) {
+  if (deliveryMethod(body) !== 'PR') {
+    return false;
+  }
+  const lines = String(body || '').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^#{1,4}\s*Delivery plan\s*$/i.test(line));
+  if (start < 0) {
+    return false;
+  }
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^#{1,4}\s/.test(line));
+  const section = end < 0 ? rest : rest.slice(0, end);
+  const methodField =
+    /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\|?\s*[*_]*(?:method|mechanism)[*_]*\s*[:|]/i;
+  for (const line of section) {
+    if (methodField.test(line)) {
+      continue;
+    }
+    if (/^\s*[-*+]\s+\[[ xX]\]\s+P\d+\b/i.test(line)) {
+      return true;
+    }
+    if (/^\s*[-*+]\s+P\d+\s+[—–-]/i.test(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Start one Cursor run for the issue. Reuses the existing launcher and prompt builder, so the
  * run is the same as an old-engine launch. `deps` is for tests.
  */
 const METHOD_PROMPTS = {
-  PR: '',
+  PR:
+    'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from the base branch (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection): ' +
+    '`/babysit-uat` (read `.cursor/skills/babysit-uat/SKILL.md`, or `.claude/skills/babysit-uat/SKILL.md` in Claude Code) when the base is `main`, ' +
+    'otherwise `/babysit-plus` (read `.cursor/skills/babysit-plus/SKILL.md`, or `.claude/skills/babysit-plus/SKILL.md`). ' +
+    "Read the skill file named by the policy subsection (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection) for this PR's base branch, and follow it to completion. Do not invoke it through the Skill tool. After the driver ends, tick the DoD and run `finish-work` only when its gate has passed.",
   'light-plan':
     'Delivery method: light-plan. Deliver this issue with the procedure in `.cursor/skills/light-plan/SKILL.md` (integration branch, phase PRs, one release PR that `Refs` this issue).',
   'execute-plan':
@@ -383,5 +416,6 @@ module.exports = {
   doorbellRingFailed,
   deriveLaunchFacts,
   deliveryMethod,
+  deliveryMethodProgrammeMismatch,
   launchIssue,
 };

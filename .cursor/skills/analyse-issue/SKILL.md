@@ -52,7 +52,7 @@ The `analyse-only` label is what stops the issue at Ready (PIPE-V2-D-ANALYSE-004
 | `question` | Wait for human reply; human comment may wake stage agent on next engine tick |
 | `decision`, `sensitive`, `paused` | Report owner; do not override |
 | `no-convergence`, `stalled` | Report owner; optional human clear + restart from To do |
-| `Ready` | Success — stop; delivery is a different skill (`mission=deliver`, planned) |
+| `Ready` | Success — stop; delivery is [`delivery-issue`](../delivery-issue/SKILL.md) (`mission=deliver`) |
 
 ## Rules
 
@@ -60,11 +60,10 @@ The `analyse-only` label is what stops the issue at Ready (PIPE-V2-D-ANALYSE-004
 - Evidence on the issue, not only in chat.
 - Refs pipeline v2 [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385).
 
-## Related missions (future)
+## Related missions
 
-| Skill (planned) | `mission` |
-|-----------------|-----------|
-| Deliver / implement | `deliver` |
-| E2E / UAT promotion | `release` or `uat` |
+| Skill | `mission` |
+|-------|-----------|
+| Deliver / implement | `deliver` — see [delivery-issue](../delivery-issue/SKILL.md) and `github-issue-workflow-operations.md` §Deliver mission |
 
-Same `issue-pipeline-v2.yml` inputs; see `github-issue-workflow-operations.md` §Analyse mission.
+Same `issue-pipeline-v2.yml` inputs.

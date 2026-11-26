@@ -2,11 +2,11 @@
 'use strict';
 
 /**
- * Agent helper: wake pipeline v2 for one issue (analyse-issue skill).
+ * Agent helper: wake pipeline v2 for one issue (analyse-issue / delivery-issue skills).
  * Dispatches issue-pipeline-v2.yml with issue_number, mission, and live flag.
  *
  * Usage:
- *   node scripts/issue_pipeline_wake.js --issue <n> --mission analyse [--live]
+ *   node scripts/issue_pipeline_wake.js --issue <n> --mission analyse|deliver [--live]
  *
  * Unknown arguments are refused, so a typo such as `--lvie` cannot quietly turn a live wake into a
  * preview. Requires `gh` authenticated with permission to dispatch workflows on this repo.
@@ -16,7 +16,7 @@ const { spawnSync } = require('node:child_process');
 const { resolveMission } = require('./issue_pipeline_mission');
 const { resolveDispatchTarget } = require('./issue_pipeline_v2_dispatch');
 
-const USAGE = 'Usage: node scripts/issue_pipeline_wake.js --issue <n> --mission analyse [--live]';
+const USAGE = 'Usage: node scripts/issue_pipeline_wake.js --issue <n> --mission analyse|deliver [--live]';
 
 /**
  * @param {string[]} argv full process.argv

@@ -115,7 +115,8 @@ A delivery agent, whatever the method, must:
 2. reference the issue as `Refs #n` in **every** PR it opens, never `Closes` / `Fixes` / `Resolves` (those auto-close the
    issue on merge; an issue must stay open through UAT and prod), including the release PR of a light-plan;
 3. tick the **delivery** Definition of Done as items land (mergeable work and automated verification only — **not** live board soaks; see [soak-testing.md](./soak-testing.md). Unticked rows that **start** with `<!-- soak-dod:defer -->` do not block `progress.finished` — `dodComplete` in `issue_pipeline_v2_release.js`);
-4. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
+4. keep `busy` while the PR it opened is open and a babysit driver ([`autonomous-pr-policy.md`](./autonomous-pr-policy.md) §Babysit skill family, issue-pipeline subsection) is working it. For `Method: PR` the end state is Pre-UAT green on the merge SHA, then DoD ticks and `finish-work`, as light-plan does;
+5. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
 
 A PR is linked to an issue when its body says `Refs|Closes|Fixes|Resolves #n` and it appears in the issue's timeline. Only
 merges into `main` count; phase PRs merged into an integration branch are open or closed work, not delivery.

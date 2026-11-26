@@ -14,7 +14,13 @@ const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./i
 const { validatePipelineDispatch, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
-const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
+const {
+  deliveryMethod,
+  deliveryMethodProgrammeMismatch,
+  deriveLaunchFacts,
+  launchIssue,
+  doorbellRingFailed,
+} = require('./issue_pipeline_v2_launch');
 const {
   deployContains,
   deriveDeliveryFacts,
@@ -197,6 +203,7 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
   if (canonical === 'Ready') {
     return {
       deliveryMethod: deliveryMethod(entry.issue.body),
+      deliveryProgrammeMismatch: deliveryMethodProgrammeMismatch(entry.issue.body),
       launch: deriveLaunchFacts({
         comments,
         engineLogins: config.engine.logins,

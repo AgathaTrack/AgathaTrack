@@ -32,6 +32,7 @@
  */
 
 const { missionGuard } = require('./issue_pipeline_mission');
+const { deliveryMethodProgrammeMismatch } = require('./issue_pipeline_v2_launch');
 const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
 const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
 const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
@@ -315,6 +316,9 @@ function decideReady(facts, config) {
   // is what holds it. Removing the label, a human decision, lets the general pipeline launch delivery.
   if ((facts.labels || []).some((label) => String(label).trim().toLowerCase() === 'analyse-only')) {
     return { type: 'none', reason: 'mission-analyse-complete', row: 'mission.analyse.complete' };
+  }
+  if (facts.deliveryProgrammeMismatch) {
+    return setBlocked('question', 'ready.method-programme-mismatch');
   }
   const ownerApprovedDelivery = (facts.labels || []).some(
     (label) => String(label).trim().toLowerCase() === 'owner-approved-delivery',

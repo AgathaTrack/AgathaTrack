@@ -2,7 +2,8 @@
 title: Issue pipeline delivery PRs — babysit gap and proposed fix
 owner: Documentation Team
 audience: both
-status: proposed
+status: in-delivery
+status_note: Phase 1 shipped 2026-11-26 (policy, METHOD_PROMPTS.PR, delivery contract, guard markers)
 last_updated: 2026-11-26
 tags: [agent-efficiency, github-issues, babysit, pipeline]
 ---

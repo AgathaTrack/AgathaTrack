@@ -77,8 +77,19 @@ The **babysit skill family** is every agent entry that opens, updates, or merges
 | `/dependabot-batch` | Yes — Phase 3 babysit+ (wait, reply+resolve, `gate`) + Phase 5 `/babysit-uat` |
 | `/execute-plan` workers (`triage-review`) | Yes — reply and resolve every listed conversation; `tick` relaunches while any stay unresolved |
 | `/execute-plan` driver | Yes — `tick` PR-ladder 5 blocks on `unresolved_threads` (GraphQL; CCR route in Claude Code cloud sessions); ladder 9 waits for Copilot on young PRs to **`main` only**; driver arms auto-merge when the ladder passes (does **not** invoke `babysit_pr_reviews.js`; workers + ruleset enforce resolve-all) |
+| Issue-pipeline delivery PR (`Method: PR`, or any PR in the R1 scope in `docs/agent-efficiency/plans/issue-pipeline-babysit-gap.md`) | Yes — driver per the decision rule below; delivery run keeps `busy` until the driver's gate passes |
 | `.cursor/rules/pr-hygiene.mdc` | Points agents at §Babysit skill family and §Automatic reviews |
 | Claude **steward** skill | Same pointers for Claude-driven PRs |
+
+### Issue-pipeline delivery PRs
+
+| PR base | Driver | Ends at |
+|---|---|---|
+| Integration branch (`cursor/*-integration-*`, or an execute-plan `base_branch`) | `/babysit-plus` | Squash merge into the integration branch |
+| `main` | `/babysit-uat` | Pre-UAT E2E green on the merge SHA, then DoD ticks and `finish-work` (light-plan parity) |
+| Anything else | `/babysit-plus` | Squash merge; the run comments the unexpected base on the issue |
+
+Plain `/babysit` is not a driver for agent PRs.
 
 **Doc drift guard:** `node scripts/check_babysit_skill_family.js` (pre-push and CI governance — see `_reusable-test.yml`).
 
