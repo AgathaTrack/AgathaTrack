@@ -29,7 +29,7 @@ push; never defer it to a debt issue.
 ## Issue links
 
 A PR for an issue says `Refs #n`, never `Closes` / `Fixes` / `Resolves`
-([delivery contract](../../../docs/agent-efficiency/github-issue-workflow.md#delivery-contract)).
+([delivery contract](../../../docs/agent-efficiency/github-issue-workflow-behaviour.md#delivery-contract)).
 
 ## Everything else
 

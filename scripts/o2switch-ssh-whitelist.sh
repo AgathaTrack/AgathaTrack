@@ -34,6 +34,12 @@ curl_api() {
       echo "::error::o2switch API error: $(echo "$response" | jq -c '.errors // .messages // .')" >&2
       exit 1
     fi
+    local success_type
+    success_type="$(echo "$response" | jq -r '.data.success_type // empty')"
+    if [ "$success_type" = "warning" ]; then
+      echo "::error::o2switch API warning (rule not applied yet): $(echo "$response" | jq -c '.messages // .')" >&2
+      exit 1
+    fi
   fi
   echo "$response"
 }
