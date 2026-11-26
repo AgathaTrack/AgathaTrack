@@ -36,7 +36,7 @@ Whether an agent may merge is defined in [`AGENTS.md`](../../AGENTS.md) §Autono
 | `/babysit-uat` | Babysit+ through merge, then in-session pre-UAT watch — only on routes in §Driver routing rows 2, 4, 8b and 12 |
 | `/execute-plan` (v1 schema-only plans) | Multi-phase orchestrator; babysit+ on phases, babysit-uat on final main merge. **v2:** `tick` and the driver own merge, pre-UAT and promotion; no babysit skill runs on plan PRs. |
 
-Routing for any PR is in §Driver routing below. Do not restate it elsewhere. During v1 execute-plan, use **babysit-plus** for intermediate phase PRs and **babysit-uat** for the final PR to `main` — never plain babysit alone.
+Routing for any PR is in §Driver routing below. Other entry points may summarize it but must not contradict it. **Execute-plan v1 (historical):** intermediate phase PRs use **babysit-plus**; final PR to `main` uses **babysit-uat**. v2 uses row 1 only.
 
 ### Execute-plan (v2)
 
@@ -111,6 +111,8 @@ The **babysit skill family** is every agent entry that opens, updates, or merges
 | — | Any base not listed above, for a programme or pipeline PR | `/babysit-plus`; comment the unexpected base on the issue | Squash merge |
 
 `/babysit-uat` is the driver for rows 2, 4, 8b and 12 only. Plan remedials are owned by row 1 (`tick`), not row 2. Row 2 covers standalone `/e2e-debug` remedials.
+
+**Execute-plan v1 (historical).** Not in the table above: intermediate phase PRs → `/babysit-plus`; final programme PR to `main` → `/babysit-uat`. Skills mark these "v1 only". v2 supersedes them with row 1.
 
 ### Issue-pipeline delivery PRs
 

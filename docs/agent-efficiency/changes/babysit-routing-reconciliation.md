@@ -2,7 +2,9 @@
 title: Babysit driver routing — review and fix spec
 owner: Documentation Team
 audience: both
-status: active
+status: in-delivery
+status_since: 2026-11-26
+folds_into: docs/agent-efficiency/autonomous-pr-policy.md
 last_updated: 2026-11-26
 tags: [agent-efficiency, babysit, policy, routing]
 ---

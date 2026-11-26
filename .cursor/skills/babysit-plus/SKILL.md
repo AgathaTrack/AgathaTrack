@@ -229,7 +229,7 @@ When babysit+ or babysit-uat merges a **child** plan PR (not the roadmap parent)
 
 **During `/execute-plan` (v2):** Phase PR squash-merge is not session completion — continue the tick loop. See `docs/agent-efficiency/plans/execute-plan-v2.md`.
 
-**Babysit+ scope ends here** (not the session) — no pre-UAT polling or deploy. Final merge to `main` when pre-UAT must pass → **/babysit-uat**.
+**Babysit+ scope ends here** (not the session) — no in-session pre-UAT watch. Default `main` programme and pipeline PRs end at squash merge; pre-UAT runs async in Actions. Use **`/babysit-uat`** only on policy §Driver routing rows 2, 4, 8b and 12.
 
 ### 8. Post-merge (out of scope for babysit+)
 
@@ -237,8 +237,8 @@ When the PR merges to **`main`**, **GitHub Actions** runs `pre-uat-e2e.yml` asyn
 
 | Layer | Owns |
 |-------|------|
-| **GitHub Actions** | Pre-UAT E2E, promote tag, deploy, prod-ready |
-| **`/babysit-uat`** | Final merge to `main` + pre-UAT gate + remedial loop |
+| **GitHub Actions** | Pre-UAT E2E, promote tag, deploy, prod-ready (async after most plus-driven merges) |
+| **`/babysit-uat`** | Rows 2, 4, 8b, 12 — merge + in-session pre-UAT gate + remedial loop |
 | **Human** | [uat-promote-manual.md](../../../docs/e2e/uat-promote-manual.md); ops localhost replay via `scripts/agent-uat-babysit.sh` |
 
 **UAT prod-ready is not a phase gate** for execute-plan. E2E/deploy failure does **not** halt the orchestrator.

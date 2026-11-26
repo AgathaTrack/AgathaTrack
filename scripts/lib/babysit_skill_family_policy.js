@@ -93,7 +93,13 @@ function validateDriverRoutingInvariants(repoRoot) {
     [
       DRIVER_ROUTING_HEADING,
       '| 2 |',
+      '| 4 |',
+      '| 8b |',
+      '| 10 |',
+      '| 11 |',
       '| 12 |',
+      '| 13 |',
+      '| 14 |',
       '`/babysit-uat` is the driver for rows 2, 4, 8b and 12 only',
     ],
     `${POLICY_REL} §Driver routing`,
@@ -154,8 +160,10 @@ function validateBabysitSkillFamily(repoRoot = path.resolve(__dirname, '../..'))
   return { ok: true, filesChecked: FAMILY_SKILL_FILES.length + 1 };
 }
 
+const ROUTING_FIXTURE_FILES = [MERGE_POLICY_REL, SPAWN_SPRINT_REL, WATCHDOG_REL];
+
 function copyFamilyFixturesToDir(targetRoot, sourceRoot = path.resolve(__dirname, '../..')) {
-  for (const rel of [POLICY_REL, ...FAMILY_SKILL_FILES]) {
+  for (const rel of [POLICY_REL, ...FAMILY_SKILL_FILES, ...ROUTING_FIXTURE_FILES]) {
     const src = path.join(sourceRoot, rel);
     const dest = path.join(targetRoot, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
