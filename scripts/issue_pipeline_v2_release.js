@@ -62,6 +62,14 @@ async function listLinkedPrs({ owner, repo, issueNumber, token, restFn = rest })
   return prs;
 }
 
+/** Deferred catalog soaks may stay unticked in delivery DoD without blocking In Main (PIPE-V2-D-SOAK-010). */
+const DEFERRED_SOAK_DOOD_LINE =
+  /SOAK-REG-\d+|<!--\s*soak-dod:defer\s*-->|\bcatalog soak\b/i;
+
+function isDeferredSoakDoDLine(line) {
+  return DEFERRED_SOAK_DOOD_LINE.test(String(line || ''));
+}
+
 /** True when the checklist sections have no unticked box; no boxes at all counts as complete. */
 function dodComplete(body) {
   const lines = String(body || '').split(/\r?\n/);
@@ -73,6 +81,9 @@ function dodComplete(body) {
       continue;
     }
     if (inSection && /^\s*[-*]\s+\[ \]/.test(line)) {
+      if (isDeferredSoakDoDLine(line)) {
+        continue;
+      }
       return false;
     }
   }
@@ -248,6 +259,7 @@ module.exports = {
   linksIssue,
   listLinkedPrs,
   dodComplete,
+  isDeferredSoakDoDLine,
   deriveDeliveryFacts,
   buildResume,
   reopenedByEngine,

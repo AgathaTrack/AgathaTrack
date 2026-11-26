@@ -11,22 +11,23 @@ You were asked to make an issue **ready**: a reviewer should be able to approve 
 ## Procedure
 
 1. Read the issue, its comments and linked issues. Clear a stale runner deferral only: `node scripts/github_issue_workflow.js clear-queued --issue <n>` (removes `queued`, not `busy`). Read the canonical doc for the affected area (`docs/domains/<domain>/README.md`, then `docs/architecture/index.md`).
-2. **Escalation gate (before any spec pass):** Read **Delivery plan**, **Definition of Done**, and any soak markers in the body (e.g. `<!-- soak2:expect Blocked=decision … -->`). **Do not** put live board soaks in Definition of Done — use [soak-testing.md](../../../docs/agent-efficiency/soak-testing.md) and register `SOAK-REG-*` rows in [pipeline-soak-catalog.md](../../../docs/e2e/pipeline-soak-catalog.md). If the work requires an owner decision under AGENTS.md §Escalation (security/crypto, breaking API, production migration, CI gate change, product or legal call) **before any commit, branch, push, or pull request** — including “describe where secrets live” style security notes, even when the first delivery step is only setting **`Blocked=decision`** — do the following and **stop** (no 👍, no DoR pass):
+2. **Soak vs delivery DoD:** Do not put live board soaks in **Definition of Done**. Register deferred work as `SOAK-REG-*` in [pipeline-soak-catalog.md](../../../docs/e2e/pipeline-soak-catalog.md) and the soak box issue ([soak-testing.md](../../../docs/agent-efficiency/soak-testing.md)).
+3. **Escalation gate (before any spec pass):** Read **Delivery plan**, **Definition of Done**, and any soak markers in the body (e.g. `<!-- soak2:expect Blocked=decision … -->`). If the work requires an owner decision under AGENTS.md §Escalation (security/crypto, breaking API, production migration, CI gate change, product or legal call) **before any commit, branch, push, or pull request** — including “describe where secrets live” style security notes, even when the first delivery step is only setting **`Blocked=decision`** — do the following and **stop** (no 👍, no DoR pass):
    - Post one recommendation comment.
    - Read the issue's current org fields (`Stage`, `Attempts`, any existing `Blocked`) and patch **`Blocked=decision`** in the **same** payload — org field `PATCH` replaces the whole value set (`github-issue-workflow.md`); never send only `Blocked` or you erase `Stage`.
    - Clear the doorbell hold: `node scripts/github_issue_workflow.js finish-work --issue <n>` (the engine does not clear `busy` when you write `Blocked` by hand).
    The engine does not infer `escalation` from issue text. Never set **Security or Sensitive Area** to `No` to hide work that still needs an escalation stop.
-3. **Draft the missing sections from the codebase and docs**, in the issue body, using the sections of its template (task, feature or bug). Prefer concrete files, behaviour and acceptance criteria over prose. Do not invent product decisions.
-4. **Check the mechanical DoR**: save the body to a file and run
+4. **Draft the missing sections from the codebase and docs**, in the issue body, using the sections of its template (task, feature or bug). Prefer concrete files, behaviour and acceptance criteria over prose. Do not invent product decisions.
+5. **Check the mechanical DoR**: save the body to a file and run
 
    ```bash
    node scripts/issue_pipeline_v2_dor.js --body-file <file> --labels <label,label>
    ```
 
    Exit `0` means every required section is present and non-empty (and has a checkbox where required). Fix what it lists and re-run.
-5. **Judge** the rest: one outcome you can state in a sentence; understandable without the owner; not a duplicate of an open issue (search first); no open question only the owner can answer.
-6. **Pass:** react 👍 on the "Spec requested" comment. That also counts as your approval of this version of the body.
-7. **Cannot pass:** post **one** consolidated comment with only the questions you could not answer yourself, each with your recommendation, then set the `Blocked` field to `question`. Do not move `Stage`. A human reply wakes you; fold the answer into the body and re-check.
+6. **Judge** the rest: one outcome you can state in a sentence; understandable without the owner; not a duplicate of an open issue (search first); no open question only the owner can answer.
+7. **Pass:** react 👍 on the "Spec requested" comment. That also counts as your approval of this version of the body.
+8. **Cannot pass:** post **one** consolidated comment with only the questions you could not answer yourself, each with your recommendation, then set the `Blocked` field to `question`. Do not move `Stage`. A human reply wakes you; fold the answer into the body and re-check.
 
 ## Rules
 

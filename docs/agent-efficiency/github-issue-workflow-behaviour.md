@@ -112,7 +112,7 @@ A delivery agent, whatever the method, must:
 1. set `busy` when it starts (the engine sets it at launch; the agent keeps it while it works);
 2. reference the issue as `Refs #n` in **every** PR it opens, never `Closes` / `Fixes` / `Resolves` (those auto-close the
    issue on merge; an issue must stay open through UAT and prod), including the release PR of a light-plan;
-3. tick the **delivery** Definition of Done as items land (mergeable work and automated verification only — **not** live board soaks; see [soak-testing.md](./soak-testing.md));
+3. tick the **delivery** Definition of Done as items land (mergeable work and automated verification only — **not** live board soaks; see [soak-testing.md](./soak-testing.md). Unticked deferred rows with `SOAK-REG-*` or `<!-- soak-dod:defer -->` do not block `progress.finished` — `dodComplete` in `issue_pipeline_v2_release.js`);
 4. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
 
 A PR is linked to an issue when its body says `Refs|Closes|Fixes|Resolves #n` and it appears in the issue's timeline. Only

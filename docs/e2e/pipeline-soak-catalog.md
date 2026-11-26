@@ -5,6 +5,7 @@ audience: both
 status: active
 last_updated: 2026-11-26
 tags: [e2e, pipeline, soak, regression]
+related_prs: [2655]
 ---
 
 # Pipeline live soak catalog
@@ -15,7 +16,7 @@ Authoritative **steps and pass criteria** for live pipeline v2 board soaks. Poli
 
 | Column | Meaning |
 |--------|---------|
-| **Agent** | `yes` — agent runs without human steps; `no` — needs `soak-human` on fixture |
+| **Agent** | `yes` — agent runs without human steps; `no` — needs `soak-human` on fixture and operator preamble |
 | **Batch** | Soak box issue tracking the deferred run (when known) |
 
 ---
@@ -25,44 +26,62 @@ Authoritative **steps and pass criteria** for live pipeline v2 board soaks. Poli
 | Field | Value |
 |-------|-------|
 | **Source** | [#2448](https://github.com/AgathaTrack/AgathaTrack/issues/2448) (gate on `main` via #2479) |
-| **Agent** | yes |
+| **Agent** | **no** (operator must arm live ticks; see §Operator) |
 | **Batch** | TBD — open next `soak-box` issue |
-| **Status** | pending (deferred from delivery; unit tests green on `main`) |
+| **Status** | pending (unit tests green on `main`; board soak waived 2026-11-26) |
 
-### Preconditions
+### Operator (human) — once per soak window
 
-- `aat.enabled: true` in `.github/pipeline-agents.json`
-- Org fields `Acceptance` and `Acceptance fail reason` present
-- `ISSUE_PIPELINE_V2=on`, `ISSUE_PIPELINE_V2_LABEL=pipeline-beta` on fixtures only
-- Dedicated fixture issues (create fresh; do not reuse production delivery issues)
+1. In GitHub **Settings → Secrets and variables → Actions**, set repository variables (names only; values per [operations doc](../agent-efficiency/github-issue-workflow-operations.md)):
+   - `ISSUE_PIPELINE_V2=on`
+   - `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`
+   - Optional: `WIP_LIMIT=off` for drain-only windows; remove when done.
+2. Confirm org fields **Acceptance** and **Acceptance fail reason** exist on the Pawpet project.
+3. Record variable state and window start time on the soak box issue.
 
-### Scenarios (separate fixtures recommended)
+Delivery agents **must not** perform step 1; escalation applies.
 
-Each scenario is one fixture issue with `pipeline-beta`, minimal body, `Method: PR`, and delivery that merges a trivial doc commit to `main` so `lastMergeSha` exists.
+### Preconditions (fixtures)
 
-1. **Pass + UAT** — Agent acceptance pass marker for merge sha + successful `deploy-uat` containing that sha → `Stage` **In UAT**.
-2. **`quality` fail** — Actionable `aat-fail` `reason=quality` → stays **In Main** until a newer linked merge to `main`.
-3. **`scope` fail** — `reason=scope` → **In progress**, does not return **In Main** until newer merge; one scope relaunch per spec.
-4. **`implementation` fail** — Follow-up issue with `<!-- v2:follow-up of=#parent -->`, parent `Refs` on fix PR → parent suppressed until merge; **no** `Blocked` while follow-up or linked PR open.
+- `aat.enabled: true` in `.github/pipeline-agents.json` on `main`
+- One **fixture issue per scenario** (fresh titles; label `pipeline-beta` + `soak-human` until operator step above is done)
+- Fixture body: `Method: PR`, minimal acceptance criteria, delivery DoD without live soak rows
 
-### Pass criteria
+### Scenario A — Pass + UAT
 
-| Scenario | Pass when |
-|----------|-----------|
-| 1 | `Stage=In UAT`, `Acceptance=Passed` (or actionable pass), deploy run id cited |
-| 2 | `Stage=In Main`, `Acceptance fail reason=quality` |
-| 3 | `Stage=In progress`, no premature **In Main** on same `lastMergeSha` |
-| 4 | `Stage` and `Blocked` match §implementation rows in [github-issue-workflow-behaviour.md](../agent-efficiency/github-issue-workflow-behaviour.md) |
+1. Open fixture issue `#F`; delivery merges a trivial `Refs #F` PR to `main`; note `mergeSha`.
+2. Tick delivery DoD; `finish-work`; wait until `Stage` is **In Main** (engine may `launch-aat`).
+3. As listed agent, run acceptance (skill) or post pass marker:
+   ```bash
+   node scripts/github_issue_workflow.js aat-pass --issue <F> --merge <mergeSha> --body-file <verdict.md>
+   ```
+4. Wait for green `deploy-uat.yml` whose commit contains `mergeSha` (see `uatContainsLatestMerge` in tests).
+5. **Pass:** org field `Stage=In UAT`; evidence: deploy run URL + issue timeline on soak box issue.
 
-### Agent procedure (summary)
+### Scenario B — `quality` fail
 
-1. Read full scenario steps in engine spec tables (issue #2448 body / `issue_pipeline_v2_acceptance.test.js` names as oracle).
-2. For each scenario: create fixture → drive delivery to **In Main** → post verdict markers via `github_issue_workflow.js` aat-* **as listed agent** or trigger engine `launch-aat` and wait for ticks (record workflow run url).
-3. Post evidence on soak box issue; set catalog **Status** to `pass` with date.
+1. Reach **In Main** as in A.1–A.2.
+2. Post fail marker:
+   ```bash
+   node scripts/github_issue_workflow.js aat-fail --issue <F> --merge <mergeSha> --reason quality --body-file <verdict.md>
+   ```
+3. **Pass:** `Stage` stays **In Main**; `Acceptance fail reason=quality`; no move to In UAT until a newer `Refs #F` merge lands on `main`.
+
+### Scenario C — `scope` fail
+
+1. Reach **In Main**; post `aat-fail --reason scope` as in B.2.
+2. **Pass:** `Stage=In progress`; on ticks with same `lastMergeSha`, `progress.finished` does **not** return to In Main (see `issue_pipeline_v2_acceptance.test.js` “each fail reason”).
+3. After engine `aat-relaunch` once, expect delivery continuation comment with `v2:aat-relaunch`.
+
+### Scenario D — `implementation` fail
+
+1. File follow-up **#B** whose body starts with `<!-- v2:follow-up of=#F -->`; open fix PR with `Refs #F` and `Refs #B`.
+2. On parent **#F** at In Main, post `aat-fail --reason implementation`.
+3. **Pass:** parent **In progress**; while **#B** is open, parent does not get `Blocked=stalled` from implementation-quiet row; merging parent-linked PR to `main` ends suppression.
 
 ### Regression trigger
 
-Changes to `scripts/issue_pipeline_v2_acceptance.js`, `issue_pipeline_v2_decide.js`, `issue_pipeline_v2_apply.js`, `.github/pipeline-agents.json` `aat`, or deploy-uat promotion rules.
+Changes to `scripts/issue_pipeline_v2_acceptance.js`, `issue_pipeline_v2_decide.js`, `issue_pipeline_v2_apply.js`, `issue_pipeline_v2_release.js` (`dodComplete`), `.github/pipeline-agents.json` `aat`, or deploy-uat promotion.
 
 ---
 
