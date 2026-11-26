@@ -1,6 +1,6 @@
 ---
 name: light-plan
-description: Single-agent sequential plan — phase PRs merge-committed one by one into an integration branch, one release PR to main after a full self-review, then /babysit-uat through Pre-UAT green. The tracking issue stays open; with pipeline v2 on, the engine advances Stage (In Main → AAT → In UAT → Done) after finish-work — the delivery agent does not run /AgentAcceptance. Use for 2–4 phases. /execute-plan for scope/budget guarantees or longer programmes.
+description: Single-agent sequential plan — phase PRs merge-committed one by one into an integration branch, one release PR to main after a full self-review, then /babysit-uat through Pre-UAT green. The tracking issue stays open; with pipeline v2 on, the engine advances Stage after finish-work (In Main, then the agent-acceptance gate, then In UAT → Done) — the delivery agent does not run /AgentAcceptance. Use for 2–4 phases. /execute-plan for scope/budget guarantees or longer programmes.
 disable-model-invocation: true
 ---
 
@@ -83,24 +83,24 @@ Done when that last row has happened. A later message that only says `/babysit-p
 
 Pre-UAT green ends the **light-plan agent session**. Stage moves, agent acceptance, UAT deploy, and prod close happen on later engine ticks and deploy workflows — do not wait for **In UAT** or issue close in-session unless you are babysitting outside a programme.
 
+Do not end the turn while the release PR is open or Pre-UAT is unfinished, except [§Stop and ask](#stop-and-ask). Never ask the owner to merge, to run `/babysit-uat`, or to pick the work up in another session.
+
 ## Pipeline v2 (Stage and agent acceptance)
 
-When **`ISSUE_PIPELINE_V2=on`**, only the **engine** (and humans) write org **`Stage`**; the delivery agent never patches it. Legacy [`issue-agent-handlers`](../../../.github/scripts/issue-agent-handlers.js) skip issues the engine owns, so merge and UAT notify jobs do **not** move **`Stage`** for light-plan tracking issues in v2 mode.
+When the engine **owns** the tracking issue (`ISSUE_PIPELINE_V2=on` and either no `ISSUE_PIPELINE_V2_LABEL` soak scope or the issue carries that label — see `v2Owns` in [`pipeline-v2-owner.js`](../../../.github/scripts/pipeline-v2-owner.js)), only the **engine** (and humans) write org **`Stage`**; the delivery agent never patches it. Legacy [`issue-agent-handlers`](../../../.github/scripts/issue-agent-handlers.js) skip owned issues, so merge and UAT notify jobs do **not** move **`Stage`** for them. An unscoped soak label on a programme that lacks it is still handled by legacy writers until the label is added.
 
 | After the delivery session | Who | What |
 |----------------------------|-----|------|
 | `finish-work`, facts match `progress.finished` | Engine tick | **In progress → In Main** |
-| **`aat.enabled`** and both acceptance org fields present (repo default) | Engine **`launch-aat`** | A **different** tier-a agent runs [`/AgentAcceptance`](../agent-acceptance/SKILL.md) non-interactively on the merge SHA |
-| AAT pass + UAT deploy contains merge SHA | Engine tick | **In Main → In UAT** |
+| **`aat.enabled`** and both acceptance org fields present (repo default) | Engine **`launch-aat`** while **In Main** | A **different configured acceptance agent** (`acceptancePool` in `issue_pipeline_v2_acceptance.js`; prefers an identity that did not author the linked PRs) runs [`/AgentAcceptance`](../agent-acceptance/SKILL.md) non-interactively — the **agent acceptance gate**, not a board stage |
+| Agent acceptance satisfied + UAT deploy contains merge SHA | Engine tick | **In Main → In UAT** |
 | Prod deploy contains merge | Engine tick | **In UAT → Done**, issue closed |
 
-Merge to `main` alone does **not** jump to **In UAT** — the issue sits in **In Main** until acceptance (when gated) and a successful **`deploy-uat.yml`** run includes the release commit.
+Merge to `main` alone does **not** jump to **In UAT** — the issue sits in **In Main** until the acceptance gate (when enabled) passes and a successful **`deploy-uat.yml`** run includes the release commit.
 
-**Delivery agent must not:** run `/AgentAcceptance`, write **`Stage`**, **`Acceptance`**, or **`Acceptance fail reason`**, or close the tracking issue.
+**Delivery agent must not** (while the engine owns the issue): run `/AgentAcceptance`, write **`Stage`**, **`Acceptance`**, or **`Acceptance fail reason`**, or close the tracking issue.
 
-**Bootstrap** (`ISSUE_PIPELINE_V2` off or dry-run on this issue): an agent may move **`Stage`** only for a transition it satisfied, citing the transitions table in [`github-issue-workflow.md`](../../../docs/agent-efficiency/github-issue-workflow.md) §Pipeline v2 with evidence in a comment.
-
-Do not end the turn while the release PR is open or Pre-UAT is unfinished, except [§Stop and ask](#stop-and-ask). Never ask the owner to merge, to run `/babysit-uat`, or to pick the work up in another session.
+**Bootstrap** (`ISSUE_PIPELINE_V2` off, or the issue is outside engine scope / in dry-run): an agent may move **`Stage`** only for a transition it satisfied, citing the transitions table in [`github-issue-workflow.md`](../../../docs/agent-efficiency/github-issue-workflow.md) §Pipeline v2 with evidence in a comment.
 
 ## Recovery
 
