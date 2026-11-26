@@ -15,6 +15,7 @@ tags: [agent-efficiency,plans]
 | [execute-plan-v2.md](./execute-plan-v2.md) | Execute-plan v2 build spec — run to merged + deployed on UAT without stops (work packages, contracts, prompts) |
 | [issue-pipeline-automation.md](./issue-pipeline-automation.md) | Target issue pipeline (Pawpet board + assignee model) — proposal |
 | [issue-pipeline-dispatcher-spec.md](./issue-pipeline-dispatcher-spec.md) | Dispatcher implementation contract (companion to issue-pipeline-automation) |
+| [issue-pipeline-babysit-gap.md](./issue-pipeline-babysit-gap.md) | Proposal — agent-opened pipeline PRs have no babysit driver; policy, prompt, trigger and engine fallback — draft |
 
 Index: [../README.md](../README.md) — engines, issue lifecycle split, policies. Execute-plan operating docs: [../execute-plan-runtime.md](../execute-plan-runtime.md) · [../execute-plan-schema.md](../execute-plan-schema.md).
 
