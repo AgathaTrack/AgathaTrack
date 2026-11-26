@@ -208,7 +208,7 @@ Each step is one outcome (`atomic-pr-policy.md`). Steps 1–2 are prerequisites.
 | 3 | Fail-closed `Method: PR` check (optional) | `scripts/issue_pipeline_v2_launch.js` (`deliveryMethod` or a new validator) | new test cases | `github-issue-workflow-behaviour.md` §Launch | D4 |
 | 4 | Decision rows and label | `docs/agent-efficiency/github-issue-workflow-wire.md` (PIPE-V2-D-DELIVER-*), `docs/agent-efficiency/github-labels.md` (`delivery-issue`) | label list test if one exists | same | D1–D3 |
 | 5 | Skill files | `.cursor/skills/delivery-issue/SKILL.md`; `.claude/skills/delivery-issue/SKILL.md` (same procedure; separately authored, Claude mechanics in §4.6) | `scripts/check_babysit_skill_family.js` pattern: a check that the skill points to the policy and does not restate the base-branch table | `docs/agent-efficiency/github-issue-workflow-operations.md` cross-link | Steps 1–4 |
-| 6 | Soak: one Ready issue per method (`PR`, `light-plan`, `execute-plan`) under the soak label | none (evidence in `docs/agent-efficiency/changes/`) | soak log | soak evidence file | Step 5 |
+| 6 | Soak: one Ready issue per method (`PR`, `light-plan`, `execute-plan`) under the soak label | `delivery-issue-soak-evidence.md`, SOAK-REG-002 in catalog, `check_delivery_issue_skill.js` | automated pass; live deferred to soak box | soak evidence file | **Automated done**; live **deferred** (D6) |
 
 **Engineering notes for step 2:**
 
@@ -258,7 +258,7 @@ Closed in review:
 - **`finish-work` (closed):** the command is `node scripts/github_issue_workflow.js finish-work --issue <n>`, per `.cursor/skills/light-plan/SKILL.md` §Pre-UAT green.
 - **Mirror text (closed, changes §5 step 5):** `.claude/skills/analyse-issue/SKILL.md` is not identical to its Cursor counterpart (its description is Claude-specific), so mirrors are separately authored.
 
-Still open:
+Closed in review (additional):
 
-- **V15:** the `:11/:41` timer policy is not located in `docs/agent-efficiency` or `.github/workflows`. Drop it from the spec unless a citation appears.
-- **Symlink or copy:** the mirror files are not symlinks is unverified. Check with `ls -l` before creating `.claude/skills/delivery-issue/`. Not blocking, since the mirror is written as a new file.
+- **V15 (closed):** pipeline v2 cron `:11,:41 * * *` is in `.github/workflows/issue-pipeline-v2.yml` (`on.schedule`); sweeper policy PIPE-V2-HT-R-003 is cited from [github-issue-workflow-operations.md](../github-issue-workflow-operations.md).
+- **Symlink or copy (closed):** `.claude/skills/delivery-issue/SKILL.md` is a separate file (not a symlink); it delegates to `.cursor/skills/delivery-issue/SKILL.md` via `../../../.cursor/...`.

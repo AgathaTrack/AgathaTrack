@@ -85,6 +85,37 @@ Changes to `scripts/issue_pipeline_v2_acceptance.js`, `issue_pipeline_v2_decide.
 
 ---
 
-## SOAK-REG-002 — (placeholder)
+## SOAK-REG-002 — `/delivery-issue` and `mission=deliver` (per delivery method)
 
-Reserve for next deferred soak. Add rows here; do not add live soaks to delivery issue DoD.
+| Field | Value |
+|-------|-------|
+| **Source** | [delivery-issue change doc](../agent-efficiency/changes/delivery-issue-skill.md) step 6; shipped engine in PR #2662 |
+| **Agent** | **partial** — unit/dry-run yes; live board **no** until operator arms soak window |
+| **Batch** | TBD — next `soak-box` issue |
+| **Status** | **Deferred** 2026-11-26 — automated regression on `main`; live runs batched in soak box (owner D6) |
+
+### Automated regression (no board)
+
+Run on every CI / pre-push when pipeline scripts change:
+
+- `node --test scripts/issue_pipeline_v2_mission.test.js` — `mission=deliver` guards and `ready.launch`
+- `node --test scripts/issue_pipeline_v2_launch.test.js` — `METHOD_PROMPTS.PR`, programme mismatch
+- `node scripts/check_delivery_issue_skill.js`
+
+Evidence: [delivery-issue-soak-evidence.md](../agent-efficiency/changes/delivery-issue-soak-evidence.md).
+
+### Live board (operator — three fixtures, one per `Method:`)
+
+Preconditions match SOAK-REG-001 operator block (`ISSUE_PIPELINE_V2=on`, `ISSUE_PIPELINE_V2_LABEL=pipeline-beta`). Each fixture: **Ready**, converged spec, `## Delivery plan` with `Method: PR` | `light-plan` | `execute-plan`.
+
+| Method | Pass (minimum) |
+|--------|----------------|
+| `PR` | Owner invokes `/delivery-issue`; remove `analyse-only` if present; `delivery-issue` label set; wake `mission=deliver`; engine `ready.launch`; delivery run opens `Refs` PR and reaches babysit driver gate (or handoff comment if timeout) |
+| `light-plan` | Same intake; delegate follows light-plan skill through one phase PR babysat+ or documented handoff |
+| `execute-plan` | Fixture names frozen `plan_id`; one worker `tick` completes without babysit+ on plan PRs |
+
+**Pass:** evidence on soak box issue (issue timeline + PR URLs). Failures or manual steps stay on the soak box; they do not block delivery DoD.
+
+### Regression trigger
+
+Changes to `delivery-issue` skills, `issue_pipeline_mission.js`, `METHOD_PROMPTS`, or `deliveryMethodProgrammeMismatch`.
