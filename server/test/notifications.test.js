@@ -17,6 +17,7 @@ function buildMockPool(overrides = {}) {
             pet_id: 'pet-1',
             pet_name: 'Buddy',
             health_entry_id: 'he-1',
+            health_occurrence_id: 'occ-1',
             organization_id: 'org-1',
             title: 'Reminder',
             message: 'Time for checkup',
@@ -159,7 +160,11 @@ describe('Notifications API', () => {
       expect(n).toHaveProperty('pet_id', 'pet-1');
       expect(n).toHaveProperty('pet_name', 'Buddy');
       expect(n).toHaveProperty('health_entry_id', 'he-1');
-      expect(n).toHaveProperty('deep_link', '/pet/pet-1/events/he-1');
+      expect(n).toHaveProperty('health_occurrence_id', 'occ-1');
+      expect(n).toHaveProperty(
+        'deep_link',
+        '/pet/pet-1/events/he-1/occurrences/occ-1?source=notification',
+      );
       expect(n).toHaveProperty('organization_id', 'org-1');
       expect(n).toHaveProperty('title', 'Reminder');
       expect(n).toHaveProperty('message', 'Time for checkup');

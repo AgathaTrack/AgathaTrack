@@ -30,13 +30,15 @@ import {
 export function notificationToMap(row) {
   const petId = row.pet_id || null;
   const healthEntryId = row.health_entry_id || null;
+  const healthOccurrenceId = row.health_occurrence_id || null;
   return {
     id: row.id,
     user_id: row.user_id,
     pet_id: petId,
     pet_name: row.pet_name || null,
     health_entry_id: healthEntryId,
-    deep_link: buildNotificationDeepLink(petId, healthEntryId),
+    health_occurrence_id: healthOccurrenceId,
+    deep_link: buildNotificationDeepLink(petId, healthEntryId, healthOccurrenceId),
     organization_id: row.organization_id || null,
     title: row.title || '',
     message: row.message || '',

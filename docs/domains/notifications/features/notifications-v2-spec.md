@@ -3,7 +3,7 @@ title: Notifications — Activity, account & Agatha Suggestions
 owner: Product
 audience: both
 status: accepted (rev 2.5.1)
-last_updated: 2026-11-11
+last_updated: 2026-11-26
 tags: [domain,notifications,spec,suggestions,sharing]
 domain: notifications
 feature_id: notifications
@@ -288,7 +288,7 @@ deleted, and what Free limits apply.
 |---|---|
 | FR-CR-1 | The server MUST NOT create inbox rows with `kind=care` after the v2 cut-over. |
 | FR-CR-2 | Care reminders MUST continue to be delivered via push/local channels per reminder settings and D21/D25; they do **not** create Activity inbox rows or affect the notifications bell (Care Actions / Actions tab is the home). |
-| FR-CR-3 | Tapping a care reminder push MUST deep-link to **Care details** for that entry (`petEventView` when `healthEntryId` is set), not the Care date screen. |
+| FR-CR-3 | Tapping a care reminder push or in-app row with occurrence context MUST deep-link to the **Care date (occurrence) screen** (`/pet/:petId/events/:entryId/occurrences/:occurrenceId?source=notification` when `health_occurrence_id` or equivalent is set). Without an occurrence id, fall back to care item detail (`petEventView`). Instrument `occurrence_screen_opened{source: notification}`. |
 | FR-CR-4 | Care Actions (dashboard) and Actions (`/pc/events`) remain the single source of truth for due/overdue items. |
 | FR-CR-5 | Existing rows of type `overdue` / `due_soon` MUST be archived (not deleted) by migration and excluded from inbox lists and badge counts. Other `care`-kind rows are **reclassified** per §3.4, not archived. A blanket "archive all `care`" would hide ownership-transfer and memorial notices, which are stored as `general`/`care` today. |
 
@@ -1028,6 +1028,7 @@ Source: §0 above.
 | **N1**–**N14** | See §0 decision table. | locked | per §0 |
 | **N15** | For you **suggestion** cards: **Accept** requires `pet_id` and payload `recommendation_id`; otherwise show a localized error snackbar (no silent no-op). Dismiss / not-relevant guard against double-submit and show a localized failure snackbar. Inbox pet group headers use localized `petLabel` when the pet name is missing. | locked | review-followups-programme-9100 phase 5 |
 | **N16** | **Mark all read** (panel + full inbox): success shows `notificationsMarkedRead`; repository failure shows `notificationsMarkReadFailed` (no false success). Shared `performMarkAllRead` helper. | locked | truthful-release-debt P1 |
+| **N17** | Care reminder and care-linked inbox taps deep-link to the **occurrence screen** when `health_occurrence_id` is present (`source=notification`); otherwise care item detail. Refs #1540 / DEBT-D-NOTIF. | locked | notification-occurrence-deeplink |
 
 ## 19. Programme & rollout index
 

@@ -30,6 +30,8 @@ class AppNotification {
     this.petId,
     this.petName,
     this.healthEntryId,
+    this.healthOccurrenceId,
+    this.deepLink,
     this.organizationId,
     required this.title,
     required this.message,
@@ -52,6 +54,8 @@ class AppNotification {
   final String? petId;
   final String? petName;
   final String? healthEntryId;
+  final String? healthOccurrenceId;
+  final String? deepLink;
   final String? organizationId;
   final String title;
   final String message;
@@ -84,6 +88,8 @@ class AppNotification {
     String? petId,
     String? petName,
     String? healthEntryId,
+    String? healthOccurrenceId,
+    String? deepLink,
     String? organizationId,
     String? title,
     String? message,
@@ -106,6 +112,8 @@ class AppNotification {
       petId: petId ?? this.petId,
       petName: petName ?? this.petName,
       healthEntryId: healthEntryId ?? this.healthEntryId,
+      healthOccurrenceId: healthOccurrenceId ?? this.healthOccurrenceId,
+      deepLink: deepLink ?? this.deepLink,
       organizationId: organizationId ?? this.organizationId,
       title: title ?? this.title,
       message: message ?? this.message,

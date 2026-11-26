@@ -114,7 +114,8 @@
     "105_care_item_closed.sql",
     "106_support_intake_tables.sql",
     "107_care_items_table_rename.sql",
-    "108_drop_health_entry_compat_views.sql"
+    "108_drop_health_entry_compat_views.sql",
+    "109_notifications_health_occurrence_id.sql"
   ],
   "code_migrations": [
     "016_migrate_family_events_placements.sql",
