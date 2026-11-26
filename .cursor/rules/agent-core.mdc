@@ -26,6 +26,7 @@ alwaysApply: true
 | `/ui-design-deep` | Multi-screen design + implementation |
 | `/AgentAcceptance` | Holistic issue/PR acceptance — [`agent-acceptance` skill](../skills/agent-acceptance/SKILL.md) |
 | `/analyse-issue` | Issue pipeline spec + review until **Ready** (no delivery) — [`analyse-issue` skill](../skills/analyse-issue/SKILL.md) |
+| `/delivery-issue` | Ready → shipped on `main` + monitor until **Done** (opt-in) — [`delivery-issue` skill](../skills/delivery-issue/SKILL.md) |
 
 Each Tier 1 skill runs the **Router** first, then applicable protocols under `.cursor/agent-kernel/protocols/`.
 

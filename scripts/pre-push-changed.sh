@@ -209,6 +209,8 @@ run_governance() {
   node --test scripts/ci/flutter-shards.test.mjs scripts/ci/flutter-shard-runner.test.mjs
   node --test scripts/ci/detect-deploy-package-changed.test.js
   node scripts/check_skill_frontmatter.js
+  node scripts/check_delivery_issue_skill.js
+  node --test scripts/check_delivery_issue_skill.test.js
   node --test scripts/check_babysit_skill_family.test.js
   node --test scripts/babysit_pr_reviews.test.js scripts/ccr_gh_shim.test.js scripts/pr_review_request.test.js scripts/lib/pr_review_request_lib.test.js
   node scripts/validate_openapi.js
