@@ -33,7 +33,8 @@ function buildLaunchRecord({ runId, agent, agentUrl, purpose = 'delivery', stage
     // A promise, not the nonce: the run reveals the nonce only in its verdict (PIPE-V2-D-REV3-011).
     attrs.push(`commit=${commitOf(nonce)}`);
   }
-  const label = purpose === 'doorbell' ? 'Doorbell' : 'Delivery';
+  const label =
+    purpose === 'doorbell' ? 'Doorbell' : purpose === 'babysit' ? 'Babysit' : 'Delivery';
   return [
     `<!-- v2:launch ${attrs.join(' ')} -->`,
     `Started a ${label.toLowerCase()} run for \`${agent}\`${agentUrl ? `: ${agentUrl}` : ''}` +
@@ -72,7 +73,7 @@ function buildLaunchAcked({ runId }) {
 
 const RECORD = new RegExp(
   '<!--\\s*v2:(launch|launch-pending|launch-failed|launch-acked)' +
-    '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell))?' +
+    '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell|babysit))?' +
     '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done))?' +
     '(?:\\s+nonce=([a-f0-9]+))?(?:\\s+commit=([a-f0-9]{64}))?\\s*-->',
   'i',
@@ -167,9 +168,10 @@ async function doorbellRingFailed({ comments, engineLogins, config, agentId, sta
 }
 
 function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
-  const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter((record) =>
-    ['launch', 'launch-pending', 'launch-failed', 'launch-acked'].includes(record.kind) &&
-    record.purpose === 'delivery',
+  const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter(
+    (record) =>
+      ['launch', 'launch-pending', 'launch-failed', 'launch-acked'].includes(record.kind) &&
+      (record.purpose === 'delivery' || record.purpose === 'babysit'),
   );
   const latest = deliveryRecords.at(-1);
   const busy = (labels || []).includes('busy');
@@ -254,10 +256,9 @@ function deliveryMethodProgrammeMismatch(body) {
  */
 const METHOD_PROMPTS = {
   PR:
-    'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from the base branch (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection): ' +
-    '`/babysit-uat` (read `.cursor/skills/babysit-uat/SKILL.md`, or `.claude/skills/babysit-uat/SKILL.md` in Claude Code) when the base is `main`, ' +
-    'otherwise `/babysit-plus` (read `.cursor/skills/babysit-plus/SKILL.md`, or `.claude/skills/babysit-plus/SKILL.md`). ' +
-    "Read the skill file named by the policy subsection (autonomous-pr-policy §Babysit skill family, issue-pipeline subsection) for this PR's base branch, and follow it to completion. Do not invoke it through the Skill tool. After the driver ends, tick the DoD and run `finish-work` only when its gate has passed.",
+    'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from autonomous-pr-policy §Driver routing (rows 10–11; both `/babysit-plus`). ' +
+    'Read `.cursor/skills/babysit-plus/SKILL.md` (or `.claude/skills/babysit-plus/SKILL.md` in Claude Code) and follow it to completion. Do not invoke it through the Skill tool. ' +
+    'After squash merge, tick the DoD and run `finish-work`. Pre-UAT runs async in Actions.',
   'light-plan':
     'Delivery method: light-plan. Deliver this issue with the procedure in `.cursor/skills/light-plan/SKILL.md` (integration branch, phase PRs, one release PR that `Refs` this issue).',
   'execute-plan':

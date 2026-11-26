@@ -38,7 +38,8 @@ async function launch({ agent, issue, owner, repo, stage, method, nonce, purpose
     throw runnerQueuedError(active + localReservations, cap);
   }
   localReservations += 1;
-  const doorbellStage = purpose === 'delivery' ? 'In progress' : stage || 'In progress';
+  const doorbellStage =
+    purpose === 'delivery' ? 'In progress' : purpose === 'babysit' ? 'babysit' : stage || 'In progress';
   try {
     await restFn('POST', enc(owner, repo, `/actions/workflows/${WORKFLOW_FILE}/dispatches`), token, {
       ref: 'main',

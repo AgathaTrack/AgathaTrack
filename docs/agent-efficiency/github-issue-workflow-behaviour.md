@@ -70,6 +70,7 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 | In progress | the newest actionable acceptance verdict for the latest merge into `main` is `fail` with `reason=scope` or `reason=implementation` (`aat.enabled`, both fields, not a follow-up) | stays. `scope` relaunches delivery once; `implementation` waits for a follow-up whose body starts with this issue's marker, or for a linked PR. Neither sets `Blocked` while that work is still open. A newer merge into `main` ends the hold |
 | In progress | umbrella (an issue with GitHub sub-issues, PIPE-UMB-D-001): a sub-issue is not In Main, In UAT or Done (one closed as not planned is ignored) | stays, `progress.umbrella-waiting`, and the blockers are logged. Checked before the In Main move |
 | In progress | `busy` gone early or 24 h without activity | one resume (relaunch), then `Blocked=stalled`; issues the engine did not launch are never resumed. A resume that fails to start does not use the one resume: it is retried on the launch backoff, then `Blocked=launch-failed`. Not taken while a scope or implementation acceptance fail still holds |
+| In progress | `Method: PR`, `busy`, an open linked PR authored by a pipeline login, no delivery run in flight, idle ≥ `babysitFallbackHours` (default 4 h) | babysit launch (`purpose=babysit`, row `progress.babysit-fallback`) |
 | In Main | `aat.enabled` is off, or an acceptance field is missing, or the issue is a follow-up: an agent that did not author the PRs reviews what shipped against the issue's intent (does not gate) | stays |
 | In Main | umbrella: a sub-issue is not In Main, In UAT or Done | stays, `main.umbrella-waiting`. Checked before intent review, acceptance and the UAT check, so none of them runs for it |
 | In Main | that same flag-off path, and the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
@@ -115,14 +116,14 @@ A delivery agent, whatever the method, must:
 2. reference the issue as `Refs #n` in **every** PR it opens, never `Closes` / `Fixes` / `Resolves` (those auto-close the
    issue on merge; an issue must stay open through UAT and prod), including the release PR of a light-plan;
 3. tick the **delivery** Definition of Done as items land (mergeable work and automated verification only — **not** live board soaks; see [soak-testing.md](./soak-testing.md). Unticked rows that **start** with `<!-- soak-dod:defer -->` do not block `progress.finished` — `dodComplete` in `issue_pipeline_v2_release.js`);
-4. keep `busy` while the PR it opened is open and a babysit driver ([`autonomous-pr-policy.md`](./autonomous-pr-policy.md) §Babysit skill family, issue-pipeline subsection) is working it. For `Method: PR` the end state is Pre-UAT green on the merge SHA, then DoD ticks and `finish-work`, as light-plan does;
+4. keep `busy` while the PR it opened is open and a babysit driver ([`autonomous-pr-policy.md`](./autonomous-pr-policy.md) §Driver routing rows 10–11) is working it. For `Method: PR` the end state is squash merge (`/babysit-plus`), then DoD ticks and `finish-work`; pre-UAT runs asynchronously in Actions (R7);
 5. remove `busy` when finished, or set `Blocked` with a reason when it gives up.
 
 A PR is linked to an issue when its body says `Refs|Closes|Fixes|Resolves #n` and it appears in the issue's timeline. Only
 merges into `main` count; phase PRs merged into an integration branch are open or closed work, not delivery.
 
 **Light-plan programmes** (body `Method: light-plan`, skill: `.cursor/skills/light-plan/SKILL.md`): the delivery agent ends
-at Pre-UAT green on the release merge SHA — every **delivery** Definition of Done item ticked (live soaks excluded per [soak-testing.md](./soak-testing.md)), then `finish-work`. It does **not** close
+at squash merge of the release PR (`/babysit-plus`, policy row 6) — every **delivery** Definition of Done item ticked (live soaks excluded per [soak-testing.md](./soak-testing.md)), then `finish-work`; pre-UAT is async in Actions. It does **not** close
 the issue or run **`/AgentAcceptance`** (the acceptance skill forbids the session that shipped the release). While the engine
 **owns** the issue (`v2Owns` in `pipeline-v2-owner.js`: `ISSUE_PIPELINE_V2=on` and no soak scope label, or the issue carries
 `ISSUE_PIPELINE_V2_LABEL` when set), the delivery agent does **not** write **`Stage`**; **bootstrap** (engine off, dry-run, or
@@ -139,6 +140,10 @@ issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
   (run id) after it, or `v2:launch-failed`; `v2:launch-acked` follows the agent's busy report. `Attempts` holds the failed-run
   count. A pending record with no `busy` label is one failed start (the handoff never happened). An issue that is already
   `busy` is never launched again.
+- **Babysit resume (`purpose=babysit`).** When an open pipeline delivery PR stalls with `busy` still set, the engine may launch
+  a babysit run (`pipeline-claude-run.yml` with `stage=babysit`). Launch records use `purpose=babysit` (not a board `Stage`).
+  The prompt is the same babysit-plus driver text as `METHOD_PROMPTS.PR` in `issue_pipeline_v2_launch.js`. Event-driven babysit
+  on every PR push remains `auto-babysit.yml` dry-run; the engine fallback is the supported unattended path.
 - **Intent review:** `v2:intent-review agent=<login> merge=<sha>` asks an agent that did not author the linked PRs to review
   the merged change against the issue's original intent (skill: `.cursor/skills/intent-review-agent`). Each finding becomes a
   new issue attached as a GitHub sub-issue of #n and starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'

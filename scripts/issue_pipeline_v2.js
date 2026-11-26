@@ -92,6 +92,9 @@ async function resolveEditors({ comments, config, token, io }) {
  */
 async function buildReleaseFacts({ owner, repo, entry, canonical, comments, config, token, io }) {
   const prs = await (io.listLinkedPrs || listLinkedPrs)({ owner, repo, issueNumber: entry.number, token });
+  const labels = (entry.issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
+  const pipelineAuthors = new Set(['pawpet-claude', 'pawpet-bot']);
+  const openPipelinePrs = prs.filter((pr) => pr.state === 'open' && pipelineAuthors.has(pr.author));
   const facts = {
     deliveryMethod: deliveryMethod(entry.issue.body),
     ...deriveDeliveryFacts({ issue: entry.issue, prs, comments, engineLogins: config.engine.logins }),
@@ -99,6 +102,13 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
       comments,
       engineLogins: config.engine.logins,
     }),
+    launch: deriveLaunchFacts({
+      comments,
+      engineLogins: config.engine.logins,
+      labels,
+      attempts: entry.parsed.attempts,
+    }),
+    pipelineOpenPrs: openPipelinePrs.length,
   };
   if (canonical === 'In progress' || canonical === 'In Main') {
     // PIPE-UMB-D-001: an umbrella moves only when every sub-issue is at In Main, In UAT or Done.

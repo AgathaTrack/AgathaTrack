@@ -305,13 +305,21 @@ async function applyAction({ action: decided, ctx }) {
         let run = null;
         let failure = null;
         // Recorded before the handoff (a failure here throws before anything starts, so the next tick retries).
-        await comment(buildLaunchPending({ agent: action.agent }), 'comment:launch-pending');
+        const launchPurpose = action.purpose || 'delivery';
+        const launchStage = action.stage || (launchPurpose === 'babysit' ? 'babysit' : undefined);
+        await comment(buildLaunchPending({ agent: action.agent, purpose: launchPurpose }), 'comment:launch-pending');
         try {
           // The launcher marks the issue `busy` before the handoff; the plan shows that request too.
           calls.push({ method: 'POST', path: `${base}/labels`, body: { labels: ['busy'] } });
           run = ctx.dryRun
             ? { runId: 'dry-run', agentUrl: '' }
-            : await ctx.launchFn({ agent: action.agent, method: action.method, purpose: 'delivery', config: ctx.config });
+            : await ctx.launchFn({
+                agent: action.agent,
+                method: action.method,
+                purpose: launchPurpose,
+                stage: launchStage,
+                config: ctx.config,
+              });
           calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
         } catch (error) {
           failure = error;
@@ -327,7 +335,8 @@ async function applyAction({ action: decided, ctx }) {
               runId: run.runId,
               agent: action.agent,
               agentUrl: run.agentUrl,
-              purpose: 'delivery',
+              purpose: launchPurpose,
+              stage: launchStage,
             }),
             'comment:launch',
           );

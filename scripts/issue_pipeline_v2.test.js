@@ -344,6 +344,17 @@ test('In progress: working, resume once, stalled, finished', () => {
   const stage = 'In progress';
   const busy = { busy: true, lastActivityAt: NOW - MIN };
   assert.equal(rowOf({ stage, delivery: busy }).reason, 'progress.working');
+  const babysitStale = {
+    stage,
+    deliveryMethod: 'PR',
+    delivery: { ...busy, openLinkedPrs: 1, lastActivityAt: NOW - 5 * 60 * MIN },
+    pipelineOpenPrs: 1,
+    launch: {},
+  };
+  const babysitAction = rowOf(babysitStale);
+  assert.equal(babysitAction.type, 'launch');
+  assert.equal(babysitAction.purpose, 'babysit');
+  assert.equal(babysitAction.row, 'progress.babysit-fallback');
   const mine = { engineLaunched: true };
   assert.equal(rowOf({ stage, delivery: { ...mine, busy: false } }).type, 'resume');
   assert.equal(rowOf({ stage, delivery: { ...mine, busy: false, resumed: true } }).reason, 'stalled');
