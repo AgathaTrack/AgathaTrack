@@ -69,6 +69,29 @@ describe('withTransaction', () => {
     ).rejects.toThrow('work failed');
   });
 
+  it('reuses an already checked-out PoolClient without nested BEGIN', async () => {
+    const queryLog = [];
+    const checkedOut = {
+      _pool: {},
+      query: async (sql) => {
+        queryLog.push(String(sql).trim());
+        return { rows: [] };
+      },
+      release: jest.fn(),
+      connect: jest.fn(),
+    };
+
+    const result = await withTransaction(checkedOut, async (db) => {
+      await db.query('SELECT 1');
+      return { nested: true };
+    });
+
+    expect(result).toEqual({ nested: true });
+    expect(queryLog).toEqual(['SELECT 1']);
+    expect(checkedOut.connect).not.toHaveBeenCalled();
+    expect(checkedOut.release).not.toHaveBeenCalled();
+  });
+
   it('rejects pools without connect()', async () => {
     const pool = {
       query: async () => ({ rows: [] }),

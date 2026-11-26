@@ -15,9 +15,17 @@ export class TransactionAbortedError extends Error {
  * @param {(client: import('pg').PoolClient) => Promise<T>} fn
  * @returns {Promise<T>}
  */
+function isCheckedOutPoolClient(db) {
+  // node-pg PoolClient is already connected; caller owns BEGIN/COMMIT (e.g. seed.js).
+  return Boolean(db && typeof db.release === 'function' && db._pool);
+}
+
 export async function withTransaction(pool, fn) {
   if (!pool) {
     throw new Error('withTransaction requires a pool');
+  }
+  if (isCheckedOutPoolClient(pool)) {
+    return fn(pool);
   }
   if (typeof pool.connect !== 'function') {
     throw new Error('withTransaction requires a pg.Pool with connect()');
