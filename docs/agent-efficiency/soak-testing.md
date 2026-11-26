@@ -20,7 +20,7 @@ Live **board soaks** (pipeline v2 ticks, `ISSUE_PIPELINE_V2=on`, often scoped wi
 
 | ID | Decision | Status |
 |---|---|---|
-| PIPE-V2-D-SOAK-010 | **Live board soaks are not Definition of Done items** on delivery issues. They live in the soak catalog and batch in a **soak box** issue. The engine skips unticked rows only when the line **starts** with **`<!-- soak-dod:defer -->`** (see §Deferral markers). `SOAK-REG-*` in the catalog is not an engine gate bypass. Spec/review agents reject new live-soak DoD rows at convergence | **Proposed** until owner signs PR #2655 (gate change). Related: [#2448](https://github.com/AgathaTrack/AgathaTrack/issues/2448) closed Done; [#2448#issuecomment-7191295003](https://github.com/AgathaTrack/AgathaTrack/issues/2448#issuecomment-7191295003) (board soak waived) |
+| PIPE-V2-D-SOAK-010 | **Live board soaks are not Definition of Done items** on delivery issues. They live in the soak catalog and batch in a **soak box** issue. The engine skips unticked rows only when the line **starts** with **`<!-- soak-dod:defer -->`** (see §Deferral markers). `SOAK-REG-*` in the catalog is not an engine gate bypass. Spec/review agents reject new live-soak DoD rows at convergence | **Accepted** (owner, 2026-11-26): owner directed merge via **PR #2655** (`/babysit-plus`); [#2448#issuecomment-7191295003](https://github.com/AgathaTrack/AgathaTrack/issues/2448#issuecomment-7191295003) (board soak waived) |
 
 This policy does **not** grant agents permission to change repo **Actions variables** (`ISSUE_PIPELINE_V2`, `ISSUE_PIPELINE_V2_LABEL`, `WIP_LIMIT`). Only owners/operators set those (AGENTS.md §Escalation — CI / pipeline gate).
 
