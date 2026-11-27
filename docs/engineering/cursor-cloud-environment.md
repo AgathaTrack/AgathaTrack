@@ -67,7 +67,8 @@ The list lives in `scripts/lib/env_proxy_agent_clis.js` (also referenced by that
 | `scripts/issue_pipeline_v2_migrate.js` | `github-project-lib` | GitHub Actions / manual migrate | **actions-only** |
 | `scripts/issue_pipeline_v2_event_wake.js` | none (sparse checkout gate) | GitHub Actions | **actions-only** |
 | `scripts/pr_review_request.js` | `github-project-lib` | GitHub Actions | **actions-only** |
-| `scripts/uat_coordinator_bootstrap.js` | `github-project-lib` | manual / ops (not agent skills) | **actions-only** |
+| `scripts/uat_coordinator_bootstrap.js` | `github-project-lib` | agents / ops ([uat-coordinator-bootstrap.md](../agent-efficiency/uat-coordinator-bootstrap.md)) | **pass** (`reexecWithEnvProxy`) |
+| `scripts/uat_queue_runtime.js` | `uat_queue_sync` → `github-project-lib` | agents ([uat-coordinator-plan.md](../agent-efficiency/uat-coordinator-plan.md), work-agent runbook) | **pass** (`reexecWithEnvProxy`) |
 | `scripts/pipeline_claude_verify.js` | `github-project-lib` | GitHub Actions | **actions-only** |
 
 `scripts/ci/*` and `.github/scripts/*` are **actions-only** as well: they run in GitHub Actions, which has no egress proxy, so they need no `reexecWithEnvProxy`.
