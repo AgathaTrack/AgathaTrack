@@ -75,7 +75,7 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 | In Main | umbrella: a sub-issue is not In Main, In UAT or Done | stays, `main.umbrella-waiting`. Checked before intent review, acceptance and the UAT check, so none of them runs for it |
 | In Main | that same flag-off path, and the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
 | In Main | `aat.enabled` is on, both fields exist, and the issue is not a follow-up | acceptance must pass for the latest merge into `main` (`aatSatisfied`) and that merge must be in the newest successful UAT deploy. No intent-review doorbell |
-| In UAT | the newest successful `deploy-prod.yml` run's commit contains it | → Done, issue closed, `in-prod` added |
+| In UAT | the newest successful `deploy-prod.yml` run's commit contains it | → Done, issue closed |
 | none | a follow-up (see below) of depth 1 or 2 | → To do; deeper → Backlog |
 | In progress / In Main / In UAT | the issue was closed (as completed) before Done, for example by a merge | reopened once (`v2:reopened` comment); a second close, a `not_planned` close and a `manual-only` issue are left alone |
 | any | an AGENTS.md escalation item is hit | stays, `Blocked=decision` |
@@ -172,7 +172,6 @@ issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 | `queued` | the engine could not start the assigned runner (Claude WIP cap); retry on the next tick; spec/review agents clear it via `clear-queued` at session start (keeps `busy`); `finish-work` clears both when ending work |
 | `manual-only` | hand-driven; the engine and autonomous implementation never touch it |
 | `needs-owner` | only on execute-plan control issues, where the runtime reads it; not an issue-pipeline state |
-| `in-prod` | added by the engine when an issue reaches Done |
 | `bug` / `feature` / `task` | issue form type; the Definition of Ready is checked per form |
 
 ### Umbrella issues (PIPE-UMB-D-001)

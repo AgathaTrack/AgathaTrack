@@ -345,12 +345,11 @@ test('wake at runner cap queues without marking the human reply handled (#2556 P
   assert.ok(!sent.some((call) => call.method === 'POST' && call.path.endsWith('/comments') && /v2:wake/.test(call.body?.body || '')));
 });
 
-test('set-stage Done writes the field and closes as completed', async () => {
+test('set-stage Done removes busy and closes as completed', async () => {
   const { sent, restFn } = recorder();
   await applyAction({ action: { type: 'set-stage', to: 'Done', close: true }, ctx: ctx({ restFn }) });
-  assert.equal(sent[0].path, '/repos/o/r/issues/7/labels');
-  assert.deepEqual(sent[0].body, { labels: ['in-prod'] });
-  assert.equal(sent[1].method, 'DELETE');
+  assert.ok(!sent.some((c) => c.method === 'POST' && c.path.endsWith('/labels')));
+  assert.equal(sent[0].method, 'DELETE');
   const patch = sent.find((c) => c.method === 'PATCH' && c.body?.state === 'closed');
   assert.equal(patch.body.state_reason, 'completed');
 });
