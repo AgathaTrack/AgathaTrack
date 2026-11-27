@@ -68,8 +68,7 @@ run_prepush_gate() {
 
 node "$ROOT/scripts/ci/check-ci-loop-label.mjs" "${CI_LOOP_EXTRA[@]}"
 
-git fetch origin main --quiet 2>/dev/null || true
-MERGE_BASE="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD)"
+MERGE_BASE="$(RESOLVE_MERGE_BASE_LABEL=pre-push-changed bash "$ROOT/scripts/db/lib/resolve-schema-merge-base.sh")"
 CHANGED="$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null; git diff --name-only; git diff --cached --name-only)" 
 CHANGED="$(echo "$CHANGED" | sort -u | grep -v '^$' || true)"
 
@@ -234,6 +233,13 @@ run_governance() {
   node --test scripts/db/regenerate-canonical.test.js
   bash scripts/test/require-non-prod-wrappers.test.sh
   node scripts/db/check-migration-manifest.js
+  FRESHNESS_EXTRA=()
+  while IFS= read -r _path; do
+    [[ -z "$_path" ]] && continue
+    FRESHNESS_EXTRA+=(--extra-path "$_path")
+  done <<< "$CHANGED"
+  node scripts/db/check-migration-canonical-freshness.js --base-ref "$MERGE_BASE" "${FRESHNESS_EXTRA[@]}"
+  node --test scripts/db/migration-governance-lib.test.js
   node scripts/check_migration_sql_transactions.js
   node scripts/check_occurrence_writes.js
   node scripts/check_pg_pool_bootstrap.js
