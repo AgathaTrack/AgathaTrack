@@ -13,17 +13,18 @@ void main() {
       );
     });
 
-    test('every other family has no requirement and uses complete', () {
-      for (final family in [
-        'medication',
-        'parasite_prevention',
-        'vaccination',
-        null,
-      ]) {
-        expect(completionRequirementsFor(family), isEmpty);
-        expect(completionEndpointFor(family), CompletionEndpoint.complete);
-      }
-    });
+    test(
+      'every taxonomy family except weight has no requirement and uses complete',
+      () {
+        for (final family in kCareFamilies) {
+          if (family == kWeightMonitoringFamily) continue;
+          expect(completionRequirementsFor(family), isEmpty);
+          expect(completionEndpointFor(family), CompletionEndpoint.complete);
+        }
+        expect(completionRequirementsFor(null), isEmpty);
+        expect(completionEndpointFor(null), CompletionEndpoint.complete);
+      },
+    );
 
     test('a weight must be a finite value above 0', () {
       const family = 'weight_monitoring';
