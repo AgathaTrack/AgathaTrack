@@ -7,19 +7,24 @@
  * An issue gets `busy` when an agent starts work. If that run ends without
  * clearing the label (for example, after a merge with no closing comment), the
  * issue sits busy and nothing picks it up. This script lists open `busy`
- * issues whose last activity is older than the threshold.
+ * issues whose last activity is older than the idle threshold (from pipeline
+ * v2 config, default 24 h), excluding issues whose comments show live delivery
+ * or doorbell work (run markers and launch records).
  *
  * Dry run by default. `--apply` posts one comment per stale issue. The comment
  * moves the issue's updated_at, so each issue is reported at most once per
  * threshold window.
  *
  * Usage (needs GITHUB_TOKEN and GITHUB_REPOSITORY=owner/repo):
- *   node scripts/issue_busy_watchdog.js [--threshold-hours 6] [--apply]
+ *   node scripts/issue_busy_watchdog.js [--threshold-hours <n>] [--apply]
  *
  * @module scripts/issue_busy_watchdog
  */
 
-const DEFAULT_THRESHOLD_HOURS = 6;
+const { loadConfig } = require('./issue_pipeline_v2_config');
+const { deliveryMethod } = require('./issue_pipeline_v2_launch');
+const { hasLivePipelineActivity } = require('./lib/busy_watchdog_pipeline');
+
 const MAX_PAGES = 50; // 5,000 open busy issues; a larger board fails loudly instead of truncating silently
 const BUSY_LABEL = 'busy';
 const WATCHDOG_MARKER = '<!-- busy-watchdog -->';
@@ -30,24 +35,68 @@ function labelName(label) {
 }
 
 /**
- * Pure selection: open, non-PR issues labelled busy with no activity since the cutoff.
- * @param {Array<object>} issues REST issue objects (number, title, updated_at, labels, pull_request?)
- * @param {{ now?: number, thresholdHours?: number }} [opts]
- * @returns {Array<{ number: number, title: string, updated_at: string, idle_hours: number }>}
+ * Idle threshold for one issue: CLI override, else `limits.stalledInactivityHours` from v2 config
+ * after resolving delivery method (per-method overrides may apply via config later).
+ * @param {object} issue
+ * @param {object} config
+ * @param {number | undefined} thresholdOverride from `--threshold-hours`
  */
-function findStaleBusyIssues(issues, { now = Date.now(), thresholdHours = DEFAULT_THRESHOLD_HOURS } = {}) {
-  const cutoff = now - thresholdHours * 3600 * 1000;
+function idleThresholdHours(issue, config, thresholdOverride) {
+  if (Number.isFinite(thresholdOverride) && thresholdOverride > 0) {
+    return thresholdOverride;
+  }
+  deliveryMethod(issue.body || '');
+  return config.limits.stalledInactivityHours;
+}
+
+/**
+ * Pure selection: open, non-PR issues labelled busy with no activity since the per-issue cutoff.
+ * @param {Array<object>} issues REST issue objects (number, title, updated_at, labels, body?, pull_request?)
+ * @param {{ now?: number, config: object, thresholdOverride?: number }} opts
+ * @returns {Array<{ number: number, title: string, updated_at: string, idle_hours: number, threshold_hours: number, labels: string[] }>}
+ */
+function findStaleBusyIssues(issues, { now = Date.now(), config, thresholdOverride } = {}) {
   return issues
     .filter((issue) => !issue.pull_request)
     .filter((issue) => (issue.labels || []).some((l) => labelName(l) === BUSY_LABEL))
-    .filter((issue) => Date.parse(issue.updated_at) <= cutoff)
-    .map((issue) => ({
+    .map((issue) => {
+      const thresholdHours = idleThresholdHours(issue, config, thresholdOverride);
+      const idleMs = now - Date.parse(issue.updated_at);
+      return {
+        issue,
+        thresholdHours,
+        idleMs,
+      };
+    })
+    .filter((row) => row.idleMs >= row.thresholdHours * 3600 * 1000)
+    .map(({ issue, thresholdHours, idleMs }) => ({
       number: issue.number,
       title: issue.title,
       updated_at: issue.updated_at,
       labels: (issue.labels || []).map(labelName),
-      idle_hours: Math.floor((now - Date.parse(issue.updated_at)) / 3600000),
+      idle_hours: Math.floor(idleMs / 3600000),
+      threshold_hours: thresholdHours,
     }));
+}
+
+/**
+ * Drop candidates whose issue comments show fresh pipeline activity.
+ * @param {Array<object>} stale from `findStaleBusyIssues`
+ * @param {Map<number, object[]> | Record<number, object[]>} commentsOf
+ * @param {{ now?: number, config: object }} opts
+ */
+function filterStaleWithoutLiveActivity(stale, commentsOf, { now = Date.now(), config } = {}) {
+  const busy = true;
+  return stale.filter((row) => {
+    const comments = commentsOf instanceof Map ? commentsOf.get(row.number) : commentsOf[row.number];
+    return !hasLivePipelineActivity({
+      comments: comments || [],
+      engineLogins: config.engine.logins,
+      busy,
+      now,
+      limits: config.limits,
+    });
+  });
 }
 
 function buildWatchdogComment(stale, thresholdHours) {
@@ -59,7 +108,7 @@ function buildWatchdogComment(stale, thresholdHours) {
   return [
     WATCHDOG_MARKER,
     `Watchdog: this issue has been \`busy\` with no activity for about ${idle} h (threshold ${thresholdHours} h).`,
-    'Idle time is a heuristic: a long run that posts no comments looks the same. Check the run before acting.',
+    'Idle time is a heuristic: a long run that posts no comments looks the same, unless a fresh pipeline run marker or launch record says otherwise. Check the run before acting.',
     next,
     '',
     '---',
@@ -82,29 +131,57 @@ async function listOpenBusyIssues({ token, repository, fetchImpl = fetch }) {
   throw new Error(`list issues: more than ${MAX_PAGES * 100} open busy issues; raise MAX_PAGES instead of truncating`);
 }
 
+async function listIssueComments({ token, repository, issueNumber, fetchImpl = fetch }) {
+  const out = [];
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const url = `https://api.github.com/repos/${repository}/issues/${issueNumber}/comments?per_page=100&page=${page}`;
+    const res = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error(`list comments on #${issueNumber} failed: HTTP ${res.status}`);
+    const batch = await res.json();
+    out.push(...batch);
+    if (batch.length < 100) return out;
+  }
+  throw new Error(`list comments on #${issueNumber}: more than ${MAX_PAGES * 100} comments`);
+}
+
 function parseArgs(argv) {
-  const args = { apply: false, thresholdHours: DEFAULT_THRESHOLD_HOURS };
+  const args = { apply: false, thresholdOverride: undefined };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--apply') args.apply = true;
-    else if (argv[i] === '--threshold-hours') args.thresholdHours = Number(argv[++i]);
+    else if (argv[i] === '--threshold-hours') args.thresholdOverride = Number(argv[++i]);
   }
-  if (!Number.isFinite(args.thresholdHours) || args.thresholdHours <= 0) {
+  if (args.thresholdOverride !== undefined && (!Number.isFinite(args.thresholdOverride) || args.thresholdOverride <= 0)) {
     throw new Error('--threshold-hours must be a positive number');
   }
   return args;
 }
 
 async function main(argv = process.argv.slice(2), env = process.env) {
-  const { apply, thresholdHours } = parseArgs(argv);
+  const { apply, thresholdOverride } = parseArgs(argv);
   const token = env.GITHUB_TOKEN;
   const repository = env.GITHUB_REPOSITORY;
   if (!token || !repository) throw new Error('GITHUB_TOKEN and GITHUB_REPOSITORY (owner/repo) are required');
 
+  const config = loadConfig();
+  const defaultThreshold = config.limits.stalledInactivityHours;
   const issues = await listOpenBusyIssues({ token, repository });
-  const stale = findStaleBusyIssues(issues, { thresholdHours });
-  console.log(`busy-watchdog: ${stale.length} stale busy issue(s) of ${issues.length} open (threshold ${thresholdHours} h)`);
+  const candidates = findStaleBusyIssues(issues, { config, thresholdOverride });
+  const commentsOf = new Map();
+  for (const row of candidates) {
+    commentsOf.set(row.number, await listIssueComments({ token, repository, issueNumber: row.number }));
+  }
+  const stale = filterStaleWithoutLiveActivity(candidates, commentsOf, { config });
+
+  const thresholdLabel = thresholdOverride ?? defaultThreshold;
+  console.log(
+    `busy-watchdog: ${stale.length} stale busy issue(s) of ${issues.length} open ` +
+      `(${candidates.length} past idle threshold; default threshold ${thresholdLabel} h)`,
+  );
   for (const s of stale) {
-    console.log(`  #${s.number} idle ${s.idle_hours} h: ${s.title}`);
+    const th = s.threshold_hours;
+    console.log(`  #${s.number} idle ${s.idle_hours} h (threshold ${th} h): ${s.title}`);
     if (!apply) continue;
     const res = await fetch(`https://api.github.com/repos/${repository}/issues/${s.number}/comments`, {
       method: 'POST',
@@ -113,7 +190,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
         Accept: 'application/vnd.github+json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ body: buildWatchdogComment(s, thresholdHours) }),
+      body: JSON.stringify({ body: buildWatchdogComment(s, th) }),
     });
     if (!res.ok) throw new Error(`comment on #${s.number} failed: HTTP ${res.status}`);
   }
@@ -130,10 +207,12 @@ if (require.main === module) {
 
 module.exports = {
   findStaleBusyIssues,
+  filterStaleWithoutLiveActivity,
+  idleThresholdHours,
   buildWatchdogComment,
   listOpenBusyIssues,
+  listIssueComments,
   parseArgs,
   WATCHDOG_MARKER,
-  DEFAULT_THRESHOLD_HOURS,
   MAX_PAGES,
 };
