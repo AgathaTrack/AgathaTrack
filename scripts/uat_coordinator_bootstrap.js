@@ -13,7 +13,7 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 const { rest } = require('../.github/scripts/github-project-lib');
 const { resolveRepository } = require('./lib/execute_plan_project');
-const { createEmptyState } = require('./lib/uat_queue_lib');
+const { createEmptyState, ledgerHasLiveContent } = require('./lib/uat_queue_lib');
 const {
   commitStateMutation,
   loadStateFromIssue,
@@ -154,15 +154,6 @@ async function createOrUpdateIssue(owner, repo, token, issueNumber, write) {
 
 function pinIssue(issueNumber) {
   ghJson(['issue', 'pin', String(issueNumber)]);
-}
-
-function ledgerHasLiveContent(state) {
-  return Boolean(
-    (state.entries && state.entries.length > 0)
-    || state.main_barrier_sha
-    || state.promote_hold
-    || state.active_watcher,
-  );
 }
 
 async function ensureMarkerComment(issueNumber, token, write) {
