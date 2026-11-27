@@ -3,7 +3,7 @@ title: GitHub issue workflow — operations
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-26
+last_updated: 2026-11-27
 tags: [documentation, github-issues, automation, pipeline-v2]
 ---
 # Issue pipeline — operations
@@ -100,6 +100,7 @@ Remove **`analyse-only`** before the first deliver wake when present. The engine
 - **Soak2 (2026-11-21 – 2026-11-22):** sign-off
   [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) — **To do → Done not proven**; shipped **#2510**, **#2511**, **#2512**, **#2517**. Fixtures **#2493–#2508** closed 2026-11-22. **Soak3:** new fixtures and a new proposal under `changes/`; proposed gates are listed in the findings doc until accepted here.
 - **Preflight:** the v2 launch preflight no longer runs the keyword risky-scope scan (PIPE-V2-D-REV4-004); the legacy launchers still do. The soak2 operator reword (**#2506**) is still governed by **SOAK-008** and by review, not by a scan.
+- **Busy watchdog (`scripts/issue_busy_watchdog.js`):** safe to run on a schedule or manually when operators want a nudge on abandoned `busy` issues. Dry run by default; pass `--apply` to post one watchdog comment (HTML marker `busy-watchdog`). **Idle threshold** is `limits.stalledInactivityHours` from `.github/pipeline-agents.json` (24 h today), resolved per issue via `deliveryMethod` on the Delivery plan — default moved from 6 h to 24 h ([#2602](https://github.com/AgathaTrack/AgathaTrack/issues/2602)). `--threshold-hours` overrides that for every issue in one run (soak). Past the threshold, the script paginates issue comments and **skips** flagging when a **fresh** signal shows live work: trusted run markers via `pipeline_run_marker.js` (`running` / `dispatched` / `creating`), or engine `v2:` launch records for `delivery` / `doorbell` (`launch-pending`, in-flight `launch`, or `launch-acked` inside `ackWindowMin`). Signals older than `stalledInactivityHours` no longer suppress a flag.
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
