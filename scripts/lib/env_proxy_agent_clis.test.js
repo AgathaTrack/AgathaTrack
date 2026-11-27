@@ -17,3 +17,9 @@ test('each agent-invoked fetch CLI has reexecWithEnvProxy before GitHub requires
     assert.equal(result.ok, true, `${rel}: ${result.reason || 'ok'}`);
   }
 });
+
+test('transitive local requires reach GitHub (execute_plan_project)', () => {
+  const { moduleReachesGithub } = require('./env_proxy_agent_clis');
+  const abs = path.join(REPO_ROOT, 'scripts/lib/execute_plan_project.js');
+  assert.equal(moduleReachesGithub(abs), true);
+});

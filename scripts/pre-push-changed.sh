@@ -219,6 +219,7 @@ run_governance() {
   node --test scripts/validate_eslint.test.js
   node --test scripts/github_issue_workflow.test.js
   node --test scripts/lib/env_proxy_reexec.test.js
+  node --test scripts/lib/env_proxy_agent_clis.test.js
   node --test scripts/lib/pipeline_path_gate.test.js
   node --test scripts/lib/pipeline_state_trust.test.js
   node --test scripts/issue_pipeline_state.test.js
