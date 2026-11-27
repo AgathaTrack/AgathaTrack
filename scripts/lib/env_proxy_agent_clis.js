@@ -17,6 +17,7 @@ const AGENT_INVOKED_FETCH_CLIS = [
   'scripts/pipeline_verdict.js',
   'scripts/uat_queue_runtime.js',
   'scripts/uat_coordinator_bootstrap.js',
+  'scripts/issue_busy_watchdog.js',
 ];
 
 function resolveRequire(fromDir, spec) {

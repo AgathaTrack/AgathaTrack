@@ -62,7 +62,7 @@ The list lives in `scripts/lib/env_proxy_agent_clis.js` (also referenced by that
 | `scripts/execute_plan_runtime.js` | `execute_plan_github` / `fetch` | agents (execute-plan `tick`) | **pass** (`reexecWithEnvProxy`) |
 | `scripts/pipeline_verdict.js` | `github-project-lib` / `fetch` | agents (spec/review verdict CLI) | **pass** (`reexecWithEnvProxy`) |
 | `scripts/issue_pipeline_wake.js` | none (`gh` subprocess only) | agents (analyse/delivery wake) | **pass** (no `fetch`; proxy not required) |
-| `scripts/issue_busy_watchdog.js` | direct `fetch` | Actions / manual ops (not agent skills) | **actions-only** (no sandbox re-exec) |
+| `scripts/issue_busy_watchdog.js` | direct `fetch` | agents / ops (manual dry-run or `--apply`; not scheduled in CI) | **pass** (`reexecWithEnvProxy`) |
 | `scripts/issue_pipeline_v2.js` | `github-project-lib` | GitHub Actions (`issue-pipeline-v2.yml`) | **actions-only** |
 | `scripts/issue_pipeline_v2_migrate.js` | `github-project-lib` | GitHub Actions / manual migrate | **actions-only** |
 | `scripts/issue_pipeline_v2_event_wake.js` | none (sparse checkout gate) | GitHub Actions | **actions-only** |

@@ -23,6 +23,11 @@
  * @module scripts/issue_busy_watchdog
  */
 
+// CLI only — before any GitHub fetch: sandbox egress needs NODE_USE_ENV_PROXY at process start.
+if (require.main === module) {
+  require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+}
+
 const {
   hasLivePipelineActivity,
   idleThresholdHoursForIssue,
