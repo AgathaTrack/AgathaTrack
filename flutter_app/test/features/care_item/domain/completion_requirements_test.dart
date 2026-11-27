@@ -20,17 +20,20 @@ void main() {
       );
     });
 
-    test('every other canonical family has no requirement and uses complete', () {
-      for (final family in kCareFamilies) {
-        if (family == 'weight_monitoring') continue;
-        expect(completionRequirementsFor(family), isEmpty, reason: family);
-        expect(
-          completionEndpointFor(family),
-          CompletionEndpoint.complete,
-          reason: family,
-        );
-      }
-    });
+    test(
+      'every other canonical family has no requirement and uses complete',
+      () {
+        for (final family in kCareFamilies) {
+          if (family == 'weight_monitoring') continue;
+          expect(completionRequirementsFor(family), isEmpty, reason: family);
+          expect(
+            completionEndpointFor(family),
+            CompletionEndpoint.complete,
+            reason: family,
+          );
+        }
+      },
+    );
 
     test('a weight must be a finite value above 0', () {
       const family = 'weight_monitoring';

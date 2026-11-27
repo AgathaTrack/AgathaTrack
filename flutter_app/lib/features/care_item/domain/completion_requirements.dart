@@ -85,8 +85,7 @@ List<CompletionRequirement> completionRequirementsFor(String? careFamily) {
 }
 
 CompletionEndpoint completionEndpointFor(String? careFamily) {
-  return completionSpecFor(careFamily)?.endpoint ??
-      CompletionEndpoint.complete;
+  return completionSpecFor(careFamily)?.endpoint ?? CompletionEndpoint.complete;
 }
 
 /// Values entered for the requirements.
