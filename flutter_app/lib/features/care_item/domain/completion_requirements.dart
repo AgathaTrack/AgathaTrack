@@ -7,6 +7,19 @@ library;
 
 const kWeightMonitoringFamily = 'weight_monitoring';
 
+/// Wire values from `CARE_FAMILIES` (`server/lib/care/enums.js`); keep in sync.
+const kCareFamilies = [
+  'medication',
+  'vaccination',
+  'parasite_prevention',
+  'wellness_review',
+  'dental',
+  'weight_monitoring',
+  'grooming',
+  'nail_care',
+  'other',
+];
+
 enum CompletionRequirement { weight }
 
 /// Which completion route the server expects (§18.6.2).

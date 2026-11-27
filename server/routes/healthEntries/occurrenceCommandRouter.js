@@ -16,7 +16,7 @@ import { CareCommandError } from '../../lib/care/occurrence/careCommandError.js'
 import {
   handleCommand,
   loadEntry,
-  weightGuard,
+  completionRequirementGuard,
   withEarlierPastDueSkipped,
 } from './occurrenceHttpBridge.js';
 import { resolveUndoAuditOccurrenceId } from './occurrenceUndoAudit.js';
@@ -36,7 +36,7 @@ router.post('/:id/occurrences/:occId/complete', asyncHandler(async (req, res) =>
     });
     const skipEarlier = Boolean(body.skip_earlier_missed || body.skipEarlierMissed);
     return handleCommand(pool, req, res, {
-      guard: weightGuard,
+      guard: completionRequirementGuard,
       command: skipEarlier ? withEarlierPastDueSkipped(occurrenceId, run) : run,
       audit: () => ({
         action: 'health_occurrence.completed',
@@ -108,7 +108,7 @@ router.post('/:id/occurrences/:occId/complete', asyncHandler(async (req, res) =>
     const body = req.body || {};
     const occurrenceId = req.params.occId;
     return handleCommand(pool, req, res, {
-      guard: weightGuard,
+      guard: completionRequirementGuard,
       command: (ctx) => recordAsGivenCommand(ctx, {
         occurrenceId,
         completedOn: normalizeCalendarDateInput(body.completed_on || body.completedOn),
@@ -123,7 +123,7 @@ router.post('/:id/occurrences/:occId/complete', asyncHandler(async (req, res) =>
   router.post('/:id/occurrences/:occId/confirm-skip', asyncHandler(async (req, res) => {
     const occurrenceId = req.params.occId;
     return handleCommand(pool, req, res, {
-      guard: weightGuard,
+      guard: completionRequirementGuard,
       command: (ctx) => confirmSkipCommand(ctx, { occurrenceId }),
       audit: () => ({
         action: 'health_occurrence.confirm_skipped',
@@ -167,7 +167,7 @@ router.post('/:id/occurrences/:occId/complete', asyncHandler(async (req, res) =>
     const notGivenRaw = body.not_given ?? body.notGiven;
     const notGiven = Array.isArray(notGivenRaw) ? notGivenRaw.map(String) : [];
     return handleCommand(pool, req, res, {
-      guard: weightGuard,
+      guard: completionRequirementGuard,
       command: (ctx) => resolveStackCommand(ctx, { given, notGiven }),
       audit: () => ({
         action: 'health_occurrence.stack_resolved',
