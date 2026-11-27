@@ -24,15 +24,16 @@ typedef CareChanged = Future<void> Function();
 
 /// Optional post-success hook (e.g. taxonomy §10.2 vet prompt) from a layer
 /// that may import health_tracking.
-typedef CareDoneVetPromptHook = Future<void> Function(
-  BuildContext context,
-  WidgetRef ref,
-  CareItemSchedule schedule,
-  CareCommandResult result, {
-  String? careSettingWire,
-  String? carePlanningWire,
-  String? healthIssueId,
-});
+typedef CareDoneVetPromptHook =
+    Future<void> Function(
+      BuildContext context,
+      WidgetRef ref,
+      CareItemSchedule schedule,
+      CareCommandResult result, {
+      String? careSettingWire,
+      String? carePlanningWire,
+      String? healthIssueId,
+    });
 
 /// The only entry point for Done (§18.8). Applies [decideDone], opens at most
 /// one modal (SH-1), sends one request, and shows the server-confirmed

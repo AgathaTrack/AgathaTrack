@@ -4,12 +4,7 @@ import '../../../../../l10n/app_localizations.dart';
 import '../../../domain/entities/health_issue.dart';
 
 /// User choice from a vet health-issue linkage prompt.
-enum VetHealthIssuePromptChoice {
-  dismiss,
-  linkExisting,
-  addNew,
-  planNextVisit,
-}
+enum VetHealthIssuePromptChoice { dismiss, linkExisting, addNew, planNextVisit }
 
 /// Suggested quick-pick titles for new health issues (§10.4).
 enum HealthIssueQuickPick { injury, dental, neutering, other }

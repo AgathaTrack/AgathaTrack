@@ -66,7 +66,8 @@ class CareItemOccurrenceTrailingControls extends ConsumerWidget {
                       onChanged: onChanged,
                       source: CareCommandSource.careItem,
                       ref: ref,
-                      vetPromptAfterDone: careCompletionPlannedVetPromptAfterDone,
+                      vetPromptAfterDone:
+                          careCompletionPlannedVetPromptAfterDone,
                       careSettingWire: entry.careSetting?.name,
                       carePlanningWire: entry.carePlanning?.name,
                       healthIssueId: entry.healthIssueId,
