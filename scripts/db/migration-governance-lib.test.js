@@ -4,6 +4,7 @@ import {
   assertCanonicalFreshness,
   assertCodeMigrationsParity,
   filterUpMigrationPaths,
+  mergePathLists,
   migrationHasNoSchemaChangeMarker,
   parseCodeMigrationKeysFromMigrateSource,
 } from './migration-governance-lib.js';
@@ -45,10 +46,12 @@ test('filterUpMigrationPaths ignores down migrations', () => {
   assert.deepEqual(filterUpMigrationPaths(files), ['db/migrations/021_x.sql']);
 });
 
-test('migrationHasNoSchemaChangeMarker reads header only', () => {
+test('migrationHasNoSchemaChangeMarker requires exact header line', () => {
   const sql = `-- title\n-- canonical: no-schema-change\nCREATE TABLE t (id int);`;
   assert.equal(migrationHasNoSchemaChangeMarker(sql), true);
   assert.equal(migrationHasNoSchemaChangeMarker('CREATE TABLE t (id int);'), false);
+  const inString = `-- x\nINSERT INTO t VALUES ('-- canonical: no-schema-change');`;
+  assert.equal(migrationHasNoSchemaChangeMarker(inString), false);
 });
 
 test('assertCanonicalFreshness requires manifest and canonical when migration changes', () => {
@@ -69,5 +72,12 @@ test('assertCanonicalFreshness accepts escape marker without canonical commit', 
   const body = `-- canonical: no-schema-change\nINSERT INTO t VALUES (1);`;
   assert.doesNotThrow(() =>
     assertCanonicalFreshness(['db/migrations/099_data.sql'], () => body)
+  );
+});
+
+test('mergePathLists dedupes paths for freshness union', () => {
+  assert.deepEqual(
+    mergePathLists(['db/migrations/a.sql', 'b'], ['b', 'c']).sort(),
+    ['b', 'c', 'db/migrations/a.sql'].sort()
   );
 });

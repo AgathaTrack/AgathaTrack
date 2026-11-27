@@ -52,14 +52,25 @@ export function filterUpMigrationPaths(diffFiles) {
 }
 
 export function migrationHasNoSchemaChangeMarker(fileContents) {
-  const head = String(fileContents).split('\n').slice(0, 30).join('\n');
-  return head.includes(CANONICAL_NO_SCHEMA_MARKER);
+  const lines = String(fileContents).split('\n').slice(0, 30);
+  return lines.some((line) => line.trim() === CANONICAL_NO_SCHEMA_MARKER);
 }
 
 /**
  * @param {string[]} diffFiles paths from git diff --name-only
  * @param {(relPath: string) => string | null} readText
  */
+export function mergePathLists(...lists) {
+  const out = new Set();
+  for (const list of lists) {
+    for (const p of list || []) {
+      const t = String(p).trim();
+      if (t) out.add(t);
+    }
+  }
+  return [...out];
+}
+
 export function assertCanonicalFreshness(diffFiles, readText) {
   const changed = new Set(diffFiles);
   const upMigrations = filterUpMigrationPaths(diffFiles);

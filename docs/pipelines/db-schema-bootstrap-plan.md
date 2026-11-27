@@ -225,9 +225,9 @@ Set an explicit non-production `APP_ENV` (e.g. `development`, `ci`, `uat`) befor
 2. Register JS hook in `migrate.js` when needed; add name to manifest `code_migrations` (must match `CODE_MIGRATIONS` keys exactly).
 3. Append filename to `db/schema/migration-manifest.json` (sorted).
 4. Run `scripts/db/regenerate-canonical.sh`; commit `db/schema/canonical.sql`.
-5. Data-only migration with no schema impact: add `-- canonical: no-schema-change` in the SQL header (see P7); otherwise freshness gate requires manifest + canonical in the same PR.
-5. Run `scripts/db/check-bootstrap-paths-equivalence.sh` and `scripts/db/check-schema-equivalence.sh` when Postgres is available.
-6. Update demo scenarios under `server/db/seeds/scenarios/` only when **uat-demo** data must change.
+5. Data-only migration with no schema impact: add `-- canonical: no-schema-change` as its own header line (see P7); otherwise freshness gate requires manifest + canonical in the same PR.
+6. Run `scripts/db/check-bootstrap-paths-equivalence.sh` and `scripts/db/check-schema-equivalence.sh` when Postgres is available.
+7. Update demo scenarios under `server/db/seeds/scenarios/` only when **uat-demo** data must change.
 
 ---
 

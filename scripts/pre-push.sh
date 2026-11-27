@@ -45,7 +45,7 @@ node --test scripts/github_issue_workflow.test.js
 node --test scripts/db/normalize-schema-dump.test.js
 node --test scripts/db/regenerate-canonical.test.js
 node scripts/db/check-migration-manifest.js
-MERGE_BASE="$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD)"
+MERGE_BASE="$(RESOLVE_MERGE_BASE_LABEL=pre-push bash scripts/db/lib/resolve-schema-merge-base.sh)"
 node scripts/db/check-migration-canonical-freshness.js --base-ref "$MERGE_BASE"
 node --test scripts/db/migration-governance-lib.test.js
 node scripts/check_occurrence_writes.js
