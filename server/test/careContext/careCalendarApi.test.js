@@ -1,7 +1,8 @@
 import request from 'supertest';
 
 import { createApp } from '../../bin/server.js';
-import { addCalendarDaysIso, todayCalendarIso } from '../../lib/calendarDate.js';
+import { addCalendarDaysIso } from '../../lib/calendarDate.js';
+import { wallClockInTimeZone } from '../../lib/petHomeTimezone.js';
 import { createMockPool, petId, token, userId } from '../pets/helpers.js';
 
 function authHeader() {
@@ -9,9 +10,16 @@ function authHeader() {
 }
 
 describe('care calendar API', () => {
-  const today = todayCalendarIso();
-  const startsOn = today;
-  const endsOn = addCalendarDaysIso(today, 27);
+  let today;
+  let startsOn;
+  let endsOn;
+
+  beforeEach(() => {
+    // Pet home timezone is UTC in these mocks — not process TZ (see AC-TZ2 Paris job).
+    today = wallClockInTimeZone('UTC').todayIso;
+    startsOn = today;
+    endsOn = addCalendarDaysIso(today, 27);
+  });
 
   function createTestApp(handler) {
     return createApp(createMockPool(handler));
