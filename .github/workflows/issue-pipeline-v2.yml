@@ -45,10 +45,9 @@ permissions:
   contents: read
   issues: read
 
-concurrency:
-  group: issue-pipeline-v2
-  cancel-in-progress: false
-
+# Concurrency sits on `tick` only (PIPE-V2-D-QUEUE-001). A workflow-level group would let events the wake gate
+# rejects join the group. `queue: max` keeps pending runs (scoped dispatches included) in order instead of cancelling
+# the older one, so a scoped `mission=analyse` run is not lost while it waits.
 jobs:
   wake-gate:
     name: Event wake gate
@@ -78,6 +77,9 @@ jobs:
       (vars.ISSUE_PIPELINE_V2 == 'dry-run' || vars.ISSUE_PIPELINE_V2 == 'on')
     runs-on: ubuntu-latest
     environment: automation
+    concurrency:
+      group: issue-pipeline-v2
+      queue: max
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

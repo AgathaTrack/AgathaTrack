@@ -44,8 +44,8 @@ failed acceptance starts with no agent run, and not recoverable by a newer merge
 
 | ID | Requirement | Phase |
 |----|-------------|-------|
-| PIPE-V2-HT-R-001 | A board-wide run is started by each event in P2's list. Pending runs collapse to the newest in the one concurrency group; with board-wide runs that loses nothing, because the newest run reads every issue | P2 |
-| PIPE-V2-HT-R-002 | The event job is skipped at job level when `ISSUE_PIPELINE_V2` is off, when the actor is the engine identity (its PAT-authored writes do trigger workflows), and for comments whose `author_association` is not OWNER, MEMBER or COLLABORATOR and whose author is not a listed agent login. The repository is public: anyone can comment | P2 |
+| PIPE-V2-HT-R-001 | A board-wide run is started by each event in P2's list. Board-wide runs share the one concurrency group, and pending runs are kept, not collapsed: the `tick` job uses `queue: max` (PIPE-V2-D-QUEUE-001). Scoped runs (`mission` set) must never be cancelled while pending, because a board tick does not do Backlog intake (`decideBacklog`) | P2 |
+| PIPE-V2-HT-R-002 | The event job is skipped at job level when `ISSUE_PIPELINE_V2` is off, when the actor is the engine identity (its PAT-authored writes do trigger workflows), and for comments whose `author_association` is not OWNER, MEMBER or COLLABORATOR and whose author is not a listed agent login. The repository is public: anyone can comment. The concurrency group sits on the `tick` job, so an event that fails this gate never joins it (PIPE-V2-D-QUEUE-001) | P2 |
 | PIPE-V2-HT-R-003 | The schedule only sweeps: it catches missed events and expired waits. Normal progress does not depend on it | P2 |
 | PIPE-V2-HT-R-004 | The advance loop feeds applied writes forward into the facts, or re-reads through issue REST only. It stops before any step whose next decision depends on search results (implementation follow-ups) or on a marker it just posted and has not read back | P3 |
 | PIPE-V2-HT-R-005 | A run for one issue reads only that issue unless it may launch; a launch still needs the board-wide WIP count and round-robin cursor | P4 |
