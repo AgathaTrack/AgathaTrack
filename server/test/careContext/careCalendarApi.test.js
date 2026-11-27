@@ -9,9 +9,15 @@ function authHeader() {
 }
 
 describe('care calendar API', () => {
-  const today = todayCalendarIso();
-  const startsOn = today;
-  const endsOn = addCalendarDaysIso(today, 27);
+  let today;
+  let startsOn;
+  let endsOn;
+
+  beforeEach(() => {
+    today = todayCalendarIso();
+    startsOn = today;
+    endsOn = addCalendarDaysIso(today, 27);
+  });
 
   function createTestApp(handler) {
     return createApp(createMockPool(handler));
