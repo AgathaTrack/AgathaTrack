@@ -101,6 +101,9 @@ class CareItemSummary {
     this.lateCompletionChoice,
     this.doseLine,
     this.strengthFormLine,
+    this.careSettingWire,
+    this.carePlanningWire,
+    this.healthIssueId,
   });
 
   final String id;
@@ -117,6 +120,11 @@ class CareItemSummary {
 
   /// Combined strength and form for medication families when set.
   final String? strengthFormLine;
+
+  /// Entry taxonomy (§10.2 prompt fallback when completion omits `entry`).
+  final String? careSettingWire;
+  final String? carePlanningWire;
+  final String? healthIssueId;
 }
 
 bool careItemSummaryShowsStrengthForm(String? careFamily) {

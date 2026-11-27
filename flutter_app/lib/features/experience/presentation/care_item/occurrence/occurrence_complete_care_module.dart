@@ -185,6 +185,9 @@ class _OccurrenceCompleteCareModuleState
           completedOn: _date,
           ref: ref,
           vetPromptAfterDone: careCompletionPlannedVetPromptAfterDone,
+          careSettingWire: _d.item.careSettingWire,
+          carePlanningWire: _d.item.carePlanningWire,
+          healthIssueId: _d.item.healthIssueId,
         ),
   );
 

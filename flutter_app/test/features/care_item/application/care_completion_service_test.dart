@@ -29,6 +29,27 @@ CareCompletionRequest request({
 
 void main() {
   group('complete (§18.6.1, DN-6)', () {
+    test('maps entry taxonomy fields from completion response', () async {
+      final recorder = RecordingClient(
+        (_) => jsonResponse(
+          commandJson(
+            entry: {
+              ...careItemJson(),
+              'care_setting': 'vet',
+              'care_planning': 'planned',
+              'health_issue_id': null,
+            },
+          ),
+        ),
+      );
+      final outcome = await serviceFor(recorder).complete(request());
+      expect(outcome, isA<CareSucceeded<CareCommandResult>>());
+      final value = (outcome as CareSucceeded<CareCommandResult>).value;
+      expect(value.careSettingWire, 'vet');
+      expect(value.carePlanningWire, 'planned');
+      expect(value.healthIssueId, isNull);
+    });
+
     test(
       'one tap posts complete without next_choice or earlier_choice',
       () async {

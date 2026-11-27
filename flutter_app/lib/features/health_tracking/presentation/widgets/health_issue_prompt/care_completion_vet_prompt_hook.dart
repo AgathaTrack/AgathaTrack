@@ -16,10 +16,10 @@ Future<void> careCompletionPlannedVetPromptAfterDone(
   String? healthIssueId,
 }) async {
   final setting = CareSettingWire.fromWire(
-    careSettingWire ?? result.careSettingWire,
+    result.careSettingWire ?? careSettingWire,
   );
   final planning = CarePlanningModeWire.fromWire(
-    carePlanningWire ?? result.carePlanningWire,
+    result.carePlanningWire ?? carePlanningWire,
   );
   if (setting == null || planning == null) return;
 
@@ -30,7 +30,7 @@ Future<void> careCompletionPlannedVetPromptAfterDone(
     entryId: schedule.entryId,
     careSetting: setting,
     carePlanning: planning,
-    healthIssueId: healthIssueId ?? result.healthIssueId,
+    healthIssueId: result.healthIssueId ?? healthIssueId,
     careFamily: schedule.careFamily,
   );
 }

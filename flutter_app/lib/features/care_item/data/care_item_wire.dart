@@ -222,6 +222,9 @@ OccurrenceDetail occurrenceDetailFromJson(Map<String, dynamic> json) {
       asOf: careAsOfFromJson(entry['as_of'] as Map<String, dynamic>),
       doseLine: _entryDoseLine(entry),
       strengthFormLine: _entryStrengthFormLine(entry),
+      careSettingWire: entry['care_setting'] as String?,
+      carePlanningWire: entry['care_planning'] as String?,
+      healthIssueId: entry['health_issue_id'] as String?,
     ),
     schedule: schedule,
     lastAction: last == null

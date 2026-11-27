@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -86,5 +87,128 @@ void main() {
 
     final undo = tester.widget<SnackBarAction>(find.byType(SnackBarAction));
     expect(undo.label, 'Undo');
+  });
+
+  testWidgets(
+    'done invokes vetPromptAfterDone when ref and hook are provided',
+    (tester) async {
+      var hookCalls = 0;
+      final client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'undo_token': 'undo-1',
+            'entry': {
+              'id': 'entry-1',
+              'pet_id': 'pet-1',
+              'care_setting': 'vet',
+              'care_planning': 'planned',
+            },
+          }),
+          200,
+        );
+      });
+      final flow = CareCompletionFlow(
+        CareCompletionService(
+          CareItemRemoteDataSource(client: client, baseUrl: 'http://localhost'),
+        ),
+      );
+      final item = schedule([
+        occ('m', 10, CareOccurrenceStatus.due, time: '10:00'),
+      ], at: asOf(10, '10:00'));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Consumer(
+              builder: (context, ref, _) => Scaffold(
+                body: TextButton(
+                  onPressed: () {
+                    flow.done(
+                      context,
+                      schedule: item,
+                      onChanged: () async {},
+                      source: CareCommandSource.agenda,
+                      ref: ref,
+                      vetPromptAfterDone:
+                          (
+                            ctx,
+                            r,
+                            sched,
+                            res, {
+                            careSettingWire,
+                            carePlanningWire,
+                            healthIssueId,
+                          }) async {
+                            hookCalls++;
+                          },
+                    );
+                  },
+                  child: const Text('Mark done'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Mark done'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(hookCalls, 1);
+    },
+  );
+
+  testWidgets('done skips vetPromptAfterDone when hook is omitted', (
+    tester,
+  ) async {
+    var hookCalls = 0;
+    final client = MockClient((request) async {
+      return http.Response(jsonEncode({'undo_token': 'undo-1'}), 200);
+    });
+    final flow = CareCompletionFlow(
+      CareCompletionService(
+        CareItemRemoteDataSource(client: client, baseUrl: 'http://localhost'),
+      ),
+    );
+    final item = schedule([
+      occ('m', 10, CareOccurrenceStatus.due, time: '10:00'),
+    ], at: asOf(10, '10:00'));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Consumer(
+            builder: (context, ref, _) => Scaffold(
+              body: TextButton(
+                onPressed: () {
+                  flow.done(
+                    context,
+                    schedule: item,
+                    onChanged: () async {},
+                    source: CareCommandSource.agenda,
+                    ref: ref,
+                  );
+                },
+                child: const Text('Mark done'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Mark done'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(hookCalls, 0);
   });
 }
