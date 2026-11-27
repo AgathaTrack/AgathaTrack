@@ -9,10 +9,7 @@ import {
 import { markSkipped } from '../../lib/care/occurrence/occurrenceRepository.js';
 import { slotIsPastDue } from '../../lib/care/schedule/occurrenceStatus.js';
 import { extractUserId } from './shared.js';
-import {
-  isWeightMonitoringEntry,
-  WEIGHT_GENERIC_COMPLETE_ERROR,
-} from './weightOccurrenceCompletion.js';
+import { genericCompleteGuard } from '../../lib/care/completionRequirements.js';
 
 const CLIENT_TAG = /^[a-z][a-z_]{0,31}$/;
 
@@ -110,9 +107,7 @@ export async function handleCommand(pool, req, res, { command, respond, audit, g
   }
 }
 
-export function weightGuard(entry) {
-  return isWeightMonitoringEntry(entry) ? WEIGHT_GENERIC_COMPLETE_ERROR : null;
-}
+export { genericCompleteGuard as weightGuard };
 
 /**
  * Compat `skip_earlier_missed`: skip earlier past-due open dates in the same command.

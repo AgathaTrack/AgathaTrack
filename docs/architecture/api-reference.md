@@ -204,7 +204,7 @@ Returns upcoming active absences for the entry's pet with per-absence `affected`
 
 **Audit tags:** occurrence commands accept optional body fields `source` and `path` (short snake_case tags such as `agenda` / `one_tap`); they are copied to the audit metadata and never stored elsewhere. Refused commands (400, 409) are logged at warn with the request id.
 
-Weight monitoring rhythms: generic occurrence **complete** returns `400` — use `POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/complete-weight` (see Care progression below). Deleting the weight entry of a weigh-in undoes that completion (D-CSM-029).
+Weight monitoring rhythms: generic occurrence **complete** returns `400` — use `POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/complete-weight` (see Care progression below). Deleting the weight entry of a weigh-in undoes that completion (D-CSM-029). Full per-family matrix (D-CIE-031): [care-item-evolution.md § Completion requirements](../domains/pet_care/features/care-item-evolution.md#completion-requirements-d-cie-031).
 
 **Removed (D-CSM-033, child F):** `POST /:id/mark-taken`, `POST /:id/occurrences/ensure-open`, `POST /:id/pause`, `POST /:id/occurrences/skip-missed`, `POST /:id/undo-complete` — use occurrence commands and `POST /:id/schedule/undo`. Per-occurrence undo remains on `POST /:id/occurrences/:occId/undo` until the Flutter client migrates. Pause uses `POST /:id/postpone` with `until: null`.
 

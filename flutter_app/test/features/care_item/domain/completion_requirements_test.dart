@@ -3,6 +3,13 @@ import 'package:pet_profile_app/features/care_item/care_item.dart';
 
 void main() {
   group('completion requirements (D-CIE-031)', () {
+    test('registry lists all nine care families', () {
+      expect(kCareFamilies.length, 9);
+      for (final family in kCareFamilies) {
+        expect(completionSpecFor(family), isNotNull);
+      }
+    });
+
     test('weight monitoring requires a weight and uses complete-weight', () {
       expect(completionRequirementsFor('weight_monitoring'), [
         CompletionRequirement.weight,
@@ -13,15 +20,15 @@ void main() {
       );
     });
 
-    test('every other family has no requirement and uses complete', () {
-      for (final family in [
-        'medication',
-        'parasite_prevention',
-        'vaccination',
-        null,
-      ]) {
-        expect(completionRequirementsFor(family), isEmpty);
-        expect(completionEndpointFor(family), CompletionEndpoint.complete);
+    test('every other canonical family has no requirement and uses complete', () {
+      for (final family in kCareFamilies) {
+        if (family == 'weight_monitoring') continue;
+        expect(completionRequirementsFor(family), isEmpty, reason: family);
+        expect(
+          completionEndpointFor(family),
+          CompletionEndpoint.complete,
+          reason: family,
+        );
       }
     });
 

@@ -7,22 +7,86 @@ library;
 
 const kWeightMonitoringFamily = 'weight_monitoring';
 
+/// Canonical care families from [CARE_FAMILIES] on the server.
+const kCareFamilies = <String>[
+  'medication',
+  'vaccination',
+  'parasite_prevention',
+  'wellness_review',
+  'dental',
+  'weight_monitoring',
+  'grooming',
+  'nail_care',
+  'other',
+];
+
 enum CompletionRequirement { weight }
 
 /// Which completion route the server expects (§18.6.2).
 enum CompletionEndpoint { complete, completeWeight }
 
+class FamilyCompletionSpec {
+  const FamilyCompletionSpec({
+    required this.requirements,
+    required this.endpoint,
+  });
+
+  final List<CompletionRequirement> requirements;
+  final CompletionEndpoint endpoint;
+}
+
+const _completionMatrix = <String, FamilyCompletionSpec>{
+  'medication': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+  'vaccination': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+  'parasite_prevention': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+  'wellness_review': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+  'dental': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+  'weight_monitoring': FamilyCompletionSpec(
+    requirements: [CompletionRequirement.weight],
+    endpoint: CompletionEndpoint.completeWeight,
+  ),
+  'grooming': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+  'nail_care': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+  'other': FamilyCompletionSpec(
+    requirements: [],
+    endpoint: CompletionEndpoint.complete,
+  ),
+};
+
+FamilyCompletionSpec? completionSpecFor(String? careFamily) {
+  if (careFamily == null) return null;
+  return _completionMatrix[careFamily];
+}
+
 List<CompletionRequirement> completionRequirementsFor(String? careFamily) {
-  if (careFamily == kWeightMonitoringFamily) {
-    return const [CompletionRequirement.weight];
-  }
-  return const [];
+  return completionSpecFor(careFamily)?.requirements ??
+      const <CompletionRequirement>[];
 }
 
 CompletionEndpoint completionEndpointFor(String? careFamily) {
-  return careFamily == kWeightMonitoringFamily
-      ? CompletionEndpoint.completeWeight
-      : CompletionEndpoint.complete;
+  return completionSpecFor(careFamily)?.endpoint ??
+      CompletionEndpoint.complete;
 }
 
 /// Values entered for the requirements.

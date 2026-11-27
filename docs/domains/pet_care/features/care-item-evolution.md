@@ -5,7 +5,7 @@ audience: both
 domain: pet_care
 feature_id: care_item
 status: active
-last_updated: 2026-11-25
+last_updated: 2026-11-27
 related_prs: [1797, 1805, 1812, 1817, 2129, 2145, 2420, 2056]
 ---
 
@@ -107,6 +107,7 @@ Four principles:
 | D-CIE-035 | Agenda and away-plan **list rows** open **Care details** only | Dashboard, All care, pet profile care, pet All care, and away-plan planned-care rows use `petEventView` — never the Care date route on row tap. Per-date work uses Care item **Needs attention** rows or trailing **Mark as done** / **Review** (D-CIE-030). Retires list-row navigation to Care date from D-CIE-029; Care date screen definition in D-CIE-029 and § Care date screen still applies when opened from Care item or commands | Live | — | — |
 | D-CIE-030 | **Done** follows one rule on every surface | A stack, an earlier open After-it's-done date, or a required input opens a screen and saves nothing; an overdue After-it's-done date asks "When was this done?"; more than half an interval early asks to confirm; anything else completes today in one request. The app never sends `next_choice` on one tap | Live | — | — |
 | D-CIE-031 | Completion requirements per family, **required inputs only** | Today only weight monitoring (a weight above 0, sent to `complete-weight`) | Live | — | — |
+| D-CIE-050 | **Completion requirements registry** (DEBT-D-FAM P0) | Shared server registry (`server/lib/care/completionRequirements.js`) and Flutter matrix (`completion_requirements.dart`); canonical nine-family table in § Completion requirements; weight behaviour unchanged | Live | 2026-11-27 | #1541 |
 | D-CIE-032 | Copy: no "dose" | Buttons say **Done** where appropriate. **Care date** open actions use **Mark as done** (care name on context tile only). List rows and other surfaces may still use care name in copy where D-CIE-026 requires. Confirmation "{name} done" | Live | — | — |
 | D-CIE-033 | Calendar: read-only projection, deferred | Stored occurrences plus estimated dates; estimates carry no actions. Out of scope for the care occurrences programme | Superseded by D-CAL-001 | — | #1539 |
 | D-CIE-034 | **Stack** = two or more open slots of one Fixed-schedule item that have **started** | Overdue, not recorded, or due with their time reached; a slot without a time has started from the beginning of its day. Coming-up slots and slots later today never count | Live | — | — |
@@ -410,6 +411,24 @@ People tiers decide what each person sees.
   - A longer one, such as a 3-year rabies booster, asks "Change the interval from now on?" and changes the cadence. A single move can't go past where the next one would have been (D-ACP-009).
 - **The next date is shown straight away.** The response carries the item with its new open occurrence; the row moves to its section without a reload (D-CSM-019).
 - **Undo** reverses the whole action, including a new next date the app created and any choice below (D-CSM-029).
+
+### Completion requirements (D-CIE-031)
+
+Authority: `server/lib/care/completionRequirements.js` (server) and `flutter_app/lib/features/care_item/domain/completion_requirements.dart` (client). Adding a required input later is one enum value, one occurrence field widget, one server validation path, and tests for that family.
+
+| `care_family` | Required inputs | Completion endpoint |
+|---------------|-----------------|---------------------|
+| `medication` | — | `POST …/occurrences/:occId/complete` |
+| `vaccination` | — | `POST …/occurrences/:occId/complete` |
+| `parasite_prevention` | — | `POST …/occurrences/:occId/complete` |
+| `wellness_review` | — | `POST …/occurrences/:occId/complete` |
+| `dental` | — | `POST …/occurrences/:occId/complete` |
+| `weight_monitoring` | Weight value &gt; 0 (observation) | `POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/complete-weight` |
+| `grooming` | — | `POST …/occurrences/:occId/complete` |
+| `nail_care` | — | `POST …/occurrences/:occId/complete` |
+| `other` | — | `POST …/occurrences/:occId/complete` |
+
+For `weight_monitoring`, generic `…/complete`, `…/record`, `…/confirm-skip`, and stack `resolve-stack` without a weight observation return **400** with `Weight monitoring occurrences require a weight observation to complete`. API detail: [api-reference.md](/docs/architecture/api-reference.md); schedule commands: [care-schedule-management.md](./care-schedule-management.md).
 
 ### Done after the due date, with another date waiting (D-CSM-026)
 
