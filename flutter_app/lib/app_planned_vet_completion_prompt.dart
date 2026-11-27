@@ -7,8 +7,11 @@ import 'package:pet_profile_app/features/health_tracking/health_tracking.dart';
 Override carePlannedVetPromptHookOverride() {
   return carePlannedVetPromptHookProvider.overrideWith(
     (ref) =>
-        (BuildContext context, WidgetRef widgetRef, CarePlannedVetPromptContext
-            data) {
+        (
+          BuildContext context,
+          WidgetRef widgetRef,
+          CarePlannedVetPromptContext data,
+        ) {
           return HealthIssueLinkageFlow.maybePromptAfterPlannedVetCompletion(
             context,
             widgetRef,

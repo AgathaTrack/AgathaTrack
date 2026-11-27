@@ -8,7 +8,6 @@ import '../../../../../l10n/app_localizations.dart';
 import '../../../../care_taxonomy/care_taxonomy.dart';
 import '../../../domain/entities/health_entry.dart';
 import '../../../domain/entities/health_issue.dart';
-import '../../../presentation/providers/health_providers.dart';
 import '../../controllers/care_schedule_controller.dart';
 import '../../providers/health_issue_providers.dart';
 import '../care_schedule_command_feedback.dart';
@@ -60,7 +59,9 @@ class HealthIssueLinkageFlow {
     var linkedIssueId = healthIssueId;
 
     if (setting == null || planning == null) {
-      final entry = await ref.read(healthRepositoryProvider).getEntry(entryId);
+      final entry = await ref
+          .read(careScheduleControllerProvider)
+          .getEntry(entryId);
       if (entry == null) return;
       setting ??= entry.careSetting;
       planning ??= entry.carePlanning;

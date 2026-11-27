@@ -94,26 +94,24 @@ void main() {
   testWidgets('done shows planned vet health-issue prompt when eligible', (
     tester,
   ) async {
-    final entryPayload = careItemJson(
-      open: [
-        {
-          'id': 'occ-due',
-          'scheduled_date': '2026-06-10',
-          'scheduled_time': null,
-          'status': 'due',
-          'origin': 'schedule',
-        },
-      ],
-    )
-      ..['care_setting'] = 'vet'
-      ..['care_planning'] = 'planned'
-      ..['health_issue_id'] = null;
+    final entryPayload =
+        careItemJson(
+            open: [
+              {
+                'id': 'occ-due',
+                'scheduled_date': '2026-06-10',
+                'scheduled_time': null,
+                'status': 'due',
+                'origin': 'schedule',
+              },
+            ],
+          )
+          ..['care_setting'] = 'vet'
+          ..['care_planning'] = 'planned'
+          ..['health_issue_id'] = null;
 
     final client = MockClient((request) async {
-      return http.Response(
-        jsonEncode(commandJson(entry: entryPayload)),
-        200,
-      );
+      return http.Response(jsonEncode(commandJson(entry: entryPayload)), 200);
     });
     final flow = CareCompletionFlow(
       CareCompletionService(
@@ -179,25 +177,23 @@ void main() {
   testWidgets('done skips planned vet prompt when not vet setting', (
     tester,
   ) async {
-    final entryPayload = careItemJson(
-      open: [
-        {
-          'id': 'occ-due',
-          'scheduled_date': '2026-06-10',
-          'scheduled_time': null,
-          'status': 'due',
-          'origin': 'schedule',
-        },
-      ],
-    )
-      ..['care_setting'] = 'home'
-      ..['care_planning'] = 'planned';
+    final entryPayload =
+        careItemJson(
+            open: [
+              {
+                'id': 'occ-due',
+                'scheduled_date': '2026-06-10',
+                'scheduled_time': null,
+                'status': 'due',
+                'origin': 'schedule',
+              },
+            ],
+          )
+          ..['care_setting'] = 'home'
+          ..['care_planning'] = 'planned';
 
     final client = MockClient((request) async {
-      return http.Response(
-        jsonEncode(commandJson(entry: entryPayload)),
-        200,
-      );
+      return http.Response(jsonEncode(commandJson(entry: entryPayload)), 200);
     });
     final flow = CareCompletionFlow(
       CareCompletionService(
@@ -215,10 +211,9 @@ void main() {
             careFamily: data.careFamily,
           ),
     );
-    final item = schedule(
-      [occ('occ-due', 10, CareOccurrenceStatus.due)],
-      at: asOf(10, '10:00'),
-    );
+    final item = schedule([
+      occ('occ-due', 10, CareOccurrenceStatus.due),
+    ], at: asOf(10, '10:00'));
 
     await tester.pumpWidget(
       ProviderScope(
