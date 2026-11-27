@@ -2,7 +2,7 @@
 title: Pipeline v2 concurrency queue
 owner: Agent efficiency
 audience: owner
-status: in-delivery
+status: proposed
 status_since: 2026-11-27
 folds_into: docs/agent-efficiency/github-issue-workflow.md
 last_updated: 2026-11-27
@@ -11,8 +11,8 @@ tags: [agent, pipeline, ticks, concurrency]
 
 # Pipeline v2: stop losing scoped ticks to the concurrency group
 
-Owner approved the direction on 2026-11-27 (PIPE-V2-D-QUEUE-001, Accepted). PR A moves the concurrency group to the `tick`
-job with `queue: max`; PR B adds the wake-script watch. This file is folded and deleted when both are delivered.
+Proposal for owner review. **No workflow file is changed in this PR.** `.github/workflows/` is a sensitive path, so the
+change waits for the owner's decision (PIPE-V2-D-QUEUE-001, Proposed).
 
 Trigger: an `/analyse-issue` run on #2672 lost most of its `workflow_dispatch` ticks (`mission=analyse`,
 `issue_number=2672`). Many runs ended `cancelled` with no jobs.
@@ -48,12 +48,10 @@ Three consequences, each checked in the repo:
 
 - Run-level evidence from the incident (run `46079254419`, "one of about 100 dispatches succeeded"). It comes from the
   analysis that prompted this proposal. Not re-pulled here.
-- Resolved: `queue: max` exists and is valid at job level (GitHub changelog 2026-05-07; job-level `concurrency` syntax
-  per the current docs). Up to 100 pending runs or jobs per group, FIFO by time waiting, with `cancel-in-progress` false
-  or unset.
-- Still unverified: whether a job **skipped** by `if:` occupies a queue slot. Not documented in the sources checked. The
-  smoke test in *Delivery plan* step 4 settles it. Either way, a rejected event can only queue behind the group, not
-  displace a scoped dispatch.
+- The exact `queue` syntax and its behaviour at **job** level. GitHub's changelog of 2026-05-07 describes
+  `queue: max` (up to 100 pending runs or jobs per group, with `cancel-in-progress` false or unset), but
+  docs.github.com was not reachable from the authoring session. **Reviewer: check the current concurrency docs before
+  approving the YAML.**
 
 ## Proposal
 
