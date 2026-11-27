@@ -232,6 +232,47 @@ async function removeOtherMarkerComments(owner, repo, issueNumber, token, keepId
   }
 }
 
+/**
+ * POST a new marker comment. Unlike `saveStateToIssue` (which upserts and so
+ * PATCHes an existing marker), this never touches a marker that already exists.
+ */
+async function createStateMarkerComment(issueNumber, state, token = null) {
+  const { owner, repo } = resolveRepository();
+  const authToken = token || getGithubToken();
+  if (!authToken) {
+    throw new Error('GITHUB_TOKEN or GH_TOKEN is required to create a uat queue marker');
+  }
+  const created = await rest(
+    'POST',
+    `/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    authToken,
+    { body: renderStateCommentBody(state) },
+  );
+  return created.id;
+}
+
+/** Every marker comment on the issue, oldest first: `{ id, body }`. */
+async function listStateMarkerComments(issueNumber, token = null) {
+  const { owner, repo } = resolveRepository();
+  const authToken = token || getGithubToken();
+  if (!authToken) {
+    throw new Error('GITHUB_TOKEN or GH_TOKEN is required to list uat queue markers');
+  }
+  const comments = await fetchIssueComments(owner, repo, issueNumber, authToken);
+  return comments
+    .filter((comment) => comment.body?.includes(STATE_MARKER))
+    .map((comment) => ({ id: comment.id, body: comment.body }));
+}
+
+async function deleteStateMarkerComment(commentId, token = null) {
+  const { owner, repo } = resolveRepository();
+  const authToken = token || getGithubToken();
+  if (!authToken) {
+    throw new Error('GITHUB_TOKEN or GH_TOKEN is required to delete a uat queue marker');
+  }
+  await rest('DELETE', `/repos/${owner}/${repo}/issues/comments/${commentId}`, authToken);
+}
+
 async function ensureCoordinationIssueExists(issueNumber, token) {
   const { owner, repo } = resolveRepository();
   const authToken = token || getGithubToken();
@@ -241,8 +282,11 @@ async function ensureCoordinationIssueExists(issueNumber, token) {
 module.exports = {
   MAX_UAT_QUEUE_WRITE_ATTEMPTS,
   commitStateMutation,
+  createStateMarkerComment,
+  deleteStateMarkerComment,
   ensureCoordinationIssueExists,
   fingerprintState,
+  listStateMarkerComments,
   loadStateFromIssue,
   resolveCoordinationIssue,
   saveStateToIssue,

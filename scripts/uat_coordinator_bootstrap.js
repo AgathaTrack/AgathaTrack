@@ -13,10 +13,14 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 const { rest } = require('../.github/scripts/github-project-lib');
 const { resolveRepository } = require('./lib/execute_plan_project');
-const { createEmptyState } = require('./lib/uat_queue_lib');
+const { createEmptyState, parseStateFromCommentBody } = require('./lib/uat_queue_lib');
 const {
   commitStateMutation,
+  createStateMarkerComment,
+  deleteStateMarkerComment,
+  listStateMarkerComments,
   loadStateFromIssue,
+  saveStateToIssue,
 } = require('./lib/uat_queue_sync');
 
 const COORDINATION_TITLE = '[uat-coordinator] UAT deploy queue';
@@ -165,8 +169,51 @@ function ledgerHasLiveContent(state) {
   );
 }
 
-async function ensureMarkerComment(issueNumber, token, write) {
-  const loaded = await loadStateFromIssue(issueNumber, token);
+/** Real GitHub-backed marker store. Tests inject a fake with the same shape. */
+const MARKER_STORE = {
+  load: loadStateFromIssue,
+  save: saveStateToIssue,
+  create: createStateMarkerComment,
+  list: listStateMarkerComments,
+  remove: deleteStateMarkerComment,
+};
+
+function markerIsLive(body) {
+  try {
+    return ledgerHasLiveContent(parseStateFromCommentBody(body));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Create the first marker without ever publishing an empty ledger over live content.
+ *
+ * Another writer can land a marker after the bootstrap's read and before this
+ * create. `saveStateToIssue` would then PATCH that marker with the empty state,
+ * so this path POSTs instead. It refuses to POST when any marker exists, and
+ * after the POST it removes its own still-empty comment if another marker holds
+ * live content. The caller's read-back then adopts the live marker.
+ */
+async function createMarkerIfAbsent(issueNumber, state, token, store) {
+  if ((await store.list(issueNumber, token)).length > 0) {
+    return { commentId: null, created: false };
+  }
+  const commentId = await store.create(issueNumber, state, token);
+  const markers = await store.list(issueNumber, token);
+  const ours = markers.find((marker) => marker.id === commentId);
+  const liveElsewhere = markers.some(
+    (marker) => marker.id !== commentId && markerIsLive(marker.body),
+  );
+  if (ours && !markerIsLive(ours.body) && liveElsewhere) {
+    await store.remove(commentId, token);
+    return { commentId: null, created: false };
+  }
+  return { commentId, created: true };
+}
+
+async function ensureMarkerComment(issueNumber, token, write, store = MARKER_STORE) {
+  const loaded = await store.load(issueNumber, token);
   if (loaded.commentId) {
     return { initialized: false, comment_id: loaded.commentId };
   }
@@ -176,6 +223,12 @@ async function ensureMarkerComment(issueNumber, token, write) {
   const saved = await commitStateMutation({
     issueNumber,
     token,
+    loadState: store.load,
+    saveState(issue, state, tok, commentId) {
+      return commentId
+        ? store.save(issue, state, tok, commentId)
+        : createMarkerIfAbsent(issue, state, tok, store);
+    },
     mutate(state) {
       if (ledgerHasLiveContent(state)) {
         return { state, initialized: false };
@@ -266,6 +319,8 @@ async function main() {
 module.exports = {
   COORDINATION_TITLE,
   COORDINATION_LABELS,
+  MARKER_STORE,
+  ensureMarkerComment,
   ledgerHasLiveContent,
   renderIssueBody,
   parseArgs,

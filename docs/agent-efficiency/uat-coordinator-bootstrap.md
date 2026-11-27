@@ -3,7 +3,7 @@ title: Uat Coordinator Bootstrap
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-23
+last_updated: 2026-11-27
 tags: [agent-efficiency, policy]
 ---
 # UAT coordinator bootstrap (Phase 1b)
@@ -82,7 +82,11 @@ GitHub issue comments have no conditional update. A save can still overwrite a c
 
 The merge handler (`issue-agent-pr-merge.yml`) and the manual CLI have no concurrency group. `deploy-uat.yml` serialises only against other `deploy-uat` runs. `deploy-prod.yml` does not read or write this marker.
 
-Acceptance: `test: scripts/uat_queue_sync.test.js#two interleaved enqueues both survive`, `test: scripts/uat_queue_sync.test.js#duplicate enqueue for the same mergeSha is idempotent`, `test: scripts/uat_queue_sync.test.js#a store that never converges throws`.
+**Bootstrap marker creation.** When the issue has no marker, `--write` creates the first one without overwriting a marker that another writer lands in the meantime. It POSTs only when no marker exists, and after the POST it removes its own still-empty comment if another marker already holds live content. Bootstrap never publishes an empty ledger as the newest marker over live entries. A writer that lands after bootstrap's last check is handled by that writer's read-back, as for any other write.
+
+**Operator guidance:** run `--write` only when no enqueue, deploy, or `uat_queue_runtime.js --write` writer is active on the coordination issue (for example, a merge to `main` or a `deploy-uat` run in flight). Bootstrap is a one-time step, and the create guard covers only the create path. The PATCH gap below still applies to any writer.
+
+Acceptance: `test: scripts/uat_queue_sync.test.js#two interleaved enqueues both survive`, `test: scripts/uat_coordinator_bootstrap.test.js#bootstrap init does not wipe an enqueue that lands before its write`, `test: scripts/uat_coordinator_bootstrap.test.js#bootstrap init removes its empty marker when an enqueue lands after its check`, `test: scripts/uat_queue_sync.test.js#duplicate enqueue for the same mergeSha is idempotent`, `test: scripts/uat_queue_sync.test.js#a store that never converges throws`.
 
 ## Troubleshooting
 
