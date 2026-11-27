@@ -428,7 +428,7 @@ Existing: `health_entries.health_issue_id` optional link; dropdown on form when 
 
 ### 10.2 Prompt — planned vet visit completion
 
-**Delivery:** **Planned** — not implemented on `CareCompletionFlow` ([#2335](https://github.com/AgathaTrack/AgathaTrack/issues/2335)); canonical truth: D-CIE-046.
+**Delivery:** **Live** on `CareCompletionFlow` ([#2419](https://github.com/AgathaTrack/AgathaTrack/issues/2419)); canonical truth: D-CIE-050.
 
 **When:** user marks completed a **planned** entry where `care_setting=vet` (or family ∈ {wellness_review, dental, vaccination}).
 
@@ -510,7 +510,7 @@ Each phase = one verifiable outcome ([atomic-pr-policy](../../../agent-efficienc
 
 ### 13.1 Remaining open items
 
-1. **Health issue from planned completion** — prompt families: all vet-setting completions, or only `wellness_review` / `dental` / `vaccination`?
+1. **Health issue from planned completion** — **Settled (v1, #2419):** gate on `care_setting=vet` with `care_planning=planned` and no linked issue (same as §10.2 vet branch). Family-only triggers (`wellness_review` / `dental` / `vaccination` without vet setting) remain future scope.
 2. **Create-at-completion detection** for backfill step 5 — confirm via `created_at ≈ completed_on` same day **and** zero occurrences (may still miss same-day planned+complete).
 
 ---
@@ -535,7 +535,7 @@ Each phase = one verifiable outcome ([atomic-pr-policy](../../../agent-efficienc
 - [ ] Taxonomy defaults match §4.3 matrix; single JSON/registry source.
 - [ ] `deriveLegacyType` has contract tests (Dart ↔ Node).
 - [ ] Vet unplanned save shows health-issue prompt (dismissible).
-- [ ] Planned vet completion shows health-issue + optional re-plan prompt. **Planned** (D-CIE-046; not on Care Item completion path).
+- [x] Planned vet completion shows health-issue + optional re-plan prompt. **Live** (D-CIE-050; `CareCompletionFlow`).
 - [ ] No urgent picker anywhere in care entry flows.
 - [ ] Filters use family + `filter_group` (type chips removed or deprecated).
 - [ ] Phase B rejects client-sent `type`; E2E updated in same PR.

@@ -117,6 +117,7 @@ class _CareListSurfaceCollectionState
           schedule: schedule,
           onChanged: _refreshAfterCareCommand,
           source: widget.source,
+          ref: ref,
         );
   }
 

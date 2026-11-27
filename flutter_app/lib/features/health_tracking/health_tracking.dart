@@ -43,6 +43,7 @@ export 'presentation/widgets/health_entry_form/health_entry_frequency_labels.dar
 export 'presentation/widgets/health_entry_status.dart';
 export 'presentation/widgets/health_entry_type_labels.dart';
 export 'presentation/widgets/health_issue_card.dart';
+export 'presentation/widgets/health_issue_prompt/health_issue_linkage_flow.dart';
 export 'presentation/widgets/occurrence_review_flow.dart';
 export 'presentation/widgets/pet_event_administration_history_dialog.dart';
 export 'presentation/widgets/pet_event_close_confirm_dialog.dart';

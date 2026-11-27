@@ -73,6 +73,9 @@ class CareCommandResult {
     this.resolvedGiven = const [],
     this.resolvedNotGiven = const [],
     this.ignoredIds = const [],
+    this.entryCareSettingWire,
+    this.entryCarePlanningWire,
+    this.entryHealthIssueId,
   });
 
   final String entryId;
@@ -106,6 +109,11 @@ class CareCommandResult {
 
   /// Completion date change: the next date was moved by a person and stays.
   final bool nextUnchanged;
+
+  /// Classification from the command `entry` payload (when present).
+  final String? entryCareSettingWire;
+  final String? entryCarePlanningWire;
+  final String? entryHealthIssueId;
 }
 
 /// A command answer: success with its result, or a mapped failure.

@@ -37,6 +37,45 @@ void main() {
     expect(result, VetHealthIssuePromptChoice.dismiss);
   });
 
+  testWidgets('planned completion prompt offers re-plan action', (
+    tester,
+  ) async {
+    late VetHealthIssuePromptChoice? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () async {
+                result = await showPlannedVetCompletionHealthIssuePrompt(
+                  context,
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Did the vet identify anything new to track?'),
+      findsOneWidget,
+    );
+    expect(find.text('Plan the next visit'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('vet_health_issue_prompt_planNextVisit')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(result, VetHealthIssuePromptChoice.planNextVisit);
+  });
+
   testWidgets('health issue picker returns selected issue', (tester) async {
     const issues = [
       HealthIssue(id: 'i1', petId: 'p1', title: 'Dental'),

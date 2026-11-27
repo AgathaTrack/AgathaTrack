@@ -111,6 +111,7 @@ class _CareAgendaCollectionState extends ConsumerState<CareAgendaCollection> {
           schedule: row.schedule,
           onChanged: _refreshAfterCareCommand,
           source: widget.source,
+          ref: ref,
         );
   }
 

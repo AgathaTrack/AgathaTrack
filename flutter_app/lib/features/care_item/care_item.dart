@@ -30,6 +30,7 @@ export 'domain/occurrence_status.dart';
 export 'domain/weigh_in_skip_reason.dart';
 export 'domain/stack_rule.dart';
 export 'presentation/care_completion_flow.dart';
+export 'presentation/care_planned_vet_prompt_hook.dart';
 export 'presentation/sheets/completion_date_sheet.dart';
 export 'presentation/sheets/early_completion_dialog.dart';
 export 'presentation/sheets/plan_another_date_sheet.dart';

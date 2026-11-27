@@ -286,6 +286,15 @@ class CareCompletionService {
   CareCommandResult _commandResult(String entryId, Map<String, dynamic> body) {
     final entry = body['entry'];
     final occurrence = body['occurrence'];
+    String? entryCareSettingWire;
+    String? entryCarePlanningWire;
+    String? entryHealthIssueId;
+    if (entry is Map<String, dynamic>) {
+      entryCareSettingWire = entry['care_setting'] as String?;
+      entryCarePlanningWire = entry['care_planning'] as String?;
+      entryHealthIssueId = entry['health_issue_id'] as String?;
+    }
+
     return CareCommandResult(
       entryId: entryId,
       occurrenceId: occurrence is Map<String, dynamic>
@@ -295,6 +304,9 @@ class CareCompletionService {
           ? careItemScheduleFromJson(entry)
           : null,
       undoToken: body['undo_token'] as String?,
+      entryCareSettingWire: entryCareSettingWire,
+      entryCarePlanningWire: entryCarePlanningWire,
+      entryHealthIssueId: entryHealthIssueId,
       nextChoiceApplied: body['next_choice_applied'] as String?,
       nextDueDate: parseCalendarDate(body['next_due_date']),
       movedNextId: body['moved_next_id'] as String?,

@@ -65,6 +65,7 @@ class CareItemOccurrenceTrailingControls extends ConsumerWidget {
                       occurrence: occurrence,
                       onChanged: onChanged,
                       source: CareCommandSource.careItem,
+                      ref: ref,
                     ),
         ),
         CareSkipButton(

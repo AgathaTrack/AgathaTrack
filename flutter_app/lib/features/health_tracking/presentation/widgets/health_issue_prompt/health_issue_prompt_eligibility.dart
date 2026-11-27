@@ -10,3 +10,14 @@ bool shouldPromptUnplannedVetSave({
       carePlanning == CarePlanningMode.unplanned &&
       healthIssueId == null;
 }
+
+/// Whether to show the §10.2 planned vet completion health-issue prompt.
+bool shouldPromptPlannedVetCompletion({
+  required CareSetting careSetting,
+  required CarePlanningMode carePlanning,
+  String? healthIssueId,
+}) {
+  return careSetting == CareSetting.vet &&
+      carePlanning == CarePlanningMode.planned &&
+      healthIssueId == null;
+}

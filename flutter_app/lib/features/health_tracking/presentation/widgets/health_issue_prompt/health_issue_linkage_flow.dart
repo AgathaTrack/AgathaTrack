@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../../core/utils/calendar_date.dart';
 import '../../../../../l10n/app_localizations.dart';
 import '../../../../care_taxonomy/care_taxonomy.dart';
+import '../../../domain/entities/health_entry.dart';
 import '../../../domain/entities/health_issue.dart';
+import '../../../presentation/providers/health_providers.dart';
 import '../../controllers/care_schedule_controller.dart';
 import '../../providers/health_issue_providers.dart';
 import '../care_schedule_command_feedback.dart';
 import 'health_issue_linkage_prompt.dart';
 import 'health_issue_prompt_eligibility.dart';
 
-/// Orchestrates vet health-issue prompts and linkage after unplanned vet save.
+/// Orchestrates vet health-issue prompts and linkage after save/completion.
 class HealthIssueLinkageFlow {
   const HealthIssueLinkageFlow._();
 
@@ -42,18 +45,88 @@ class HealthIssueLinkageFlow {
     );
   }
 
+  static Future<void> maybePromptAfterPlannedVetCompletion(
+    BuildContext context,
+    WidgetRef ref, {
+    required String petId,
+    required String entryId,
+    String? careSettingWire,
+    String? carePlanningWire,
+    String? healthIssueId,
+    String? careFamily,
+  }) async {
+    var setting = CareSettingWire.fromWire(careSettingWire);
+    var planning = CarePlanningModeWire.fromWire(carePlanningWire);
+    var linkedIssueId = healthIssueId;
+
+    if (setting == null || planning == null) {
+      final entry = await ref.read(healthRepositoryProvider).getEntry(entryId);
+      if (entry == null) return;
+      setting ??= entry.careSetting;
+      planning ??= entry.carePlanning;
+      linkedIssueId ??= entry.healthIssueId;
+      careFamily ??= entry.careFamily?.wireValue;
+    }
+
+    if (!shouldPromptPlannedVetCompletion(
+      careSetting: setting ?? CareSetting.other,
+      carePlanning: planning ?? CarePlanningMode.planned,
+      healthIssueId: linkedIssueId,
+    )) {
+      return;
+    }
+
+    final familyQuery = careFamily == null || careFamily.isEmpty
+        ? ''
+        : '?family=$careFamily';
+
+    await _runPrompt(
+      context,
+      ref,
+      petId: petId,
+      entryId: entryId,
+      prompt: showPlannedVetCompletionHealthIssuePrompt,
+      onPlanNextVisit: () {
+        if (!context.mounted) return;
+        context.push('/pet/$petId/care/add$familyQuery');
+      },
+    );
+  }
+
+  /// Convenience when a full [HealthEntry] is already loaded.
+  static Future<void> maybePromptAfterPlannedVetCompletionForEntry(
+    BuildContext context,
+    WidgetRef ref,
+    HealthEntry entry,
+  ) {
+    return maybePromptAfterPlannedVetCompletion(
+      context,
+      ref,
+      petId: entry.petId,
+      entryId: entry.id,
+      careSettingWire: entry.careSetting?.wireValue,
+      carePlanningWire: entry.carePlanning?.wireValue,
+      healthIssueId: entry.healthIssueId,
+      careFamily: entry.careFamily?.wireValue,
+    );
+  }
+
   static Future<void> _runPrompt(
     BuildContext context,
     WidgetRef ref, {
     required String petId,
     required String entryId,
     required Future<VetHealthIssuePromptChoice?> Function(BuildContext) prompt,
+    VoidCallback? onPlanNextVisit,
   }) async {
     final choice = await prompt(context);
     if (!context.mounted || choice == null) return;
 
     switch (choice) {
       case VetHealthIssuePromptChoice.dismiss:
+        return;
+      case VetHealthIssuePromptChoice.planNextVisit:
+        onPlanNextVisit?.call();
         return;
       case VetHealthIssuePromptChoice.linkExisting:
         await _linkExistingIssue(context, ref, petId: petId, entryId: entryId);

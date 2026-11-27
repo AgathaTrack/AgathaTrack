@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app_care_provider_contacts.dart';
 import 'app_care_suggestion_accept.dart';
 import 'app_pet_care_sync.dart';
+import 'app_planned_vet_completion_prompt.dart';
 import 'core/care/care_item_observation_section.dart';
 import 'core/providers/analytics_providers.dart';
 import 'core/providers/locale_provider.dart';
@@ -63,6 +64,7 @@ Future<void> main() async {
         petCareSyncProvider.overrideWith((ref) => AppPetCareSync(ref)),
         careProviderContactOptionsOverride(),
         careSuggestionFormAcceptHandlerOverride(),
+        carePlannedVetPromptHookOverride(),
         careItemObservationSectionProvider.overrideWith(
           (ref) =>
               (
