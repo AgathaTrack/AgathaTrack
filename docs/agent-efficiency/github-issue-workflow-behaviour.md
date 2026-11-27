@@ -174,7 +174,6 @@ issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
 | `needs-owner` | only on execute-plan control issues, where the runtime reads it; not an issue-pipeline state |
 | `in-prod` | added by the engine when an issue reaches Done |
 | `bug` / `feature` / `task` | issue form type; the Definition of Ready is checked per form |
-| `AAT-progress` / `AAT-passed` / `AAT-failed` | Agent Acceptance (`/AgentAcceptance`); see [github-labels.md](./github-labels.md) |
 
 ### Umbrella issues (PIPE-UMB-D-001)
 
@@ -192,7 +191,7 @@ An **umbrella** is an issue that has GitHub sub-issues. Its own delivery is stil
 Holistic acceptance on a **parent** issue. With `aat.enabled` false it stays human- or agent-invoked and does not gate In UAT. With `aat.enabled` true (the repo config since #2448 P4) and both org fields present, it is the engine's blocking gate from **In Main** to **In UAT** for issues that are not follow-ups: `aatSatisfied` for `delivery.lastMergeSha` and `uatContainsLatestMerge` are both required. Follow-ups keep intent review. The production-deploy guard stays on #2424.
 
 1. **Eligibility:** Parent issues only — not bodies with `<!-- v2:follow-up of=#n -->`.
-2. **Labels:** human-facing; `aat-start` ensures labels and sets `AAT-progress`; `aat-pass` / `aat-fail` update labels after the comment (REST via `github_issue_workflow.js`, not `gh issue edit`). The engine does not read the labels. **Token:** `GH_TOKEN` or `PAWPET_CLAUDE_TOKEN` in agent sessions. Agents never write `Stage`, `Acceptance`, or `Acceptance fail reason`.
+2. **Acceptance state:** org field `Acceptance` (humans may set `Manual` / `Skipped` per #2424). Agents post verdict comments via `aat-pass` / `aat-fail` / `aat-inconclusive` only (`github_issue_workflow.js`); the engine reads the `v2:aat` marker, not legacy `AAT-*` labels (retired). **Token:** `GH_TOKEN` or `PAWPET_CLAUDE_TOKEN` in agent sessions. Agents never write `Stage`, `Acceptance`, or `Acceptance fail reason`.
 3. **Verdict record:** last line of the verdict comment, `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->`. A fail includes `reason=scope|implementation|quality`. Pass and inconclusive omit `reason`. `inconclusive` is a verdict, not a reason. A fail without a known reason is ignored. Only a listed agent's comment newer than the engine's latest `v2:aat-launch` for that merge counts.
 4. **INCONCLUSIVE and timeout** share `aat.maxInconclusive` per merge, then `Blocked=stalled` while the issue stays In Main. A launch still inside `aat.timeoutMin` is not relaunched. A timeout is not a fail. A launch that failed to start (`v2:aat-launch … failed=1`) is not an attempt: it is retried on the launch backoff, then `Blocked=launch-failed`. A newer merge releases either hold (§Holds). Verdicts are compared to the latest launch that started.
 5. **Fail paths:** `quality` stays In Main until a newer linked merge into `main`. `scope` and `implementation` return to In progress and stay there until a newer linked merge into `main`. `scope` relaunches delivery once on the existing programme. `implementation` is a `bug` follow-up (`<!-- v2:follow-up of=#parent -->`, `Priority=Urgent` when that field exists) whose PRs also `Refs` the parent. Neither sets `Blocked` while a linked PR is open or, for implementation, while such a follow-up is open.
