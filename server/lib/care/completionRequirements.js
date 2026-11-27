@@ -68,9 +68,15 @@ const COMPLETION_MATRIX = {
  * @param {string | null | undefined} careFamily
  * @returns {readonly CompletionRequirementKind[]}
  */
+function matrixSpec(careFamily) {
+  return Object.hasOwn(COMPLETION_MATRIX, careFamily)
+    ? COMPLETION_MATRIX[careFamily]
+    : null;
+}
+
 export function completionRequirementsFor(careFamily) {
   if (!careFamily) return [];
-  return COMPLETION_MATRIX[careFamily]?.requirements ?? [];
+  return matrixSpec(careFamily)?.requirements ?? [];
 }
 
 /**
@@ -79,7 +85,7 @@ export function completionRequirementsFor(careFamily) {
  */
 export function completionEndpointFor(careFamily) {
   if (!careFamily) return 'complete';
-  return COMPLETION_MATRIX[careFamily]?.endpoint ?? 'complete';
+  return matrixSpec(careFamily)?.endpoint ?? 'complete';
 }
 
 /**
@@ -90,7 +96,7 @@ export function completionEndpointFor(careFamily) {
 export function genericCompleteGuard(entry) {
   const family = entry?.care_family;
   if (!family) return null;
-  return COMPLETION_MATRIX[family]?.genericCompleteError ?? null;
+  return matrixSpec(family)?.genericCompleteError ?? null;
 }
 
 /** @returns {string[]} */
@@ -103,7 +109,7 @@ export function listCompletionFamilies() {
  * @returns {FamilyCompletionSpec | null}
  */
 export function completionSpecFor(careFamily) {
-  return COMPLETION_MATRIX[careFamily] ?? null;
+  return matrixSpec(careFamily);
 }
 
 export { COMPLETION_MATRIX };

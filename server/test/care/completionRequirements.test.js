@@ -40,5 +40,6 @@ describe('completionRequirements registry (D-CIE-031)', () => {
     expect(completionRequirementsFor('unknown_family')).toEqual([]);
     expect(completionEndpointFor('unknown_family')).toBe('complete');
     expect(genericCompleteGuard({ care_family: 'unknown_family' })).toBeNull();
+    expect(completionSpecFor('toString')).toBeNull();
   });
 });

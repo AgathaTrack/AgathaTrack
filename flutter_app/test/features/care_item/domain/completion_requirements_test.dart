@@ -1,12 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pet_profile_app/features/care_item/care_item.dart';
+import 'package:pet_profile_app/features/care_taxonomy/domain/care_family.dart';
 
 void main() {
   group('completion requirements (D-CIE-031)', () {
-    test('registry lists all nine care families', () {
-      expect(kCareFamilies.length, 9);
-      for (final family in kCareFamilies) {
-        expect(completionSpecFor(family), isNotNull);
+    test('registry keys match CareFamily wire values', () {
+      final wireFamilies = CareFamily.values.map((f) => f.wireValue).toList();
+      expect(kCareFamilies, containsAll(wireFamilies));
+      expect(kCareFamilies.length, wireFamilies.length);
+      for (final wire in wireFamilies) {
+        expect(completionSpecFor(wire), isNotNull);
       }
     });
 
