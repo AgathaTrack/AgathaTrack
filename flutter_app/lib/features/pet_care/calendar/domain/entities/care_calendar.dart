@@ -51,6 +51,16 @@ class CareCalendarNotice {
   final String healthEntryId;
 }
 
+class CareCalendarDayAbsenceOverlay {
+  const CareCalendarDayAbsenceOverlay({
+    required this.petId,
+    required this.overlay,
+  });
+
+  final String petId;
+  final CareCalendarPlannedAbsenceOverlay overlay;
+}
+
 class CareCalendarPlannedAbsenceOverlay {
   const CareCalendarPlannedAbsenceOverlay({
     required this.absenceId,

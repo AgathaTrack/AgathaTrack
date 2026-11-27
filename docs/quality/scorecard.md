@@ -27,8 +27,8 @@ Living metrics for Agatha Track quality. Update when CI or test counts change ma
 | Flutter integration flows | 1 | `flutter-integration` job |
 | Jest (active / frozen) | 328 / 9 | `jest.config.active.cjs` |
 | Playwright (active / frozen) | 43 / 0 | `shard-files.mjs` + frozen list |
-| BDD active scenarios | 249 (16 frozen excluded) | `check_bdd_coverage.js` |
-| BDD mapped (active) | 85.9% (214/249) | gate **169/249 (68%)** |
+| BDD active scenarios | 250 (16 frozen excluded) | `check_bdd_coverage.js` |
+| BDD mapped (active) | 86.0% (215/250) | gate **170/250 (68%)** |
 | BDD title drift (active) | 0 | `generate-scorecard-metrics.mjs --check` |
 | BDD uncovered (active) | 35 | informational |
 | Pre-UAT shard orphans | 0 | `validate-shard-manifest.mjs` |

@@ -29,6 +29,7 @@ class CareCalendarSurface extends StatelessWidget {
     final monthLabel = DateFormat.yMMMM().format(month);
     final itemsByDate = {for (final day in result.days) day.date: day.items};
     final overlayByDay = plannedAbsenceOverlaysByDay(
+      petId,
       result.plannedAbsenceOverlays,
     );
     final hasAny =
@@ -171,15 +172,22 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
       });
     }
 
-    final overlayByDay = <String, List<CareCalendarPlannedAbsenceOverlay>>{};
+    final overlayByDay = <String, List<CareCalendarDayAbsenceOverlay>>{};
     for (final row in rows) {
       final data = row.data;
       if (data == null) continue;
-      final perPet = plannedAbsenceOverlaysByDay(data.plannedAbsenceOverlays);
+      final perPet = plannedAbsenceOverlaysByDay(
+        row.petId,
+        data.plannedAbsenceOverlays,
+      );
       for (final entry in perPet.entries) {
         final list = overlayByDay.putIfAbsent(entry.key, () => []);
         for (final overlay in entry.value) {
-          if (!list.any((o) => o.absenceId == overlay.absenceId)) {
+          if (!list.any(
+            (o) =>
+                o.overlay.absenceId == overlay.overlay.absenceId &&
+                o.petId == overlay.petId,
+          )) {
             list.add(overlay);
           }
         }

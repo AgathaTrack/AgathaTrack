@@ -2,6 +2,7 @@
  * @bdd care_calendar.feature
  * Scenario: Dashboard calendar tab
  * Scenario: Open Care date from calendar
+ * Scenario: Planned absence overlay on calendar grid
  */
 import { test, expect, loginAs } from '../fixtures/auth.fixture';
 import { GuardianDashboardPage } from '../pages/guardian-dashboard.page';
@@ -21,6 +22,14 @@ import {
   refreshFlutterAccessibility,
   waitForFlutterRoutePattern,
 } from '../support/flutter';
+
+function addCalendarDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${dt.getUTCFullYear()}-${mm}-${dd}`;
+}
 
 async function openCareCalendarTab(page: Page): Promise<void> {
   const toggle = page.locator(
@@ -129,8 +138,8 @@ test.describe('Care calendar @care', () => {
 
   test('Planned absence overlay on calendar grid', async ({ page, testUser }) => {
     const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
-    const today = '2026-11-27';
-    const endsOn = '2026-12-02';
+    const today = new Date().toISOString().slice(0, 10);
+    const endsOn = addCalendarDays(today, 5);
     await withCareClock(`${today}T09:00`, page);
     try {
       const pet = await createPetApi(baseURL, testUser.accessToken, 'Away overlay');

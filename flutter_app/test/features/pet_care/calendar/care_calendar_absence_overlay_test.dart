@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pet_profile_app/features/pet_care/calendar/domain/entities/care_calendar.dart';
 import 'package:pet_profile_app/features/pet_care/calendar/presentation/widgets/care_calendar_surface.dart';
 import 'package:pet_profile_app/l10n/app_localizations.dart';
@@ -42,23 +44,35 @@ CareCalendarResult _monthWithAbsenceOverlay() {
   );
 }
 
+Widget _calendarUnderTest(GoRouter router) {
+  return MaterialApp.router(
+    routerConfig: router,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+  );
+}
+
 void main() {
-  testWidgets('absence overlay shows icon without care badge', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: CareCalendarSurface(
-            petId: 'pet-1',
-            month: DateTime(2026, 11),
-            result: _monthWithAbsenceOverlay(),
-            onPreviousMonth: () {},
-            onNextMonth: () {},
+  testWidgets('absence-only day shows luggage without care badge', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: CareCalendarSurface(
+              petId: 'pet-1',
+              month: DateTime(2026, 11),
+              result: _monthWithAbsenceOverlay(),
+              onPreviousMonth: () {},
+              onNextMonth: () {},
+            ),
           ),
         ),
-      ),
+      ],
     );
+    await tester.pumpWidget(_calendarUnderTest(router));
     await tester.pump();
     await tester.pump();
 
@@ -68,5 +82,76 @@ void main() {
     );
     expect(find.byIcon(Icons.luggage_outlined), findsWidgets);
     expect(find.byKey(const Key('care_calendar_empty_month')), findsNothing);
+  });
+
+  testWidgets('mixed day keeps care badge while overlay is active', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: CareCalendarSurface(
+              petId: 'pet-1',
+              month: DateTime(2026, 11),
+              result: _monthWithAbsenceOverlay(),
+              onPreviousMonth: () {},
+              onNextMonth: () {},
+            ),
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(_calendarUnderTest(router));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(Badge), findsOneWidget);
+    expect(
+      find.bySemanticsIdentifier('care_calendar_day_2026-11-11'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('absence-only tap opens pet away plan route', (tester) async {
+    const awayOpened = Key('away_plan_opened');
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: CareCalendarSurface(
+              petId: 'pet-1',
+              month: DateTime(2026, 11),
+              result: _monthWithAbsenceOverlay(),
+              onPreviousMonth: () {},
+              onNextMonth: () {},
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/pc/away/:absenceId/pets/:petId',
+          builder: (context, state) => Scaffold(
+            key: awayOpened,
+            body: Text(state.pathParameters['absenceId']!),
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(_calendarUnderTest(router));
+    await tester.pump();
+    await tester.pump();
+
+    final absenceDay = find.bySemanticsIdentifier(
+      'care_calendar_day_2026-11-10',
+    );
+    final semantics = tester.getSemantics(absenceDay);
+    expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue);
+
+    await tester.tap(absenceDay);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(awayOpened), findsOneWidget);
   });
 }

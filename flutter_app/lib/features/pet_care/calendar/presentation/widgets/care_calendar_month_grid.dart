@@ -17,7 +17,7 @@ class CareCalendarMonthGrid extends StatelessWidget {
   final String petId;
   final DateTime month;
   final Map<String, List<CareCalendarItem>> itemsByDate;
-  final Map<String, List<CareCalendarPlannedAbsenceOverlay>> overlayByDay;
+  final Map<String, List<CareCalendarDayAbsenceOverlay>> overlayByDay;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +54,7 @@ class CareCalendarMonthGridMarkers extends StatelessWidget {
   >
   markers;
   final String? petId;
-  final Map<String, List<CareCalendarPlannedAbsenceOverlay>> overlayByDay;
+  final Map<String, List<CareCalendarDayAbsenceOverlay>> overlayByDay;
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +117,7 @@ class CareCalendarDayCell extends StatelessWidget {
 
   final DateTime date;
   final List<({String petId, String petName, CareCalendarItem item})> markers;
-  final List<CareCalendarPlannedAbsenceOverlay> absenceOverlays;
+  final List<CareCalendarDayAbsenceOverlay> absenceOverlays;
   final String? petId;
 
   @override
@@ -128,15 +128,14 @@ class CareCalendarDayCell extends StatelessWidget {
     final hasAbsenceOverlay = absenceOverlays.isNotEmpty;
     final hasProjectedOnly =
         count > 0 && markers.every((row) => row.item.isProjected);
-    CareCalendarPlannedAbsenceOverlay? openableAbsence;
-    for (final overlay in absenceOverlays) {
-      if (overlay.canOpenAwayPlan) {
-        openableAbsence = overlay;
+    CareCalendarDayAbsenceOverlay? openableEntry;
+    for (final entry in absenceOverlays) {
+      if (entry.overlay.canOpenAwayPlan) {
+        openableEntry = entry;
         break;
       }
     }
-    final absenceOnlyTap =
-        count == 0 && openableAbsence != null && petId != null;
+    final absenceOnlyTap = count == 0 && openableEntry != null;
 
     final semanticsParts = <String>[
       if (count > 0) l.careCalendarDaySheetTitle(iso),
@@ -152,8 +151,8 @@ class CareCalendarDayCell extends StatelessWidget {
             ? (absenceOnlyTap
                   ? () => openPetAwayPlan(
                       context,
-                      openableAbsence!.absenceId,
-                      petId!,
+                      openableEntry!.overlay.absenceId,
+                      openableEntry.petId,
                     )
                   : null)
             : () => _onTap(context, iso, markers),

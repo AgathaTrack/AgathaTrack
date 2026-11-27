@@ -1,15 +1,17 @@
 import 'entities/care_calendar.dart';
 
 /// Maps each in-grid calendar day to overlays active on that date (inclusive).
-Map<String, List<CareCalendarPlannedAbsenceOverlay>>
-plannedAbsenceOverlaysByDay(List<CareCalendarPlannedAbsenceOverlay> overlays) {
-  final byDay = <String, List<CareCalendarPlannedAbsenceOverlay>>{};
+Map<String, List<CareCalendarDayAbsenceOverlay>> plannedAbsenceOverlaysByDay(
+  String petId,
+  List<CareCalendarPlannedAbsenceOverlay> overlays,
+) {
+  final byDay = <String, List<CareCalendarDayAbsenceOverlay>>{};
   for (final overlay in overlays) {
     var cursor = overlay.overlayStartsOn;
     while (cursor.compareTo(overlay.overlayEndsOn) <= 0) {
       final list = byDay.putIfAbsent(cursor, () => []);
-      if (!list.any((o) => o.absenceId == overlay.absenceId)) {
-        list.add(overlay);
+      if (!list.any((o) => o.overlay.absenceId == overlay.absenceId)) {
+        list.add(CareCalendarDayAbsenceOverlay(petId: petId, overlay: overlay));
       }
       cursor = _nextCalendarDay(cursor);
     }
