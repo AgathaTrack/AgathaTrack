@@ -53,20 +53,25 @@ class HealthIssueLinkageFlow {
     String? carePlanningWire,
     String? healthIssueId,
     String? careFamily,
+    bool entryClassificationComplete = false,
   }) async {
     var setting = CareSettingWire.fromWire(careSettingWire);
     var planning = CarePlanningModeWire.fromWire(carePlanningWire);
     var linkedIssueId = healthIssueId;
 
-    if (setting == null || planning == null) {
-      final entry = await ref
-          .read(careScheduleControllerProvider)
-          .getEntry(entryId);
-      if (entry == null) return;
-      setting ??= entry.careSetting;
-      planning ??= entry.carePlanning;
-      linkedIssueId ??= entry.healthIssueId;
-      careFamily ??= entry.careFamily?.wireValue;
+    if (!entryClassificationComplete) {
+      try {
+        final entry = await ref
+            .read(careScheduleControllerProvider)
+            .getEntry(entryId);
+        if (entry == null) return;
+        setting = entry.careSetting;
+        planning = entry.carePlanning;
+        linkedIssueId = entry.healthIssueId;
+        careFamily ??= entry.careFamily?.wireValue;
+      } catch (_) {
+        return;
+      }
     }
 
     if (!shouldPromptPlannedVetCompletion(

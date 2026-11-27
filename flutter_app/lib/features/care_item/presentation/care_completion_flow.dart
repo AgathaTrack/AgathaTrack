@@ -210,6 +210,7 @@ class CareCompletionFlow {
         carePlanningWire: result.entryCarePlanningWire,
         healthIssueId: result.entryHealthIssueId,
         careFamily: schedule.careFamily,
+        entryClassificationComplete: result.entryClassificationComplete,
       ),
     );
   }

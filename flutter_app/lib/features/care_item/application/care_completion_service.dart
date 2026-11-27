@@ -289,10 +289,15 @@ class CareCompletionService {
     String? entryCareSettingWire;
     String? entryCarePlanningWire;
     String? entryHealthIssueId;
+    var entryClassificationComplete = false;
     if (entry is Map<String, dynamic>) {
       entryCareSettingWire = entry['care_setting'] as String?;
       entryCarePlanningWire = entry['care_planning'] as String?;
       entryHealthIssueId = entry['health_issue_id'] as String?;
+      entryClassificationComplete =
+          entry.containsKey('care_setting') &&
+          entry.containsKey('care_planning') &&
+          entry.containsKey('health_issue_id');
     }
 
     return CareCommandResult(
@@ -307,6 +312,7 @@ class CareCompletionService {
       entryCareSettingWire: entryCareSettingWire,
       entryCarePlanningWire: entryCarePlanningWire,
       entryHealthIssueId: entryHealthIssueId,
+      entryClassificationComplete: entryClassificationComplete,
       nextChoiceApplied: body['next_choice_applied'] as String?,
       nextDueDate: parseCalendarDate(body['next_due_date']),
       movedNextId: body['moved_next_id'] as String?,

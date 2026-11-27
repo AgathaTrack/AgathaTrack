@@ -127,6 +127,7 @@ void main() {
             carePlanningWire: data.carePlanningWire,
             healthIssueId: data.healthIssueId,
             careFamily: data.careFamily,
+            entryClassificationComplete: data.entryClassificationComplete,
           ),
     );
     final item = schedule(
@@ -209,6 +210,7 @@ void main() {
             carePlanningWire: data.carePlanningWire,
             healthIssueId: data.healthIssueId,
             careFamily: data.careFamily,
+            entryClassificationComplete: data.entryClassificationComplete,
           ),
     );
     final item = schedule([

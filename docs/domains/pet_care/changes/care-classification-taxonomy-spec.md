@@ -430,7 +430,7 @@ Existing: `health_entries.health_issue_id` optional link; dropdown on form when 
 
 **Delivery:** **Live** on `CareCompletionFlow` ([#2419](https://github.com/AgathaTrack/AgathaTrack/issues/2419)); canonical truth: D-CIE-050.
 
-**When:** user marks completed a **planned** entry where `care_setting=vet` (or family ∈ {wellness_review, dental, vaccination}).
+**When:** user marks completed a **planned** entry where `care_setting=vet` and `health_issue_id` is null. (Family-only triggers without `care_setting=vet` remain **future scope**; v1 settled in §13.1.)
 
 **UI:** after completion confirm:
 

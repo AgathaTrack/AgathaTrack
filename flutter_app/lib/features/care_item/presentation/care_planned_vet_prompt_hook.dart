@@ -10,6 +10,7 @@ class CarePlannedVetPromptContext {
     this.carePlanningWire,
     this.healthIssueId,
     this.careFamily,
+    this.entryClassificationComplete = false,
   });
 
   final String petId;
@@ -18,6 +19,7 @@ class CarePlannedVetPromptContext {
   final String? carePlanningWire;
   final String? healthIssueId;
   final String? careFamily;
+  final bool entryClassificationComplete;
 }
 
 typedef CarePlannedVetPromptHook =

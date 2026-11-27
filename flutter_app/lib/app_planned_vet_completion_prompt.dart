@@ -21,6 +21,7 @@ Override carePlannedVetPromptHookOverride() {
             carePlanningWire: data.carePlanningWire,
             healthIssueId: data.healthIssueId,
             careFamily: data.careFamily,
+            entryClassificationComplete: data.entryClassificationComplete,
           );
         },
   );
