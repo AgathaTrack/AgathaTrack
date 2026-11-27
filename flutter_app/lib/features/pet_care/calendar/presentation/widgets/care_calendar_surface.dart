@@ -171,20 +171,20 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
       });
     }
 
-  final overlayByDay = <String, List<CareCalendarPlannedAbsenceOverlay>>{};
-  for (final row in rows) {
-    final data = row.data;
-    if (data == null) continue;
-    final perPet = plannedAbsenceOverlaysByDay(data.plannedAbsenceOverlays);
-    for (final entry in perPet.entries) {
-      final list = overlayByDay.putIfAbsent(entry.key, () => []);
-      for (final overlay in entry.value) {
-        if (!list.any((o) => o.absenceId == overlay.absenceId)) {
-          list.add(overlay);
+    final overlayByDay = <String, List<CareCalendarPlannedAbsenceOverlay>>{};
+    for (final row in rows) {
+      final data = row.data;
+      if (data == null) continue;
+      final perPet = plannedAbsenceOverlaysByDay(data.plannedAbsenceOverlays);
+      for (final entry in perPet.entries) {
+        final list = overlayByDay.putIfAbsent(entry.key, () => []);
+        for (final overlay in entry.value) {
+          if (!list.any((o) => o.absenceId == overlay.absenceId)) {
+            list.add(overlay);
+          }
         }
       }
     }
-  }
 
     final errors = rows.where((r) => r.error != null).toList();
     final beforeMonth =

@@ -150,20 +150,19 @@ class CareCalendarDayCell extends StatelessWidget {
       child: InkWell(
         onTap: count == 0
             ? (absenceOnlyTap
-                ? () => openPetAwayPlan(
-                    context,
-                    openableAbsence!.absenceId,
-                    petId!,
-                  )
-                : null)
+                  ? () => openPetAwayPlan(
+                      context,
+                      openableAbsence!.absenceId,
+                      petId!,
+                    )
+                  : null)
             : () => _onTap(context, iso, markers),
         child: DecoratedBox(
           decoration: hasAbsenceOverlay
               ? BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withValues(alpha: 0.55),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(6),
                 )
               : const BoxDecoration(),
@@ -182,7 +181,9 @@ class CareCalendarDayCell extends StatelessWidget {
                     Badge(
                       isLabelVisible: true,
                       backgroundColor: hasProjectedOnly
-                          ? Theme.of(context).colorScheme.surfaceContainerHighest
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest
                           : null,
                       label: Text(
                         count > 1 ? '$count' : '•',
@@ -225,11 +226,8 @@ class CareCalendarDayCell extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => CareCalendarDaySheet(
-        date: iso,
-        rows: rows,
-        fallbackPetId: petId,
-      ),
+      builder: (ctx) =>
+          CareCalendarDaySheet(date: iso, rows: rows, fallbackPetId: petId),
     );
   }
 }
