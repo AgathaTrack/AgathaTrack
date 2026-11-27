@@ -22,6 +22,8 @@ import {
   DEFAULT_BASE_HOT_MINUTES,
   DEFAULT_LEASE_STALE_MINUTES,
   MERGE_LEASE_LABEL,
+  canClaimMergeLease,
+  evaluateClaimWinner,
   evaluateMergePreflight,
   findCompetingGreenPrs,
   findLeaseHolder,
@@ -344,7 +346,7 @@ function main() {
           leaseStale: ctx.leaseStale,
         });
       }
-      if (!evaluation.allowed) {
+      if (!canClaimMergeLease(evaluation)) {
         const payload = {
           command: 'claim',
           pr: ctx.pr.number,
@@ -359,13 +361,56 @@ function main() {
       }
     }
 
+    const claimedLease = !evaluation.allowed;
     addLeaseLabel(ctx.pr.number);
+    let openAfterClaim = listOpenPrsOnBase(ctx.baseBranch);
+    let claimResult = evaluateClaimWinner(ctx.pr.number, openAfterClaim);
+    if (claimResult.reason === 'claim_unconfirmed') {
+      openAfterClaim = listOpenPrsOnBase(ctx.baseBranch);
+      claimResult = evaluateClaimWinner(ctx.pr.number, openAfterClaim);
+    }
+    if (!claimResult.won) {
+      removeLeaseLabel(ctx.pr.number);
+      const lostEvaluation = {
+        allowed: false,
+        exitCode: claimResult.exitCode ?? 2,
+        reason: claimResult.reason,
+        action: claimResult.action ?? 'wait',
+        lease_holder: claimResult.holder
+          ? {
+              number: claimResult.holder.number,
+              url: claimResult.holder.url,
+            }
+          : undefined,
+      };
+      const payload = {
+        command: 'claim',
+        pr: ctx.pr.number,
+        base: ctx.baseBranch,
+        claimed: false,
+        label: MERGE_LEASE_LABEL,
+        concurrent_holder_count: claimResult.concurrent_holder_count,
+        ...lostEvaluation,
+      };
+      printResult({ ...ctx, evaluation: lostEvaluation }, opts);
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+      } else {
+        console.log(
+          `babysit_merge_preflight: ${lostEvaluation.reason} — released merge-lease on PR #${ctx.pr.number}`,
+        );
+      }
+      process.exit(lostEvaluation.exitCode);
+    }
+
     const payload = {
       command: 'claim',
       pr: ctx.pr.number,
       base: ctx.baseBranch,
       claimed: true,
       label: MERGE_LEASE_LABEL,
+      claim_result: claimResult.reason,
+      concurrent_holder_count: claimResult.concurrent_holder_count,
       evaluation,
     };
     if (opts.json) {
@@ -373,7 +418,7 @@ function main() {
     } else {
       console.log(`babysit_merge_preflight: claimed merge-lease on PR #${ctx.pr.number}`);
     }
-    process.exit(0);
+    process.exit(claimedLease ? evaluation.exitCode : 0);
   }
 
   const payload = {
