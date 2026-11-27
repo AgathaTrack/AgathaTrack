@@ -72,7 +72,7 @@ async function collectPetFileUrlsForOwnedPets(client, userId) {
     const entryPhotos = await client.query(
       `SELECT hep.url
        FROM health_event_photos hep
-       JOIN health_entries he ON he.id = hep.health_entry_id
+       JOIN care_items he ON he.id = hep.health_entry_id
        WHERE he.pet_id = $1`,
       [petId],
     );

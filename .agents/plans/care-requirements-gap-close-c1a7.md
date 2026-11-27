@@ -36,7 +36,7 @@
 | R8 | **Server only** | **B1** delivers both booster-at-create and Plan another date on existing item + **UIR-21**. |
 | R9 | **Defect** | **A1** — includes Plan/Record E2E + edit-with-existing-`completed_on` case. |
 | R10 | **Met** | **B2** fixes EN `recurrenceAnchorInfoBody` (“1 day late” nit). **Q3 (FR only):** ~7 keys use “en retard” vs Overdue policy. |
-| R11 | **Split** | Automated met; operational (cron, prod reset, repair dry-run, live UAT) — **DEBT-OPS-R11**. |
+| R11 | **Met (UAT operational)** | Automated met; UAT cron + post-reset `repair_occurrences --dry-run` → 0 violations (**DEBT-OPS-R11** [#1546](https://github.com/AgathaTrack/AgathaTrack/issues/1546), 2026-11-26). Prod cron (WP4) deferred. |
 | R12 | **Partial** | UIR-13 → **B2**; UIR-15 + UIR-21 → **B1**. |
 
 ## Goals
@@ -62,9 +62,10 @@
 
 **Tables CARE created that must appear in export (A2) and erasure verification (D1):**
 
-| Table | Scope in export |
-|-------|-----------------|
-| `health_occurrences` | Rows for user's pets via `health_entries.user_id` |
+| Table (physical) | Scope in export |
+|-----------------|-----------------|
+| `care_occurrences` | Rows for user's pets via `care_items.user_id` (GDPR export JSON key `health_occurrences`) |
+| `care_items` | Care item definitions for user's pets (export key `health_entries`) |
 | `care_schedule_events` | Ledger rows for user's care entries |
 | `health_entry_absence_resolutions` | Absence resolution rows for user's entries/absences |
 
@@ -238,7 +239,7 @@
 | DEBT-D-CAL | Calendar (D-CIE-033) | [#1539](https://github.com/KanopeeKa/AgathaCheck/issues/1539) |
 | DEBT-D-NOTIF | Notification deep link | [#1540](https://github.com/KanopeeKa/AgathaCheck/issues/1540) |
 | DEBT-D-FAM | Family completion requirements | [#1541](https://github.com/KanopeeKa/AgathaCheck/issues/1541) |
-| DEBT-D-RENAME | Table renames — **closed Option B** [#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542); deferred Option A [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405) | — |
+| DEBT-D-RENAME | Option A delivered [#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405) (PRs [#2611](https://github.com/AgathaTrack/AgathaTrack/pull/2611), [#2630](https://github.com/AgathaTrack/AgathaTrack/pull/2630)); Option B decision [#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542) superseded for persistence | — |
 | DEBT-D-FORM | Close when B1–B4 done | [#1543](https://github.com/KanopeeKa/AgathaCheck/issues/1543) |
 | DEBT-PRIV-DROP | Track until D1 merged | [#1544](https://github.com/KanopeeKa/AgathaCheck/issues/1544) |
 | DEBT-ARCH-CYCLE | Until C1 resolved | [#1545](https://github.com/KanopeeKa/AgathaCheck/issues/1545) |

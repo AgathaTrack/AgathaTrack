@@ -58,7 +58,7 @@ export async function trimCarerInvitesForAbsencePet(client, absenceId, petId) {
 export async function deleteAbsenceResolutionsForPet(client, absenceId, petId) {
   await client.query(
     `DELETE FROM health_entry_absence_resolutions r
-     USING health_entries he
+     USING care_items he
      WHERE r.health_entry_id = he.id
        AND he.pet_id = $2
        AND r.planned_absence_id = $1`,

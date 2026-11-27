@@ -103,7 +103,7 @@ describe('DELETE /api/people/contacts (usage-aware)', () => {
     const contactId = await insertContact(harness.pool, owner.userId, { name: 'Provider Clinic' });
     const entryId = randomUUID();
     await harness.pool.query(
-      `INSERT INTO health_entries (
+      `INSERT INTO care_items (
          id, pet_id, user_id, name, type, frequency, status,
          care_family, care_setting, care_planning, care_importance,
          importance_overridden, care_source, schedule_policy_version,

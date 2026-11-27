@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Write-path guard (D-CSM-033): only `server/lib/care/occurrence/**` may
- * INSERT, UPDATE or DELETE `health_occurrences`. Migrations (SQL and their JS
+ * INSERT, UPDATE or DELETE `care_occurrences`. Migrations (SQL and their JS
  * hooks under `server/scripts/migrations/`) are excluded; seeds must call the
  * care commands. Tests are excluded (fixtures may build rows directly).
  *
@@ -18,7 +18,7 @@ const ALLOWED = [
   path.join('server', 'scripts', 'migrations') + path.sep,
 ];
 const SKIP_DIRS = new Set(['node_modules', 'test', 'coverage', 'uploads']);
-const WRITE = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+health_occurrences\b/i;
+const WRITE = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+care_occurrences\b/i;
 
 function walk(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -48,7 +48,7 @@ const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fil
 if (invokedDirectly) {
   const violations = findViolations();
   if (violations.length > 0) {
-    console.error('check_occurrence_writes: health_occurrences is written outside server/lib/care/occurrence/:');
+    console.error('check_occurrence_writes: care_occurrences is written outside server/lib/care/occurrence/:');
     for (const v of violations) console.error(`  ${v}`);
     console.error('Route the change through a care command (D-CSM-033).');
     process.exit(1);

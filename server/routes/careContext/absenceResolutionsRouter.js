@@ -56,7 +56,7 @@ export function registerAbsenceResolutionsRoutes(router, pool, deps) {
       const filtered = [];
       for (const resolution of await listResolutionsForAbsence(pool, viewed.row.id)) {
         const entryResult = await pool.query(
-          'SELECT pet_id FROM health_entries WHERE id = $1',
+          'SELECT pet_id FROM care_items WHERE id = $1',
           [resolution.health_entry_id],
         );
         const petId = entryResult.rows[0]?.pet_id;
@@ -95,7 +95,7 @@ export function registerAbsenceResolutionsRoutes(router, pool, deps) {
         }
 
         const entryResult = await pool.query(
-          'SELECT id, pet_id FROM health_entries WHERE id = $1',
+          'SELECT id, pet_id FROM care_items WHERE id = $1',
           [healthEntryId]
         );
         const entry = entryResult.rows[0];

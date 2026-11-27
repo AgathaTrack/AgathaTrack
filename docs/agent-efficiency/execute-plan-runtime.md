@@ -12,7 +12,9 @@ Control issue + plan artifact runtime for `/execute-plan` v2 and `/babysit-plus`
 [execute-plan-v2.md](./plans/execute-plan-v2.md).
 
 **Canonical policy:** [autonomous-pr-policy.md](./autonomous-pr-policy.md)  
-**Snapshot schema (v2):** [execute-plan-v2/contracts.md](./plans/execute-plan-v2/contracts.md) §3.1  
+**Snapshot schema (v1, authors):** [execute-plan-schema.md](./execute-plan-schema.md)  
+**Snapshot schema (v2, driver):** [execute-plan-v2/contracts.md](./plans/execute-plan-v2/contracts.md) §3.1  
+**Build spec / work packages (not day-to-day ops):** [plans/execute-plan-v2.md](./plans/execute-plan-v2.md)  
 **Labels:** [github-labels.md](./github-labels.md)
 
 Historical schema-1 snapshots under `.agents/plans/*.snapshot.json` are **records only** — not validated or loaded by active tooling except legacy roadmap CLI (see below).
@@ -88,4 +90,4 @@ Validates `.agents/plans/_example.v2.snapshot.json` only (v1 example removed in 
 
 ## Related
 
-[execute-plan-instruction-stack.md](./execute-plan-instruction-stack.md) · [execute-plan skill](../../.cursor/skills/execute-plan/SKILL.md)
+[execute-plan-schema.md](./execute-plan-schema.md) (v1 snapshot fields) · [execute-plan-instruction-stack.md](./execute-plan-instruction-stack.md) · [execute-plan skill](../../.cursor/skills/execute-plan/SKILL.md) · [agent-efficiency README](./README.md)

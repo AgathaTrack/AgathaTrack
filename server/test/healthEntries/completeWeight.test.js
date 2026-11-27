@@ -104,7 +104,7 @@ describe('POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/
         });
         if (access) return access;
 
-        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'health_entries he' });
+        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'care_items he' });
         if (manageEntry) return manageEntry;
 
         if (sql.includes('FROM pets p') && sql.includes('WHERE p.id = $1')) {
@@ -112,27 +112,27 @@ describe('POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/
         }
 
         // Care occurrence engine: row lock, pet clock, open rows.
-        if (sql.includes('SELECT * FROM health_entries WHERE id = $1')) {
+        if (sql.includes('SELECT * FROM care_items WHERE id = $1')) {
           return { rows: params[0] === entryId ? [entry] : [] };
         }
         if (sql.includes('SELECT home_timezone FROM pets')) {
           return { rows: [{ home_timezone: 'UTC' }] };
         }
         if (
-          sql.includes('SELECT * FROM health_occurrences')
+          sql.includes('SELECT * FROM care_occurrences')
           && sql.includes("WHERE health_entry_id = $1 AND status = 'pending'")
         ) {
           return { rows: occurrence.status === 'pending' ? [occurrence] : [] };
         }
 
-        if (sql.includes('FROM health_entries he') && sql.includes('he.pet_id = $2')) {
+        if (sql.includes('FROM care_items he') && sql.includes('he.pet_id = $2')) {
           if (params[0] === entryId && params[1] === petId) {
             return { rows: [entry] };
           }
           return { rows: [] };
         }
 
-        if (sql.includes('FROM health_occurrences ho') && sql.includes('ho.id = $1')) {
+        if (sql.includes('FROM care_occurrences ho') && sql.includes('ho.id = $1')) {
           if (params[0] === occurrenceId) {
             return { rows: [{ ...occurrence, marked_by_name: null }] };
           }
@@ -140,7 +140,7 @@ describe('POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/
         }
 
         if (
-          sql.includes('SELECT * FROM health_occurrences')
+          sql.includes('SELECT * FROM care_occurrences')
           && sql.includes("status = 'pending'")
           && sql.includes('health_entry_id = $2')
         ) {
@@ -171,7 +171,7 @@ describe('POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/
           return { rows: [linkedWeight] };
         }
 
-        if (sql.includes('UPDATE health_occurrences SET status = \'completed\'')) {
+        if (sql.includes('UPDATE care_occurrences SET status = \'completed\'')) {
           occurrence = {
             ...occurrence,
             status: 'completed',
@@ -186,24 +186,24 @@ describe('POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/
         if (sql.includes("status = 'completed' OR status = 'skipped'")) {
           return { rows: occurrence.status === 'completed' ? [occurrence] : [] };
         }
-        if (sql.includes('INSERT INTO health_occurrences') && sql.includes('RETURNING id')) {
+        if (sql.includes('INSERT INTO care_occurrences') && sql.includes('RETURNING id')) {
           entry = { ...entry, next_due_date: new Date(params[2]) };
           return { rows: [{ id: params[0] }] };
         }
 
-        if (sql.includes('SELECT next_due_date FROM health_entries WHERE id = $1')) {
+        if (sql.includes('SELECT next_due_date FROM care_items WHERE id = $1')) {
           return { rows: [{ next_due_date: entry.next_due_date }] };
         }
 
-        if (sql.includes('UPDATE health_entries SET next_due_date')) {
+        if (sql.includes('UPDATE care_items SET next_due_date')) {
           return { rows: [] };
         }
 
-        if (sql.includes('SELECT scheduled_date FROM health_occurrences') && sql.includes("status = 'pending'")) {
+        if (sql.includes('SELECT scheduled_date FROM care_occurrences') && sql.includes("status = 'pending'")) {
           return { rows: [] };
         }
 
-        if (sql.includes('SELECT scheduled_date, completed_on FROM health_occurrences')) {
+        if (sql.includes('SELECT scheduled_date, completed_on FROM care_occurrences')) {
           return {
             rows: occurrence.status === 'completed'
               ? [{ scheduled_date: occurrence.scheduled_date, completed_on: occurrence.completed_on }]
@@ -211,15 +211,15 @@ describe('POST /api/pets/:petId/care-rhythms/:entryId/occurrences/:occurrenceId/
           };
         }
 
-        if (sql.includes('INSERT INTO health_occurrences')) {
+        if (sql.includes('INSERT INTO care_occurrences')) {
           return { rows: [] };
         }
 
-        if (sql.includes('SELECT scheduled_date, scheduled_time FROM health_occurrences') && sql.includes("status = 'pending'")) {
+        if (sql.includes('SELECT scheduled_date, scheduled_time FROM care_occurrences') && sql.includes("status = 'pending'")) {
           return { rows: [] };
         }
 
-        if (sql.includes('SELECT 1 FROM health_occurrences WHERE health_entry_id = $1 AND status = \'pending\'')) {
+        if (sql.includes('SELECT 1 FROM care_occurrences WHERE health_entry_id = $1 AND status = \'pending\'')) {
           return { rows: [] };
         }
 
@@ -347,9 +347,9 @@ describe('weight monitoring generic completion blocks', () => {
       query: async (sql, params) => {
         const access = handlePetAccessQuery(sql, params, { userId, ownedPetIds: [petId] });
         if (access) return access;
-        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'health_entries he' });
+        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'care_items he' });
         if (manageEntry) return manageEntry;
-        if (sql.includes('SELECT * FROM health_entries WHERE id = $1')) {
+        if (sql.includes('SELECT * FROM care_items WHERE id = $1')) {
           return { rows: [makeHealthEntryRow()] };
         }
         return { rows: [] };

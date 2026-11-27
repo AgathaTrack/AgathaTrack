@@ -28,7 +28,7 @@ describe('care item closed status', () => {
     api = careApi(app, owner);
     entryId = randomUUID();
     await pool.query(
-      `INSERT INTO health_entries
+      `INSERT INTO care_items
          (id, pet_id, user_id, name, type, frequency, status, care_planning, care_importance,
           care_closed_reason, start_date, completed_on)
        VALUES ($1, $2, $3, 'Old care', 'medication', 'once', 'closed', 'planned', 'essential',
@@ -40,7 +40,7 @@ describe('care item closed status', () => {
   afterAll(async () => {
     if (!pool) return;
     if (entryId) {
-      await pool.query('DELETE FROM health_entries WHERE id = $1', [entryId]);
+      await pool.query('DELETE FROM care_items WHERE id = $1', [entryId]);
     }
     if (owner) await removeOwner(pool, owner);
     await pool.end();

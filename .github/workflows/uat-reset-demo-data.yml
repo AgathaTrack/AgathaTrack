@@ -8,8 +8,9 @@ on:
         required: true
         type: string
 
+# Serialize with deploy-uat / uat-r11-verify so whitelist slots are not cleared mid-flight.
 concurrency:
-  group: uat-demo-reset
+  group: deploy-uat
   cancel-in-progress: false
 
 permissions:
@@ -62,24 +63,34 @@ jobs:
 
       - name: o2switch SSH whitelist — allow GitHub runner
         id: whitelist_add
-        continue-on-error: true
         env:
           CPANEL_SERVER: ${{ secrets.UAT_SSH_HOST }}
           CPANEL_USER: ${{ secrets.UAT_SSH_USER }}
           CPANEL_TOKEN: ${{ secrets.UAT_CPANEL_API_TOKEN }}
+          SSH_PORT: ${{ secrets.UAT_SSH_PORT || 22 }}
           RUNNER_IP: ${{ steps.runner_ip.outputs.ipv4 }}
         run: bash scripts/o2switch-ssh-whitelist.sh add
 
-      - name: Wait for firewall
+      - name: o2switch SSH whitelist — verify runner IP
+        id: whitelist_verify
         if: steps.whitelist_add.outcome == 'success'
+        env:
+          CPANEL_SERVER: ${{ secrets.UAT_SSH_HOST }}
+          CPANEL_USER: ${{ secrets.UAT_SSH_USER }}
+          CPANEL_TOKEN: ${{ secrets.UAT_CPANEL_API_TOKEN }}
+        run: |
+          bash scripts/o2switch-ssh-whitelist.sh list | grep -q "${{ steps.runner_ip.outputs.ipv4 }}"
+
+      - name: Wait for firewall
+        if: steps.whitelist_verify.outcome == 'success'
         run: sleep 30
 
       - name: Prepare remote demo reset script
-        if: steps.whitelist_add.outcome == 'success'
+        if: steps.whitelist_verify.outcome == 'success'
         run: bash scripts/ci/prepare-uat-ssh-demo-reset.sh
 
       - name: Reset UAT demo data via SSH
-        if: steps.whitelist_add.outcome == 'success'
+        if: steps.whitelist_verify.outcome == 'success'
         uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f # v1.2.2
         with:
           host: ${{ secrets.UAT_SSH_HOST }}
@@ -87,8 +98,8 @@ jobs:
           key: ${{ secrets.UAT_SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.UAT_SSH_PASSPHRASE }}
           port: ${{ secrets.UAT_SSH_PORT || 22 }}
-          timeout: 120s
-          command_timeout: 5m
+          timeout: 180s
+          command_timeout: 10m
           script_path: .ci-uat-ssh-demo-reset.sh
 
       - name: o2switch SSH whitelist — cleanup
@@ -98,8 +109,15 @@ jobs:
           CPANEL_SERVER: ${{ secrets.UAT_SSH_HOST }}
           CPANEL_USER: ${{ secrets.UAT_SSH_USER }}
           CPANEL_TOKEN: ${{ secrets.UAT_CPANEL_API_TOKEN }}
+          SSH_PORT: ${{ secrets.UAT_SSH_PORT || 22 }}
           RUNNER_IP: ${{ steps.runner_ip.outputs.ipv4 }}
         run: bash scripts/o2switch-ssh-whitelist.sh remove
+
+      - name: Fail when whitelist did not verify
+        if: steps.whitelist_verify.outcome != 'success'
+        run: |
+          echo "::error::Runner IP was not on the o2switch SSH whitelist — reset did not run. Retry after other deploy-uat SSH jobs finish."
+          exit 1
 
       - name: Write summary
         if: always()
@@ -109,7 +127,7 @@ jobs:
             echo
             if [ "${{ github.event.inputs.confirm }}" != "RESET" ]; then
               echo "Skipped — confirmation input was not RESET."
-            elif [ "${{ steps.whitelist_add.outcome }}" != "success" ]; then
+            elif [ "${{ steps.whitelist_verify.outcome }}" != "success" ]; then
               echo "Failed — could not whitelist runner IP for SSH."
             else
               echo "Demo data reset completed. See [uat-demo-data.md](docs/e2e/uat-demo-data.md) for credentials."

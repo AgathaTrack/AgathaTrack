@@ -152,7 +152,7 @@ function buildMockPool(overrides = {}) {
     if (sql.includes('UPDATE pet_access SET hidden')) {
       return { rows: [] };
     }
-    if (sql.includes('SELECT * FROM health_entries WHERE pet_id')) {
+    if (sql.includes('SELECT * FROM care_items WHERE pet_id')) {
       return { rows: [] };
     }
     if (sql.includes('SELECT first_name FROM users WHERE id = $1')) {

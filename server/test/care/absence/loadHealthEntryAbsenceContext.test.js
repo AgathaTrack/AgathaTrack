@@ -34,7 +34,7 @@ describe('loadHealthEntryAbsenceContext active window', () => {
         if (sql.includes('health_entry_absence_resolutions')) {
           return { rows: [] };
         }
-        if (sql.includes('FROM health_entries')) {
+        if (sql.includes('FROM care_items')) {
           return { rows: [] };
         }
         return { rows: [] };

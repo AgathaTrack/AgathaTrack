@@ -141,7 +141,7 @@ describe('W3 weight fulfilment endpoints', () => {
       created: true,
     });
     const occRow = await harness.pool.query(
-      'SELECT status, completed_on FROM health_occurrences WHERE id = $1',
+      'SELECT status, completed_on FROM care_occurrences WHERE id = $1',
       [occ.id],
     );
     expect(occRow.rows[0].status).toBe('completed');
@@ -208,7 +208,7 @@ describe('W3 weight fulfilment endpoints', () => {
       [weightId],
     );
     expect(weight.rows[0].health_occurrence_id).toBeNull();
-    const occRow = await harness.pool.query('SELECT status FROM health_occurrences WHERE id = $1', [occ.id]);
+    const occRow = await harness.pool.query('SELECT status FROM care_occurrences WHERE id = $1', [occ.id]);
     expect(occRow.rows[0].status).toBe('pending');
   });
 

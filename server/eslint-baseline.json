@@ -1,6 +1,6 @@
 {
   "_comment": "ESLint ratchet for active server/lib, services and routes (J.2-1). Only shrinks: run --update-baseline after fixing a violation.",
-  "generated_at": "2026-11-10",
+  "generated_at": "2026-11-26",
   "violations": [
     {
       "file": "server/lib/care/awayPlan/presentation.js",
@@ -15,13 +15,6 @@
       "line": 31,
       "column": 7,
       "message": "'VISIT_KEYS' is assigned a value but never used."
-    },
-    {
-      "file": "server/lib/care/occurrence/syncOpenOccurrences.js",
-      "rule": "no-unused-vars",
-      "line": 19,
-      "column": 3,
-      "message": "'nextSeriesSlotAfter' is defined but never used."
     },
     {
       "file": "server/lib/care/planner/planAbsenceCare.js",
@@ -52,13 +45,6 @@
       "message": "'taxonomy' is assigned a value but never used."
     },
     {
-      "file": "server/lib/checkDueNotifications.js",
-      "rule": "no-unused-vars",
-      "line": 68,
-      "column": 59,
-      "message": "'petNamesFromClient' is assigned a value but never used. Allowed unused args must match /^_/u."
-    },
-    {
       "file": "server/lib/email/branding.js",
       "rule": "no-undef",
       "line": 17,
@@ -85,20 +71,6 @@
       "line": 4,
       "column": 10,
       "message": "'createNotification' is defined but never used."
-    },
-    {
-      "file": "server/lib/people/absenceCarerInviteService.js",
-      "rule": "no-unused-vars",
-      "line": 115,
-      "column": 9,
-      "message": "'absencePetIds' is assigned a value but never used."
-    },
-    {
-      "file": "server/lib/people/absenceCarerInviteService.js",
-      "rule": "no-unused-vars",
-      "line": 14,
-      "column": 7,
-      "message": "'PLANNED_ABSENCE_STATUS_ACTIVE' is assigned a value but never used."
     },
     {
       "file": "server/lib/people/absenceGuestGrants.js",

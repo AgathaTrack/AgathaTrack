@@ -4,6 +4,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { loadAwayPlanReadinessForAbsence } from '../../lib/care/awayPlan/index.js';
+import { withCanGrantGuestAccess } from '../../lib/care/awayPlan/carerGuestGrantFlags.js';
 import { withTransaction } from '../../lib/db/withTransaction.js';
 import {
   PLANNED_ABSENCE_PROVENANCE_USER_DECLARED,
@@ -158,9 +159,12 @@ export async function getPlannedAbsenceDetail(pool, userId, absenceId) {
   const declarerDisplayName = viewed.isDeclarer
     ? null
     : await loadDeclarerDisplayName(pool, userId, viewed.row.user_id);
+  const base = absenceResponse(viewed.row, viewed.petRows);
+  const petCarers = await withCanGrantGuestAccess(pool, base.pet_carers, userId);
   return {
     absence: {
-      ...absenceResponse(viewed.row, viewed.petRows),
+      ...base,
+      pet_carers: petCarers,
       is_own_absence: viewed.isDeclarer,
       declarer_display_name: declarerDisplayName,
       can_edit_trip: viewed.canEditTrip,

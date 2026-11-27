@@ -3304,6 +3304,13 @@
   "awayPlanningCarerEditSaveAction": "Save carer",
   "awayPlanningCarerEditSaveFailedForbidden": "That person no longer has shared access. Pick another or add a name.",
   "awayPlanningCarerEditSaveFailed": "Could not save the carer. Try again.",
+  "awayPlanningCarerInviteOfferTitle": "Invite this carer for other pets too?",
+  "awayPlanningCarerInviteOfferBody": "This carer is also assigned to these pets on this absence. Choose which ones to include in the app invite.",
+  "awayPlanningCarerInviteOnlyThisPet": "Only this pet",
+  "awayPlanningCarerInviteIncludeSelected": "Include selected pets",
+  "awayPlanningCarerInviteSendAction": "Send app invite",
+  "awayPlanningCarerInviteSent": "App invite sent.",
+  "awayPlanningCarerInviteFailed": "Could not send the app invite. Try again.",
   "awayPlanningCarerEditPetNoteLabel": "Notes for {petName}",
   "@awayPlanningCarerEditPetNoteLabel": {
     "placeholders": {

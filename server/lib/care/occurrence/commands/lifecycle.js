@@ -172,7 +172,7 @@ export async function closeSeriesCommand(ctx) {
   await closeAllOpen(db, entry.id, userId, 'system', { asOf, trace });
   const once = !seriesStep(entry);
   await db.query(
-    `UPDATE health_entries SET status = $4,
+    `UPDATE care_items SET status = $4,
        care_closed_reason = $5,
        completed_on = CASE WHEN $1 THEN COALESCE(completed_on, $2::date) ELSE completed_on END,
        completed_at = CASE WHEN $1 THEN COALESCE(completed_at, NOW()) ELSE completed_at END,

@@ -30,15 +30,15 @@ describe('Occurrence-scoped health documents', () => {
         if (access) return access;
 
         const manageEntry = handleManageEntryQuery(sql, params, {
-          tableName: 'health_entries he',
+          tableName: 'care_items he',
         });
         if (manageEntry) return manageEntry;
 
-        if (sql.includes('SELECT pet_id FROM health_entries WHERE id = $1')) {
+        if (sql.includes('SELECT pet_id FROM care_items WHERE id = $1')) {
           return { rows: [{ pet_id: 'pet-1' }] };
         }
 
-        if (sql.includes('SELECT * FROM health_entries WHERE id = $1')) {
+        if (sql.includes('SELECT * FROM care_items WHERE id = $1')) {
           return {
             rows: [{
               id: entryId,
@@ -50,7 +50,7 @@ describe('Occurrence-scoped health documents', () => {
           };
         }
 
-        if (sql.includes('FROM health_occurrences ho') && sql.includes('ho.id = $1')) {
+        if (sql.includes('FROM care_occurrences ho') && sql.includes('ho.id = $1')) {
           return {
             rows: [{
               id: occId,
@@ -63,7 +63,7 @@ describe('Occurrence-scoped health documents', () => {
           };
         }
 
-        if (sql.includes('SELECT id FROM health_occurrences') && sql.includes('health_entry_id = $2')) {
+        if (sql.includes('SELECT id FROM care_occurrences') && sql.includes('health_entry_id = $2')) {
           return { rows: [{ id: occId }] };
         }
 
@@ -91,7 +91,7 @@ describe('Occurrence-scoped health documents', () => {
           };
         }
 
-        if (sql.includes('UPDATE health_occurrences SET notes = $1')) {
+        if (sql.includes('UPDATE care_occurrences SET notes = $1')) {
           return {
             rows: [{
               id: occId,

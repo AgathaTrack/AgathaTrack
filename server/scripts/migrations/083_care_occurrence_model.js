@@ -3,7 +3,18 @@ import {
   careAsOfForZone,
   syncOpenOccurrences,
 } from '../../lib/care/occurrence/index.js';
+import { runWithLegacyCareTables } from '../../lib/db/careTableScope.js';
 import { loadPetHomeTimezone } from '../../lib/petHomeTimezone.js';
+
+async function hasPhysicalCareItemsTable(client) {
+  const { rows } = await client.query(
+    `SELECT 1 FROM information_schema.tables
+     WHERE table_schema = current_schema()
+       AND table_type = 'BASE TABLE'
+       AND table_name = 'care_items'`,
+  );
+  return rows.length > 0;
+}
 
 /**
  * Light hook for migration 083 (pre-launch; UAT data is wiped and reseeded):
@@ -13,6 +24,15 @@ import { loadPetHomeTimezone } from '../../lib/petHomeTimezone.js';
  * @param {import('pg').PoolClient} client
  */
 export async function migrateCareOccurrenceModel(client) {
+  const run = (await hasPhysicalCareItemsTable(client))
+    ? (fn) => fn()
+    : runWithLegacyCareTables;
+  return run(async () => {
+    await migrateCareOccurrenceModelBody(client);
+  });
+}
+
+async function migrateCareOccurrenceModelBody(client) {
   await client.query(
     `UPDATE health_occurrences ho SET origin = 'schedule', series_date = ho.scheduled_date
      FROM health_entries he

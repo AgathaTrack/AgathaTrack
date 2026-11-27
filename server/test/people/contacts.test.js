@@ -85,7 +85,7 @@ describe('People contacts API', () => {
           return { rows: [{ '?column?': 1 }] };
         }
 
-        if (sql.includes('health_occurrences')) {
+        if (sql.includes('care_occurrences')) {
           return { rows: [{ count: 0 }] };
         }
 
@@ -93,7 +93,7 @@ describe('People contacts API', () => {
           return { rows: [] };
         }
 
-        if (sql.includes('health_entries he') && sql.includes('provider_contact_id')) {
+        if (sql.includes('care_items he') && sql.includes('provider_contact_id')) {
           return { rows: [] };
         }
 

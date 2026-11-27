@@ -3,7 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { createNotification, userDisplayName } from '../notificationHelper.js';
 import { NOTIFICATION_TYPE_ABSENCE_GUEST_GRANTED } from '../notificationKind.js';
-import { isShareLinkExpired, shareExpiryFromNow } from '../shareLinkPolicy.js';
+import {
+  DEFAULT_SHARE_EXPIRY_DAYS,
+  isShareLinkExpired,
+  shareExpiryFromNow,
+} from '../shareLinkPolicy.js';
 import {
   GUEST_GRANT_ACTIVE,
   GUEST_GRANT_REVOKED,
@@ -11,7 +15,6 @@ import {
 } from './absenceGuestGrants.js';
 import { linkContactToUser as linkContactToUserRepo } from './contactsRepo.js';
 
-const PLANNED_ABSENCE_STATUS_ACTIVE = 'active';
 const PLANNED_ABSENCE_STATUS_CANCELLED = 'cancelled';
 
 export const INVITE_PENDING = 'pending';
@@ -112,7 +115,6 @@ export async function createAbsenceCarerInvite(pool, {
   }
 
   const petRows = await loadAbsencePetRows(pool, absenceId);
-  const absencePetIds = petRows.map((row) => row.pet_id);
   const contactPetIds = petRows
     .filter((row) => row.contact_id === contactId)
     .map((row) => row.pet_id);
@@ -152,7 +154,7 @@ export async function createAbsenceCarerInvite(pool, {
 
   const inviteId = uuidv4();
   const code = generateInviteCode();
-  const expiresAt = shareExpiryFromNow();
+  const expiresAt = shareExpiryFromNow(DEFAULT_SHARE_EXPIRY_DAYS);
 
   await pool.query(
     `INSERT INTO planned_absence_carer_invites (

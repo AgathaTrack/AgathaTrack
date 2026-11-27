@@ -62,7 +62,7 @@ async function collectHouseholdContactIdsForPet(client, petId, householdId) {
 
   const entries = await client.query(
     `SELECT he.provider_contact_id AS contact_id, pd.household_id
-     FROM health_entries he
+     FROM care_items he
      INNER JOIN people_contacts pc ON pc.id = he.provider_contact_id
      INNER JOIN people_directories pd ON pd.id = pc.directory_id
      WHERE he.pet_id = $1 AND he.provider_contact_id IS NOT NULL AND pd.household_id IS NOT NULL`,
@@ -75,8 +75,8 @@ async function collectHouseholdContactIdsForPet(client, petId, householdId) {
 
   const occurrences = await client.query(
     `SELECT ho.provider_contact_id AS contact_id, pd.household_id
-     FROM health_occurrences ho
-     INNER JOIN health_entries he ON he.id = ho.health_entry_id
+     FROM care_occurrences ho
+     INNER JOIN care_items he ON he.id = ho.health_entry_id
      INNER JOIN people_contacts pc ON pc.id = ho.provider_contact_id
      INNER JOIN people_directories pd ON pd.id = pc.directory_id
      WHERE he.pet_id = $1 AND ho.provider_contact_id IS NOT NULL AND pd.household_id IS NOT NULL`,
@@ -134,7 +134,7 @@ export async function repointPetReferences(client, petId, sourceContactId, targe
   );
 
   await client.query(
-    `UPDATE health_entries
+    `UPDATE care_items
      SET provider_contact_id = $1, updated_at = NOW()
      WHERE pet_id = $2 AND provider_contact_id = $3`,
     [targetContactId, petId, sourceContactId],
@@ -208,7 +208,7 @@ async function listPetOwnersReferencingContact(client, sourceContactId) {
 
   const entries = await client.query(
     `SELECT he.pet_id, p.user_id AS owner_user_id
-     FROM health_entries he
+     FROM care_items he
      INNER JOIN pets p ON p.id = he.pet_id
      WHERE he.provider_contact_id = $1`,
     [sourceContactId],
@@ -217,8 +217,8 @@ async function listPetOwnersReferencingContact(client, sourceContactId) {
 
   const occurrences = await client.query(
     `SELECT he.pet_id, p.user_id AS owner_user_id
-     FROM health_occurrences ho
-     INNER JOIN health_entries he ON he.id = ho.health_entry_id
+     FROM care_occurrences ho
+     INNER JOIN care_items he ON he.id = ho.health_entry_id
      INNER JOIN pets p ON p.id = he.pet_id
      WHERE ho.provider_contact_id = $1`,
     [sourceContactId],

@@ -26,7 +26,7 @@ function buildMockPool() {
       return { rows: [{ home_timezone: 'UTC' }] };
     }
 
-    if (sql.includes('FROM health_entries') && sql.includes('weight_monitoring')) {
+    if (sql.includes('FROM care_items') && sql.includes('weight_monitoring')) {
       return { rows: [] };
     }
 

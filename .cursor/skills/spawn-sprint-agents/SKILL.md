@@ -26,7 +26,7 @@ description: Coordinate parallel cloud agents on an integration branch with file
 
 3. **Foundation agent first** when shared files needed (`api.ts`, CI scripts, page object base classes).
 4. **Spawn parallel agents** on **disjoint directories only**.
-5. Each agent branch: `cursor/<descriptive-name>-13e3` from integration parent.
+5. Each agent branch: `cursor/<descriptive-name>-13e3` from integration parent. Agent PRs into the integration branch are driven by `/babysit-plus` ([autonomous-pr-policy.md](../../../docs/agent-efficiency/autonomous-pr-policy.md) §Driver routing row 7).
 6. **Per-agent prompt must include:**
    - Sprint item ID (e.g. 6.1)
    - Integration branch name
@@ -38,7 +38,7 @@ description: Coordinate parallel cloud agents on an integration branch with file
    git fetch origin
    git log --oneline origin/<branch> -5
    ```
-8. **Single PR** integration → `main` when sprint gate met; coordinator runs `./scripts/pre-push.sh`.
+8. **Single PR** integration → `main` when sprint gate met. The coordinator drives it with `/babysit-plus` (policy §Driver routing row 8). Use `/babysit-uat` only if the PR touches a shard flagged by `babysit_uat_shard_risk.mjs` (row 8b). Coordinator runs `./scripts/pre-push.sh`.
 
 ## Default ownership splits
 

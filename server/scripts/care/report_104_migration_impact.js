@@ -16,7 +16,7 @@ async function main() {
     const legacy = await pool.query(
       `SELECT 1 FROM information_schema.columns
        WHERE table_schema = current_schema()
-         AND table_name = 'health_occurrences' AND column_name = 'close_reason'`,
+         AND table_name = 'care_occurrences' AND column_name = 'close_reason'`,
     );
     if (legacy.rows.length === 0) {
       console.log('close_reason column absent — migration 104 already applied or not applicable.');
@@ -25,7 +25,7 @@ async function main() {
 
     const convertNotRecorded = await pool.query(
       `SELECT close_reason, COUNT(*)::int AS count
-       FROM health_occurrences
+       FROM care_occurrences
        WHERE status = 'skipped' AND close_reason = 'not_recorded'
        GROUP BY close_reason
        ORDER BY close_reason`,
@@ -33,7 +33,7 @@ async function main() {
 
     const convertStarted = await pool.query(
       `SELECT close_reason, COUNT(*)::int AS count
-       FROM health_occurrences
+       FROM care_occurrences
        WHERE status = 'skipped'
          AND close_reason IN ('system', 'paused', 'covered')
          AND (
@@ -49,7 +49,7 @@ async function main() {
 
     const deleteFuture = await pool.query(
       `SELECT close_reason, COUNT(*)::int AS count
-       FROM health_occurrences
+       FROM care_occurrences
        WHERE status = 'skipped'
          AND close_reason IN ('system', 'paused', 'covered')
          AND NOT (

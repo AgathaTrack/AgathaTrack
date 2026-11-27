@@ -19,7 +19,7 @@ export async function loadManagedEntry(pool, entryId, userId) {
     return null;
   }
   const result = await pool.query(
-    'SELECT * FROM health_entries WHERE id = $1',
+    'SELECT * FROM care_items WHERE id = $1',
     [entryId],
   );
   return result.rows[0] || null;
@@ -32,7 +32,7 @@ export async function listOccurrencesForEntry(pool, entry, { status, req }) {
     const rows = synced?.openRows ?? await listOpenRows(pool, entry.id);
     const names = await pool.query(
       `SELECT ho.id, TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS marked_by_name
-       FROM health_occurrences ho LEFT JOIN users u ON u.id = ho.marked_by_user_id
+       FROM care_occurrences ho LEFT JOIN users u ON u.id = ho.marked_by_user_id
        WHERE ho.health_entry_id = $1 AND ho.status = 'pending'`,
       [entry.id],
     );
@@ -54,7 +54,7 @@ export async function listOccurrencesForEntry(pool, entry, { status, req }) {
   const result = await pool.query(
     `SELECT ho.*,
       TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS marked_by_name
-     FROM health_occurrences ho
+     FROM care_occurrences ho
      LEFT JOIN users u ON u.id = ho.marked_by_user_id
      WHERE ho.health_entry_id = $1 AND ho.status IN ('completed', 'skipped', 'not_recorded')
      ORDER BY ho.scheduled_date DESC,

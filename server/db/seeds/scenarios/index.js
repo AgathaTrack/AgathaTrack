@@ -8,6 +8,7 @@ import { seedSharingNotifications } from './sharing-notifications.js';
 import { ORG_ROLE_ADMIN, ORG_ROLE_SUPER_ADMIN } from '../../../lib/orgRoles.js';
 import { DEMO_IDS, DEMO_USERS } from '../demo-constants.js';
 import {
+  calendarDaysFromToday,
   upsertOrgMember,
   upsertOrgPet,
   upsertOrganization,
@@ -74,6 +75,19 @@ export async function seedActiveDemoOrgFixtures(client) {
     breed: 'British Shorthair',
     gender: 'Female',
     bio: 'Organisation-held clinic patient for health-care timeline fixture',
+  });
+
+  await upsertOrgPet(client, {
+    id: DEMO_IDS.maxPet,
+    userId: DEMO_IDS.alice,
+    orgId: DEMO_IDS.rescueHeartsOrg,
+    name: 'Max',
+    species: 'Dog',
+    breed: 'Mixed breed',
+    dateOfBirth: calendarDaysFromToday(-365 * 2),
+    weight: 12.0,
+    gender: 'Male',
+    bio: 'Rescue Hearts demo dog — flea prevention care item',
   });
 
   console.log('seed: active-demo-org-fixtures ready (Happy Paws + Rescue Hearts shell)');

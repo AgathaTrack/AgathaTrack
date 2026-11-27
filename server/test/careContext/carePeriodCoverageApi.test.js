@@ -43,7 +43,7 @@ describe('care-period coverage API', () => {
       if (sql.includes('FROM pets WHERE id = $1 AND user_id = $2')) {
         return { rows: [{ id: petId, user_id: userId }] };
       }
-      if (sql.includes('FROM health_entries WHERE pet_id = $1')) {
+      if (sql.includes('FROM care_items WHERE pet_id = $1')) {
         return {
           rows: [{
             id: 'entry-1',
@@ -60,7 +60,7 @@ describe('care-period coverage API', () => {
           }],
         };
       }
-      if (sql.includes('FROM health_occurrences ho')) {
+      if (sql.includes('FROM care_occurrences ho')) {
         return { rows: [] };
       }
       return { rows: [] };
@@ -87,7 +87,7 @@ describe('care-period coverage API', () => {
       if (sql.includes('FROM pets WHERE id = $1 AND user_id = $2')) {
         return { rows: [{ id: petId, user_id: userId }] };
       }
-      if (sql.includes('FROM health_entries WHERE pet_id = $1')) {
+      if (sql.includes('FROM care_items WHERE pet_id = $1')) {
         throw new Error('boom: simulated DB failure');
       }
       return { rows: [] };
@@ -122,7 +122,7 @@ describe('care-period coverage API', () => {
       if (sql.includes('FROM pets WHERE id = $1 AND user_id = $2')) {
         return { rows: [{ id: petId, user_id: userId }] };
       }
-      if (sql.includes('FROM health_entries WHERE pet_id = $1')) {
+      if (sql.includes('FROM care_items WHERE pet_id = $1')) {
         return {
           rows: [{
             id: 'entry-1',
@@ -139,7 +139,7 @@ describe('care-period coverage API', () => {
           }],
         };
       }
-      if (sql.includes('FROM health_occurrences ho')) {
+      if (sql.includes('FROM care_occurrences ho')) {
         return { rows: [] };
       }
       return { rows: [] };

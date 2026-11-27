@@ -42,7 +42,7 @@ export function createWeightEntriesWriteRouter(pool) {
       const fulfilsOccurrenceId = data.fulfils_occurrence_id || data.fulfilsOccurrenceId || null;
       if (fulfilsOccurrenceId) {
         const occLink = await pool.query(
-          'SELECT health_entry_id FROM health_occurrences WHERE id = $1',
+          'SELECT health_entry_id FROM care_occurrences WHERE id = $1',
           [fulfilsOccurrenceId],
         );
         const careEntryId = occLink.rows[0]?.health_entry_id;
@@ -120,7 +120,7 @@ export function createWeightEntriesWriteRouter(pool) {
         return res.status(400).json({ error: 'occurrence_id is required' });
       }
       const occLink = await pool.query(
-        'SELECT health_entry_id FROM health_occurrences WHERE id = $1',
+        'SELECT health_entry_id FROM care_occurrences WHERE id = $1',
         [occurrenceId],
       );
       const careEntryId = occLink.rows[0]?.health_entry_id;

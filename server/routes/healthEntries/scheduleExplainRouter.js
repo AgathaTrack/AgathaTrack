@@ -9,7 +9,7 @@ async function loadEntry(pool, entryId, userId) {
     return null;
   }
   const result = await pool.query(
-    'SELECT * FROM health_entries WHERE id = $1',
+    'SELECT * FROM care_items WHERE id = $1',
     [entryId],
   );
   return result.rows[0] || null;

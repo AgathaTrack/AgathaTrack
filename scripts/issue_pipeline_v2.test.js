@@ -344,6 +344,17 @@ test('In progress: working, resume once, stalled, finished', () => {
   const stage = 'In progress';
   const busy = { busy: true, lastActivityAt: NOW - MIN };
   assert.equal(rowOf({ stage, delivery: busy }).reason, 'progress.working');
+  const babysitStale = {
+    stage,
+    deliveryMethod: 'PR',
+    delivery: { ...busy, openLinkedPrs: 1, lastActivityAt: NOW - 5 * 60 * MIN },
+    pipelineOpenPrs: 1,
+    launch: {},
+  };
+  const babysitAction = rowOfBoth(babysitStale);
+  assert.equal(babysitAction.type, 'launch');
+  assert.equal(babysitAction.purpose, 'babysit');
+  assert.equal(babysitAction.row, 'progress.babysit-fallback');
   const mine = { engineLaunched: true };
   assert.equal(rowOf({ stage, delivery: { ...mine, busy: false } }).type, 'resume');
   assert.equal(rowOf({ stage, delivery: { ...mine, busy: false, resumed: true } }).reason, 'stalled');
@@ -483,6 +494,8 @@ function mockListProjectIssues(rows) {
   return async ({ owner, repo } = {}) => filterRowsByRepository(rows, owner, repo);
 }
 
+const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
+
 function boardIo(extra = {}) {
   const issues = {
     1: { number: 1, body: 'a', labels: [{ name: 'task' }], issue_field_values: [{ field_id: 1, single_select_option: { name: 'To do' } }] },
@@ -508,6 +521,7 @@ function boardIo(extra = {}) {
     getIssue: async (n) => issues[n],
     listIssueComments: async () => [],
     listCommentReactions: async () => [],
+    fetchIssueBlockedBy: noopBlockedBy,
     ...extra,
   };
 }

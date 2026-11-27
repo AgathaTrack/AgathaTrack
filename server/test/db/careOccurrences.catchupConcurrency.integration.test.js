@@ -21,7 +21,7 @@ beforeAll(async () => {
     try {
       await probe.query(
         `SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'health_occurrences' AND column_name = 'origin'`,
+         WHERE table_name = 'care_occurrences' AND column_name = 'origin'`,
       );
       throw new Error('Care DB integration tests require the migrated health_occurrences.origin column');
     } finally {

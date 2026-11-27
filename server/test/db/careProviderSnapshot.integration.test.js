@@ -72,7 +72,7 @@ describe('provider snapshot on completion (I12)', () => {
     const done = await careApi(harness.app, coParent).at('2026-06-05T10:00').complete(created.body.id, occ.id, {});
     expect(done.statusCode).toBe(200);
     const row = await harness.pool.query(
-      'SELECT provider_contact_id, provider_contact_snapshot FROM health_occurrences WHERE id = $1',
+      'SELECT provider_contact_id, provider_contact_snapshot FROM care_occurrences WHERE id = $1',
       [occ.id],
     );
     expect(row.rows[0].provider_contact_id).toBe(contactId);
@@ -96,7 +96,7 @@ describe('provider snapshot on completion (I12)', () => {
     });
     expect(done.statusCode).toBe(200);
     const row = await harness.pool.query(
-      'SELECT provider_contact_id FROM health_occurrences WHERE id = $1',
+      'SELECT provider_contact_id FROM care_occurrences WHERE id = $1',
       [occ.id],
     );
     expect(row.rows[0].provider_contact_id).toBe(contactId);

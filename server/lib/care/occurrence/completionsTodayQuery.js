@@ -19,7 +19,7 @@ export async function listCompletionsTodayByEntry(db, entryToday) {
   const todayByEntry = new Map(entryToday.map((e) => [e.id, e.todayIso]));
   for (const id of ids) map.set(id, []);
   const result = await db.query(
-    `SELECT * FROM health_occurrences
+    `SELECT * FROM care_occurrences
      WHERE health_entry_id = ANY($1::uuid[])
        AND status = 'completed'
        AND completed_on = ANY($2::date[])

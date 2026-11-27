@@ -14,6 +14,7 @@ class PlannedAbsenceModel {
       carerRemoved:
           json['carer_removed'] == true || json['carer_state'] == 'unavailable',
       petNote: json['pet_note'] as String?,
+      canGrantGuestAccess: json['can_grant_guest_access'] == true,
     );
   }
 

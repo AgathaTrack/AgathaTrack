@@ -8347,6 +8347,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not save the carer. Try again.';
 
   @override
+  String get awayPlanningCarerInviteOfferTitle =>
+      'Invite this carer for other pets too?';
+
+  @override
+  String get awayPlanningCarerInviteOfferBody =>
+      'This carer is also assigned to these pets on this absence. Choose which ones to include in the app invite.';
+
+  @override
+  String get awayPlanningCarerInviteOnlyThisPet => 'Only this pet';
+
+  @override
+  String get awayPlanningCarerInviteIncludeSelected => 'Include selected pets';
+
+  @override
+  String get awayPlanningCarerInviteSendAction => 'Send app invite';
+
+  @override
+  String get awayPlanningCarerInviteSent => 'App invite sent.';
+
+  @override
+  String get awayPlanningCarerInviteFailed =>
+      'Could not send the app invite. Try again.';
+
+  @override
   String awayPlanningCarerEditPetNoteLabel(String petName) {
     return 'Notes for $petName';
   }

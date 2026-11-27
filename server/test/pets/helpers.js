@@ -19,7 +19,7 @@ export const petId2 = '223e4567-e89b-12d3-a456-426614174001';
 const PET_DATA_TABLES = [
   'weight_entries',
   'health_issues',
-  'health_entries',
+  'care_items',
   'pet_vaccination_records',
   'pet_timeline_entries',
   'pet_activity_events',

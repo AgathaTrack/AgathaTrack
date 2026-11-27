@@ -91,7 +91,7 @@ beforeAll(async () => {
   // prerequisite or the database is absent; these are not mock/skip tests.
   const ready = await admin.query(
     `SELECT count(*)::int AS n FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'health_occurrences'
+     WHERE table_schema = 'public' AND table_name = 'care_occurrences'
        AND column_name = 'origin'`,
   );
   if (ready.rows[0].n !== 1) throw new Error('Migration 083 tests require a migrated PostgreSQL public schema');
@@ -112,9 +112,10 @@ beforeAll(async () => {
   db = createAppPool(config);
   expect((await db.query('SELECT current_schema() AS schema')).rows[0].schema).toBe(schema);
 
-  for (const table of ['pets', 'health_entries', 'health_occurrences', 'care_schedule_events']) {
-    await db.query(`CREATE TABLE ${table} (LIKE public.${table} INCLUDING ALL)`);
-  }
+  await db.query('CREATE TABLE pets (LIKE public.pets INCLUDING ALL)');
+  await db.query('CREATE TABLE health_entries (LIKE public.care_items INCLUDING ALL)');
+  await db.query('CREATE TABLE health_occurrences (LIKE public.care_occurrences INCLUDING ALL)');
+  await db.query('CREATE TABLE care_schedule_events (LIKE public.care_schedule_events INCLUDING ALL)');
   for (const [table, columns] of [
     ['health_entries', ['schedule_anchor_date', 'late_completion_choice', 'paused_until', 'series_resumed_on']],
     ['health_occurrences', ['origin', 'series_date']],

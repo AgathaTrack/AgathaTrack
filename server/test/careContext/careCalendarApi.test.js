@@ -8,6 +8,15 @@ function authHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
+function calendarTodayInZone(timeZone) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 describe('care calendar API', () => {
   const today = todayCalendarIso();
   const startsOn = today;
@@ -62,7 +71,7 @@ describe('care calendar API', () => {
       if (sql.includes('SELECT timezone FROM users')) {
         return { rows: [{ timezone: 'UTC' }] };
       }
-      if (sql.includes('FROM health_entries WHERE pet_id')) {
+      if (sql.includes('FROM care_items WHERE pet_id')) {
         return {
           rows: [{
             id: 'entry-1',
@@ -79,7 +88,7 @@ describe('care calendar API', () => {
           }],
         };
       }
-      if (sql.includes('FROM health_occurrences')) {
+      if (sql.includes('FROM care_occurrences')) {
         return { rows: [] };
       }
       return { rows: [] };
@@ -96,7 +105,10 @@ describe('care calendar API', () => {
     expect(res.body.before_month).toEqual({ items: [] });
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
-    expect(res.body.as_of).toMatchObject({ date: today, timezone: 'UTC' });
+    expect(res.body.as_of).toMatchObject({
+      date: calendarTodayInZone('UTC'),
+      timezone: 'UTC',
+    });
   });
 
   it('honours X-Care-As-Of in test env', async () => {
@@ -110,7 +122,7 @@ describe('care calendar API', () => {
       if (sql.includes('SELECT timezone FROM users')) {
         return { rows: [{ timezone: 'UTC' }] };
       }
-      if (sql.includes('FROM health_entries')) return { rows: [] };
+      if (sql.includes('FROM care_items')) return { rows: [] };
       return { rows: [] };
     });
 

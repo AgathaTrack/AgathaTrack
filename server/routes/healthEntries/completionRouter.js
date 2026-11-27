@@ -40,7 +40,7 @@ export function registerCompletionRoutes(router, pool) {
           ho.scheduled_date AS due_date,
           COALESCE(ho.marked_at, ho.updated_at) AS changed_at,
           TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS marked_by_name
-         FROM health_occurrences ho
+         FROM care_occurrences ho
          LEFT JOIN users u ON u.id = ho.marked_by_user_id
          WHERE ho.health_entry_id = $1 AND ho.status IN ('completed', 'skipped', 'not_recorded')
          ORDER BY COALESCE(ho.marked_at, ho.updated_at) DESC, ho.scheduled_date DESC`,

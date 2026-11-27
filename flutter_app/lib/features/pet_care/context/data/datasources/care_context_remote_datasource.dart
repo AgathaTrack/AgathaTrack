@@ -430,4 +430,22 @@ class CareContextRemoteDataSource {
       json.decode(response.body) as Map<String, dynamic>,
     );
   }
+
+  /// AP-18: send an app invite for [contactId] covering exactly [petIds].
+  /// `pet_ids` is always explicit; omitting it would invite every contact pet.
+  Future<Map<String, dynamic>> createAbsenceCarerInvite({
+    required String absenceId,
+    required String contactId,
+    required List<String> petIds,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/planned-absences/$absenceId/carer-invites'),
+      headers: _headers(jsonBody: true),
+      body: json.encode({'contact_id': contactId, 'pet_ids': petIds}),
+    );
+    _check(response);
+    return Map<String, dynamic>.from(
+      json.decode(response.body) as Map<String, dynamic>,
+    );
+  }
 }

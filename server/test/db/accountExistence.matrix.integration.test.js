@@ -41,7 +41,7 @@ async function createUserWithPet(password = 'EraseMe123!') {
   );
   const entryId = randomUUID();
   await pool.query(
-    `INSERT INTO health_entries
+    `INSERT INTO care_items
        (id, pet_id, user_id, name, type, status, care_family, care_planning, care_importance, next_due_date)
      VALUES ($1, $2, $3, 'Check', 'vet_visit', 'active', 'wellness_review', 'planned', 'essential', '2030-01-01')`,
     [entryId, petId, userId],

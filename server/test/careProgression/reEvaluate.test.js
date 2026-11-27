@@ -23,7 +23,7 @@ describe('POST /api/pets/:id/care-progression/re-evaluate', () => {
       if (sql.includes('FROM pets p') && sql.includes('WHERE p.id = $1')) {
         return { rows: [{ id: petId }] };
       }
-      if (sql.includes('FROM health_entries') && sql.includes('care_family = \'weight_monitoring\'')) {
+      if (sql.includes('FROM care_items') && sql.includes('care_family = \'weight_monitoring\'')) {
         return { rows: [] };
       }
       return { rows: [] };

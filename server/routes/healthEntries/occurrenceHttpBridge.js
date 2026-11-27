@@ -33,7 +33,7 @@ export async function loadEntry(pool, entryId, userId) {
     return null;
   }
   const result = await pool.query(
-    'SELECT * FROM health_entries WHERE id = $1',
+    'SELECT * FROM care_items WHERE id = $1',
     [entryId],
   );
   return result.rows[0] || null;
@@ -43,7 +43,7 @@ export async function loadOccurrence(pool, entryId, occId) {
   const result = await pool.query(
     `SELECT ho.*,
       TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) AS marked_by_name
-     FROM health_occurrences ho
+     FROM care_occurrences ho
      LEFT JOIN users u ON u.id = ho.marked_by_user_id
      WHERE ho.id = $1 AND ho.health_entry_id = $2`,
     [occId, entryId],
