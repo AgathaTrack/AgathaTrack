@@ -102,16 +102,11 @@ Remove revoke label; comment `resume-plan <plan_id>`.
 
 ## Agent acceptance (`/AgentAcceptance`)
 
-| Label | Purpose |
-|-------|---------|
-| `AAT-progress` | AAT run in progress — set by `aat-start` |
-| `AAT-passed` | Holistic acceptance passed — issue may close when policy allows |
-| `AAT-failed` | Acceptance failed — remediation PR or P0 sub-issue required |
+The org **Acceptance** field is the issue's acceptance state. The **`v2:aat` marker** on the verdict comment is what the engine reads. Legacy `AAT-*` labels are retired (may still appear on old issues); no CLI command adds or removes them.
 
 **Marker (authoritative for automation):** last line of the verdict comment — `<!-- v2:aat verdict=pass|fail|inconclusive merge=<sha> -->` (appended by the CLI). A fail includes the reason: `<!-- v2:aat verdict=fail reason=scope|implementation|quality merge=<sha> -->`. Pass and inconclusive omit `reason`. Attribute order does not matter.
 
-**CLI:** `node scripts/github_issue_workflow.js aat-start|aat-pass|aat-fail|aat-inconclusive --issue <n> [--merge <sha>]`. `aat-fail` requires `--reason scope|implementation|quality` and exits non-zero without it.  
-Labels and comments use the GitHub REST API (`createGitHubClient`); `aat-start` ensures repo labels via REST when missing. Set `GH_TOKEN` (Cursor / pawpet-bot) or `PAWPET_CLAUDE_TOKEN` (Claude Code) before running — not a stale workflow `GITHUB_TOKEN` alone.  
+**CLI:** `node scripts/github_issue_workflow.js aat-pass|aat-fail|aat-inconclusive --issue <n> [--merge <sha>]`. `aat-fail` requires `--reason scope|implementation|quality` and exits non-zero without it. Comments use the GitHub REST API (`postIssueComment`). Set `GH_TOKEN` (Cursor / pawpet-bot) or `PAWPET_CLAUDE_TOKEN` (Claude Code) before running — not a stale workflow `GITHUB_TOKEN` alone.  
 **Procedure:** [`.cursor/skills/agent-acceptance/SKILL.md`](../../.cursor/skills/agent-acceptance/SKILL.md)
 
 Do not run AAT on issues whose body contains `<!-- v2:follow-up of=#… -->`.

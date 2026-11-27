@@ -1,27 +1,6 @@
 'use strict';
 
-const AAT_LABELS = {
-  progress: 'AAT-progress',
-  passed: 'AAT-passed',
-  failed: 'AAT-failed',
-};
-
 const AAT_MARKER = 'v2:aat';
-
-/** @param {'start'|'pass'|'fail'|'inconclusive'} outcome */
-function aatLabelPlan(outcome) {
-  const all = [AAT_LABELS.progress, AAT_LABELS.passed, AAT_LABELS.failed];
-  if (outcome === 'inconclusive') {
-    return { add: [], remove: all };
-  }
-  let add;
-  if (outcome === 'start') add = [AAT_LABELS.progress];
-  else if (outcome === 'pass') add = [AAT_LABELS.passed];
-  else if (outcome === 'fail') add = [AAT_LABELS.failed];
-  else throw new Error(`unknown AAT outcome: ${outcome}`);
-  const remove = all.filter((l) => !add.includes(l));
-  return { add, remove };
-}
 
 const AAT_FAIL_REASONS = ['scope', 'implementation', 'quality'];
 
@@ -73,10 +52,8 @@ function lastMainMergeShaFromLinkedPrs(prs) {
 }
 
 module.exports = {
-  AAT_LABELS,
   AAT_MARKER,
   AAT_FAIL_REASONS,
-  aatLabelPlan,
   normalizeAatFailReason,
   buildAatMarker,
   appendAatMarker,
