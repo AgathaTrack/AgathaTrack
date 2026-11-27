@@ -21,6 +21,15 @@ const {
   pullSnapshot,
   slugFromRemote,
 } = require('./lib/ccr_gh_shim_lib');
+const {
+  buildPreflightClearRoutes,
+  buildPreflightFifoRoutes,
+  installFakeGh,
+  labelDeleteRoute,
+  labelPostRoute,
+  parseJsonDocument,
+  shimEnv,
+} = require('./test/helpers/ccr_gh_fake');
 
 const ROOT = path.resolve(__dirname, '..');
 const BIN_DIR = path.join(ROOT, 'scripts/ccr-bin');
@@ -149,36 +158,12 @@ test('findRealGh skips the wrapper itself on PATH', () => {
 });
 
 // End to end: the unchanged babysit_pr_reviews.js, with scripts/ccr-bin first on PATH and a fake "real" gh.
-const FAKE_GH = `#!/usr/bin/env node
-const routes = JSON.parse(require('fs').readFileSync(process.env.FAKE_GH_ROUTES, 'utf8'));
-const args = process.argv.slice(2);
-const jqAt = args.indexOf('--jq');
-const key = (jqAt >= 0 ? args.slice(0, jqAt) : args).join(' ');
-if (key === '--version') { console.log('gh version 0.0.0'); process.exit(0); }
-if (key.startsWith('api graphql') || key.startsWith('pr ')) { console.error('HTTP 403: GitHub GraphQL is not available'); process.exit(1); }
-if (!(key in routes)) { console.error('unrecorded: ' + key); process.exit(1); }
-if (jqAt < 0) { process.stdout.write(JSON.stringify(routes[key])); process.exit(0); }
-// Like gh --jq: evaluate with jq, raw string output.
-const jq = require('child_process').spawnSync('jq', ['-r', args[jqAt + 1]], { input: JSON.stringify(routes[key]), encoding: 'utf8' });
-process.stderr.write(jq.stderr || '');
-process.stdout.write(jq.stdout || '');
-process.exit(jq.status ?? 1);
-`;
-
 function runReviews(cmd, routes) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-gh-e2e-'));
-  const fake = path.join(dir, 'fake-gh');
-  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
-  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(routes));
+  const { fake, routesPath } = installFakeGh(dir, routes);
   return spawnSync(process.execPath, [path.join(ROOT, 'scripts/babysit_pr_reviews.js'), cmd, '--pr', '7'], {
     encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${BIN_DIR}${path.delimiter}${process.env.PATH}`,
-      REAL_GH: fake,
-      FAKE_GH_ROUTES: path.join(dir, 'routes.json'),
-      GITHUB_REPOSITORY: 'o/r',
-    },
+    env: { ...shimEnv({ fake, routesPath, binDir: BIN_DIR }), GITHUB_REPOSITORY: 'o/r' },
   });
 }
 
@@ -217,12 +202,10 @@ test('e2e: an empty CCR thread list with comments present is an error, never mer
 
 test('e2e: other GraphQL calls still reach the real gh and fail', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-gh-pass-'));
-  const fake = path.join(dir, 'fake-gh');
-  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
-  fs.writeFileSync(path.join(dir, 'routes.json'), '{}');
+  const { fake, routesPath } = installFakeGh(dir, {});
   const result = spawnSync(path.join(BIN_DIR, 'gh'), ['api', 'graphql', '-f', 'query={ viewer { login } }'], {
     encoding: 'utf8',
-    env: { ...process.env, REAL_GH: fake, FAKE_GH_ROUTES: path.join(dir, 'routes.json') },
+    env: { ...process.env, REAL_GH: fake, FAKE_GH_ROUTES: routesPath },
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /GraphQL is not available/);
@@ -258,13 +241,13 @@ function syncBaseRepo() {
 
 function runSyncBase(baseRef) {
   const { dir, work } = syncBaseRepo();
-  const fake = path.join(dir, 'fake-gh');
-  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
-  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ 'api repos/o/r/pulls/7': { base: { ref: baseRef }, head: { ref: 'feature' } } }));
+  const { fake, routesPath } = installFakeGh(dir, {
+    'api repos/o/r/pulls/7': { base: { ref: baseRef }, head: { ref: 'feature' } },
+  });
   return spawnSync('bash', ['scripts/babysit_sync_base.sh', '--pr', 'https://github.com/o/r/pull/7', '--check'], {
     cwd: work,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${BIN_DIR}${path.delimiter}${process.env.PATH}`, REAL_GH: fake, FAKE_GH_ROUTES: path.join(dir, 'routes.json') },
+    env: shimEnv({ fake, routesPath, binDir: BIN_DIR }),
   });
 }
 
@@ -279,13 +262,13 @@ test('e2e: unchanged babysit_sync_base.sh --pr reads the PR base through the wra
 test('e2e: babysit_sync_base.sh counts against the checkout it is run in, not the one holding the script', { skip: !hasJq && 'jq not installed' }, () => {
   // Script from the wrapper's checkout (ROOT), run from a scratch repo that is behind main by one commit.
   const { dir, work } = syncBaseRepo();
-  const fake = path.join(dir, 'fake-gh');
-  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
-  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify({ 'api repos/o/r/pulls/7': { base: { ref: 'main' }, head: { ref: 'feature' } } }));
+  const { fake, routesPath } = installFakeGh(dir, {
+    'api repos/o/r/pulls/7': { base: { ref: 'main' }, head: { ref: 'feature' } },
+  });
   const result = spawnSync('bash', [path.join(ROOT, 'scripts/babysit_sync_base.sh'), '--pr', 'https://github.com/o/r/pull/7', '--check'], {
     cwd: work,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${BIN_DIR}${path.delimiter}${process.env.PATH}`, REAL_GH: fake, FAKE_GH_ROUTES: path.join(dir, 'routes.json') },
+    env: shimEnv({ fake, routesPath, binDir: BIN_DIR }),
   });
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stdout, /behind origin\/main by 1 commit\(s\) \(1 ahead\)/);
@@ -417,13 +400,11 @@ test('e2e: gh repo view --json nameWithOwner is answered from the origin remote'
 
 function runGhWithRoutes(args, routes, cwd = undefined) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-gh-snap-'));
-  const fake = path.join(dir, 'fake-gh');
-  fs.writeFileSync(fake, FAKE_GH, { mode: 0o755 });
-  fs.writeFileSync(path.join(dir, 'routes.json'), JSON.stringify(routes));
+  const { fake, routesPath } = installFakeGh(dir, routes);
   return spawnSync(path.join(BIN_DIR, 'gh'), args, {
     encoding: 'utf8',
     cwd,
-    env: { ...process.env, REAL_GH: fake, FAKE_GH_ROUTES: path.join(dir, 'routes.json') },
+    env: { ...process.env, REAL_GH: fake, FAKE_GH_ROUTES: routesPath },
   });
 }
 
@@ -433,3 +414,69 @@ function syncBaseRepoRemote() {
   spawnSync('git', ['remote', 'add', 'origin', 'git@github.com:o/r.git'], { cwd: dir });
   return dir;
 }
+
+const checkoutOrigin = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd: ROOT, encoding: 'utf8' }).stdout;
+const CHECKOUT_SLUG = slugFromRemote(checkoutOrigin);
+const PR_SUBJECT = 7;
+
+function runMergePreflight(workTree, routes, extraArgv = []) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccr-gh-preflight-'));
+  const { fake, routesPath } = installFakeGh(dir, routes);
+  const prUrl = `https://github.com/${CHECKOUT_SLUG}/pull/${PR_SUBJECT}`;
+  return spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'scripts/babysit_merge_preflight.mjs'), '--pr', prUrl, ...extraArgv],
+    { cwd: workTree, encoding: 'utf8', env: shimEnv({ fake, routesPath, binDir: BIN_DIR }) },
+  );
+}
+
+const skipPreflightE2e =
+  (!hasJq && 'jq not installed') || (!CHECKOUT_SLUG && 'checkout origin is not a GitHub remote');
+
+test('e2e: merge preflight fifo_yield through the CCR gh shim (exit 2, not 3)', { skip: skipPreflightE2e }, () => {
+  const { work } = syncBaseRepo();
+  const routes = buildPreflightFifoRoutes(CHECKOUT_SLUG);
+  const result = runMergePreflight(work, routes, ['--json']);
+  assert.notEqual(result.status, 3, result.stderr || result.stdout);
+  assert.equal(result.status, 2, result.stderr);
+  const check = parseJsonDocument(result.stdout, 1);
+  assert.equal(check.reason, 'fifo_yield');
+});
+
+test('e2e: merge preflight clear through the CCR gh shim (exit 0)', { skip: skipPreflightE2e }, () => {
+  const { work } = syncBaseRepo();
+  const routes = buildPreflightClearRoutes(CHECKOUT_SLUG);
+  const result = runMergePreflight(work, routes, ['--json']);
+  assert.notEqual(result.status, 3, result.stderr || result.stdout);
+  assert.equal(result.status, 0, result.stderr);
+  const check = parseJsonDocument(result.stdout, 1);
+  assert.equal(check.reason, 'clear');
+});
+
+test('e2e: merge preflight --claim through the CCR gh shim', { skip: skipPreflightE2e }, () => {
+  const { work } = syncBaseRepo();
+  const routes = {
+    ...buildPreflightClearRoutes(CHECKOUT_SLUG),
+    ...labelPostRoute(PR_SUBJECT),
+  };
+  const result = runMergePreflight(work, routes, ['--claim', '--json']);
+  assert.notEqual(result.status, 3, result.stderr || result.stdout);
+  assert.equal(result.status, 0, result.stderr);
+  const check = parseJsonDocument(result.stdout, 0);
+  assert.equal(check.claimed, true);
+});
+
+test('e2e: merge preflight --release through the CCR gh shim', { skip: skipPreflightE2e }, () => {
+  const { work } = syncBaseRepo();
+  const routes = labelDeleteRoute(PR_SUBJECT);
+  const result = runMergePreflight(work, routes, ['--release', '--json']);
+  assert.notEqual(result.status, 3, result.stderr || result.stdout);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    command: 'release',
+    pr: String(PR_SUBJECT),
+    released: true,
+    already_absent: false,
+    label: 'merge-lease',
+  });
+});

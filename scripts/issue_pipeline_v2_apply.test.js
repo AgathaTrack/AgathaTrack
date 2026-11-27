@@ -300,6 +300,28 @@ test('wake posts the marker once after a confirmed doorbell', async () => {
   assert.ok(assignIdx >= 0 && assignIdx < sent.indexOf(wake), 'assign before wake');
 });
 
+test('blocked runner-queued ring-doorbell does not write round markers', async () => {
+  const { sent, restFn } = recorder();
+  const withRunners = {
+    ...config,
+    launchRunners: ['claude'],
+    agents: [{ id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'] }],
+  };
+  await applyAction({
+    action: { type: 'ring-doorbell', agent: 'claude-a', stage: 'To do', row: 'blocked.runner-queued' },
+    ctx: ctx({
+      restFn,
+      config: withRunners,
+      facts: { stage: 'To do' },
+      launchFn: async () => ({ runId: 'r1' }),
+    }),
+  });
+  assert.ok(
+    !sent.some((call) => call.method === 'POST' && /v2:round/.test(call.body?.body || '')),
+    'blocked queued retry is not an R-round',
+  );
+});
+
 test('wake at runner cap queues without marking the human reply handled (#2556 P1)', async () => {
   const { sent, restFn } = recorder();
   const withRunners = {

@@ -144,16 +144,21 @@ Script: `scripts/babysit_sync_base.sh` — fetches `origin/<base>`, rebases when
 
 Serialize merge attempts when multiple PRs reach the CI gate at the same time. Does not eliminate all rebases; reduces thundering-herd rebase + CI churn.
 
+**Evaluation order (preflight library):** `merge-lease` and FIFO **before** `behind_base`. A PR that is behind its base **while another PR holds the lease** exits `2` (wait) — **not** `1` (rebase). Rebases while blocked on a lease are what cause every waiter to hit exit `1` together after a merge and restart full CI in parallel.
+
+**Lease covers rebase + CI + merge:** Always run `--claim` first at §7. When behind and no waiter ahead, `--claim` adds `merge-lease` and may still exit `1` — the holder rebases once, waits for CI, runs the review gate, and merges **without** `--release` until squash succeeds. Other PRs stay on exit `2` until the holder releases.
+
 | When | Command |
 |------|---------|
 | Before merge (babysit+ §7) | `./scripts/babysit_merge_preflight.sh --pr <url> --claim` |
-| Preflight exit `1` (behind base, action `rebase`) | `./scripts/babysit_sync_base.sh --pr <url> --push` once; re-run CI if required checks re-triggered; then `--claim` again. Action `recheck_mergeable` (integration head): fetch `mergeable` again; do not rebase. |
-| Preflight exit `2` (wait) | Subscribe (`cursor-subscriptions` → `subscribe_github_pr` on lease holder or `subscribe_github_ci` on base) and wait for the lease holder; this is not a halt (merge coordination) — do **not** rebase yet |
+| `--claim` exit `0` | Up to date on the base; proceed to review gate and merge |
+| `--claim` exit `1` (`behind_base` or `integration_mergeability_unknown`) | Lease held — `./scripts/babysit_sync_base.sh --pr <url> --push` once when action is `rebase` (not on an integration head); re-run CI if checks re-trigger; then review gate and merge. Do **not** release the lease between rebase and merge. `recheck_mergeable`: refresh `mergeable`; do not rebase an integration head. |
+| Preflight exit `2` (wait) | Another PR holds `merge-lease` or FIFO yield — subscribe (`cursor-subscriptions` → `subscribe_github_pr` on lease holder or `subscribe_github_ci` on base) and wait; not a halt — **do not rebase** |
 | Preflight exit `4` (integration conflict) | One PR that merges the base into the integration head and resolves the conflict. Do not rebase. |
 | After successful merge | `./scripts/babysit_merge_preflight.sh --pr <url> --release` (no-op if PR closed) |
-| Stale lease (≥45 min, holder idle) | `--claim --force` |
+| Stale lease (≥45 min default, holder idle) | `--claim --force` — default should stay **longer than a full CI run** under the lease; tune `MERGE_PREFLIGHT_LEASE_STALE_MINUTES` if merges routinely exceed 45 min |
 
-Script: `scripts/babysit_merge_preflight.sh` — `merge-lease` label mutex + FIFO yield when base was updated within 10 minutes and a lower-numbered green PR exists on the same base. Env: `MERGE_PREFLIGHT_BASE_HOT_MINUTES`, `MERGE_PREFLIGHT_LEASE_STALE_MINUTES`. Claim and release add or remove that label with the REST issue-labels API (`POST` / `DELETE /repos/{owner}/{repo}/issues/{n}/labels`). That path is this checkout. A pull or issue URL for a different repository is rejected (exit 3) before any label change. Release succeeds when the label is already absent, including after the PR is closed. Do not switch the mutation back to `gh pr edit`: that command fetches org team `login`, `name`, and `slug` (and Projects fields) before it edits, and a `repo`-only token fails the fetch. The script would then exit `3`, which babysit treats as a halt, on a preflight that had already evaluated clear.
+Script: `scripts/babysit_merge_preflight.sh` — `merge-lease` label mutex + FIFO yield when base was updated within 10 minutes and a lower-numbered green PR exists on the same base. After `--claim` POST, the script re-lists open PRs on the base; if multiple carry `merge-lease`, the **lowest PR number keeps the label** and others release theirs (exit `2`). `isPrCiGreen` accepts native `gh` rollup (`status` + `conclusion`) and GraphQL/shim `state`. Env: `MERGE_PREFLIGHT_BASE_HOT_MINUTES`, `MERGE_PREFLIGHT_LEASE_STALE_MINUTES`. Claim and release add or remove that label with the REST issue-labels API (`POST` / `DELETE /repos/{owner}/{repo}/issues/{n}/labels`). That path is this checkout. A pull or issue URL for a different repository is rejected (exit 3) before any label change. Release succeeds when the label is already absent, including after the PR is closed. Do not switch the mutation back to `gh pr edit`: that command fetches org team `login`, `name`, and `slug` (and Projects fields) before it edits, and a `repo`-only token fails the fetch. The script would then exit `3`, which babysit treats as a halt, on a preflight that had already evaluated clear.
 
 ## CI cost (Actions minutes)
 
@@ -331,9 +336,9 @@ Run merge coordination first (§Merge coordination):
 
 ```bash
 ./scripts/babysit_merge_preflight.sh --pr <url> --claim
-# When preflight exit 1 (action rebase): babysit_sync_base.sh --pr <url> --push once, then --claim again.
+# Exit 2 → wait (do not rebase). Exit 1 after --claim → lease held; rebase once below, then merge without releasing until squash succeeds.
 # Integration head (`cursor/*-integration-*`): do not --push; MERGEABLE while BEHIND is OK. Exit 4 → merge base into release.
-./scripts/babysit_sync_base.sh --pr <url> --push    # only when behind and head is not an integration release; skip if up to date
+./scripts/babysit_sync_base.sh --pr <url> --push    # when action rebase and head is not an integration release; skip if up to date
 node scripts/babysit_pr_reviews.js gate --pr <url>  # must exit 0 — after the last push; 2 → release the lease, back to triage
 gh pr merge <url> --squash
 ./scripts/babysit_merge_preflight.sh --pr <url> --release

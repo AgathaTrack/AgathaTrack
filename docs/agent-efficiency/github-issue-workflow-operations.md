@@ -19,7 +19,7 @@ One table for every pipeline-related repo variable and JSON limit that used to b
 | Switch | Where | Read by (on `main`) | Values | Effect by combination |
 |--------|-------|---------------------|--------|------------------------|
 | `ISSUE_PIPELINE` | repo variable (retired) | **Nothing** — safe to delete on GitHub | was `off` / `dry-run` / `on` | v1 assignee dispatcher removed ([#2598](https://github.com/AgathaTrack/AgathaTrack/issues/2598)); plan docs removed run D ([#2411](https://github.com/AgathaTrack/AgathaTrack/issues/2411)). Never the cutover switch. |
-| `ISSUE_PIPELINE_V2` | repo variable | [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) gate and tick; merge/UAT/prod handlers; `agent-dispatch` / `agent-monitor` / `triage-human-reviewed` job guards; `issue_pipeline_v2.js` | `off` (default), `dry-run`, `on` | `off`: no v2 jobs. `dry-run`: decide + log only. `on`: live writes when `ENGINE_PAT` matches `engine.logins`. Legacy label workflows skip when `on`. |
+| `ISSUE_PIPELINE_V2` | repo variable | [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) gate and tick; merge/UAT/prod handlers; `issue_pipeline_v2.js` | `off` (default), `dry-run`, `on` | `off`: no v2 jobs. `dry-run`: decide + log only. `on`: live writes when `ENGINE_PAT` matches `engine.logins`. Legacy label workflows skip when `on`. |
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Same as `ISSUE_PIPELINE_V2` | e.g. `pipeline-beta`, `soak4`, or empty | With `on`: only labelled issues get live writes; others stay dry-run on the same tick. Empty = whole board. |
 | `WIP_LIMIT` | repo variable | `issue_pipeline_v2.js` | `off` or unset | `off` lifts the Ready queue cap (`limits.wip`) for the run. Any other value keeps the JSON limit. |
 | `limits.wip` | `.github/pipeline-agents.json` | `issue_pipeline_v2.js` | positive integer (default 2) | Delivery slot count while `WIP_LIMIT` is not `off`. Not the Stage column. |
@@ -32,10 +32,10 @@ One table for every pipeline-related repo variable and JSON limit that used to b
 
 | `ISSUE_PIPELINE_V2` | `ISSUE_PIPELINE_V2_LABEL` | What runs |
 |---------------------|---------------------------|-----------|
-| `off` | any | Legacy label flow (until #2411 removes it); handlers use legacy `Stage` rules; v2 workflow skipped. |
+| `off` | any | v2 workflow skipped; no live Stage writes from the engine. |
 | `dry-run` | e.g. `soak4` | v2 ticks decide and log; scoped issues show what *would* be written; legacy flows still run. |
-| `on` | set | Live v2 writes on labelled issues only; legacy dispatch/triage/monitor skipped; handlers skip v2-owned issues. |
-| `on` | empty | Full board cutover: v2 owns all issues in scope; legacy flows off. |
+| `on` | set | Live v2 writes on labelled issues only; handlers skip v2-owned issues. |
+| `on` | empty | Full board cutover: v2 owns all issues in scope. |
 
 #### Identity and pool (`pipeline-agents.json`)
 
@@ -100,6 +100,7 @@ Remove **`analyse-only`** before the first deliver wake when present. The engine
 - **Soak2 (2026-11-21 – 2026-11-22):** sign-off
   [pipeline-v2-soak2-findings.md](./changes/pipeline-v2-soak2-findings.md) — **To do → Done not proven**; shipped **#2510**, **#2511**, **#2512**, **#2517**. Fixtures **#2493–#2508** closed 2026-11-22. **Soak3:** new fixtures and a new proposal under `changes/`; proposed gates are listed in the findings doc until accepted here.
 - **Preflight:** the v2 launch preflight no longer runs the keyword risky-scope scan (PIPE-V2-D-REV4-004); the legacy launchers still do. The soak2 operator reword (**#2506**) is still governed by **SOAK-008** and by review, not by a scan.
+- **Busy watchdog:** `node scripts/issue_busy_watchdog.js` (dry-run; `--apply` comments only). Default idle threshold is `limits.stalledInactivityHours` from `.github/pipeline-agents.json` (24 h as of 2026-11), optionally overridden per method via `limits.stalledInactivityHoursByMethod` when set. Wall-clock `updated_at` alone is insufficient: for each `busy` issue past its threshold the script fetches comments (capped at 25 marker checks per run, 100 ms between fetches) and **skips** flagging when fresh pipeline markers show live work (`cursor-agent-run` with active status, or engine `v2:launch*` records for delivery/doorbell within the freshness/ack windows). `--threshold-hours` overrides config for one run. Not scheduled in CI until a follow-up.
 - **Board:** group the Pawpet board by `Stage`; make sure new issues and follow-ups are added to it (auto-add).
 - **Project workflows:** turn off the built-in "Item closed" and "Pull request merged" workflows (they set Done and
   race the engine). "Auto-close issue" (Status Done closes the issue) agrees with the engine closing at Done and can stay on.
