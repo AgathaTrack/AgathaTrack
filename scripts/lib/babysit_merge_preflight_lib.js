@@ -74,14 +74,61 @@ function isPrCiGreen(statusCheckRollup) {
  * @param {string} [leaseLabel]
  */
 function findLeaseHolder(openPrs, leaseLabel = MERGE_LEASE_LABEL) {
+  const holders = findAllLeaseHolders(openPrs, leaseLabel);
+  return holders[0] || null;
+}
+
+/**
+ * @param {object[]} openPrs
+ * @param {string} [leaseLabel]
+ */
+function findAllLeaseHolders(openPrs, leaseLabel = MERGE_LEASE_LABEL) {
   if (!Array.isArray(openPrs)) {
-    return null;
+    return [];
   }
-  return (
-    openPrs.find((pr) =>
+  return openPrs
+    .filter((pr) =>
       (pr.labels || []).some((label) => label.name === leaseLabel),
-    ) || null
-  );
+    )
+    .sort((a, b) => a.number - b.number);
+}
+
+/**
+ * After REST label POST, re-list holders; lowest PR number keeps the lease (ties break on number).
+ * @param {number} prNumber
+ * @param {object[]} holders
+ */
+function evaluateClaimWinner(prNumber, holders) {
+  const sorted = findAllLeaseHolders(holders);
+  if (sorted.length === 0) {
+    return { won: true, reason: 'claim_unconfirmed' };
+  }
+  const ours = sorted.find((pr) => pr.number === prNumber);
+  if (!ours) {
+    return {
+      won: false,
+      exitCode: 2,
+      reason: 'merge_lease_held',
+      action: 'wait',
+      holder: sorted[0],
+    };
+  }
+  if (sorted[0].number === prNumber) {
+    return {
+      won: true,
+      reason:
+        sorted.length > 1 ? 'won_concurrent_claim' : 'sole_lease_holder',
+      concurrent_holder_count: sorted.length,
+    };
+  }
+  return {
+    won: false,
+    exitCode: 2,
+    reason: 'concurrent_claim_lost',
+    action: 'wait',
+    holder: sorted[0],
+    concurrent_holder_count: sorted.length,
+  };
 }
 
 /**
@@ -358,8 +405,10 @@ module.exports = {
   MERGE_LEASE_LABEL,
   evaluateMergePreflight,
   isIntegrationHead,
+  findAllLeaseHolders,
   findCompetingGreenPrs,
   findLeaseHolder,
+  evaluateClaimWinner,
   isBaseHot,
   isLeaseStale,
   isPrCiGreen,

@@ -5,6 +5,8 @@
 const assert = require('node:assert/strict');
 const {
   evaluateMergePreflight,
+  evaluateClaimWinner,
+  findAllLeaseHolders,
   findCompetingGreenPrs,
   findLeaseHolder,
   isBaseHot,
@@ -76,6 +78,21 @@ assert.equal(isLeaseStale('2026-09-22T11:30:00.000Z', NOW, 45), false);
   ];
   const holder = findLeaseHolder(openPrs);
   assert.equal(holder.number, 10);
+  assert.deepEqual(findAllLeaseHolders(openPrs).map((pr) => pr.number), [10]);
+}
+
+{
+  const openPrs = [
+    { number: 20, labels: [{ name: MERGE_LEASE_LABEL }], url: 'https://x/20' },
+    { number: 15, labels: [{ name: MERGE_LEASE_LABEL }], url: 'https://x/15' },
+  ];
+  const won = evaluateClaimWinner(20, openPrs);
+  assert.equal(won.won, false);
+  assert.equal(won.reason, 'concurrent_claim_lost');
+  assert.equal(won.holder.number, 15);
+  const kept = evaluateClaimWinner(15, openPrs);
+  assert.equal(kept.won, true);
+  assert.equal(kept.reason, 'won_concurrent_claim');
 }
 
 {
