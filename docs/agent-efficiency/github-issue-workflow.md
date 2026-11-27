@@ -35,7 +35,9 @@ Lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and
 An issue moves through eight stages by agent work alone, except where a human is needed. The only state is stored on the
 issue; everything else (votes, linked PRs, Definition of Done progress, run liveness, deployments) is read from GitHub on
 every tick. Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). Code: `scripts/issue_pipeline_v2*.js`
-(a pure `decide(facts, config)` plus thin readers and one action executor).
+(a pure `decide(facts, config)` plus thin readers and one action executor). Runner-cap **`queued`** retries use the same
+`ring-doorbell` path for spec, review, intent review, and blocked wake (pickup clock and `busy` rules: PIPE-V2-D-TICK-004 in
+[wire contract](./github-issue-workflow-wire.md#decision-log)).
 
 ### Pipeline v2 split (read by purpose)
 

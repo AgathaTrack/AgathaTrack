@@ -3,10 +3,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createEmptyState, enqueueEntry, UatQueueError } = require('./lib/uat_queue_lib');
+const { createEmptyState, enqueueEntry, ledgerHasLiveContent, UatQueueError } = require('./lib/uat_queue_lib');
 const { syncEnqueueAfterMerge } = require('./lib/uat_queue_apply');
 const { commitStateMutation } = require('./lib/uat_queue_sync');
-const { ledgerHasLiveContent } = require('./uat_coordinator_bootstrap');
 const { reapplyDispatchLedger } = require('../.github/scripts/uat-coordinator-dispatch');
 
 function defer() {
@@ -206,6 +205,89 @@ test('dispatch reapply leases the live entry sequence', async () => {
   assert.equal(state.active_watcher.holder, 'gha-2');
   assert.equal(state.active_watcher.watching_seq, 4);
   assert.equal(state.promote_hold, true);
+});
+
+test('empty init skips when pre-save read finds live marker', async () => {
+  let loadN = 0;
+  const withEntry = createEmptyState();
+  withEntry.entries.push({
+    seq: 1,
+    pr_number: 1,
+    merge_sha: 'live',
+    state: 'queued',
+    enqueued_at: '2026-01-01T00:00:00.000Z',
+    enqueued_by: 'pr-1',
+  });
+  const store = {
+    async load() {
+      loadN += 1;
+      if (loadN <= 2) {
+        return { state: createEmptyState(), commentId: null, commentUpdatedAt: null };
+      }
+      return {
+        state: structuredClone(withEntry),
+        commentId: 88,
+        commentUpdatedAt: '1',
+      };
+    },
+    async save() {
+      assert.fail('save should not run when a live marker appeared');
+    },
+  };
+  const result = await commitStateMutation({
+    issueNumber: 2573,
+    loadState: () => store.load(),
+    saveState: (...args) => store.save(...args),
+    mutate(state) {
+      if (ledgerHasLiveContent(state)) {
+        return { state, initialized: false };
+      }
+      return { state: createEmptyState(), initialized: true };
+    },
+  });
+  assert.equal(result.written, false);
+  assert.equal(result.initialized, false);
+  assert.equal(result.state.entries.length, 1);
+  assert.equal(result.state.entries[0].merge_sha, 'live');
+});
+
+test('marker_already_live when pre-save sees live ledger before empty write', async () => {
+  let loadN = 0;
+  const live = createEmptyState();
+  live.entries.push({
+    seq: 1,
+    pr_number: 2,
+    merge_sha: 'pre-save',
+    state: 'queued',
+    enqueued_at: '2026-01-01T00:00:00.000Z',
+    enqueued_by: 'pr-2',
+  });
+  const store = {
+    async load() {
+      loadN += 1;
+      if (loadN <= 2) {
+        return { state: createEmptyState(), commentId: null, commentUpdatedAt: null };
+      }
+      if (loadN === 3) {
+        return { state: structuredClone(live), commentId: 12, commentUpdatedAt: '1' };
+      }
+      return { state: structuredClone(live), commentId: 12, commentUpdatedAt: '1' };
+    },
+    async save() {
+      assert.fail('save should not run when pre-save sees live content');
+    },
+  };
+  const result = await commitStateMutation({
+    issueNumber: 2573,
+    loadState: () => store.load(),
+    saveState: (...args) => store.save(...args),
+    mutate() {
+      return { state: createEmptyState(), initialized: true };
+    },
+  });
+  assert.equal(result.skipped, true);
+  assert.equal(result.reason, 'marker_already_live');
+  assert.equal(result.written, false);
 });
 
 test('a skipped mutation does not create a marker', async () => {

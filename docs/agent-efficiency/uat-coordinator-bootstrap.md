@@ -26,6 +26,8 @@ Until bootstrap completes, `uat_queue_runtime.js enqueue` returns `skipped: true
 
 ## Automated bootstrap
 
+Run `--write` only when **no concurrent queue writers** are active (no in-flight merge enqueue, no `deploy-uat` queue update, no operator `uat_queue_runtime.js --write`). Overlapping writers during first marker creation can race; `commitStateMutation` skips empty bootstrap when it observes live marker content, but operator quiet time is the reliable guard.
+
 ```bash
 # Create/update issue, pin, post empty ledger marker, run health-check
 node scripts/uat_coordinator_bootstrap.js --write --pin
@@ -76,13 +78,13 @@ node scripts/uat_queue_runtime.js enqueue \
 
 ## Overlapping writers
 
-The ledger is one marker comment (`<!-- uat-queue-state:v1 -->`). Writers load that comment, change the snapshot, and save it back. `commitStateMutation` (`scripts/lib/uat_queue_sync.js`) re-reads before the save. When the marker changed, it drops that attempt and reapplies the same change on the new snapshot. A duplicate `merge_sha` stays one entry. `created` comes from the attempt that landed, so an overlapping duplicate returns `created: false` when the entry is already present. Saves patch the newest marker and delete older copies of it. Bootstrap does not replace a ledger that already has entries, a barrier, a promote hold, or an active watcher. A store that never converges throws `uat_queue_write_conflict` after five attempts.
+The ledger is one marker comment (`<!-- uat-queue-state:v1 -->`). Writers load that comment, change the snapshot, and save it back. `commitStateMutation` (`scripts/lib/uat_queue_sync.js`) re-reads before the save. When the marker changed, it drops that attempt and reapplies the same change on the new snapshot. A duplicate `merge_sha` stays one entry. `created` comes from the attempt that landed, so an overlapping duplicate returns `created: false` when the entry is already present. Saves patch the newest marker and delete older copies of it. Bootstrap does not replace a ledger that already has entries, a barrier, a promote hold, or an active watcher. If another writer creates the marker with live content while bootstrap is initializing, the shared `commitStateMutation` helper skips the empty write (`marker_already_live`) instead of patching the marker back to empty. A store that never converges throws `uat_queue_write_conflict` after five attempts.
 
 GitHub issue comments have no conditional update. A save can still overwrite a comment that landed after the writer's last read and before its PATCH. Closing that gap would need another queue store, or a serialisation design the owner accepts. A shared Actions concurrency group is not that design: with `cancel-in-progress: false`, GitHub keeps one pending run and cancels earlier pending runs, so a queued enqueue would be dropped.
 
 The merge handler (`issue-agent-pr-merge.yml`) and the manual CLI have no concurrency group. `deploy-uat.yml` serialises only against other `deploy-uat` runs. `deploy-prod.yml` does not read or write this marker.
 
-Acceptance: `test: scripts/uat_queue_sync.test.js#two interleaved enqueues both survive`, `test: scripts/uat_queue_sync.test.js#duplicate enqueue for the same mergeSha is idempotent`, `test: scripts/uat_queue_sync.test.js#a store that never converges throws`.
+Acceptance: `test: scripts/uat_queue_sync.test.js#two interleaved enqueues both survive`, `test: scripts/uat_queue_sync.test.js#duplicate enqueue for the same mergeSha is idempotent`, `test: scripts/uat_queue_sync.test.js#bootstrap empty init does not clobber a concurrent marker with entries`, `test: scripts/uat_queue_sync.test.js#a store that never converges throws`.
 
 ## Troubleshooting
 

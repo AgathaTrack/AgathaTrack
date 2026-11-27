@@ -28,16 +28,45 @@ function isBaseHot(iso, nowMs, hotMinutes = DEFAULT_BASE_HOT_MINUTES) {
   return nowMs - pushedMs < hotMinutes * 60 * 1000;
 }
 
+const GREEN_CHECK_OUTCOMES = new Set(['SUCCESS', 'SKIPPED', 'NEUTRAL']);
+const IN_PROGRESS_CHECK_STATUS = new Set([
+  'PENDING',
+  'QUEUED',
+  'IN_PROGRESS',
+  'WAITING',
+  'REQUESTED',
+]);
+
 /**
- * @param {{ state?: string }[]|null|undefined} statusCheckRollup
+ * Single rollup item from native `gh` (conclusion + status) or GraphQL/shim (`state`).
+ * @param {{ state?: string, status?: string, conclusion?: string|null }} check
+ */
+function isCheckRollupItemGreen(check) {
+  const status = String(check.status || '').toUpperCase();
+  const state = String(check.state || '').toUpperCase();
+  const conclusion = String(check.conclusion || '').toUpperCase();
+
+  if (IN_PROGRESS_CHECK_STATUS.has(status) || IN_PROGRESS_CHECK_STATUS.has(state)) {
+    return false;
+  }
+  if (status === 'COMPLETED' || status === '') {
+    const outcome = state || conclusion;
+    if (!outcome || outcome === 'NONE') {
+      return false;
+    }
+    return GREEN_CHECK_OUTCOMES.has(outcome);
+  }
+  return false;
+}
+
+/**
+ * @param {{ state?: string, status?: string, conclusion?: string|null }[]|null|undefined} statusCheckRollup
  */
 function isPrCiGreen(statusCheckRollup) {
   if (!Array.isArray(statusCheckRollup) || statusCheckRollup.length === 0) {
     return false;
   }
-  return statusCheckRollup.every((check) =>
-    ['SUCCESS', 'SKIPPED', 'NEUTRAL'].includes(String(check.state || '')),
-  );
+  return statusCheckRollup.every((check) => isCheckRollupItemGreen(check));
 }
 
 /**
@@ -45,14 +74,61 @@ function isPrCiGreen(statusCheckRollup) {
  * @param {string} [leaseLabel]
  */
 function findLeaseHolder(openPrs, leaseLabel = MERGE_LEASE_LABEL) {
+  const holders = findAllLeaseHolders(openPrs, leaseLabel);
+  return holders[0] || null;
+}
+
+/**
+ * @param {object[]} openPrs
+ * @param {string} [leaseLabel]
+ */
+function findAllLeaseHolders(openPrs, leaseLabel = MERGE_LEASE_LABEL) {
   if (!Array.isArray(openPrs)) {
-    return null;
+    return [];
   }
-  return (
-    openPrs.find((pr) =>
+  return openPrs
+    .filter((pr) =>
       (pr.labels || []).some((label) => label.name === leaseLabel),
-    ) || null
-  );
+    )
+    .sort((a, b) => a.number - b.number);
+}
+
+/**
+ * After REST label POST, re-list holders; lowest PR number keeps the lease (ties break on number).
+ * @param {number} prNumber
+ * @param {object[]} holders
+ */
+function evaluateClaimWinner(prNumber, holders) {
+  const sorted = findAllLeaseHolders(holders);
+  if (sorted.length === 0) {
+    return { won: true, reason: 'claim_unconfirmed' };
+  }
+  const ours = sorted.find((pr) => pr.number === prNumber);
+  if (!ours) {
+    return {
+      won: false,
+      exitCode: 2,
+      reason: 'merge_lease_held',
+      action: 'wait',
+      holder: sorted[0],
+    };
+  }
+  if (sorted[0].number === prNumber) {
+    return {
+      won: true,
+      reason:
+        sorted.length > 1 ? 'won_concurrent_claim' : 'sole_lease_holder',
+      concurrent_holder_count: sorted.length,
+    };
+  }
+  return {
+    won: false,
+    exitCode: 2,
+    reason: 'concurrent_claim_lost',
+    action: 'wait',
+    holder: sorted[0],
+    concurrent_holder_count: sorted.length,
+  };
 }
 
 /**
@@ -147,23 +223,6 @@ function evaluateMergePreflight(input) {
     };
   }
 
-  if (behindBase && !(integrationHead && mergeable === 'MERGEABLE')) {
-    if (integrationHead) {
-      return {
-        allowed: false,
-        exitCode: 1,
-        reason: 'integration_mergeability_unknown',
-        action: 'recheck_mergeable',
-      };
-    }
-    return {
-      allowed: false,
-      exitCode: 1,
-      reason: 'behind_base',
-      action: 'rebase',
-    };
-  }
-
   if (
     leaseHolder &&
     leaseHolder.number !== prNumber &&
@@ -200,12 +259,43 @@ function evaluateMergePreflight(input) {
     };
   }
 
+  if (behindBase && !(integrationHead && mergeable === 'MERGEABLE')) {
+    if (integrationHead) {
+      return {
+        allowed: false,
+        exitCode: 1,
+        reason: 'integration_mergeability_unknown',
+        action: 'recheck_mergeable',
+      };
+    }
+    return {
+      allowed: false,
+      exitCode: 1,
+      reason: 'behind_base',
+      action: 'rebase',
+    };
+  }
+
   return {
     allowed: true,
     exitCode: 0,
     reason: 'clear',
     action: 'merge',
   };
+}
+
+/**
+ * Whether `--claim` may add `merge-lease` even when `allowed` is false (hold through rebase + CI).
+ * @param {{ allowed?: boolean, reason?: string, exitCode?: number }} evaluation
+ */
+function canClaimMergeLease(evaluation) {
+  if (!evaluation || evaluation.allowed) {
+    return true;
+  }
+  return (
+    evaluation.reason === 'behind_base' ||
+    evaluation.reason === 'integration_mergeability_unknown'
+  );
 }
 
 /**
@@ -315,11 +405,15 @@ module.exports = {
   MERGE_LEASE_LABEL,
   evaluateMergePreflight,
   isIntegrationHead,
+  findAllLeaseHolders,
   findCompetingGreenPrs,
   findLeaseHolder,
+  evaluateClaimWinner,
   isBaseHot,
   isLeaseStale,
   isPrCiGreen,
+  isCheckRollupItemGreen,
+  canClaimMergeLease,
   parsePrNumber,
   parsePrUrlRepo,
   prRefCheckoutMismatch,
