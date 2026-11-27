@@ -50,8 +50,9 @@ class CareCalendarDayCell extends StatelessWidget {
       }
     }
 
-    final semanticsLabel =
-        hasAbsenceOverlay ? _semanticsLabel(l, count, overlays) : null;
+    final semanticsLabel = hasAbsenceOverlay
+        ? _semanticsLabel(l, count, overlays)
+        : null;
 
     return Semantics(
       button: count > 0 || navigableOverlay != null,
@@ -62,15 +63,15 @@ class CareCalendarDayCell extends StatelessWidget {
       child: InkWell(
         onTap: count == 0
             ? navigableOverlay == null
-                ? null
-                : () {
-                    final target = navigableOverlay!;
-                    openPetAwayPlan(
-                      context,
-                      target.overlay.absenceId,
-                      target.petId,
-                    );
-                  }
+                  ? null
+                  : () {
+                      final target = navigableOverlay!;
+                      openPetAwayPlan(
+                        context,
+                        target.overlay.absenceId,
+                        target.petId,
+                      );
+                    }
             : () => _onCareTap(context, iso, markers),
         child: SizedBox(
           height: 48,
@@ -101,7 +102,9 @@ class CareCalendarDayCell extends StatelessWidget {
                       Badge(
                         isLabelVisible: true,
                         backgroundColor: hasProjectedOnly
-                            ? Theme.of(context).colorScheme.surfaceContainerHighest
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest
                             : null,
                         label: Text(
                           count > 1 ? '$count' : '•',
@@ -140,8 +143,7 @@ class CareCalendarDayCell extends StatelessWidget {
     if (overlay.declarerIsViewer) {
       return l.careCalendarAbsenceDaySemantics(titleSuffix);
     }
-    final declarerName =
-        overlay.declarerDisplayName?.trim().isNotEmpty == true
+    final declarerName = overlay.declarerDisplayName?.trim().isNotEmpty == true
         ? overlay.declarerDisplayName!.trim()
         : '—';
     return l.careCalendarAbsenceCoParentDaySemantics(declarerName, titleSuffix);

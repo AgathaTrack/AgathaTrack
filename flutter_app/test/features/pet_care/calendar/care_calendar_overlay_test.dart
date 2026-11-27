@@ -59,7 +59,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('renders absence overlay semantics without care badge', (tester) async {
+  testWidgets('renders absence overlay semantics without care badge', (
+    tester,
+  ) async {
     await pumpCalendar(tester, result: fixture());
 
     expect(
@@ -73,7 +75,9 @@ void main() {
     expect(find.byType(Badge), findsNothing);
   });
 
-  testWidgets('mixed day keeps care badge and absence semantics', (tester) async {
+  testWidgets('mixed day keeps care badge and absence semantics', (
+    tester,
+  ) async {
     const careItem = CareCalendarItem(
       healthEntryId: 'entry-1',
       occurrenceId: 'occ-1',

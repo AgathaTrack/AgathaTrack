@@ -154,11 +154,7 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final monthLabel = DateFormat.yMMMM().format(month);
-    final merged =
-        <
-          String,
-          List<CareCalendarDayMarker>
-        >{};
+    final merged = <String, List<CareCalendarDayMarker>>{};
     final overlayMaps = <Map<String, List<CareCalendarOverlayRef>>>[];
     for (final row in rows) {
       final data = row.data;

@@ -8,8 +8,9 @@ class CareCalendarModel {
         .cast<Map<String, dynamic>>();
     final noticeList = (json['notices'] as List<dynamic>? ?? [])
         .cast<Map<String, dynamic>>();
-    final overlayList = (json['planned_absence_overlays'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
+    final overlayList =
+        (json['planned_absence_overlays'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>();
 
     return CareCalendarResult(
       petId: json['pet_id'] as String? ?? '',
