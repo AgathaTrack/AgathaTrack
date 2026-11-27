@@ -9,7 +9,7 @@ import {
   assertCanonicalFreshness,
   gitDiffNameOnly,
   readRepoFile,
-  resolveGitBaseRef,
+  resolveFreshnessBaseRef,
 } from './migration-governance-lib.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -43,15 +43,15 @@ function parseArgs(argv) {
 
 function main() {
   const { baseRef, headRef } = parseArgs(process.argv);
-  let resolved;
+  let base;
   try {
-    resolved = resolveGitBaseRef(baseRef, ROOT);
+    base = resolveFreshnessBaseRef(baseRef, ROOT);
   } catch (err) {
     fail(err.message);
   }
   let diffFiles;
   try {
-    diffFiles = gitDiffNameOnly(resolved, headRef, ROOT);
+    diffFiles = gitDiffNameOnly(base.ref, headRef, ROOT, { twoDot: base.twoDot });
   } catch (err) {
     fail(err.message);
   }

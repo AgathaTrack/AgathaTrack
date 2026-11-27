@@ -87,6 +87,53 @@ export function assertCanonicalFreshness(diffFiles, readText) {
   }
 }
 
+const SHA40 = /^[0-9a-f]{40}$/i;
+
+export function readPrBaseShaFromGithubEvent() {
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventPath || !fs.existsSync(eventPath)) return null;
+  try {
+    const payload = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+    return payload.pull_request?.base?.sha || null;
+  } catch {
+    return null;
+  }
+}
+
+export function ensureCommitAvailable(sha, cwd) {
+  if (!SHA40.test(String(sha))) {
+    throw new Error(`migration-canonical-freshness: expected 40-char commit SHA, got "${sha}"`);
+  }
+  let verify = spawnSync('git', ['rev-parse', '--verify', sha], { cwd, encoding: 'utf8' });
+  if (verify.status === 0) return sha;
+  const fetch = spawnSync('git', ['fetch', '--depth=1', 'origin', sha], { cwd, encoding: 'utf8' });
+  if (fetch.status !== 0) {
+    throw new Error(
+      `migration-canonical-freshness: cannot fetch PR base commit ${sha} (${fetch.stderr || fetch.stdout || ''})`
+    );
+  }
+  verify = spawnSync('git', ['rev-parse', '--verify', sha], { cwd, encoding: 'utf8' });
+  if (verify.status !== 0) {
+    throw new Error(`migration-canonical-freshness: PR base commit ${sha} not available after fetch`);
+  }
+  return sha;
+}
+
+/**
+ * Prefer explicit PR base SHA in Actions (shallow checkout) over merge-base three-dot diff.
+ */
+export function resolveFreshnessBaseRef(explicitBaseRef, cwd) {
+  const prBase =
+    process.env.MIGRATION_LINT_BASE_SHA ||
+    process.env.GITHUB_EVENT_PULL_REQUEST_BASE_SHA ||
+    readPrBaseShaFromGithubEvent();
+  if (prBase) {
+    return { ref: ensureCommitAvailable(prBase, cwd), twoDot: true };
+  }
+  const resolved = resolveGitBaseRef(explicitBaseRef, cwd);
+  return { ref: resolved, twoDot: SHA40.test(resolved) };
+}
+
 export function resolveGitBaseRef(baseRef, cwd) {
   let verify = spawnSync('git', ['rev-parse', '--verify', baseRef], {
     cwd,
@@ -117,8 +164,9 @@ export function resolveGitBaseRef(baseRef, cwd) {
   return verify.stdout.trim();
 }
 
-export function gitDiffNameOnly(baseResolved, headRef, cwd) {
-  const diff = spawnSync('git', ['diff', '--name-only', `${baseResolved}...${headRef}`], {
+export function gitDiffNameOnly(baseResolved, headRef, cwd, { twoDot = false } = {}) {
+  const range = twoDot ? `${baseResolved}..${headRef}` : `${baseResolved}...${headRef}`;
+  const diff = spawnSync('git', ['diff', '--name-only', range], {
     cwd,
     encoding: 'utf8',
   });
