@@ -28,16 +28,45 @@ function isBaseHot(iso, nowMs, hotMinutes = DEFAULT_BASE_HOT_MINUTES) {
   return nowMs - pushedMs < hotMinutes * 60 * 1000;
 }
 
+const GREEN_CHECK_OUTCOMES = new Set(['SUCCESS', 'SKIPPED', 'NEUTRAL']);
+const IN_PROGRESS_CHECK_STATUS = new Set([
+  'PENDING',
+  'QUEUED',
+  'IN_PROGRESS',
+  'WAITING',
+  'REQUESTED',
+]);
+
 /**
- * @param {{ state?: string }[]|null|undefined} statusCheckRollup
+ * Single rollup item from native `gh` (conclusion + status) or GraphQL/shim (`state`).
+ * @param {{ state?: string, status?: string, conclusion?: string|null }} check
+ */
+function isCheckRollupItemGreen(check) {
+  const status = String(check.status || '').toUpperCase();
+  const state = String(check.state || '').toUpperCase();
+  const conclusion = String(check.conclusion || '').toUpperCase();
+
+  if (IN_PROGRESS_CHECK_STATUS.has(status) || IN_PROGRESS_CHECK_STATUS.has(state)) {
+    return false;
+  }
+  if (status === 'COMPLETED' || status === '') {
+    const outcome = state || conclusion;
+    if (!outcome || outcome === 'NONE') {
+      return false;
+    }
+    return GREEN_CHECK_OUTCOMES.has(outcome);
+  }
+  return false;
+}
+
+/**
+ * @param {{ state?: string, status?: string, conclusion?: string|null }[]|null|undefined} statusCheckRollup
  */
 function isPrCiGreen(statusCheckRollup) {
   if (!Array.isArray(statusCheckRollup) || statusCheckRollup.length === 0) {
     return false;
   }
-  return statusCheckRollup.every((check) =>
-    ['SUCCESS', 'SKIPPED', 'NEUTRAL'].includes(String(check.state || '')),
-  );
+  return statusCheckRollup.every((check) => isCheckRollupItemGreen(check));
 }
 
 /**
@@ -147,23 +176,6 @@ function evaluateMergePreflight(input) {
     };
   }
 
-  if (behindBase && !(integrationHead && mergeable === 'MERGEABLE')) {
-    if (integrationHead) {
-      return {
-        allowed: false,
-        exitCode: 1,
-        reason: 'integration_mergeability_unknown',
-        action: 'recheck_mergeable',
-      };
-    }
-    return {
-      allowed: false,
-      exitCode: 1,
-      reason: 'behind_base',
-      action: 'rebase',
-    };
-  }
-
   if (
     leaseHolder &&
     leaseHolder.number !== prNumber &&
@@ -200,12 +212,43 @@ function evaluateMergePreflight(input) {
     };
   }
 
+  if (behindBase && !(integrationHead && mergeable === 'MERGEABLE')) {
+    if (integrationHead) {
+      return {
+        allowed: false,
+        exitCode: 1,
+        reason: 'integration_mergeability_unknown',
+        action: 'recheck_mergeable',
+      };
+    }
+    return {
+      allowed: false,
+      exitCode: 1,
+      reason: 'behind_base',
+      action: 'rebase',
+    };
+  }
+
   return {
     allowed: true,
     exitCode: 0,
     reason: 'clear',
     action: 'merge',
   };
+}
+
+/**
+ * Whether `--claim` may add `merge-lease` even when `allowed` is false (hold through rebase + CI).
+ * @param {{ allowed?: boolean, reason?: string, exitCode?: number }} evaluation
+ */
+function canClaimMergeLease(evaluation) {
+  if (!evaluation || evaluation.allowed) {
+    return true;
+  }
+  return (
+    evaluation.reason === 'behind_base' ||
+    evaluation.reason === 'integration_mergeability_unknown'
+  );
 }
 
 /**
@@ -320,6 +363,8 @@ module.exports = {
   isBaseHot,
   isLeaseStale,
   isPrCiGreen,
+  isCheckRollupItemGreen,
+  canClaimMergeLease,
   parsePrNumber,
   parsePrUrlRepo,
   prRefCheckoutMismatch,

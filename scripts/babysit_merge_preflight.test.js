@@ -10,6 +10,8 @@ const {
   isBaseHot,
   isLabelAlreadyAbsent,
   isLeaseStale,
+  canClaimMergeLease,
+  isCheckRollupItemGreen,
   isPrCiGreen,
   leaseLabelApiArgs,
   MERGE_LEASE_LABEL,
@@ -23,6 +25,35 @@ const NOW = Date.parse('2026-09-22T12:00:00.000Z');
 assert.equal(isPrCiGreen([{ state: 'SUCCESS' }, { state: 'SKIPPED' }]), true);
 assert.equal(isPrCiGreen([{ state: 'SUCCESS' }, { state: 'FAILURE' }]), false);
 assert.equal(isPrCiGreen([]), false);
+
+assert.equal(
+  isPrCiGreen([
+    {
+      __typename: 'CheckRun',
+      status: 'COMPLETED',
+      conclusion: 'SUCCESS',
+    },
+    {
+      __typename: 'CheckRun',
+      status: 'COMPLETED',
+      conclusion: 'SKIPPED',
+    },
+  ]),
+  true,
+  'native gh CheckRun shape is green when all conclusions succeed',
+);
+assert.equal(
+  isPrCiGreen([
+    { status: 'COMPLETED', conclusion: 'SUCCESS' },
+    { status: 'QUEUED', conclusion: '' },
+  ]),
+  false,
+  'queued checks are not green',
+);
+assert.equal(
+  isCheckRollupItemGreen({ status: 'COMPLETED', conclusion: 'FAILURE' }),
+  false,
+);
 
 assert.equal(
   isBaseHot('2026-09-22T11:55:00.000Z', NOW, 10),
@@ -62,6 +93,27 @@ assert.equal(isLeaseStale('2026-09-22T11:30:00.000Z', NOW, 45), false);
   ];
   const competing = findCompetingGreenPrs(openPrs, { prNumber: 9 });
   assert.deepEqual(competing.map((pr) => pr.number), [8]);
+}
+
+{
+  const openPrs = [
+    {
+      number: 8,
+      mergeable: 'MERGEABLE',
+      statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }],
+    },
+    {
+      number: 12,
+      mergeable: 'MERGEABLE',
+      statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'FAILURE' }],
+    },
+  ];
+  const competing = findCompetingGreenPrs(openPrs, { prNumber: 9 });
+  assert.deepEqual(
+    competing.map((pr) => pr.number),
+    [8],
+    'findCompetingGreenPrs accepts native gh rollup shape',
+  );
 }
 
 {
@@ -126,6 +178,17 @@ assert.equal(isLeaseStale('2026-09-22T11:30:00.000Z', NOW, 45), false);
 {
   const result = evaluateMergePreflight({
     prNumber: 20,
+    behindBase: true,
+    leaseHolder: { number: 15, url: 'https://x/15' },
+  });
+  assert.equal(result.exitCode, 2);
+  assert.equal(result.reason, 'merge_lease_held');
+  assert.equal(result.action, 'wait');
+}
+
+{
+  const result = evaluateMergePreflight({
+    prNumber: 20,
     leaseHolder: { number: 20 },
   });
   assert.equal(result.allowed, true);
@@ -160,6 +223,10 @@ assert.equal(isLeaseStale('2026-09-22T11:30:00.000Z', NOW, 45), false);
   assert.equal(result.exitCode, 3);
   assert.equal(result.reason, 'do_not_merge');
 }
+
+assert.equal(canClaimMergeLease({ allowed: true, reason: 'clear' }), true);
+assert.equal(canClaimMergeLease({ allowed: false, reason: 'behind_base' }), true);
+assert.equal(canClaimMergeLease({ allowed: false, reason: 'merge_lease_held' }), false);
 
 assert.equal(parsePrNumber(2188), '2188');
 assert.equal(parsePrNumber(' 2303 '), '2303');

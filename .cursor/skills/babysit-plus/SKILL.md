@@ -187,8 +187,8 @@ When all merge gates pass (autonomous-pr-policy §Merge gates), **always squash-
 | Exit | Action |
 |------|--------|
 | `0` | Proceed. An integration head (`cursor/*-integration-*`) may be `BEHIND` and still `MERGEABLE`; do not rebase it. |
-| `1` | Action `rebase`: `./scripts/babysit_sync_base.sh --pr <url> --push` once; re-run CI if checks re-triggered; `--claim` again. Action `recheck_mergeable`: fetch `mergeable` again; do not rebase an integration head. |
-| `2` | Another PR holds `merge-lease` or FIFO yield — subscribe and wait for the lease holder; this is not a halt (merge coordination); do not rebase yet |
+| `1` | **`--claim` holds the lease** when behind — action `rebase`: `./scripts/babysit_sync_base.sh --pr <url> --push` once, re-run CI, then review gate + merge **without** `--release` until squash. Action `recheck_mergeable`: fetch `mergeable` again; do not rebase an integration head. |
+| `2` | Another PR holds `merge-lease` or FIFO yield — subscribe and wait; not a halt — **do not rebase**, even when behind on the base |
 | `3` | Halt (`do-not-merge` or error) |
 | `4` | Integration head conflicts. One PR that merges the base into that head and resolves the conflict. Do not rebase. |
 

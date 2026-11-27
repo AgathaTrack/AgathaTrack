@@ -22,6 +22,7 @@ import {
   DEFAULT_BASE_HOT_MINUTES,
   DEFAULT_LEASE_STALE_MINUTES,
   MERGE_LEASE_LABEL,
+  canClaimMergeLease,
   evaluateMergePreflight,
   findCompetingGreenPrs,
   findLeaseHolder,
@@ -344,7 +345,7 @@ function main() {
           leaseStale: ctx.leaseStale,
         });
       }
-      if (!evaluation.allowed) {
+      if (!canClaimMergeLease(evaluation)) {
         const payload = {
           command: 'claim',
           pr: ctx.pr.number,
@@ -359,6 +360,7 @@ function main() {
       }
     }
 
+    const claimedLease = !evaluation.allowed;
     addLeaseLabel(ctx.pr.number);
     const payload = {
       command: 'claim',
@@ -373,7 +375,7 @@ function main() {
     } else {
       console.log(`babysit_merge_preflight: claimed merge-lease on PR #${ctx.pr.number}`);
     }
-    process.exit(0);
+    process.exit(claimedLease ? evaluation.exitCode : 0);
   }
 
   const payload = {
