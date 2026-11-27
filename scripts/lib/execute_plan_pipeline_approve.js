@@ -2,7 +2,7 @@
 
 /**
  * Coded auto-approve policy for issue-pipeline-started execute-plan programmes (D-001).
- * Spec: docs/agent-efficiency/plans/issue-pipeline-automation.md §8
+ * Spec: docs/agent-efficiency/github-issue-workflow.md (execute-plan approve / pipeline programmes)
  */
 
 const { bodySha } = require('../issue_pipeline_v2_hash');
