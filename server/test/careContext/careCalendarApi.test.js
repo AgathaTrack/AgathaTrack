@@ -89,7 +89,8 @@ describe('care calendar API', () => {
 
     const res = await request(app)
       .get(`/api/pets/${petId}/care-calendar?starts_on=${requestStartsOn}&ends_on=${requestEndsOn}`)
-      .set(authHeader());
+      .set(authHeader())
+      .set('X-Care-As-Of', `${requestStartsOn}T12:00:00`);
 
     expect(res.statusCode).toBe(200);
     expect(res.body.pet_id).toBe(petId);
@@ -98,8 +99,10 @@ describe('care calendar API', () => {
     expect(res.body.before_month).toEqual({ items: [] });
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
-    expect(res.body.as_of).toMatchObject({ timezone: 'UTC' });
-    expect(res.body.as_of.date).toBe(res.body.starts_on);
+    expect(res.body.as_of).toMatchObject({
+      date: requestStartsOn,
+      timezone: 'UTC',
+    });
   });
 
   it('honours X-Care-As-Of in test env', async () => {
