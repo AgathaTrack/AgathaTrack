@@ -51,10 +51,26 @@ field in `.cursor/environment.json`) and rebuild — see below.
 Node's built-in `fetch` ignores `HTTPS_PROXY` / `ALL_PROXY` unless `NODE_USE_ENV_PROXY=1` is set at process start, so a
 direct call from a sandbox gets `401 Bad credentials`. A script that an agent runs and that calls GitHub with `fetch`
 must call `reexecWithEnvProxy()` from `scripts/lib/env_proxy_reexec.js` **only when** `require.main === module`, and **before**
-any module that calls GitHub with `fetch` is loaded. Covered today: `scripts/github_issue_workflow.js` and
-`scripts/execute_plan_runtime.js`. Other scripts under `scripts/` that reach GitHub via `fetch` in agent sandboxes still
-need an audit — tracking issue #2472 (`reexecWithEnvProxy` or route through `gh`). The `scripts/ci/*` and `.github/scripts/*` callers
-run only in GitHub Actions, which has no proxy, so they need no change.
+any module that calls GitHub with `fetch` is loaded.
+
+Regression: `node --test scripts/lib/env_proxy_agent_clis.test.js` asserts the guard on every **agent-invoked** CLI below.
+The list lives in `scripts/lib/env_proxy_agent_clis.js` (also referenced by that test).
+
+| Script | GitHub access | Runner | Proxy status |
+|--------|---------------|--------|--------------|
+| `scripts/github_issue_workflow.js` | `execute_plan_github` / `fetch` | agents (pipeline, AAT, babysit) | **pass** (`reexecWithEnvProxy`) |
+| `scripts/execute_plan_runtime.js` | `execute_plan_github` / `fetch` | agents (execute-plan `tick`) | **pass** (`reexecWithEnvProxy`) |
+| `scripts/pipeline_verdict.js` | `github-project-lib` / `fetch` | agents (spec/review verdict CLI) | **pass** (`reexecWithEnvProxy`) |
+| `scripts/issue_pipeline_wake.js` | none (`gh` subprocess only) | agents (analyse/delivery wake) | **pass** (no `fetch`; proxy not required) |
+| `scripts/issue_busy_watchdog.js` | direct `fetch` | Actions / manual ops (not agent skills) | **actions-only** (no sandbox re-exec) |
+| `scripts/issue_pipeline_v2.js` | `github-project-lib` | GitHub Actions (`issue-pipeline-v2.yml`) | **actions-only** |
+| `scripts/issue_pipeline_v2_migrate.js` | `github-project-lib` | GitHub Actions / manual migrate | **actions-only** |
+| `scripts/issue_pipeline_v2_event_wake.js` | none (sparse checkout gate) | GitHub Actions | **actions-only** |
+| `scripts/pr_review_request.js` | `github-project-lib` | GitHub Actions | **actions-only** |
+| `scripts/uat_coordinator_bootstrap.js` | `github-project-lib` | manual / ops (not agent skills) | **actions-only** |
+| `scripts/pipeline_claude_verify.js` | `github-project-lib` | GitHub Actions | **actions-only** |
+
+`scripts/ci/*` and `.github/scripts/*` are **actions-only** as well: they run in GitHub Actions, which has no egress proxy, so they need no `reexecWithEnvProxy`.
 
 ## Claude Code cloud sessions (`agathatrack` environment)
 
