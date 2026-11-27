@@ -126,8 +126,36 @@ test('idleThresholdHoursForIssue uses config default and override', () => {
     config.limits.stalledInactivityHours,
   );
   assert.equal(
+    idleThresholdHoursForIssue({
+      body: '### Delivery plan\n\nMethod: light-plan\n',
+      config,
+      overrideHours: null,
+    }),
+    config.limits.stalledInactivityHours,
+  );
+  assert.equal(
     idleThresholdHoursForIssue({ body: '', config, overrideHours: 2 }),
     2,
+  );
+});
+
+test('hasLivePipelineActivity: stale launch-pending does not suppress', () => {
+  const comments = [
+    comment(
+      1,
+      '<!-- v2:launch-pending agent=cursor-a purpose=doorbell -->\nLaunching',
+      '2026-11-22T00:00:00Z',
+    ),
+  ];
+  assert.equal(
+    hasLivePipelineActivity({
+      comments,
+      now: NOW,
+      limits: LIMITS,
+      engineLogins: ENGINE,
+      issueIsBusy: true,
+    }),
+    false,
   );
 });
 
