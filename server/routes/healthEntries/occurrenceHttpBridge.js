@@ -107,7 +107,7 @@ export async function handleCommand(pool, req, res, { command, respond, audit, g
   }
 }
 
-export function weightGuard(entry) {
+export function completionRequirementGuard(entry) {
   return genericCompleteGuard(entry);
 }
 
