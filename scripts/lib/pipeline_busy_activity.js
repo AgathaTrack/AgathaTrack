@@ -75,14 +75,25 @@ function hasLivePipelineActivity({ comments, now, limits, engineLogins, issueIsB
 }
 
 /**
- * Idle threshold (hours) for one issue: operator override, else config stalledInactivityHours.
+ * Config limit for a delivery method when `limits.stalledInactivityHoursByMethod` is present.
+ */
+function resolveStalledInactivityHours(config, method) {
+  const map = config.limits.stalledInactivityHoursByMethod;
+  if (map && Number.isFinite(map[method])) {
+    return map[method];
+  }
+  return config.limits.stalledInactivityHours;
+}
+
+/**
+ * Idle threshold (hours) for one issue: operator override, else method-aware config limit.
  */
 function idleThresholdHoursForIssue({ body, config, overrideHours }) {
   if (Number.isFinite(overrideHours) && overrideHours > 0) {
     return overrideHours;
   }
-  deliveryMethod(body);
-  return config.limits.stalledInactivityHours;
+  const method = deliveryMethod(body);
+  return resolveStalledInactivityHours(config, method);
 }
 
 function loadWatchdogLimits(configPath) {
@@ -98,6 +109,7 @@ module.exports = {
   MIN,
   hasLivePipelineActivity,
   idleThresholdHoursForIssue,
+  resolveStalledInactivityHours,
   loadWatchdogLimits,
   commentAtMs,
   isFresh,

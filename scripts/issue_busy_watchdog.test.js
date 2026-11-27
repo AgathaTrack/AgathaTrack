@@ -6,6 +6,7 @@ const {
   findWallClockIdleBusyIssues,
   buildWatchdogComment,
   listOpenBusyIssues,
+  listIssueComments,
   parseArgs,
   selectStaleBusyIssues,
   WATCHDOG_MARKER,
@@ -83,16 +84,78 @@ test('selectStaleBusyIssues skips live marker after wall-clock idle', async () =
       user: { login: 'pawpet-bot' },
     },
   ];
-  const stale = await selectStaleBusyIssues({
+  const { stale } = await selectStaleBusyIssues({
     issues,
     now: NOW,
     overrideHours: null,
     config: CONFIG,
     engineLogins: CONFIG.engine.logins,
     fetchComments,
+    maxMarkerChecks: 10,
+    commentFetchDelayMs: 0,
   });
   assert.deepEqual(stale.map((s) => s.number), []);
 });
+
+test('selectStaleBusyIssues caps marker checks and reports skip count', async () => {
+  const issues = Array.from({ length: 3 }, (_, i) => ({
+    number: 10 + i,
+    title: 't',
+    updated_at: hoursAgo(30),
+    labels: ['busy'],
+    body: '',
+  }));
+  let fetches = 0;
+  const fetchComments = async () => {
+    fetches += 1;
+    return [];
+  };
+  const { stale, markerCheckSkipped } = await selectStaleBusyIssues({
+    issues,
+    now: NOW,
+    overrideHours: null,
+    config: CONFIG,
+    engineLogins: CONFIG.engine.logins,
+    fetchComments,
+    maxMarkerChecks: 2,
+    commentFetchDelayMs: 0,
+  });
+  assert.equal(fetches, 2);
+  assert.equal(markerCheckSkipped, 1);
+  assert.equal(stale.length, 2);
+});
+
+test('listIssueComments follows pages and enforces page cap', async () => {
+  const full = Array.from({ length: 100 }, (_, i) => ({ id: i }));
+  const { fetchImpl } = pagedCommentsFetch({ 1: full, 2: [{ id: 100 }] });
+  const comments = await listIssueComments({
+    token: 't',
+    repository: 'o/r',
+    issueNumber: 1,
+    fetchImpl,
+  });
+  assert.equal(comments.length, 101);
+});
+
+test('listIssueComments fails when page cap exceeded', async () => {
+  const full = Array.from({ length: 100 }, (_, i) => ({ id: i }));
+  const pages = {};
+  for (let p = 1; p <= 20; p += 1) pages[p] = full;
+  const { fetchImpl } = pagedCommentsFetch(pages);
+  await assert.rejects(
+    listIssueComments({ token: 't', repository: 'o/r', issueNumber: 1, fetchImpl }),
+    /more than/,
+  );
+});
+
+function pagedCommentsFetch(pages) {
+  const fetchImpl = async (url) => {
+    const page = Number(new URL(url).searchParams.get('page'));
+    const batch = pages[page] || [];
+    return { ok: true, json: async () => batch };
+  };
+  return { fetchImpl };
+}
 
 function pagedFetch(pages) {
   const calls = [];

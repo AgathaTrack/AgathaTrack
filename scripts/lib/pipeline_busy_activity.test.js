@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const {
   hasLivePipelineActivity,
   idleThresholdHoursForIssue,
+  resolveStalledInactivityHours,
   isFresh,
 } = require('./pipeline_busy_activity');
 const { loadConfig } = require('../issue_pipeline_v2_config');
@@ -137,6 +138,19 @@ test('idleThresholdHoursForIssue uses config default and override', () => {
     idleThresholdHoursForIssue({ body: '', config, overrideHours: 2 }),
     2,
   );
+});
+
+test('resolveStalledInactivityHours uses per-method map when present', () => {
+  const config = loadConfig();
+  const withMap = {
+    ...config,
+    limits: {
+      ...config.limits,
+      stalledInactivityHoursByMethod: { PR: 24, 'light-plan': 48 },
+    },
+  };
+  assert.equal(resolveStalledInactivityHours(withMap, 'light-plan'), 48);
+  assert.equal(resolveStalledInactivityHours(withMap, 'PR'), 24);
 });
 
 test('hasLivePipelineActivity: stale launch-pending does not suppress', () => {
