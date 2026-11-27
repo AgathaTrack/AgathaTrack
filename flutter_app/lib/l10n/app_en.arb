@@ -624,6 +624,27 @@
       "date": { "type": "String" }
     }
   },
+  "careCalendarAbsenceOverlayLegend": "Tinted days show a planned absence; care badges are separate.",
+  "careCalendarAbsenceDayIconSemantics": "Planned absence",
+  "careCalendarAbsenceDaySemantics": "Planned absence{titleSuffix}",
+  "@careCalendarAbsenceDaySemantics": {
+    "placeholders": {
+      "titleSuffix": { "type": "String" }
+    }
+  },
+  "careCalendarAbsenceCoParentDaySemantics": "{declarerName} is away{titleSuffix}",
+  "@careCalendarAbsenceCoParentDaySemantics": {
+    "placeholders": {
+      "declarerName": { "type": "String" },
+      "titleSuffix": { "type": "String" }
+    }
+  },
+  "careCalendarMixedDaySemantics": "{count, plural, one{1 care item and planned absence context} other{{count} care items and planned absence context}}",
+  "@careCalendarMixedDaySemantics": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
   "careForPet": "{petName}'s care",
   "@careForPet": {
     "placeholders": {

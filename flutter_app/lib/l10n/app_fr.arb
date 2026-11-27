@@ -549,6 +549,27 @@
     }
   },
   "careCalendarDaySheetTitle": "Soins le {date}",
+  "careCalendarAbsenceOverlayLegend": "Les jours teintés indiquent une absence prévue, distincte des pastilles de soins.",
+  "careCalendarAbsenceDayIconSemantics": "Absence prévue",
+  "careCalendarAbsenceDaySemantics": "Absence prévue{titleSuffix}",
+  "@careCalendarAbsenceDaySemantics": {
+    "placeholders": {
+      "titleSuffix": { "type": "String" }
+    }
+  },
+  "careCalendarAbsenceCoParentDaySemantics": "{declarerName} est absent{titleSuffix}",
+  "@careCalendarAbsenceCoParentDaySemantics": {
+    "placeholders": {
+      "declarerName": { "type": "String" },
+      "titleSuffix": { "type": "String" }
+    }
+  },
+  "careCalendarMixedDaySemantics": "{count, plural, one{1 soin et contexte d'absence} other{{count} soins et contexte d'absence}}",
+  "@careCalendarMixedDaySemantics": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
   "careForPet": "Soins pour {petName}",
   "@careForPet": {
     "placeholders": {

@@ -5,7 +5,7 @@ feature_id: care_calendar
 status: active
 related_prs: [2610]
 related_bdd: []
-last_updated: 2026-11-25
+last_updated: 2026-11-27
 tags: [pet_care, care, calendar]
 ---
 
@@ -14,7 +14,7 @@ tags: [pet_care, care, calendar]
 ## Summary / scope
 
 - **Owns:** Month grid of open/projected care beside the care agenda on the Pet Care dashboard and pet profile; `GET /api/pets/:petId/care-calendar`; server-side visibility and calendar DTO.
-- **Does not own:** Agenda actions (D-CIE-025), away-plan JSON (`care-period-projection`), absence overlays ([#2418](https://github.com/AgathaTrack/AgathaTrack/issues/2418)), cross-pet routes, client-only filtering.
+- **Does not own:** Agenda actions (D-CIE-025), away-plan JSON (`care-period-projection`), cross-pet routes, client-only filtering.
 - **Depends on:** Schedule projection (`loadScheduleDataForProjection` + `projectSchedule`), occurrence status helpers, `HEALTH_VIEW`, pet home timezone + account timezone for window caps.
 
 ## Vocabulary
@@ -37,6 +37,10 @@ EN **Care calendar** / FR **Calendrier de soins** — read-only month view. **Be
 | CARE-CALENDAR-R-010 | Multi-pet dashboard: parallel fetch concurrency 4; cancel on month change; per-pet error chip | Live |
 | CARE-CALENDAR-R-011 | Empty/sparse month copy EN+FR + release-note expectation for after-it's-done sparsity | Live |
 | CARE-CALENDAR-R-012 | Semantics ids `care_calendar_*` on web | Live |
+| CARE-CALENDAR-R-017 | `planned_absence_overlays[]` on care-calendar for declarer, Full-access co-visible (R-032), and in-window guest grants; clipped to request window | Live |
+| CARE-CALENDAR-R-018 | Absence overlay does not count toward care badges; mixed-day care tap unchanged | Live |
+| CARE-CALENDAR-R-019 | Overlay layer distinct from care markers (theme away tokens / semantics) | Live |
+| CARE-CALENDAR-R-020 | Absence-only day with `can_open_away_plan` navigates to pet away plan | Live |
 
 ## Acceptance criteria
 
@@ -47,6 +51,10 @@ EN **Care calendar** / FR **Calendrier de soins** — read-only month view. **Be
 | Given dashboard pets excluding passed-away When Calendar tab is selected Then each pet loads via care-calendar with concurrency 4 | CARE-CALENDAR-R-010 | bdd: flutter_app/test/bdd/features/care_calendar.feature#Dashboard calendar tab |
 | Given a materialised occurrence When user taps a single-item day Then Care date opens via `openOccurrenceScreen` | CARE-CALENDAR-R-004 | bdd: flutter_app/test/bdd/features/care_calendar.feature#Open Care date from calendar |
 | Given after-it's-done sparse projection When future month has no dated slots Then empty-state copy explains sparsity | CARE-CALENDAR-R-011 | test: flutter_app/test/features/pet_care/calendar/care_calendar_empty_month_test.dart |
+| Given declarer absence overlapping the request window When care-calendar loads Then `planned_absence_overlays` lists clipped overlay dates | CARE-CALENDAR-R-017 | test: server/test/care/loadPlannedAbsenceOverlays.test.js |
+| Given a day with care markers and absence overlay When the user taps Then care day-sheet behaviour is unchanged and absence is not counted as a care item | CARE-CALENDAR-R-018 | test: flutter_app/test/features/pet_care/calendar/care_calendar_overlay_test.dart |
+| Given absence overlay days When the grid renders Then tint or icon layer is distinct from care badges with `care_calendar_*` semantics | CARE-CALENDAR-R-019 | test: flutter_app/test/features/pet_care/calendar/care_calendar_overlay_test.dart |
+| Given an absence-only day with `can_open_away_plan` When the user activates the day Then navigation opens the pet away plan screen | CARE-CALENDAR-R-020 | test: e2e/playwright/tests/care.calendar.spec.ts |
 
 ## States & data
 
@@ -61,7 +69,16 @@ Wire shape (indicative):
   "projection_status": "complete|partially_indeterminate",
   "before_month": { "items": [] },
   "days": [{ "date": "YYYY-MM-DD", "items": [] }],
-  "notices": [{ "kind": "from_completion_chain", "health_entry_id": "…" }]
+  "notices": [{ "kind": "from_completion_chain", "health_entry_id": "…" }],
+  "planned_absence_overlays": [{
+    "absence_id": "…",
+    "starts_on": "YYYY-MM-DD",
+    "ends_on": "YYYY-MM-DD",
+    "overlay_starts_on": "YYYY-MM-DD",
+    "overlay_ends_on": "YYYY-MM-DD",
+    "declarer_is_viewer": true,
+    "can_open_away_plan": true
+  }]
 }
 ```
 
@@ -75,7 +92,7 @@ Day `items[]` include `display_status` (`coming_up`|`due`|`overdue`|`not_recorde
 
 ## Out of scope (v1)
 
-Cross-pet route; new GoRoute; `loadAwayPlanProjection` / away-plan JSON passthrough; v1 forward estimator for `from_completion`; done/skipped on grid; absence overlay #2418.
+Cross-pet route; new GoRoute; `loadAwayPlanProjection` / away-plan JSON passthrough; v1 forward estimator for `from_completion`; done/skipped on grid.
 
 ## Release note (accepted product risk)
 

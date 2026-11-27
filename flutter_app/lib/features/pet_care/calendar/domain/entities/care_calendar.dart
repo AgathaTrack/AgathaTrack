@@ -51,6 +51,34 @@ class CareCalendarNotice {
   final String healthEntryId;
 }
 
+class CareCalendarPlannedAbsenceOverlay {
+  const CareCalendarPlannedAbsenceOverlay({
+    required this.absenceId,
+    required this.startsOn,
+    required this.endsOn,
+    required this.overlayStartsOn,
+    required this.overlayEndsOn,
+    required this.declarerIsViewer,
+    required this.canOpenAwayPlan,
+    this.title,
+    this.declarerDisplayName,
+  });
+
+  final String absenceId;
+  final String startsOn;
+  final String endsOn;
+  final String overlayStartsOn;
+  final String overlayEndsOn;
+  final bool declarerIsViewer;
+  final bool canOpenAwayPlan;
+  final String? title;
+  final String? declarerDisplayName;
+
+  bool coversDate(String isoDate) =>
+      isoDate.compareTo(overlayStartsOn) >= 0 &&
+      isoDate.compareTo(overlayEndsOn) <= 0;
+}
+
 class CareCalendarResult {
   const CareCalendarResult({
     required this.petId,
@@ -61,6 +89,7 @@ class CareCalendarResult {
     required this.beforeMonthItems,
     required this.days,
     this.notices = const [],
+    this.plannedAbsenceOverlays = const [],
   });
 
   final String petId;
@@ -71,4 +100,5 @@ class CareCalendarResult {
   final List<CareCalendarItem> beforeMonthItems;
   final List<CareCalendarDay> days;
   final List<CareCalendarNotice> notices;
+  final List<CareCalendarPlannedAbsenceOverlay> plannedAbsenceOverlays;
 }

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:pet_profile_app/core/router/shell_return_navigation.dart';
 import 'package:pet_profile_app/l10n/app_localizations.dart';
+import '../../domain/care_calendar_overlay_index.dart';
 import '../../domain/entities/care_calendar.dart';
 import 'care_calendar_before_month_strip.dart';
+import 'care_calendar_day_cell.dart';
 
 class CareCalendarSurface extends StatelessWidget {
   const CareCalendarSurface({
@@ -27,7 +28,12 @@ class CareCalendarSurface extends StatelessWidget {
     final l = AppLocalizations.of(context)!;
     final monthLabel = DateFormat.yMMMM().format(month);
     final itemsByDate = {for (final day in result.days) day.date: day.items};
-    final hasAny = result.days.any((d) => d.items.isNotEmpty);
+    final overlayByDate = indexCareCalendarOverlays(
+      petId: petId,
+      overlays: result.plannedAbsenceOverlays,
+    );
+    final hasCare = result.days.any((d) => d.items.isNotEmpty);
+    final hasOverlay = result.plannedAbsenceOverlays.isNotEmpty;
 
     return Semantics(
       container: true,
@@ -82,8 +88,15 @@ class CareCalendarSurface extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
+          if (hasOverlay) ...[
+            const SizedBox(height: 4),
+            Text(
+              l.careCalendarAbsenceOverlayLegend,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 8),
-          if (!hasAny)
+          if (!hasCare && !hasOverlay)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Semantics(
@@ -106,7 +119,12 @@ class CareCalendarSurface extends StatelessWidget {
               ),
             )
           else
-            _MonthGrid(petId: petId, month: month, itemsByDate: itemsByDate),
+            _MonthGrid(
+              petId: petId,
+              month: month,
+              itemsByDate: itemsByDate,
+              overlayByDate: overlayByDate,
+            ),
         ],
       ),
     );
@@ -139,11 +157,18 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
     final merged =
         <
           String,
-          List<({String petId, String petName, CareCalendarItem item})>
+          List<CareCalendarDayMarker>
         >{};
+    final overlayMaps = <Map<String, List<CareCalendarOverlayRef>>>[];
     for (final row in rows) {
       final data = row.data;
       if (data == null) continue;
+      overlayMaps.add(
+        indexCareCalendarOverlays(
+          petId: row.petId,
+          overlays: data.plannedAbsenceOverlays,
+        ),
+      );
       for (final day in data.days) {
         final list = merged.putIfAbsent(day.date, () => []);
         for (final item in day.items) {
@@ -161,6 +186,7 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
       });
     }
 
+    final overlayByDate = mergeCareCalendarOverlayMaps(overlayMaps);
     final errors = rows.where((r) => r.error != null).toList();
     final beforeMonth =
         <({String petId, String petName, CareCalendarItem item})>[
@@ -213,8 +239,19 @@ class CareCalendarMultiPetSurface extends StatelessWidget {
             const SizedBox(height: 8),
             CareCalendarMultiBeforeMonthStrip(rows: beforeMonth),
           ],
+          if (overlayByDate.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              l.careCalendarAbsenceOverlayLegend,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 8),
-          _MonthGridMarkers(month: month, markers: merged),
+          _MonthGridMarkers(
+            month: month,
+            markers: merged,
+            overlayByDate: overlayByDate,
+          ),
         ],
       ),
     );
@@ -226,11 +263,13 @@ class _MonthGrid extends StatelessWidget {
     required this.petId,
     required this.month,
     required this.itemsByDate,
+    required this.overlayByDate,
   });
 
   final String petId;
   final DateTime month;
   final Map<String, List<CareCalendarItem>> itemsByDate;
+  final Map<String, List<CareCalendarOverlayRef>> overlayByDate;
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +281,12 @@ class _MonthGrid extends StatelessWidget {
             .toList(growable: false),
       ),
     );
-    return _MonthGridMarkers(month: month, markers: markers, petId: petId);
+    return _MonthGridMarkers(
+      month: month,
+      markers: markers,
+      petId: petId,
+      overlayByDate: overlayByDate,
+    );
   }
 }
 
@@ -250,15 +294,13 @@ class _MonthGridMarkers extends StatelessWidget {
   const _MonthGridMarkers({
     required this.month,
     required this.markers,
+    required this.overlayByDate,
     this.petId,
   });
 
   final DateTime month;
-  final Map<
-    String,
-    List<({String petId, String petName, CareCalendarItem item})>
-  >
-  markers;
+  final Map<String, List<CareCalendarDayMarker>> markers;
+  final Map<String, List<CareCalendarOverlayRef>> overlayByDate;
   final String? petId;
 
   @override
@@ -289,137 +331,24 @@ class _MonthGridMarkers extends StatelessWidget {
             children: [
               for (var day = 0; day < 7; day++)
                 Expanded(
-                  child: _DayCell(
-                    date: gridStart.add(Duration(days: week * 7 + day)),
-                    markers:
-                        markers[DateFormat('yyyy-MM-dd').format(
-                          gridStart.add(Duration(days: week * 7 + day)),
-                        )] ??
-                        const [],
-                    petId: petId,
+                  child: Builder(
+                    builder: (context) {
+                      final cellDate = gridStart.add(
+                        Duration(days: week * 7 + day),
+                      );
+                      final iso = DateFormat('yyyy-MM-dd').format(cellDate);
+                      return CareCalendarDayCell(
+                        date: cellDate,
+                        markers: markers[iso] ?? const [],
+                        overlays: overlayByDate[iso] ?? const [],
+                        defaultPetId: petId,
+                      );
+                    },
                   ),
                 ),
             ],
           ),
       ],
-    );
-  }
-}
-
-class _DayCell extends StatelessWidget {
-  const _DayCell({required this.date, required this.markers, this.petId});
-
-  final DateTime date;
-  final List<({String petId, String petName, CareCalendarItem item})> markers;
-  final String? petId;
-
-  @override
-  Widget build(BuildContext context) {
-    final iso = DateFormat('yyyy-MM-dd').format(date);
-    final count = markers.length;
-    final hasProjectedOnly =
-        count > 0 && markers.every((row) => row.item.isProjected);
-
-    return Semantics(
-      button: count > 0,
-      identifier: 'care_calendar_day_$iso',
-      child: InkWell(
-        onTap: count == 0 ? null : () => _onTap(context, iso, markers),
-        child: SizedBox(
-          height: 48,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${date.day}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                if (count > 0)
-                  Badge(
-                    isLabelVisible: true,
-                    backgroundColor: hasProjectedOnly
-                        ? Theme.of(context).colorScheme.surfaceContainerHighest
-                        : null,
-                    label: Text(
-                      count > 1 ? '$count' : '•',
-                      style: hasProjectedOnly
-                          ? Theme.of(context).textTheme.labelSmall
-                          : null,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _onTap(
-    BuildContext context,
-    String iso,
-    List<({String petId, String petName, CareCalendarItem item})> rows,
-  ) {
-    if (rows.length == 1 && rows.first.item.isMaterialised) {
-      final item = rows.first.item;
-      openOccurrenceScreen(
-        context,
-        petId: petId ?? rows.first.petId,
-        entryId: item.healthEntryId,
-        occurrenceId: item.occurrenceId!,
-        source: 'care_calendar',
-      );
-      return;
-    }
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => _DaySheet(date: iso, rows: rows, fallbackPetId: petId),
-    );
-  }
-}
-
-class _DaySheet extends StatelessWidget {
-  const _DaySheet({required this.date, required this.rows, this.fallbackPetId});
-
-  final String date;
-  final List<({String petId, String petName, CareCalendarItem item})> rows;
-  final String? fallbackPetId;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
-    return SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(l.careCalendarDaySheetTitle(date)),
-          ),
-          for (final row in rows)
-            ListTile(
-              title: Text(row.item.name),
-              subtitle: Text(
-                row.petName.isEmpty ? row.item.displayStatus : row.petName,
-              ),
-              onTap: row.item.isMaterialised
-                  ? () {
-                      Navigator.of(context).pop();
-                      openOccurrenceScreen(
-                        context,
-                        petId: fallbackPetId ?? row.petId,
-                        entryId: row.item.healthEntryId,
-                        occurrenceId: row.item.occurrenceId!,
-                        source: 'care_calendar',
-                      );
-                    }
-                  : null,
-            ),
-        ],
-      ),
     );
   }
 }

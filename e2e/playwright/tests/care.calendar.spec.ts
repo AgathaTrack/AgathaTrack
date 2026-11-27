@@ -11,7 +11,7 @@ import {
   listHealthEntryOccurrences,
   withCareClock,
 } from '../support/care-api';
-import { createPet as createPetApi } from '../support/api';
+import { createPet as createPetApi, createPlannedAbsence } from '../support/api';
 import type { Page } from '@playwright/test';
 import {
   enableFlutterAccessibility,
@@ -119,6 +119,33 @@ test.describe('Care calendar @care', () => {
       }
       await occurrence.expectLoaded();
       expect(entry.id).toBeTruthy();
+    } finally {
+      await withCareClock(null, page);
+    }
+  });
+
+  test('Planned absence overlay band', async ({ page, testUser }) => {
+    const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+    const today = '2026-11-25';
+    await withCareClock(`${today}T10:00`, page);
+    try {
+      const pet = await createPetApi(baseURL, testUser.accessToken, 'Overlay Pet');
+      await createPlannedAbsence(baseURL, testUser.accessToken, {
+        startsOn: today,
+        endsOn: '2026-11-28',
+        petIds: [pet.id],
+      });
+      await enableFlutterAccessibility(page);
+      await loginAs(page, testUser, { experience: 'guardian' });
+      const dashboard = new GuardianDashboardPage(page);
+      await dashboard.open();
+      await dashboard.careRegion().scrollIntoViewIfNeeded();
+      await openCareCalendarTab(page);
+      await refreshFlutterAccessibility(page);
+      const overlayDay = page.locator(
+        `[flt-semantics-identifier="care_calendar_day_${today}_absence"]`,
+      );
+      await expect(overlayDay).toBeVisible({ timeout: 60_000 });
     } finally {
       await withCareClock(null, page);
     }

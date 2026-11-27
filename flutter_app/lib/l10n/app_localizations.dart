@@ -2492,6 +2492,39 @@ abstract class AppLocalizations {
   /// **'Care on {date}'**
   String careCalendarDaySheetTitle(String date);
 
+  /// No description provided for @careCalendarAbsenceOverlayLegend.
+  ///
+  /// In en, this message translates to:
+  /// **'Tinted days show a planned absence; care badges are separate.'**
+  String get careCalendarAbsenceOverlayLegend;
+
+  /// No description provided for @careCalendarAbsenceDayIconSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned absence'**
+  String get careCalendarAbsenceDayIconSemantics;
+
+  /// No description provided for @careCalendarAbsenceDaySemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned absence{titleSuffix}'**
+  String careCalendarAbsenceDaySemantics(String titleSuffix);
+
+  /// No description provided for @careCalendarAbsenceCoParentDaySemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{declarerName} is away{titleSuffix}'**
+  String careCalendarAbsenceCoParentDaySemantics(
+    String declarerName,
+    String titleSuffix,
+  );
+
+  /// No description provided for @careCalendarMixedDaySemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 care item and planned absence context} other{{count} care items and planned absence context}}'**
+  String careCalendarMixedDaySemantics(int count);
+
   /// No description provided for @careForPet.
   ///
   /// In en, this message translates to:

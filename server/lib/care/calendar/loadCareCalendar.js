@@ -4,6 +4,8 @@ import {
 } from '../schedule/projectSchedule.js';
 import { resolveCareAsOf } from '../occurrence/careAsOf.js';
 import { mapCareCalendarResponse } from './mapCareCalendarResponse.js';
+import { loadPlannedAbsenceOverlays } from './loadPlannedAbsenceOverlays.js';
+import { extractUserId } from '../../requireAuth.js';
 
 /**
  * @param {import('pg').Pool|import('pg').PoolClient} pool
@@ -27,7 +29,7 @@ export async function loadCareCalendar(pool, petId, startsOn, endsOn, req) {
     endsOn,
     asOf.todayIso
   );
-  return mapCareCalendarResponse({
+  const payload = mapCareCalendarResponse({
     petId,
     startsOn,
     endsOn,
@@ -35,4 +37,11 @@ export async function loadCareCalendar(pool, petId, startsOn, endsOn, req) {
     entries,
     asOf,
   });
+
+  const viewerUserId = req ? extractUserId(req) : null;
+  const planned_absence_overlays = viewerUserId
+    ? await loadPlannedAbsenceOverlays(pool, petId, viewerUserId, startsOn, endsOn)
+    : [];
+
+  return { ...payload, planned_absence_overlays };
 }

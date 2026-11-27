@@ -8,6 +8,8 @@ class CareCalendarModel {
         .cast<Map<String, dynamic>>();
     final noticeList = (json['notices'] as List<dynamic>? ?? [])
         .cast<Map<String, dynamic>>();
+    final overlayList = (json['planned_absence_overlays'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>();
 
     return CareCalendarResult(
       petId: json['pet_id'] as String? ?? '',
@@ -33,6 +35,21 @@ class CareCalendarModel {
             (n) => CareCalendarNotice(
               kind: n['kind'] as String? ?? '',
               healthEntryId: n['health_entry_id'] as String? ?? '',
+            ),
+          )
+          .toList(growable: false),
+      plannedAbsenceOverlays: overlayList
+          .map(
+            (o) => CareCalendarPlannedAbsenceOverlay(
+              absenceId: o['absence_id'] as String? ?? '',
+              startsOn: o['starts_on'] as String? ?? '',
+              endsOn: o['ends_on'] as String? ?? '',
+              overlayStartsOn: o['overlay_starts_on'] as String? ?? '',
+              overlayEndsOn: o['overlay_ends_on'] as String? ?? '',
+              declarerIsViewer: o['declarer_is_viewer'] as bool? ?? false,
+              canOpenAwayPlan: o['can_open_away_plan'] as bool? ?? false,
+              title: o['title'] as String?,
+              declarerDisplayName: o['declarer_display_name'] as String?,
             ),
           )
           .toList(growable: false),

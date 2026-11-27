@@ -1445,6 +1445,37 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get careCalendarAbsenceOverlayLegend =>
+      'Les jours teintés indiquent une absence prévue, distincte des pastilles de soins.';
+
+  @override
+  String get careCalendarAbsenceDayIconSemantics => 'Absence prévue';
+
+  @override
+  String careCalendarAbsenceDaySemantics(String titleSuffix) {
+    return 'Absence prévue$titleSuffix';
+  }
+
+  @override
+  String careCalendarAbsenceCoParentDaySemantics(
+    String declarerName,
+    String titleSuffix,
+  ) {
+    return '$declarerName est absent$titleSuffix';
+  }
+
+  @override
+  String careCalendarMixedDaySemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count soins et contexte d\'absence',
+      one: '1 soin et contexte d\'absence',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String careForPet(String petName) {
     return 'Soins pour $petName';
   }

@@ -104,10 +104,15 @@ describe('care calendar API', () => {
     expect(res.body.before_month).toEqual({ items: [] });
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
+<<<<<<< HEAD
     expect(res.body.as_of).toMatchObject({
       date: new Date().toISOString().slice(0, 10),
       timezone: 'UTC',
     });
+=======
+    expect(res.body.as_of).toMatchObject({ date: today, timezone: 'UTC' });
+    expect(Array.isArray(res.body.planned_absence_overlays)).toBe(true);
+>>>>>>> 3cffad8b (feat(care-calendar): planned absence overlay on month grid (D-CAL-010))
   });
 
   it('honours X-Care-As-Of in test env', async () => {
