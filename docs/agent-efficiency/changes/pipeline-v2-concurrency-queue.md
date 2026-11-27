@@ -4,7 +4,7 @@ owner: Agent efficiency
 audience: owner
 status: proposed
 status_since: 2026-11-27
-folds_into: docs/agent-efficiency/github-issue-workflow.md
+folds_into: docs/domains/cross-domain/features/github-issue-workflow.md
 last_updated: 2026-11-27
 tags: [agent, pipeline, ticks, concurrency]
 ---
@@ -57,11 +57,23 @@ Three consequences, each checked in the repo:
 
 | ID | Change | Why |
 |----|--------|-----|
-| PIPE-V2-CQ-R-001 | Move `concurrency` from the workflow to the `tick` job, group `issue-pipeline-v2`, and add `queue: max` | Gated-out events never reach the group (consequence 3). Pending scoped dispatches queue in order instead of replacing each other (1, 2). Serialisation of every engine write is kept |
-| PIPE-V2-CQ-R-002 | `scripts/issue_pipeline_wake.js` dispatches once, finds the run it started, and waits for its conclusion. It re-wakes once only when that run is `cancelled` with no jobs | Replaces a "no tight loops" prose rule in the analyse and delivery skills with behaviour that cannot loop. Also covers any displacement the queue does not prevent |
-| PIPE-V2-CQ-R-003 | Amend PIPE-V2-HT-R-001: only **board** runs may be collapsed; a run with `issue_number` or `mission` must not be. Amend HT-R-002: gated-out events do not enter the group | Keeps the requirement text true after R-001 |
+| PIPE-V2-CQ-R-001 | Move `concurrency` from the workflow to the `tick` job, group `issue-pipeline-v2`, and add `queue: max` | Gated-out events never reach the group (consequence 3). Pending dispatches are kept, up to 100, instead of replacing each other; dispatch order is not guaranteed (1, 2). Serialisation of every engine write is kept |
+| PIPE-V2-CQ-R-002 | `scripts/issue_pipeline_wake.js` dispatches once, finds the run it started (best-effort until the `wake_id` correlation below lands), and waits for its conclusion. It re-wakes once only when that run is `cancelled` with no jobs | Replaces a "no tight loops" prose rule in the analyse and delivery skills with behaviour that cannot loop. Also covers any displacement the queue does not prevent |
+| PIPE-V2-CQ-R-003 | Amend PIPE-V2-HT-R-001: only **board** runs may be collapsed; a scoped run (`issue_number` or `mission`) must not be cancelled by collapse. Under queue saturation this is best-effort (see Limits). Amend HT-R-002: gated-out events do not enter the group | Keeps the requirement text true after R-001 |
 
 R-001 and R-003 ship together in one workflow PR; R-002 is a separate small PR.
+
+### Limits
+
+- **Ordering.** GitHub does not guarantee the order in which queued runs in a concurrency group start. A scoped run can
+  be overtaken by a board tick.
+- **Run correlation.** The watch finds its run by creation time after the dispatch, skipping runs it already attributed.
+  Concurrent wakes can attach it to another run. The fix is a `wake_id` `workflow_dispatch` input shown in the run name,
+  matched exactly. That changes the workflow, so it belongs with PR A and must land before PR B is relied on.
+- **Queue saturation (100 pending).** GitHub cancels runs beyond the limit with no jobs. R-002 re-wakes once. If that
+  run is lost too, the wake is reported as not retried, and the scoped intake waits for the next wake. The schedule
+  sweeper runs board ticks, which do not do Backlog intake (`decideBacklog`), so it does not recover the intake.
+- **Retry budget.** One re-wake per wake, so the retry cannot loop.
 
 ### Cost
 
