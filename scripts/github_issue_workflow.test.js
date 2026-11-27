@@ -47,6 +47,39 @@ test('buildAatMarker and appendAatMarker', () => {
   assert.throws(() => normalizeAatFailReason(''), /--reason/);
 });
 
+test('aat-start is removed from the CLI', () => {
+  const script = path.join(__dirname, 'github_issue_workflow.js');
+  const result = spawnSync(process.execPath, [script, 'aat-start', '--issue', '1'], { encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+});
+
+test('aatVerdict posts a comment with marker and does not touch labels', async () => {
+  const workflowPath = require.resolve('./github_issue_workflow');
+  const project = require('./lib/execute_plan_project');
+  const posts = [];
+  const original = project.postIssueComment;
+  project.postIssueComment = async (issueNumber, body) => {
+    posts.push({ issueNumber, body });
+    return { ok: true };
+  };
+  delete require.cache[workflowPath];
+  const { aatVerdict } = require('./github_issue_workflow');
+  try {
+    const result = await aatVerdict({
+      issueNumber: 42,
+      verdict: 'pass',
+      flags: { body: 'AAT summary', merge: SAMPLE_SHA },
+    });
+    assert.equal(result.mergeSha, SAMPLE_SHA);
+    assert.equal(posts.length, 1);
+    assert.match(posts[0].body, /AAT summary/);
+    assert.match(posts[0].body, /v2:aat verdict=pass/);
+  } finally {
+    project.postIssueComment = original;
+    delete require.cache[workflowPath];
+  }
+});
+
 test('aat-fail exits non-zero without a known --reason', () => {
   const script = path.join(__dirname, 'github_issue_workflow.js');
   const missing = spawnSync(process.execPath, [script, 'aat-fail', '--issue', '1', '--body', 'nope'], { encoding: 'utf8' });
