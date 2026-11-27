@@ -624,6 +624,7 @@
       "date": { "type": "String" }
     }
   },
+  "careCalendarAbsenceOverlayDay": "Away plan window",
   "careForPet": "{petName}'s care",
   "@careForPet": {
     "placeholders": {

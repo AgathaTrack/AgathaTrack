@@ -2492,6 +2492,12 @@ abstract class AppLocalizations {
   /// **'Care on {date}'**
   String careCalendarDaySheetTitle(String date);
 
+  /// No description provided for @careCalendarAbsenceOverlayDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Away plan window'**
+  String get careCalendarAbsenceOverlayDay;
+
   /// No description provided for @careForPet.
   ///
   /// In en, this message translates to:

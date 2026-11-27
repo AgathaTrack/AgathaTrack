@@ -1427,6 +1427,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get careCalendarAbsenceOverlayDay => 'Away plan window';
+
+  @override
   String careForPet(String petName) {
     return '$petName\'s care';
   }

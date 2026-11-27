@@ -96,11 +96,16 @@ describe('care calendar API', () => {
     expect(res.body.before_month).toEqual({ items: [] });
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
+<<<<<<< HEAD
     expect(res.body.as_of.timezone).toBe('UTC');
     expect(res.body.as_of.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(res.body.days.some((day) => day.date === res.body.as_of.date)).toBe(
       true,
     );
+=======
+    expect(res.body.as_of).toMatchObject({ date: today, timezone: 'UTC' });
+    expect(Array.isArray(res.body.planned_absence_overlays)).toBe(true);
+>>>>>>> a2fde2bb (feat(calendar): planned absence overlay on care-calendar (D-CAL-010))
   });
 
   it('honours X-Care-As-Of in test env', async () => {

@@ -36,7 +36,28 @@ class CareCalendarModel {
             ),
           )
           .toList(growable: false),
+      plannedAbsenceOverlays: _overlays(json['planned_absence_overlays']),
     );
+  }
+
+  static List<CareCalendarPlannedAbsenceOverlay> _overlays(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .cast<Map<String, dynamic>>()
+        .map(
+          (o) => CareCalendarPlannedAbsenceOverlay(
+            absenceId: o['absence_id'] as String? ?? '',
+            startsOn: o['starts_on'] as String? ?? '',
+            endsOn: o['ends_on'] as String? ?? '',
+            overlayStartsOn: o['overlay_starts_on'] as String? ?? '',
+            overlayEndsOn: o['overlay_ends_on'] as String? ?? '',
+            declarerIsViewer: o['declarer_is_viewer'] as bool? ?? false,
+            canOpenAwayPlan: o['can_open_away_plan'] as bool? ?? false,
+            title: o['title'] as String?,
+            declarerDisplayName: o['declarer_display_name'] as String?,
+          ),
+        )
+        .toList(growable: false);
   }
 
   static List<CareCalendarItem> _items(dynamic raw) {
