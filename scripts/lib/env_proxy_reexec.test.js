@@ -141,3 +141,35 @@ test('reexecWithEnvProxy rethrows a spawn error instead of hiding it', () => {
     /spawn failed/,
   );
 });
+
+// Static guard (#2472): every agent-invoked CLI that reaches GitHub with fetch must re-exec
+// behind `require.main === module` before any local module (which may call GitHub) is loaded.
+// Read-only: no network, no process spawn.
+const fs = require('node:fs');
+const path = require('node:path');
+
+const SCRIPTS_DIR = path.join(__dirname, '..');
+const AGENT_INVOKED_GITHUB_CLIS = [
+  'github_issue_workflow.js',
+  'execute_plan_runtime.js',
+  'pipeline_verdict.js',
+  'issue_busy_watchdog.js',
+  'uat_queue_runtime.js',
+  'uat_coordinator_bootstrap.js',
+];
+const REEXEC_CALL = "require('./lib/env_proxy_reexec').reexecWithEnvProxy();";
+
+test('each agent-invoked GitHub CLI gates reexecWithEnvProxy() on require.main before local requires', () => {
+  for (const name of AGENT_INVOKED_GITHUB_CLIS) {
+    const src = fs.readFileSync(path.join(SCRIPTS_DIR, name), 'utf8');
+    const guard = src.indexOf(REEXEC_CALL);
+    assert.ok(guard >= 0, `${name} must call reexecWithEnvProxy() (#2472)`);
+    const before = src.slice(0, guard);
+    assert.ok(before.includes('if (require.main === module) {'), `${name}: re-exec must be gated by require.main === module`);
+    assert.equal(
+      /require\(\s*['"]\.\.?\//.test(before),
+      false,
+      `${name}: re-exec must come before any local require (GitHub modules load there)`,
+    );
+  }
+});

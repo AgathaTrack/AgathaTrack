@@ -13,6 +13,11 @@
  * One verdict per run: the nonce is revealed once, and only the first reveal counts.
  */
 
+// CLI only — before any GitHub fetch: sandbox egress needs NODE_USE_ENV_PROXY at process start.
+if (require.main === module) {
+  require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+}
+
 const fs = require('node:fs');
 const { bodySha } = require('./issue_pipeline_v2_hash');
 const { rest, parseRepo } = require('../.github/scripts/github-project-lib');

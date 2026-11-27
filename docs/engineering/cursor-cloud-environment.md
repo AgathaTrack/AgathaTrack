@@ -51,10 +51,34 @@ field in `.cursor/environment.json`) and rebuild — see below.
 Node's built-in `fetch` ignores `HTTPS_PROXY` / `ALL_PROXY` unless `NODE_USE_ENV_PROXY=1` is set at process start, so a
 direct call from a sandbox gets `401 Bad credentials`. A script that an agent runs and that calls GitHub with `fetch`
 must call `reexecWithEnvProxy()` from `scripts/lib/env_proxy_reexec.js` **only when** `require.main === module`, and **before**
-any module that calls GitHub with `fetch` is loaded. Covered today: `scripts/github_issue_workflow.js` and
-`scripts/execute_plan_runtime.js`. Other scripts under `scripts/` that reach GitHub via `fetch` in agent sandboxes still
-need an audit — tracking issue #2472 (`reexecWithEnvProxy` or route through `gh`). The `scripts/ci/*` and `.github/scripts/*` callers
-run only in GitHub Actions, which has no proxy, so they need no change.
+any module that calls GitHub with `fetch` is loaded. The `scripts/ci/*` and `.github/scripts/*` callers run only in GitHub
+Actions, which has no proxy, so they need no change. Library modules under `scripts/lib/` take no re-exec; only CLI entry
+points do.
+
+**Checklist (tracking issue #2472).** Every `scripts/` CLI that reaches GitHub with `fetch` (directly or via
+`execute_plan_github` / `github-project-lib`) is listed below. `pass` = re-exec guard present, or no `fetch` egress (the
+CLI uses `gh` only); `actions-only` = runs only from `.github/workflows/**`, so no sandbox proxy is needed. The static
+test `scripts/lib/env_proxy_reexec.test.js` fails if an agent-invoked CLI in the `pass` rows drops its guard. A new
+GitHub-`fetch` CLI must add a row here.
+
+| Script | GitHub path | Runner class | Status |
+|--------|-------------|--------------|--------|
+| `scripts/github_issue_workflow.js` | `execute_plan_github` (fetch) | agents (pipeline, babysit, AAT) | pass (re-exec) |
+| `scripts/execute_plan_runtime.js` | `execute_plan_github` (fetch) | agents (execute-plan `tick`) | pass (re-exec) |
+| `scripts/pipeline_verdict.js` | `github-project-lib` (fetch) | agents (spec-agent, review-agent) | pass (re-exec) |
+| `scripts/issue_busy_watchdog.js` | direct `fetch` | agents (busy watchdog, autonomous-pr-policy §Busy watchdog) | pass (re-exec) |
+| `scripts/uat_queue_runtime.js` | `uat_queue_sync` → `github-project-lib` (fetch) | agents (UAT coordinator runbooks) | pass (re-exec) |
+| `scripts/uat_coordinator_bootstrap.js` | `github-project-lib` (fetch) | operator runbook (uat-coordinator-bootstrap) | pass (re-exec) |
+| `scripts/babysit_pr_reviews.js` | `gh` only (`resolveRepository` reads the git remote) | agents (babysit, light-plan, dependabot-batch) | pass (no fetch) |
+| `scripts/issue_pipeline_wake.js` | `gh` spawn only | agents (analyse-issue, delivery-issue) | pass (no fetch) |
+| `scripts/issue_pipeline_v2.js` | `github-project-lib` (fetch) | `.github/workflows/issue-pipeline-v2.yml` | actions-only |
+| `scripts/issue_pipeline_v2_migrate.js` | `github-project-lib` (fetch) | `.github/workflows/issue-pipeline-v2-migrate.yml` | actions-only |
+| `scripts/pipeline_claude_prepare.js` | `github-project-lib` (fetch) | `.github/workflows/pipeline-claude-run.yml` | actions-only |
+| `scripts/pipeline_claude_verify.js` | `github-project-lib` (fetch) | `.github/workflows/pipeline-claude-run.yml` | actions-only |
+| `scripts/pr_review_request.js` | `github-project-lib` (fetch) | `.github/workflows/pr-review-request.yml` | actions-only |
+
+Not CLI entry points (library modules, no re-exec): `scripts/lib/execute_plan_*.js`, `scripts/issue_pipeline_v2_*.js`
+modules, `scripts/pipeline_runners/*.js`, `scripts/lib/uat_queue_sync.js`.
 
 ## Claude Code cloud sessions (`agathatrack` environment)
 

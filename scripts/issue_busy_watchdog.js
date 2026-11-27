@@ -19,6 +19,11 @@
  * @module scripts/issue_busy_watchdog
  */
 
+// CLI only — before any GitHub fetch: sandbox egress needs NODE_USE_ENV_PROXY at process start.
+if (require.main === module) {
+  require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+}
+
 const DEFAULT_THRESHOLD_HOURS = 6;
 const MAX_PAGES = 50; // 5,000 open busy issues; a larger board fails loudly instead of truncating silently
 const BUSY_LABEL = 'busy';

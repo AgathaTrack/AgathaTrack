@@ -16,6 +16,11 @@
 
 'use strict';
 
+// CLI only — before any GitHub fetch: sandbox egress needs NODE_USE_ENV_PROXY at process start.
+if (require.main === module) {
+  require('./lib/env_proxy_reexec').reexecWithEnvProxy();
+}
+
 const { execFileSync } = require('child_process');
 const path = require('path');
 const {
