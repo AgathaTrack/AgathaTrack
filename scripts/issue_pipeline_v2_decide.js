@@ -66,15 +66,69 @@ function canonicalStage(raw) {
  * The agent a wake rings. The holder is used only when the engine can start them. Otherwise the
  * next startable agent in the round robin, or null when none is startable.
  */
+function wakePoolForStage(stage, config) {
+  return stage === 'To do' || stage === 'In analysis' ? reviewPoolIds(config) : startableIds(config);
+}
+
+/** Resolve a GitHub assignee login to a pipeline agent id in the given pool. */
+function assigneeAgentId(assignees, config, pool) {
+  const allowed = new Set(pool);
+  for (const login of assignees || []) {
+    const entry = (config.agents || []).find(
+      (agent) => agent.actsAs === login || agent.id === login || agent.login === login,
+    );
+    if (entry && allowed.has(entry.id)) {
+      return entry.id;
+    }
+  }
+  return null;
+}
+
 function wakeAgent(facts, stage, config) {
   const holder =
     stage === 'To do' ? facts.spec?.assignedTo : stage === 'In analysis' ? facts.review?.assignedTo : null;
-  // Only spec and review pickup is tier-a-only. Blocked delivery and intent-review wakes keep every startable id.
-  const startable = stage === 'To do' || stage === 'In analysis' ? reviewPoolIds(config) : startableIds(config);
-  if (holder && startable.includes(holder)) {
+  const startable = wakePoolForStage(stage, config);
+  const timedOut = new Set(
+    stage === 'To do'
+      ? facts.spec?.timedOut || []
+      : stage === 'In analysis'
+        ? facts.review?.timedOut || []
+        : [],
+  );
+  if (holder && startable.includes(holder) && !timedOut.has(holder)) {
     return holder;
   }
-  return pickAgent(startable, facts);
+  const remaining = startable.filter((id) => !timedOut.has(id));
+  return pickAgent(remaining.length > 0 ? remaining : startable, facts);
+}
+
+function factsForBlockedWakeTimeout({ facts, stage, heldId, humanCommentAt, config }) {
+  const timeoutMs = config.limits.reviewTimeoutMin * MIN;
+  const pastPickup = humanCommentAt && facts.now - humanCommentAt >= timeoutMs;
+  if (!pastPickup || !heldId || !(facts.labels || []).includes('queued')) {
+    return facts;
+  }
+  if (stage === 'To do') {
+    return {
+      ...facts,
+      spec: {
+        ...(facts.spec || {}),
+        assignedTo: heldId,
+        timedOut: [...new Set([...(facts.spec?.timedOut || []), heldId])],
+      },
+    };
+  }
+  if (stage === 'In analysis') {
+    return {
+      ...facts,
+      review: {
+        ...(facts.review || {}),
+        assignedTo: heldId,
+        timedOut: [...new Set([...(facts.review?.timedOut || []), heldId])],
+      },
+    };
+  }
+  return facts;
 }
 
 function none(reason) {
@@ -541,7 +595,29 @@ function decide(facts, config) {
     if (!(facts.humanCommentSinceBlock && !answered)) {
       return none(answered ? 'blocked.already-woken' : 'blocked');
     }
-    const agent = wakeAgent(facts, stage, config);
+    const wakePool = wakePoolForStage(stage, config);
+    const heldId = assigneeAgentId(facts.assignees, config, wakePool);
+    const humanCommentAt = facts.humanCommentAt;
+    const labels = facts.labels || [];
+    if (labels.includes('queued') && labels.includes('busy')) {
+      return none('blocked.waiting-busy');
+    }
+    const agentForComment = wakeAgent(facts, stage, config);
+    const heldForQueued = heldId && agentForComment && heldId === agentForComment ? heldId : null;
+    const queuedRetry = runnerQueuedRetry({
+      facts,
+      config,
+      stage,
+      rowPrefix: 'blocked',
+      assignedTo: heldForQueued,
+      requestedAt: humanCommentAt,
+      allowed: wakePool,
+    });
+    if (queuedRetry) {
+      return queuedRetry;
+    }
+    const wakeFacts = factsForBlockedWakeTimeout({ facts, stage, heldId: heldForQueued, humanCommentAt, config });
+    const agent = wakeAgent(wakeFacts, stage, config);
     return agent
       ? {
           type: 'wake-stage-agent',
