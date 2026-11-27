@@ -234,6 +234,8 @@ run_governance() {
   node --test scripts/db/regenerate-canonical.test.js
   bash scripts/test/require-non-prod-wrappers.test.sh
   node scripts/db/check-migration-manifest.js
+  node scripts/db/check-migration-canonical-freshness.js --base-ref "$MERGE_BASE"
+  node --test scripts/db/migration-governance-lib.test.js
   node scripts/check_migration_sql_transactions.js
   node scripts/check_occurrence_writes.js
   node scripts/check_pg_pool_bootstrap.js

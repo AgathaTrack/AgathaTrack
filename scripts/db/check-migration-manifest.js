@@ -6,6 +6,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  assertCodeMigrationsParity,
+  parseCodeMigrationKeysFromMigrateSource,
+} from './migration-governance-lib.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -83,6 +87,22 @@ function main() {
       if (!listedSet.has(name)) {
         fail(`code_migrations entry not in incremental_migrations: ${name}`);
       }
+    }
+    const migratePath = path.join(ROOT, 'server/scripts/migrate.js');
+    if (!fs.existsSync(migratePath)) {
+      fail('server/scripts/migrate.js missing');
+    }
+    const migrateSource = fs.readFileSync(migratePath, 'utf8');
+    let migrateKeys;
+    try {
+      migrateKeys = parseCodeMigrationKeysFromMigrateSource(migrateSource);
+    } catch (err) {
+      fail(err.message);
+    }
+    try {
+      assertCodeMigrationsParity(manifest.code_migrations, migrateKeys);
+    } catch (err) {
+      fail(err.message);
     }
   }
 

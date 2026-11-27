@@ -35,6 +35,17 @@ fi
 echo "==> migration manifest"
 node "${ROOT}/scripts/db/check-migration-manifest.js"
 
+echo "==> migration / canonical freshness (git diff vs base)"
+SCHEMA_BASE_REF="${GITHUB_BASE_REF:-}"
+if [[ -z "$SCHEMA_BASE_REF" ]]; then
+  SCHEMA_BASE_REF="$(git -C "${ROOT}" merge-base HEAD origin/main 2>/dev/null || true)"
+fi
+if [[ -n "$SCHEMA_BASE_REF" ]]; then
+  node "${ROOT}/scripts/db/check-migration-canonical-freshness.js" --base-ref "${SCHEMA_BASE_REF}"
+else
+  echo "check-schema-equivalence: WARN — no merge base; skipping canonical freshness"
+fi
+
 echo "==> build schema via bootstrap path (baseline + incremental migrations)"
 RESET_DB="${RESET_DB:-true}"
 if [[ "$RESET_DB" == "true" ]]; then
