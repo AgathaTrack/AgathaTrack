@@ -35,29 +35,29 @@ export async function buildUserDataExport(pool, userId) {
   ] = await Promise.all([
     pool.query('SELECT * FROM pets WHERE user_id = $1', [userId]),
     pool.query('SELECT * FROM vets WHERE user_id = $1', [userId]),
-    pool.query('SELECT * FROM health_entries WHERE user_id = $1', [userId]),
+    pool.query('SELECT * FROM care_items WHERE user_id = $1', [userId]),
     pool.query('SELECT * FROM health_issues WHERE user_id = $1', [userId]),
     pool.query(
-      `SELECT ho.* FROM health_occurrences ho
-       INNER JOIN health_entries he ON he.id = ho.health_entry_id
+      `SELECT ho.* FROM care_occurrences ho
+       INNER JOIN care_items he ON he.id = ho.health_entry_id
        WHERE he.user_id = $1`,
       [userId],
     ),
     pool.query(
       `SELECT cse.* FROM care_schedule_events cse
-       INNER JOIN health_entries he ON he.id = cse.health_entry_id
+       INNER JOIN care_items he ON he.id = cse.health_entry_id
        WHERE he.user_id = $1`,
       [userId],
     ),
     pool.query(
       `SELECT hear.* FROM health_entry_absence_resolutions hear
-       INNER JOIN health_entries he ON he.id = hear.health_entry_id
+       INNER JOIN care_items he ON he.id = hear.health_entry_id
        WHERE he.user_id = $1`,
       [userId],
     ),
     pool.query(
       `SELECT hep.* FROM health_event_photos hep
-       INNER JOIN health_entries he ON he.id = hep.health_entry_id
+       INNER JOIN care_items he ON he.id = hep.health_entry_id
        WHERE he.user_id = $1`,
       [userId],
     ),

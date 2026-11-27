@@ -48,7 +48,7 @@ async function loadEligiblePets(pool, {
 async function loadHealthEntries(pool, petId) {
   const result = await pool.query(
     `SELECT care_family, frequency, care_source, status
-     FROM health_entries WHERE pet_id = $1`,
+     FROM care_items WHERE pet_id = $1`,
     [petId],
   );
   return result.rows;

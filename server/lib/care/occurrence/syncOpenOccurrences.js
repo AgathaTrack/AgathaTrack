@@ -12,11 +12,11 @@
  * 6. `next_due_date` = earliest open occurrence.
  */
 
+import { careTables } from '../../db/careTableScope.js';
 import { dateToIsoDate } from '../../calendarDate.js';
 import {
   expectedFixedSlots,
   isFixedSchedule,
-  nextSeriesSlotAfter,
   scheduleAnchorIso,
   stackWindowStart,
 } from '../schedule/fixedSlots.js';
@@ -179,7 +179,7 @@ async function finishIfNothingLeft(db, entry, asOf) {
   if (open.length > 0) return entry;
   if (!isRecurring(entry)) {
     const closed = await db.query(
-      `SELECT completed_on, scheduled_date FROM health_occurrences
+      `SELECT completed_on, scheduled_date FROM ${careTables().occurrences}
        WHERE health_entry_id = $1 AND status IN ('completed', 'skipped')
        ORDER BY marked_at DESC NULLS LAST LIMIT 1`,
       [entry.id],
@@ -201,7 +201,7 @@ async function writeNextDueDate(db, entry) {
   const next = open[0]?.scheduled_date ?? null;
   if (dateToIsoDate(entry.next_due_date) !== next) {
     await db.query(
-      'UPDATE health_entries SET next_due_date = $1, updated_at = NOW() WHERE id = $2',
+      `UPDATE ${careTables().items} SET next_due_date = $1, updated_at = NOW() WHERE id = $2`,
       [next, entry.id],
     );
   }

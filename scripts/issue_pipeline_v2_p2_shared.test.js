@@ -21,10 +21,12 @@ test('P2: claude-b is tier b on opus, and the claude pair shares one login', () 
   assert.equal(isSharedActsAs(config, 'pawpet-claude'), true);
 });
 
-test('P2: both Claude identities get the signed-verdict prompts, not the reaction prompts', () => {
-  assert.equal(stagePromptsForConfig(config, byId('claude-a')), STAGE_PROMPTS_SIGNED);
-  assert.equal(stagePromptsForConfig(config, byId('claude-b')), STAGE_PROMPTS_SIGNED);
-  assert.notEqual(STAGE_PROMPTS['To do'], STAGE_PROMPTS_SIGNED['To do']);
+test('P2: both Claude identities get the one signed-verdict prompt set; no prompt asks for a reaction vote', () => {
+  assert.equal(stagePromptsForConfig(config, byId('claude-a')), STAGE_PROMPTS);
+  assert.equal(stagePromptsForConfig(config, byId('claude-b')), STAGE_PROMPTS);
+  assert.equal(STAGE_PROMPTS_SIGNED, STAGE_PROMPTS);
+  assert.doesNotMatch(STAGE_PROMPTS['In analysis'], /react 👍|react 👎/);
+  assert.match(STAGE_PROMPTS['In analysis'], /review up --hash[\s\S]*review down --hash/);
 });
 
 test('P2: a 👍 from a shared login is not a vote; only signed verdicts name the voter', () => {
@@ -36,7 +38,7 @@ test('P2: a 👍 from a shared login is not a vote; only signed verdicts name th
   assert.deepEqual(votes, [], 'shared-login reactions must not count');
 });
 
-test('P2: a 👍 from a login with one identity still counts', () => {
+test('P2: a 👍 from a login with one identity is not a vote either (signed verdicts only)', () => {
   const solo = validateConfig({
     agents: [
       { id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'], tier: 'a' },
@@ -48,7 +50,7 @@ test('P2: a 👍 from a login with one identity still counts', () => {
     aat: { enabled: false, timeoutMin: 120, maxInconclusive: 2 },
   });
   const votes = votesOnRequest({ request, reactions: [reaction('pawpet-claude', '+1')], config: solo });
-  assert.deepEqual(votes.map((v) => [v.login, v.vote]), [['pawpet-claude', 'up']]);
+  assert.deepEqual(votes, [], 'reactions are never votes, even from a login with one identity');
 });
 
 const soloClaudePool = () =>

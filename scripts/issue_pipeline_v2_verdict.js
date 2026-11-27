@@ -109,4 +109,34 @@ function findConfirmedClaims({ comments, config, engineLogins, limits }) {
   return out;
 }
 
-module.exports = { VERDICT, CLAIM, commitOf, parseVerdict, parseClaim, findVerifiedVerdicts, findConfirmedClaims };
+/**
+ * Edit claims whose commit matches a doorbell launch of the same identity, in the stage the claim
+ * belongs to, and posted within the launch timeout. No nonce is needed: the claim names a commit
+ * the engine published at launch, so the claim is the run's own edit even when the run never votes.
+ * An edit is the reviewer's approval of the new version and never a verdict (PIPE-V2-D-REV4-002).
+ * Oldest first.
+ */
+function findLaunchVerifiedClaims({ comments, config, engineLogins, limits }) {
+  const { launches, timeoutMs } = verifiedReveals({ comments, config, engineLogins, limits });
+  const out = [];
+  for (const comment of byTime(comments)) {
+    const claim = parseClaim(comment.body);
+    if (!claim) continue;
+    const at = Date.parse(comment.created_at);
+    const fit = launchFor({ launches, commit: claim.commit, agentId: claim.agentId, kind: claim.kind, author: comment.user?.login, at, config, timeoutMs });
+    if (!fit) continue;
+    out.push({ ...claim, agentId: fit.agent.id, actsAs: fit.agent.actsAs, at, commentId: comment.id });
+  }
+  return out;
+}
+
+module.exports = {
+  VERDICT,
+  CLAIM,
+  commitOf,
+  parseVerdict,
+  parseClaim,
+  findVerifiedVerdicts,
+  findConfirmedClaims,
+  findLaunchVerifiedClaims,
+};

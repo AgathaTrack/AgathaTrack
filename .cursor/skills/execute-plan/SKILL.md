@@ -19,7 +19,7 @@ Run `node scripts/execute_plan_runtime.js init <plan_id>`, end the session with 
 ## Issue-pipeline delivery
 
 When the pipeline launched the work for an issue, follow its delivery contract
-([`github-issue-workflow.md` §Delivery contract](../../../docs/agent-efficiency/github-issue-workflow.md#delivery-contract)):
+([`github-issue-workflow-behaviour.md` §Delivery contract](../../../docs/agent-efficiency/github-issue-workflow-behaviour.md#delivery-contract)):
 `Refs #n` in every PR, Definition of Done ticks, `busy` released at the end.
 
 ## Worker session

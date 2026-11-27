@@ -66,7 +66,7 @@ async function loadLinkedOccurrences(pool, visitId) {
   const result = await pool.query(
     `SELECT ho.id AS occurrence_id, ho.health_entry_id, ho.status, ho.scheduled_date
      FROM vet_visit_occurrence_links l
-     INNER JOIN health_occurrences ho ON ho.id = l.health_occurrence_id
+     INNER JOIN care_occurrences ho ON ho.id = l.health_occurrence_id
      WHERE l.vet_visit_id = $1
      ORDER BY ho.scheduled_date ASC, ho.created_at ASC`,
     [visitId],
@@ -78,8 +78,8 @@ async function assertOccurrencesBelongToPet(pool, petId, occurrenceIds) {
   if (occurrenceIds.length === 0) return { ok: true };
   const result = await pool.query(
     `SELECT ho.id
-     FROM health_occurrences ho
-     INNER JOIN health_entries he ON he.id = ho.health_entry_id
+     FROM care_occurrences ho
+     INNER JOIN care_items he ON he.id = ho.health_entry_id
      WHERE he.pet_id = $1 AND ho.id = ANY($2::uuid[])`,
     [petId, occurrenceIds],
   );

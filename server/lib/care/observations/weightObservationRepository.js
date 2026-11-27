@@ -1,8 +1,8 @@
 import { dateToIsoDate } from '../../calendarDate.js';
 
 const FULFILS_JOIN = `
-  LEFT JOIN health_occurrences ho_f ON ho_f.id = we.health_occurrence_id
-  LEFT JOIN health_entries he_f ON he_f.id = ho_f.health_entry_id`;
+  LEFT JOIN care_occurrences ho_f ON ho_f.id = we.health_occurrence_id
+  LEFT JOIN care_items he_f ON he_f.id = ho_f.health_entry_id`;
 
 const LIST_BY_PET_SQL = `
   SELECT we.*, p.name AS pet_name,
@@ -203,7 +203,7 @@ export async function linkWeightToOccurrence(db, weightId, occurrenceId) {
  */
 export async function loadFulfilmentContext(db, petId) {
   const itemsResult = await db.query(
-    `SELECT * FROM health_entries
+    `SELECT * FROM care_items
      WHERE pet_id = $1 AND care_family = 'weight_monitoring' AND status = 'active'`,
     [petId],
   );
@@ -213,7 +213,7 @@ export async function loadFulfilmentContext(db, petId) {
   const latestCompletedOnByEntry = new Map();
   if (entryIds.length > 0) {
     const pendingResult = await db.query(
-      `SELECT * FROM health_occurrences
+      `SELECT * FROM care_occurrences
        WHERE health_entry_id = ANY($1::uuid[]) AND status = 'pending'
        ORDER BY scheduled_date ASC, scheduled_time ASC NULLS FIRST`,
       [entryIds],
@@ -225,7 +225,7 @@ export async function loadFulfilmentContext(db, petId) {
     }
     const doneResult = await db.query(
       `SELECT DISTINCT ON (health_entry_id) health_entry_id, completed_on
-       FROM health_occurrences
+       FROM care_occurrences
        WHERE health_entry_id = ANY($1::uuid[]) AND status = 'completed'
        ORDER BY health_entry_id, completed_on DESC NULLS LAST`,
       [entryIds],
@@ -251,7 +251,7 @@ export async function loadWeightOverviewContext(db, petId) {
     [petId],
   );
   const itemsResult = await db.query(
-    `SELECT * FROM health_entries
+    `SELECT * FROM care_items
      WHERE pet_id = $1 AND care_family = 'weight_monitoring'
        AND status IN ('active', 'paused')
      ORDER BY name`,
@@ -262,7 +262,7 @@ export async function loadWeightOverviewContext(db, petId) {
   const pendingByEntry = new Map();
   if (entryIds.length > 0) {
     const pendingResult = await db.query(
-      `SELECT * FROM health_occurrences
+      `SELECT * FROM care_occurrences
        WHERE health_entry_id = ANY($1::uuid[]) AND status = 'pending'
        ORDER BY scheduled_date ASC, scheduled_time ASC NULLS FIRST`,
       [entryIds],

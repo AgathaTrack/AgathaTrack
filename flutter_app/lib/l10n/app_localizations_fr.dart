@@ -8492,6 +8492,33 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible d\'enregistrer le soignant. Réessayez.';
 
   @override
+  String get awayPlanningCarerInviteOfferTitle =>
+      'Inviter ce soignant pour d\'autres animaux ?';
+
+  @override
+  String get awayPlanningCarerInviteOfferBody =>
+      'Ce soignant est aussi assigné à ces animaux pendant cette absence. Choisissez ceux à inclure dans l\'invitation à l\'application.';
+
+  @override
+  String get awayPlanningCarerInviteOnlyThisPet => 'Seulement cet animal';
+
+  @override
+  String get awayPlanningCarerInviteIncludeSelected =>
+      'Inclure les animaux sélectionnés';
+
+  @override
+  String get awayPlanningCarerInviteSendAction =>
+      'Envoyer l\'invitation à l\'application';
+
+  @override
+  String get awayPlanningCarerInviteSent =>
+      'Invitation à l\'application envoyée.';
+
+  @override
+  String get awayPlanningCarerInviteFailed =>
+      'Impossible d\'envoyer l\'invitation à l\'application. Réessayez.';
+
+  @override
   String awayPlanningCarerEditPetNoteLabel(String petName) {
     return 'Notes pour $petName';
   }

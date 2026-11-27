@@ -74,7 +74,7 @@ test('trust: an engine-authored, unedited request counts; edits by anyone else d
   assert.equal(findReviewRequests([forged, edited], ['engine'], {}).length, 0);
 });
 
-test('votes: latest 👍/👎 per listed agent; the owner, other emojis and older reactions are ignored', () => {
+test('votes: reactions are never votes, from any listed agent (PIPE-V2-D-REV4-001)', () => {
   const req = findReviewRequests([request('h1')], ['engine'])[0];
   const votes = votesOnRequest({
     request: req,
@@ -87,7 +87,7 @@ test('votes: latest 👍/👎 per listed agent; the owner, other emojis and olde
       reaction('pawpet-claude', '+1', '2026-11-16T10:00:00Z'),
     ],
   });
-  assert.deepEqual(votes.map(({ login, vote, hash }) => [login, vote, hash]), [['pawpet-bot', 'down', 'h1']]);
+  assert.deepEqual(votes, [], 'no reaction counts');
 });
 
 test('facts: last editor is the newest editor, else the issue author; edits before In analysis do not count', () => {
@@ -127,7 +127,7 @@ test('graphql readers: request shape, ordering, author fallback and unedited com
   assert.equal(await fetchCommentEditor({ nodeId: '', token: 't', graphqlFn }), null);
 });
 
-test('runner: an In analysis issue reads requests, reactions, edit history and editors (reactions are not votes)', async () => {
+test('runner: an In analysis issue reads requests, edit history and editors; reactions are not read (signed verdicts only)', async () => {
   const prior = process.env.ISSUE_PIPELINE_V2;
   process.env.ISSUE_PIPELINE_V2 = 'dry-run';
   const body = 'the body';
@@ -154,7 +154,7 @@ test('runner: an In analysis issue reads requests, reactions, edit history and e
         fetchBodyEdits: async () => ({ author: 'KanopeeKa', edits: [edit('pawpet-claude', '2026-11-16T11:15:00Z')] }),
       },
     });
-    assert.deepEqual(calls, [['editor', req.node_id], ['reactions', req.id]]);
+    assert.deepEqual(calls, [['editor', req.node_id]], 'reactions are not read: votes are signed verdicts only');
     const entry = result.actions[0];
     // A reaction from a shared login is not a vote (PIPE-V2-D-P2-001), so this silent round is retried.
     assert.equal(entry.action.type, 'reassign', 'a shared-login reaction does not converge the body');
@@ -187,4 +187,22 @@ test('graphql: the edit history is paged backwards so edits past one page still 
   let calls = 0;
   await fetchBodyEdits({ owner: 'o', repo: 'r', issueNumber: 5, token: 't', maxPages: 3, graphqlFn: async () => { calls += 1; return page([{ editedAt: `2026-11-16T0${calls}:00:00Z`, editor: { login: 'x' } }], true, 'c'); } });
   assert.equal(calls, 3);
+});
+
+test('totalVotes: a signed review verdict on an earlier hash still counts toward the vote cap (since entry)', () => {
+  const { buildLaunchRecord } = require('./issue_pipeline_v2_launch');
+  const T = Date.parse('2026-11-18T10:00:00Z');
+  const at = (ms) => new Date(ms).toISOString();
+  const nonce = 'd0'.repeat(16);
+  const h0 = 'a1'.repeat(8);
+  const h1 = 'b2'.repeat(8);
+  const engine = 'engine';
+  const comments = [
+    { id: 1, user: { login: engine }, created_at: at(T), updated_at: at(T), body: buildReviewRequest({ hash: h0, assigned: 'pawpet-claude', history: [], config }) },
+    { id: 2, user: { login: engine }, created_at: at(T + 60000), updated_at: at(T + 60000), body: buildLaunchRecord({ runId: 'r1', agent: 'pawpet-claude', purpose: 'doorbell', stage: 'In analysis', nonce }) },
+    { id: 3, user: { login: 'pawpet-claude' }, created_at: at(T + 120000), updated_at: at(T + 120000), body: `<!-- v2:verdict agent=pawpet-claude nonce=${nonce} kind=review hash=${h0} value=down -->` },
+    { id: 4, user: { login: engine }, created_at: at(T + 180000), updated_at: at(T + 180000), body: buildReviewRequest({ hash: h1, assigned: 'pawpet-bot', history: [], config }) },
+  ];
+  const facts = deriveReviewFacts({ comments, reactionsByComment: {}, edits: [], bodyAuthor: null, config, engineLogins: [engine], editors: {}, bodyHash: h1, issueNumber: 1, limits, now: T + 240000 });
+  assert.equal(facts.totalVotes, 1, 'the down on h0 is a vote cast in In analysis');
 });

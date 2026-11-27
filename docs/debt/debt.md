@@ -17,7 +17,6 @@ tags: [debt, deferred, tech-debt]
 |--------|-----|------|----------|-------------|
 | architecture | #1545 | tech debt | P3 | DEBT-ARCH-CYCLE (residual): 35 baselined feature edges and 3 R4 exceptions into the `care_item` leaf remain; barrel exports cannot be removed without R1/R5/R6 violations (P1 decision table in `docs/architecture/care-item-cross-feature-imports.md`). Structural split deferred to ARCH-G |
 | pet_care | #1823 | tech debt | P3 | Deduplicate **Change date** / **Skip** / Mark done controls in `care_item_dates_section.dart` vs Needs attention rows — leaf screen is canonical (D-CIE-037) |
-| pet_care | care-next-occurrence | feature | P2 | Notification deep link opens the **occurrence screen** (not care item only) — §18.14; track with `occurrence_screen_opened{source: notification}` |
 | pet_care | — | tech debt | P2 | `publicError(err, msg)` returns a string — add `sendPublicError(res, err, msg)` wrapper or ESLint ban on `publicError(res` (D-AWAY-013; AW-EMERGENCY fixed the two `careContext` call sites) |
 | pet_care | — | tech debt | P3 | `timestampToIso()` helper in `calendarDate.js` — adopt repo-wide (17 call sites across 10 files); AW-0 scopes to `plannedAbsence.js` only |
 | platform | — | tech debt | P1 | PostHog authorized URLs for prod (`https://prod.agathatrack.com`) |

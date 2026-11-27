@@ -2,6 +2,7 @@
  * Care item row reads/writes used by occurrence commands.
  */
 
+import { careTables } from '../../db/careTableScope.js';
 import { dateToIsoDate } from '../../calendarDate.js';
 
 /**
@@ -9,7 +10,7 @@ import { dateToIsoDate } from '../../calendarDate.js';
  * @param {string} entryId
  */
 export async function reloadEntry(db, entryId) {
-  const result = await db.query('SELECT * FROM health_entries WHERE id = $1', [entryId]);
+  const result = await db.query(`SELECT * FROM ${careTables().items} WHERE id = $1`, [entryId]);
   return result.rows[0] || null;
 }
 
@@ -42,7 +43,7 @@ export async function updateEntryFields(db, entryId, fields) {
     ? JSON.stringify(fields[k])
     : fields[k]));
   const result = await db.query(
-    `UPDATE health_entries SET ${sets.join(', ')}, updated_at = NOW()
+    `UPDATE ${careTables().items} SET ${sets.join(', ')}, updated_at = NOW()
      WHERE id = $${keys.length + 1} RETURNING *`,
     [...values, entryId],
   );

@@ -36,7 +36,7 @@ const PET_DELETE_FAULT_STEPS = [
   'enqueue_jobs',
   'delete_weight_entries',
   'delete_health_issues',
-  'delete_health_entries',
+  'delete_care_items',
   'delete_pet_timeline_entries',
   'delete_pet_activity_events',
   'delete_family_events',
@@ -138,7 +138,7 @@ describe('pet lifecycle commands (real PG)', () => {
       await seedUserPet(pool, { userId, petId, photoPath });
       const healthEntryId = randomUUID();
       await pool.query(
-        `INSERT INTO health_entries
+        `INSERT INTO care_items
            (id, pet_id, user_id, type, name, frequency, recurrence_anchor,
             next_due_date, start_date, status, care_planning, care_importance)
          VALUES ($1, $2, $3, 'medication', 'Fault pet care', 'daily', 'from_due_date',
@@ -154,7 +154,7 @@ describe('pet lifecycle commands (real PG)', () => {
       const pet = await pool.query('SELECT id FROM pets WHERE id = $1', [petId]);
       expect(pet.rows).toHaveLength(1);
 
-      const health = await pool.query('SELECT id FROM health_entries WHERE id = $1', [
+      const health = await pool.query('SELECT id FROM care_items WHERE id = $1', [
         healthEntryId,
       ]);
       expect(health.rows).toHaveLength(1);
@@ -173,7 +173,7 @@ describe('pet lifecycle commands (real PG)', () => {
       expect(audits.rows[0].n).toBe(0);
 
       clearPetDeletionFaultStep();
-      await pool.query('DELETE FROM health_entries WHERE pet_id = $1', [petId]);
+      await pool.query('DELETE FROM care_items WHERE pet_id = $1', [petId]);
       await pool.query('DELETE FROM pets WHERE id = $1', [petId]);
       await pool.query('DELETE FROM users WHERE id = $1', [userId]);
     }

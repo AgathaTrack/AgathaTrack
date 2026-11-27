@@ -283,10 +283,44 @@ test('reassign edits the held request with history and bumps attempts', async ()
   assert.ok(sent.at(-1).body.issue_field_values, 'attempts written');
 });
 
-test('wake posts the marker once and rings the agent', async () => {
+test('wake posts the marker once after a confirmed doorbell', async () => {
   const { sent, restFn } = recorder();
-  await applyAction({ action: { type: 'wake-stage-agent', agent: 'pawpet-bot', commentId: 99 }, ctx: ctx({ restFn }) });
-  assert.match(sent[0].body.body, /v2:wake comment=99/);
+  const withRunners = {
+    ...config,
+    launchRunners: ['cursor'],
+    agents: [{ id: 'cursor-a', actsAs: 'pawpet-bot', runner: 'cursor', methods: ['PR'] }],
+  };
+  await applyAction({
+    action: { type: 'wake-stage-agent', agent: 'pawpet-bot', commentId: 99 },
+    ctx: ctx({ restFn, config: withRunners, launchFn: async () => ({ runId: 'r1' }), facts: { stage: 'To do' } }),
+  });
+  const wake = sent.find((call) => call.method === 'POST' && call.path.endsWith('/comments') && /v2:wake comment=99/.test(call.body?.body || ''));
+  assert.ok(wake, 'wake marker after doorbell');
+  const assignIdx = sent.findIndex((c) => c.method === 'PATCH' && c.path.includes('/issues/'));
+  assert.ok(assignIdx >= 0 && assignIdx < sent.indexOf(wake), 'assign before wake');
+});
+
+test('wake at runner cap queues without marking the human reply handled (#2556 P1)', async () => {
+  const { sent, restFn } = recorder();
+  const withRunners = {
+    ...config,
+    launchRunners: ['claude'],
+    agents: [{ id: 'claude-a', actsAs: 'pawpet-claude', runner: 'claude', methods: ['PR'] }],
+  };
+  const queued = Object.assign(new Error('claude runner at WIP cap (1/1)'), { code: 'RUNNER_QUEUED' });
+  const result = await applyAction({
+    action: { type: 'wake-stage-agent', agent: 'claude-a', commentId: 42 },
+    ctx: ctx({
+      restFn,
+      config: withRunners,
+      facts: { stage: 'To do' },
+      launchFn: async () => {
+        throw queued;
+      },
+    }),
+  });
+  assert.ok(result.applied.includes('runner-queued:claude-a'));
+  assert.ok(!sent.some((call) => call.method === 'POST' && call.path.endsWith('/comments') && /v2:wake/.test(call.body?.body || '')));
 });
 
 test('set-stage Done writes the field and closes as completed', async () => {
@@ -471,4 +505,16 @@ test('launch: a failed record POST after a started run is never retried as a sec
   );
   assert.equal(launches, 1, 'the run is started once; the pending record and busy label remain');
   assert.ok(sent.some((c) => String(c.body?.body).includes('v2:launch-pending')), 'pending record was written first');
+});
+
+test('an edit closes its round on the issue: the superseded round is marked edit-self-vote when its new hash got an ignored self-vote', async () => {
+  const { sent, restFn } = recorder();
+  const roundPlan = {
+    reviews: 1,
+    derived: [{ tier: 'a', kind: 'review', hashIn: 'h2', attempts: [{ type: 'claude-a', nonce: null, startedAt: 0, result: 'red', hashOut: 'h3' }] }],
+    ignored: [{ agentId: 'claude-a', hash: 'h3', value: 'up', reason: 'self-vote' }],
+  };
+  await applyAction({ action: { type: 'request-review', agent: 'cursor-a', hash: 'h3' }, ctx: ctx({ restFn, facts: { roundPlan } }) });
+  const bodies = sent.map((call) => call.body?.body || '').join('\n');
+  assert.match(bodies, /event=close round=R2 tier=a identity=claude-a[^\n]*hash=h3 verdict=edit-self-vote/);
 });

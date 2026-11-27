@@ -1,6 +1,6 @@
 /**
  * Care Intelligence provenance enums (D0 contract).
- * Distinct from health_entries.care_source (rhythm provenance).
+ * Distinct FROM care_items.care_source (rhythm provenance).
  */
 
 export const MEASUREMENT_SOURCES = new Set([

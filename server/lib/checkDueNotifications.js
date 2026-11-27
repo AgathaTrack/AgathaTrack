@@ -3,14 +3,7 @@ import { dateToIsoDate } from './calendarDate.js';
 import { careAsOfForZone } from './care/occurrence/careAsOf.js';
 import { normalizePetHomeTimezone } from './petHomeTimezone.js';
 
-/**
- * In-app deep link for a care notification tied to a health entry (view screen).
- * Returns null when pet or entry id is missing.
- */
-export function buildNotificationDeepLink(petId, healthEntryId) {
-  if (!petId || !healthEntryId) return null;
-  return `/pet/${petId}/events/${healthEntryId}`;
-}
+export { buildNotificationDeepLink } from './notifications/deepLink.js';
 
 function daysBetweenCalendarDates(isoFrom, isoTo) {
   const [fy, fm, fd] = isoFrom.split('-').map(Number);
@@ -65,11 +58,16 @@ async function loadUserPrefs(pool, userId) {
  * @param {Record<string, string>} [petNamesFromClient]
  * @param {{ clock?: { todayIso: string, nowTimeIso: string }|null }} [options] test clock
  */
-export async function checkDueNotifications(pool, userId, petNamesFromClient = {}, { clock = null } = {}) {
+export async function checkDueNotifications(
+  pool,
+  userId,
+  _petNamesFromClient = {},
+  { clock = null } = {},
+) {
   const entries = await pool.query(
     `SELECT he.id, he.pet_id, he.name, he.next_due_date, he.remind_days_before,
             p.name AS pet_name, p.home_timezone AS pet_home_timezone
-     FROM health_entries he
+     FROM care_items he
      JOIN pets p ON p.id = he.pet_id
      WHERE ${accessiblePetSql('p', '$1')}
        AND he.next_due_date IS NOT NULL

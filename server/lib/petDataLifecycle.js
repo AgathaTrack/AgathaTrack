@@ -24,7 +24,7 @@ import {
 const PET_DATA_TABLES = [
   'weight_entries',
   'health_issues',
-  'health_entries',
+  'care_items',
   'pet_vaccination_records',
   'pet_timeline_entries',
   'pet_activity_events',
@@ -73,7 +73,7 @@ async function collectPetFileUrls(db, petId) {
   const entryPhotos = await db.query(
     `SELECT hep.url
      FROM health_event_photos hep
-     JOIN health_entries he ON he.id = hep.health_entry_id
+     JOIN care_items he ON he.id = hep.health_entry_id
      WHERE he.pet_id = $1`,
     [petId],
   );

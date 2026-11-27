@@ -119,7 +119,7 @@ export async function repairTzShift(pool, {
   asOfInstant = new Date(),
 } = {}) {
   const entries = await pool.query(
-    `SELECT * FROM health_entries
+    `SELECT * FROM care_items
      WHERE COALESCE(care_planning, 'planned') <> 'unplanned'
      ORDER BY id`,
   );
@@ -142,7 +142,7 @@ export async function repairTzShift(pool, {
       report.todayIso = today;
       report.timeZone = zone;
       const rows = (await db.query(
-        `SELECT * FROM health_occurrences WHERE health_entry_id = $1 AND origin = 'schedule'`,
+        `SELECT * FROM care_occurrences WHERE health_entry_id = $1 AND origin = 'schedule'`,
         [entry.id],
       )).rows;
       const bySlot = new Map();

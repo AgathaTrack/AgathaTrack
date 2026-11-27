@@ -121,7 +121,7 @@ export async function createHealthEntry(pool, userId, body, req) {
       const lateChoice = parseLateCompletionChoice(data);
       if (lateChoice.error) return { status: 400, error: lateChoice.error };
       const insertRow = (db) => db.query(
-        `INSERT INTO health_entries (id, pet_id, user_id, name, type, dosage, frequency, frequency_days, frequency_interval, start_date, next_due_date, completed_on, recurrence_anchor, repeat_end_date, notes, health_issue_id, remind_days_before, schedule_times, status, care_family, care_setting, care_planning, care_importance, importance_overridden, care_source, schedule_policy_version, provider_contact_id, provider_typed_name, care_blocks)
+        `INSERT INTO care_items (id, pet_id, user_id, name, type, dosage, frequency, frequency_days, frequency_interval, start_date, next_due_date, completed_on, recurrence_anchor, repeat_end_date, notes, health_issue_id, remind_days_before, schedule_times, status, care_family, care_setting, care_planning, care_importance, importance_overridden, care_source, schedule_policy_version, provider_contact_id, provider_typed_name, care_blocks)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29) RETURNING *`,
         [
           id, petId, userId,
@@ -197,7 +197,7 @@ export async function updateHealthEntry(pool, userId, entryId, body, req) {
       const lateChoice = parseLateCompletionChoice(data);
       if (lateChoice.error) return { status: 400, error: lateChoice.error };
       const existingResult = await pool.query(
-        'SELECT * FROM health_entries WHERE id = $1',
+        'SELECT * FROM care_items WHERE id = $1',
         [entryId],
       );
       if (existingResult.rows.length === 0) {
@@ -299,7 +299,7 @@ export async function updateHealthEntry(pool, userId, entryId, body, req) {
       const existingStart = dateToIsoDate(existing.start_date);
       if (startDate && existingStart && startDate !== existingStart) {
         const closed = await pool.query(
-          `SELECT 1 FROM health_occurrences
+          `SELECT 1 FROM care_occurrences
            WHERE health_entry_id = $1 AND status IN ('completed', 'skipped') LIMIT 1`,
           [entryId],
         );
@@ -316,7 +316,7 @@ export async function updateHealthEntry(pool, userId, entryId, body, req) {
         : (existing.status || 'active');
       const out = await runCareCommand(pool, { entryId: entryId, userId, req }, async (ctx) => {
         const updated = await ctx.db.query(
-          `UPDATE health_entries SET name = $1, type = $2, dosage = $3, frequency = $4, frequency_days = $5,
+          `UPDATE care_items SET name = $1, type = $2, dosage = $3, frequency = $4, frequency_days = $5,
             frequency_interval = $6, start_date = $7, completed_on = $8,
             recurrence_anchor = $9, repeat_end_date = $10, notes = $11,
             health_issue_id = $12, remind_days_before = $13, status = $14,
@@ -374,6 +374,6 @@ export async function deleteHealthEntry(pool, userId, entryId) {
   if (!(await userCanManageHealthEntry(pool, entryId, userId))) {
     return { status: 404, error: 'Entry not found' };
   }
-  await pool.query('DELETE FROM health_entries WHERE id = $1', [entryId]);
+  await pool.query('DELETE FROM care_items WHERE id = $1', [entryId]);
   return { deleted: true };
 }

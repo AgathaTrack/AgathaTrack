@@ -210,7 +210,7 @@ export async function careHandoverScopeForPet(pool, userId, petId) {
 
   const providerResult = await pool.query(
     `SELECT DISTINCT he.provider_contact_id AS contact_id
-     FROM health_entries he
+     FROM care_items he
      WHERE he.pet_id = $1 AND he.provider_contact_id IS NOT NULL`,
     [petId],
   );

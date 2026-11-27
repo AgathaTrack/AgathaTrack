@@ -96,6 +96,12 @@ async function applyAction({ action: decided, ctx }) {
     return author.human ? 'human' : author.type;
   };
   const brandOf = (id) => resolveAgent(ctx.config, id)?.runner || null;
+  // The assignee and hash of the newest review round, when its edit closed it (a new hash, not a hold).
+  const lastRoundEdit = (derived) => {
+    const last = (derived || []).filter((round) => round.kind === 'review').at(-1);
+    const attempt = last?.attempts.at(-1);
+    return attempt?.hashOut && attempt.hashOut !== last.hashIn ? { type: attempt.type, hash: attempt.hashOut } : null;
+  };
   // A review number `k` gives its label; a null `k` (no plan) gives no label.
   const currentRound = (k) => (k === null || k === undefined ? null : roundFor(k));
   const roundCtx = (k, attempt, hash, author) => {
@@ -206,7 +212,23 @@ async function applyAction({ action: decided, ctx }) {
         await assign(action.agent);
         await ring(action.agent, 'To do', { round: 'R1', tier: 'a', attempt: 1, hash: ctx.facts.bodyHash, author: 'none' });
         break;
-      case 'request-review':
+      case 'request-review': {
+        // An edit closes the round it was made in (PIPE-V2-D-REV4-002). Mark that round closed by the edit, and
+        // name it when a self-vote on the new hash was ignored, so the issue shows why the round ended there.
+        const edited = plan ? lastRoundEdit(plan.derived) : null;
+        if (edited) {
+          const label = currentRound(reviewsSoFar);
+          const selfVote = (plan.ignored || []).some((v) => v.hash === edited.hash);
+          await writeMarker({
+            event: 'close',
+            round: label?.round,
+            tier: label?.tier,
+            identity: edited.type,
+            brand: brandOf(edited.type),
+            hash: edited.hash,
+            verdict: selfVote ? 'edit-self-vote' : 'edit',
+          });
+        }
         await comment(
           buildReviewRequest({ hash: action.hash, assigned: action.agent, config: ctx.config }),
           'comment:review-request',
@@ -214,6 +236,7 @@ async function applyAction({ action: decided, ctx }) {
         await assign(action.agent);
         await ring(action.agent, 'In analysis', roundCtx(reviewsSoFar === null ? null : reviewsSoFar + 1, 1, action.hash, authorLabel(action.hash)));
         break;
+      }
       case 'reassign': {
         const inReview = action.stage === 'In analysis';
         const held = inReview ? ctx.facts.review : ctx.facts.spec;
@@ -255,12 +278,15 @@ async function applyAction({ action: decided, ctx }) {
         break;
       }
       case 'wake-stage-agent':
-        await comment(
-          buildWake({ commentId: action.commentId, agent: action.agent, config: ctx.config }),
-          'comment:wake',
-        );
+        // Hand off before the wake marker: a runner cap must not mark the human reply handled (#2556 P1).
         await assign(action.agent);
         await ring(action.agent, ctx.facts.stage);
+        if (applied.some((line) => line.startsWith('doorbell:'))) {
+          await comment(
+            buildWake({ commentId: action.commentId, agent: action.agent, config: ctx.config }),
+            'comment:wake',
+          );
+        }
         break;
       case 'ring-doorbell': {
         const inReview = action.stage === 'In analysis';
@@ -279,13 +305,21 @@ async function applyAction({ action: decided, ctx }) {
         let run = null;
         let failure = null;
         // Recorded before the handoff (a failure here throws before anything starts, so the next tick retries).
-        await comment(buildLaunchPending({ agent: action.agent }), 'comment:launch-pending');
+        const launchPurpose = action.purpose || 'delivery';
+        const launchStage = action.stage || (launchPurpose === 'babysit' ? 'babysit' : undefined);
+        await comment(buildLaunchPending({ agent: action.agent, purpose: launchPurpose }), 'comment:launch-pending');
         try {
           // The launcher marks the issue `busy` before the handoff; the plan shows that request too.
           calls.push({ method: 'POST', path: `${base}/labels`, body: { labels: ['busy'] } });
           run = ctx.dryRun
             ? { runId: 'dry-run', agentUrl: '' }
-            : await ctx.launchFn({ agent: action.agent, method: action.method, purpose: 'delivery', config: ctx.config });
+            : await ctx.launchFn({
+                agent: action.agent,
+                method: action.method,
+                purpose: launchPurpose,
+                stage: launchStage,
+                config: ctx.config,
+              });
           calls.push({ method: 'POST', path: 'cursor:/v1/agents', body: { agent: action.agent, method: action.method } });
         } catch (error) {
           failure = error;
@@ -301,7 +335,8 @@ async function applyAction({ action: decided, ctx }) {
               runId: run.runId,
               agent: action.agent,
               agentUrl: run.agentUrl,
-              purpose: 'delivery',
+              purpose: launchPurpose,
+              stage: launchStage,
             }),
             'comment:launch',
           );

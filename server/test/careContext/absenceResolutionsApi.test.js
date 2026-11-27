@@ -45,7 +45,7 @@ describe('absence resolutions API', () => {
         if (sql.includes('FROM planned_absence_pets')) {
           return { rows: [{ pet_id: petId }] };
         }
-        if (sql.includes('SELECT pet_id FROM health_entries WHERE id = $1')) {
+        if (sql.includes('SELECT pet_id FROM care_items WHERE id = $1')) {
           return { rows: [{ pet_id: petId }] };
         }
         if (sql.includes('FROM health_entry_absence_resolutions')) {

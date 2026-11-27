@@ -71,7 +71,7 @@ const claimComment = (id, login, ms, agent, hash, nonce) =>
 const verdictComment = (id, login, ms, agent, hash, value, nonce) =>
   comment(id, login, ms, `<!-- v2:verdict agent=${agent} nonce=${nonce} kind=review hash=${hash} value=${value} -->\n\`review\` \`${value}\`.`);
 
-test('red with an edit, real formats: the verdict on the new hash is linked by the confirmed edit claim', () => {
+test('red with an edit, real formats: the edit closes the round; the verdict on the new hash is not counted', () => {
   const comments = [
     requestComment(1, 'h0', 'claude-a', T_LAUNCH),
     launchComment(2, 'claude-a', T_LAUNCH + 1000, NONCE),
@@ -109,5 +109,78 @@ test('a late verdict from the old run, posted after the next request, does not a
   ];
   const out = planRounds({ comments, config, engineLogins: ENGINE, editors: {}, bodyHash: 'h1', issueNumber: 1, limits: config.limits, now: NOW });
   const r2 = out.derived[1];
-  assert.deepEqual([r2.attempts[0].result, r2.attempts[0].hashOut], [null, null], 'the next request already started, so the late verdict is not this round');
+  assert.deepEqual([r2.attempts[0].result, r2.attempts[0].hashOut], ['red', 'h1'], 'the edit closes the round');
+  assert.equal(r2.attempts[0].nonce, null, 'the late verdict from the old run is not attached to this round');
+});
+
+// Review process v4 (PIPE-V2-D-REV4-001, -002): an edit closes its round and posts no verdict; the run
+// that made the edit is the author of the new hash, whether or not it voted; a verdict on a hash the
+// same run produced is a self-vote and is not counted.
+test('an edit with no verdict still records its run as the author: the next tier-a pick is the other brand', () => {
+  const comments = [
+    requestComment(1, 'h0', 'claude-a', T_LAUNCH),
+    launchComment(2, 'claude-a', T_LAUNCH + 1000, NONCE),
+    claimComment(3, 'pawpet-claude', T_LAUNCH + 2000, 'claude-a', 'h1', NONCE),
+  ];
+  const out = planRounds({ comments, config, engineLogins: ENGINE, editors: {}, bodyHash: 'h1', issueNumber: 1, limits: config.limits, now: NOW });
+  assert.equal(out.derived[1].attempts[0].hashOut, 'h1', 'the edit produced h1');
+  assert.equal(out.plan.type, 'request-round');
+  assert.equal(out.plan.tier, 'a');
+  assert.equal(out.plan.agent, 'cursor-a', 'the body was written by a claude run: the other brand comes first');
+  assert.equal(out.plan.fallback, false);
+});
+
+// The #2103 sequence: R2, R3 and R4 each edit and post no verdict on their own edit, except claude-a on R4,
+// whose up on its own edit is a self-vote. The challenge round (C1) must go to the other brand.
+test('#2103 replay: edits close their rounds; the self-vote is not counted; C1 goes to the other brand', () => {
+  const t = NOW - 2 * 60 * 60 * 1000;
+  const n1 = 'c0ffee01';
+  const n2 = 'c0ffee02';
+  const n3 = 'c0ffee03';
+  const comments = [
+    requestComment(1, 'h0', 'claude-a', t),
+    launchComment(2, 'claude-a', t + 1000, n1),
+    claimComment(3, 'pawpet-claude', t + 2000, 'claude-a', 'h1', n1),
+    requestComment(4, 'h1', 'cursor-a', t + 3000),
+    launchComment(5, 'cursor-a', t + 4000, n2),
+    claimComment(6, 'pawpet-bot', t + 5000, 'cursor-a', 'h2', n2),
+    requestComment(7, 'h2', 'claude-a', t + 6000),
+    launchComment(8, 'claude-a', t + 7000, n3),
+    claimComment(9, 'pawpet-claude', t + 8000, 'claude-a', 'h3', n3),
+    verdictComment(10, 'pawpet-claude', t + 9000, 'claude-a', 'h3', 'up', n3),
+  ];
+  const out = planRounds({ comments, config, engineLogins: ENGINE, editors: {}, bodyHash: 'h3', issueNumber: 1, limits: config.limits, now: NOW });
+  const [, r2, r3, r4] = out.derived;
+  assert.deepEqual(r2.attempts.map((a) => [a.type, a.result, a.hashOut]), [['claude-a', 'red', 'h1']]);
+  assert.deepEqual(r3.attempts.map((a) => [a.type, a.result, a.hashOut]), [['cursor-a', 'red', 'h2']]);
+  assert.deepEqual(r4.attempts.map((a) => [a.type, a.result, a.hashOut]), [['claude-a', 'red', 'h3']]);
+  assert.deepEqual(out.ignored.map((v) => [v.agentId, v.hash, v.value, v.reason]), [['claude-a', 'h3', 'up', 'self-vote']]);
+  assert.equal(out.plan.type, 'request-round');
+  assert.equal(out.plan.tier, 'b');
+  assert.equal(out.plan.round, 'C1');
+  assert.equal(out.plan.agent, 'cursor-b', 'claude-a wrote h3: the other brand (cursor) is first');
+  assert.equal(out.plan.fallback, false);
+});
+
+// Same-identity fallback: the editing run's own up is a self-vote, but a later run of the same identity is a
+// different run, and its verdict on that hash counts. Self-votes are matched by run (commitment), not agent id.
+test('same-identity fallback: the editing run\'s own up is a self-vote; a later run of the same identity counts', () => {
+  const t = NOW - 2 * 60 * 60 * 1000;
+  const n1 = 'f1f1f1f1';
+  const n2 = 'f2f2f2f2';
+  const comments = [
+    requestComment(1, 'h0', 'claude-a', t),
+    launchComment(2, 'claude-a', t + 1000, n1),
+    claimComment(3, 'pawpet-claude', t + 2000, 'claude-a', 'h1', n1),
+    verdictComment(4, 'pawpet-claude', t + 3000, 'claude-a', 'h1', 'up', n1),
+    requestComment(5, 'h1', 'claude-a', t + 4000),
+    launchComment(6, 'claude-a', t + 5000, n2),
+    verdictComment(7, 'pawpet-claude', t + 6000, 'claude-a', 'h1', 'up', n2),
+  ];
+  const out = planRounds({ comments, config, engineLogins: ENGINE, editors: {}, bodyHash: 'h1', issueNumber: 1, limits: config.limits, now: NOW });
+  assert.deepEqual(out.ignored.map((v) => [v.agentId, v.hash, v.value]), [['claude-a', 'h1', 'up']], 'only the editing run\'s own vote is ignored');
+  const r3 = out.derived[2];
+  assert.deepEqual([r3.hashIn, r3.attempts[0].type, r3.attempts[0].result], ['h1', 'claude-a', 'green']);
+  assert.equal(out.plan.type, 'set-stage', 'a green from a different run converges');
+  assert.equal(out.plan.to, 'Ready');
 });

@@ -33,7 +33,8 @@ function buildLaunchRecord({ runId, agent, agentUrl, purpose = 'delivery', stage
     // A promise, not the nonce: the run reveals the nonce only in its verdict (PIPE-V2-D-REV3-011).
     attrs.push(`commit=${commitOf(nonce)}`);
   }
-  const label = purpose === 'doorbell' ? 'Doorbell' : 'Delivery';
+  const label =
+    purpose === 'doorbell' ? 'Doorbell' : purpose === 'babysit' ? 'Babysit' : 'Delivery';
   return [
     `<!-- v2:launch ${attrs.join(' ')} -->`,
     `Started a ${label.toLowerCase()} run for \`${agent}\`${agentUrl ? `: ${agentUrl}` : ''}` +
@@ -72,8 +73,8 @@ function buildLaunchAcked({ runId }) {
 
 const RECORD = new RegExp(
   '<!--\\s*v2:(launch|launch-pending|launch-failed|launch-acked)' +
-    '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell))?' +
-    '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done))?' +
+    '(?:\\s+run=([\\w.:-]+))?(?:\\s+agent=([\\w-]+))?(?:\\s+purpose=(delivery|doorbell|babysit))?' +
+    '(?:\\s+stage=(To do|In analysis|In Main|In progress|Ready|In UAT|Backlog|Done|babysit))?' +
     '(?:\\s+nonce=([a-f0-9]+))?(?:\\s+commit=([a-f0-9]{64}))?\\s*-->',
   'i',
 );
@@ -167,9 +168,10 @@ async function doorbellRingFailed({ comments, engineLogins, config, agentId, sta
 }
 
 function deriveLaunchFacts({ comments, engineLogins, labels, attempts }) {
-  const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter((record) =>
-    ['launch', 'launch-pending', 'launch-failed', 'launch-acked'].includes(record.kind) &&
-    record.purpose === 'delivery',
+  const deliveryRecords = listLaunchRecords({ comments, engineLogins }).filter(
+    (record) =>
+      ['launch', 'launch-pending', 'launch-failed', 'launch-acked'].includes(record.kind) &&
+      (record.purpose === 'delivery' || record.purpose === 'babysit'),
   );
   const latest = deliveryRecords.at(-1);
   const busy = (labels || []).includes('busy');
@@ -219,12 +221,44 @@ function deliveryMethod(body) {
   return 'PR';
 }
 
+/** True when `Method:` is `PR` but the Delivery plan section looks like a multi-phase programme (PIPE-V2-D-DELIVER-006). */
+function deliveryMethodProgrammeMismatch(body) {
+  if (deliveryMethod(body) !== 'PR') {
+    return false;
+  }
+  const lines = String(body || '').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^#{1,4}\s*Delivery plan\s*$/i.test(line));
+  if (start < 0) {
+    return false;
+  }
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^#{1,4}\s/.test(line));
+  const section = end < 0 ? rest : rest.slice(0, end);
+  const methodField =
+    /^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s*)?\|?\s*[*_]*(?:method|mechanism)[*_]*\s*[:|]/i;
+  let phases = 0;
+  for (const line of section) {
+    if (methodField.test(line)) {
+      continue;
+    }
+    if (/^\s*[-*+]\s+\[[ xX]\]\s+P\d+\b/i.test(line)) {
+      phases += 1;
+    } else if (/^\s*[-*+]\s+P\d+\s+[—–-]/i.test(line)) {
+      phases += 1;
+    }
+  }
+  return phases >= 2;
+}
+
 /**
  * Start one Cursor run for the issue. Reuses the existing launcher and prompt builder, so the
  * run is the same as an old-engine launch. `deps` is for tests.
  */
 const METHOD_PROMPTS = {
-  PR: '',
+  PR:
+    'Delivery method: PR. After you open the PR, do not finish yet. Pick the driver from autonomous-pr-policy §Driver routing (rows 10–11; both `/babysit-plus`). ' +
+    'Read `.cursor/skills/babysit-plus/SKILL.md` (or `.claude/skills/babysit-plus/SKILL.md` in Claude Code) and follow it to completion. Do not invoke it through the Skill tool. ' +
+    'After squash merge, tick the DoD and run `finish-work`. Pre-UAT runs async in Actions.',
   'light-plan':
     'Delivery method: light-plan. Deliver this issue with the procedure in `.cursor/skills/light-plan/SKILL.md` (integration branch, phase PRs, one release PR that `Refs` this issue).',
   'execute-plan':
@@ -243,18 +277,25 @@ const STAGE_PROMPTS = {
     'question in a comment, and set `Blocked` to `question` (agent-owned write; the engine wakes you when a human replies). ' +
     'If there is enough, write the full spec into the issue body: intent, acceptance criteria, a `## Delivery plan` section ' +
     'with a `Method:` line (`PR`, `light-plan` or `execute-plan`), the planned work, an `agent-paths` block and the ' +
-    'Definition of Done checkboxes. Then react 👍 on the engine\'s latest `v2:spec-request` comment to mark the spec ready; ' +
-    'the engine moves the issue to In analysis for the first adversarial review. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
+    'Definition of Done checkboxes. Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, ' +
+    'and, as your last action, record `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. ' +
+    'Post one verdict only: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it. ' +
+    'Reactions are not votes. The engine moves the issue to In analysis for the first adversarial review. ' +
+    'Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
   'In analysis':
     'Stage task: ADVERSARIAL REVIEW (the engine assigned you this issue; do not implement it). Review the issue body as a spec: ' +
-    'challenge intent, scope, delivery method, acceptance criteria and risks. If it needs changes, edit the body (your edit counts as ' +
-    'your approval; the other agent must then vote) and say what changed in a comment. If it is sound, react 👍 on the engine\'s latest ' +
-    '`v2:review-request` comment; if not, react 👎 with a comment explaining why. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
+    'challenge intent, scope, delivery method, acceptance criteria and risks. Run `node scripts/pipeline_verdict.js read` first. ' +
+    'If the body needs changes, make them with `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` and say what changed in a comment. ' +
+    'An edit is your approval of the new version: it closes your round, another run reviews the new hash, and you post NO verdict after an edit. ' +
+    'If you did not edit and the version is sound as written, record `node scripts/pipeline_verdict.js review up --hash <hash>`. ' +
+    'If it is not sound and you did not edit, record `node scripts/pipeline_verdict.js review down --hash <hash>` and explain why in a comment. ' +
+    'Post at most one verdict, as your last action; it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it. ' +
+    'Reactions are not votes. Follow `docs/agent-efficiency/github-issue-workflow.md` §Pipeline v2.',
   'In Main':
     'Stage task: INTENT REVIEW (the engine assigned you this issue; do not implement or edit it). Follow ' +
     '`.cursor/skills/intent-review-agent/SKILL.md`: review what shipped (the merged PRs named in the engine\'s latest ' +
     '`v2:intent-review` comment) against the issue\'s original intent, file each real finding as a follow-up issue that ' +
-    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment, and react 👍 on that engine comment last. ' +
+    'starts with `<!-- v2:follow-up of=#<this issue> -->`, post one summary comment last. Reactions are not read: intent review is non-gating (PIPE-V2-D-2428-004). ' +
     'When finished, remove the `busy` label (`node scripts/github_issue_workflow.js finish-work --issue <n>`).',
   acceptance:
     'Stage task: AGENT ACCEPTANCE (non-interactive; do not ask questions and do not implement). Follow ' +
@@ -269,33 +310,18 @@ function fillPrompt(template, { number, mergeSha } = {}) {
     .replaceAll('{{mergeSha}}', String(mergeSha ?? ''));
 }
 
-const STAGE_PROMPTS_SIGNED = {
-  ...STAGE_PROMPTS,
-  'To do':
-    STAGE_PROMPTS['To do'].replace(
-      "Then react 👍 on the engine's latest `v2:spec-request` comment to mark the spec ready;",
-      'Then run `node scripts/pipeline_verdict.js read` on this issue, review the body it prints, and, as your last action, record `node scripts/pipeline_verdict.js spec up --hash <hash>` when the Definition of Ready passes. Post one verdict only: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it;',
-    ),
-  'In analysis':
-    STAGE_PROMPTS['In analysis'].replace(
-      'If it is sound, react 👍 on the engine\'s latest `v2:review-request` comment; if not, react 👎 with a comment explaining why.',
-      'If it is sound, run `node scripts/pipeline_verdict.js read`, then `node scripts/pipeline_verdict.js review up|down --hash <hash>`. ' +
-        'If you change the body, use `node scripts/pipeline_verdict.js edit --from <hash> --file <path>` only, before your verdict. Post exactly one verdict, as your last action: it reveals your run nonce, which the CLI reads from `PIPELINE_RUN_NONCE`; never type or print it;',
-    ),
-};
+// Every agent votes with a signed verdict (PIPE-V2-D-REV4-001). Reactions are never votes, so there is one
+// prompt set. The alias keeps the signed name for callers that asked for it.
+const STAGE_PROMPTS_SIGNED = STAGE_PROMPTS;
 
-function stagePromptsForConfig(config, agent) {
-  const { isSharedActsAs, entryActsAs, sharedActsAs } = require('./issue_pipeline_v2_config');
-  if (agent) {
-    return isSharedActsAs(config, entryActsAs(agent)) ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
-  }
-  return sharedActsAs(config).length > 0 ? STAGE_PROMPTS_SIGNED : STAGE_PROMPTS;
+function stagePromptsForConfig() {
+  return STAGE_PROMPTS;
 }
 
 /**
  * Under pipeline v2 the approval the legacy preflight looks for is the engine's own: an issue is
  * only launched from Ready, after a converged review. The legacy labels are retired, so the
- * engine supplies them for a delivery launch. The risky-scope and blocking-label checks stay.
+ * engine supplies them for a delivery launch. The blocking-label check stays; the v2 launch runs without the keyword risky-scope scan (PIPE-V2-D-REV4-004).
  * Spec, review and intent-review doorbells start no delivery and skip the preflight; they still set `busy`.
  */
 const V2_APPROVAL_LABELS = ['agent-approved', 'human-reviewed'];
@@ -326,7 +352,11 @@ async function launchIssue({
   const labels = (issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
   if (purpose === 'delivery' && !stage) {
     const preflightLabels = [...new Set([...labels, ...V2_APPROVAL_LABELS])];
-    const preflight = preflightIssue({ title: issue.title, body: issue.body, labels: preflightLabels.map((name) => ({ name })) });
+    // keywordScan: false, PIPE-V2-D-REV4-004. The legacy launchers keep the keyword scan.
+    const preflight = preflightIssue(
+      { title: issue.title, body: issue.body, labels: preflightLabels.map((name) => ({ name })) },
+      { keywordScan: false },
+    );
     if (!preflight.ok) {
       throw new Error(`preflight: ${preflight.reason}`);
     }
@@ -387,5 +417,6 @@ module.exports = {
   doorbellRingFailed,
   deriveLaunchFacts,
   deliveryMethod,
+  deliveryMethodProgrammeMismatch,
   launchIssue,
 };

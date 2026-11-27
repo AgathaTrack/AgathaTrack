@@ -20,7 +20,7 @@ describe('migration 084 care date outcome', () => {
     pool = createDbPool();
     const ready = await pool.query(
       `SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'health_occurrences' AND column_name = 'origin'`,
+       WHERE table_name = 'care_occurrences' AND column_name = 'origin'`,
     );
     if (ready.rows.length === 0) {
       await pool.end();
@@ -29,7 +29,7 @@ describe('migration 084 care date outcome', () => {
     }
     const legacy = await pool.query(
       `SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'health_occurrences' AND column_name = 'close_reason'`,
+       WHERE table_name = 'care_occurrences' AND column_name = 'close_reason'`,
     );
     runnable = legacy.rows.length > 0;
     if (!runnable) return;
@@ -38,7 +38,7 @@ describe('migration 084 care date outcome', () => {
     occId = randomUUID();
     owner = await createOwner(pool);
     await pool.query(
-      `INSERT INTO health_entries
+      `INSERT INTO care_items
          (id, pet_id, user_id, name, type, frequency, status, care_planning, care_importance,
           start_date, next_due_date)
        VALUES ($1, $2, $3, 'M084', 'medication', 'once', 'active', 'planned', 'essential',
@@ -46,7 +46,7 @@ describe('migration 084 care date outcome', () => {
       [entryId, owner.petId, owner.userId],
     );
     await pool.query(
-      `INSERT INTO health_occurrences
+      `INSERT INTO care_occurrences
          (id, health_entry_id, scheduled_date, status, close_reason, origin)
        VALUES ($1, $2, CURRENT_DATE - 1, 'skipped', 'not_recorded', 'schedule')`,
       [occId, entryId],
@@ -56,8 +56,8 @@ describe('migration 084 care date outcome', () => {
   afterAll(async () => {
     if (!pool) return;
     if (entryId) {
-      await pool.query('DELETE FROM health_occurrences WHERE health_entry_id = $1', [entryId]);
-      await pool.query('DELETE FROM health_entries WHERE id = $1', [entryId]);
+      await pool.query('DELETE FROM care_occurrences WHERE health_entry_id = $1', [entryId]);
+      await pool.query('DELETE FROM care_items WHERE id = $1', [entryId]);
     }
     if (owner) await removeOwner(pool, owner);
     await pool.end();
@@ -76,11 +76,11 @@ describe('migration 084 care date outcome', () => {
     } finally {
       client.release();
     }
-    const row = await pool.query('SELECT status FROM health_occurrences WHERE id = $1', [occId]);
+    const row = await pool.query('SELECT status FROM care_occurrences WHERE id = $1', [occId]);
     expect(row.rows[0]).toEqual({ status: 'not_recorded' });
     const legacy = await pool.query(
       `SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'health_occurrences' AND column_name = 'close_reason'`,
+       WHERE table_name = 'care_occurrences' AND column_name = 'close_reason'`,
     );
     expect(legacy.rows).toHaveLength(0);
   });

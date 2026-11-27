@@ -65,7 +65,7 @@ async function findStaleHouseholdContactReferences(client) {
        WHERE pcr.pet_id = p.id AND pd.household_id = hp.household_id
      )
      OR EXISTS (
-       SELECT 1 FROM health_entries he
+       SELECT 1 FROM care_items he
        INNER JOIN people_contacts pc ON pc.id = he.provider_contact_id
        INNER JOIN people_directories pd ON pd.id = pc.directory_id
        WHERE he.pet_id = p.id AND pd.household_id = hp.household_id

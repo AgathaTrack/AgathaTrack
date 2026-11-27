@@ -74,7 +74,7 @@ function makePool(state = {}) {
     if (sql.includes('DELETE FROM pet_access')) return { rows: [] };
     if (sql.includes('DELETE FROM org_pet_home_hidden')) return { rows: [] };
     if (sql.includes('DELETE FROM archived_pets')) return { rows: [] };
-    if (sql.includes('health_entries')) return { rows: [] };
+    if (sql.includes('care_items')) return { rows: [] };
     if (sql.includes('weight_entries')) return { rows: [] };
     if (sql.includes('INSERT INTO notifications')) return { rows: [] };
     return { rows: [] };

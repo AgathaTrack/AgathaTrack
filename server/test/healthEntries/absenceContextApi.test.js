@@ -19,7 +19,7 @@ describe('health entry absence-context API', () => {
   it('GET returns 404 when entry missing', async () => {
     const app = createApp(
       createMockPool(async (sql) => {
-        if (sql.includes('FROM health_entries WHERE id')) {
+        if (sql.includes('FROM care_items WHERE id')) {
           return { rows: [] };
         }
         return { rows: [] };

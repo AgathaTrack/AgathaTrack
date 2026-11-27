@@ -17,7 +17,7 @@
  *   followUp        { depth } when the issue is an intent-review follow-up
  *   bodyHash        hash of the current body
  *   lastBodyEditor  login of the last body editor, or null
- *   totalVotes      votes cast in To do / In analysis (reactions + agent body edits)
+ *   totalVotes      signed review verdicts since entry into In analysis + agent body edits (reactions are not votes)
  *   roundRobinAfter id last assigned on the board (newest v2:launch, then earlier picks this tick)
  *   roundRobinOrder startable ids in config order; the ring the cursor walks
  *   spec            { requestedAt, assignedTo, timedOut[], passedBy }
@@ -31,6 +31,7 @@
  *   uatContainsLatestMerge, prodContainsLatestMerge   booleans
  */
 
+const { missionGuard } = require('./issue_pipeline_mission');
 const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
 const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
 const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
@@ -309,6 +310,15 @@ function decideReady(facts, config) {
   if (launch.busy) {
     return setStage('In progress', 'ready.launched', { evidence: { runId: launch.runId || null } });
   }
+  // An issue started by /analyse-issue carries `analyse-only` and stops at Ready. Any tick reaches this row
+  // (a board tick woken by a label or an agent comment does not carry the analyse mission), so the label
+  // is what holds it. Removing the label, a human decision, lets the general pipeline launch delivery.
+  if ((facts.labels || []).some((label) => String(label).trim().toLowerCase() === 'analyse-only')) {
+    return { type: 'none', reason: 'mission-analyse-complete', row: 'mission.analyse.complete' };
+  }
+  if (facts.deliveryProgrammeMismatch) {
+    return setBlocked('question', 'ready.method-programme-mismatch');
+  }
   const ownerApprovedDelivery = (facts.labels || []).some(
     (label) => String(label).trim().toLowerCase() === 'owner-approved-delivery',
   );
@@ -356,6 +366,9 @@ function decideInProgress(facts, config) {
     (delivery.openLinkedPrs || 0) === 0 &&
     (delivery.mergedIntoMain || 0) >= 1 &&
     !delivery.busy;
+  if (finished && umbrellaBlocked(facts)) {
+    return umbrellaWait('progress.umbrella-waiting', facts);
+  }
   if (finished) {
     return setStage(
       'In Main',
@@ -387,10 +400,48 @@ function decideInProgress(facts, config) {
       ? noAgent('progress.no-launchable-agent')
       : { type: 'resume', agent: pickAgent(capable, facts), method, row: 'progress.resume' };
   }
+  const launch = facts.launch || {};
+  const babysitHours = config.limits.babysitFallbackHours ?? 4;
+  const babysitStale =
+    delivery.lastActivityAt != null && facts.now - delivery.lastActivityAt >= babysitHours * HOUR;
+  if (
+    (facts.deliveryMethod || 'PR') === 'PR' &&
+    delivery.busy &&
+    (delivery.openLinkedPrs || 0) > 0 &&
+    (facts.pipelineOpenPrs || 0) > 0 &&
+    !launch.runId &&
+    babysitStale
+  ) {
+    const capable = launchableAgents(config, 'PR').filter(
+      (id) => resolveAgent(config, id)?.runner === 'claude',
+    );
+    if (capable.length === 0) {
+      return noAgent('progress.babysit-no-agent');
+    }
+    return {
+      type: 'launch',
+      agent: pickAgent(capable, facts),
+      method: 'PR',
+      purpose: 'babysit',
+      stage: 'babysit',
+      row: 'progress.babysit-fallback',
+    };
+  }
   return none('progress.working');
 }
 
+/** PIPE-UMB-D-001: an umbrella waits while any sub-issue is still short of In Main. */
+function umbrellaBlocked(facts) {
+  return (facts.umbrella?.blockers || []).length > 0;
+}
+
+function umbrellaWait(reason, facts) {
+  return { type: 'none', reason, blockers: facts.umbrella.blockers };
+}
+
 function decideInMain(facts, config) {
+  // First, so no acceptance run or intent review starts for an umbrella whose sub-issues are not done.
+  if (umbrellaBlocked(facts)) return umbrellaWait('main.umbrella-waiting', facts);
   if (aatGateOn(facts, config)) return acceptanceInMain(facts, config);
   // An issue moved to In Main by hand may have no linked PR merged into `main`. There is then no
   // merge to review or to find in a deploy, and a request could never be satisfied: it would repeat
@@ -448,9 +499,20 @@ function decide(facts, config) {
   if ((facts.labels || []).includes('manual-only')) {
     return none('manual-only');
   }
+  if (facts.blockedByReadError) {
+    return { type: 'none', row: 'blocked-by.read-failed' };
+  }
+  if (facts.blockedByOpen?.length) {
+    return { type: 'none', row: 'blocked-by', blockers: facts.blockedByOpen };
+  }
   const stage = canonicalStage(facts.stage);
   if (stage === null) {
     return none('unknown-stage');
+  }
+  // Scoped missions (e.g. analyse) must not reopen closed delivery issues or release holds past Ready.
+  const missionBlock = missionGuard(stage, facts.mission);
+  if (missionBlock) {
+    return missionBlock;
   }
   if (facts.closed) {
     // Closed while delivery was under way (a merge auto-closed it, for example): an issue must stay
@@ -497,9 +559,25 @@ function decide(facts, config) {
   return decideStage(facts, config);
 }
 
+/**
+ * Backlog is human triage. Only an analyse wake moves an issue on: the engine sets To do, so the
+ * `/analyse-issue` orchestrator never writes Stage (PIPE-V2-D-ANALYSE-003). Every other mission and
+ * the scheduled board leave Backlog alone.
+ */
+function decideBacklog(facts) {
+  if (facts.mission === 'analyse') {
+    return setStage('To do', 'analyse.intake');
+  }
+  return none('stage-backlog');
+}
+
 /** The stage rows, for an issue that is not blocked (or an engine hold being re-evaluated). */
 function decideStage(facts, config) {
   const stage = canonicalStage(facts.stage);
+  const missionBlock = missionGuard(stage, facts.mission);
+  if (missionBlock) {
+    return missionBlock;
+  }
   if (!String(facts.stage || '').trim() && facts.followUp) {
     return facts.followUp.depth <= config.limits.followUpMaxDepth
       ? setStage('To do', 'followup.todo')
@@ -509,6 +587,8 @@ function decideStage(facts, config) {
     return setBlocked('decision', 'any.escalation');
   }
   switch (stage) {
+    case 'Backlog':
+      return decideBacklog(facts);
     case 'To do':
       return decideToDo(facts, config);
     case 'In analysis':

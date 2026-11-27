@@ -173,7 +173,7 @@ export async function relatedCare(pool, userId, contactId) {
     ),
     pool.query(
       `SELECT he.id, he.name, he.pet_id
-       FROM health_entries he
+       FROM care_items he
        WHERE he.provider_contact_id = $1
        ORDER BY he.name`,
       [contactId],
@@ -190,8 +190,8 @@ export async function relatedCare(pool, userId, contactId) {
     ),
     pool.query(
       `SELECT COUNT(*)::int AS count
-       FROM health_occurrences ho
-       INNER JOIN health_entries he ON he.id = ho.health_entry_id
+       FROM care_occurrences ho
+       INNER JOIN care_items he ON he.id = ho.health_entry_id
        WHERE ho.provider_contact_id = $1
           OR he.provider_contact_id = $1`,
       [contactId],

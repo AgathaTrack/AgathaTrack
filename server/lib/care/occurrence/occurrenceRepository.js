@@ -5,6 +5,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { careTables } from '../../db/careTableScope.js';
 import { dateToIsoDate } from '../../calendarDate.js';
 import { slotHasStarted } from '../schedule/occurrenceStatus.js';
 import { normalizeOccurrenceRow } from './occurrenceRowNormalize.js';
@@ -29,7 +30,7 @@ const ORDER_ASC = `ORDER BY scheduled_date ASC, COALESCE(scheduled_time, '00:00:
  */
 export async function listOpenRows(db, entryId) {
   const result = await db.query(
-    `SELECT * FROM health_occurrences
+    `SELECT * FROM ${careTables().occurrences}
      WHERE health_entry_id = $1 AND status = 'pending'
      ${ORDER_ASC}`,
     [entryId],
@@ -48,7 +49,7 @@ export async function listOpenRowsByEntry(db, entryIds) {
   const map = new Map(entryIds.map((id) => [id, []]));
   if (entryIds.length === 0) return map;
   const result = await db.query(
-    `SELECT * FROM health_occurrences
+    `SELECT * FROM ${careTables().occurrences}
      WHERE health_entry_id = ANY($1::uuid[]) AND status = 'pending'
      ${ORDER_ASC}`,
     [entryIds],
@@ -72,7 +73,7 @@ export async function listLastDoneByEntry(db, entryIds) {
   if (entryIds.length === 0) return map;
   const result = await db.query(
     `SELECT DISTINCT ON (health_entry_id) health_entry_id, id, completed_on, marked_at
-     FROM health_occurrences
+     FROM ${careTables().occurrences}
      WHERE health_entry_id = ANY($1::uuid[]) AND status = 'completed'
      ORDER BY health_entry_id, completed_on DESC NULLS LAST, marked_at DESC NULLS LAST`,
     [entryIds],
@@ -94,7 +95,7 @@ export async function listLastDoneByEntry(db, entryIds) {
  */
 export async function findOccurrence(db, entryId, occurrenceId) {
   const result = await db.query(
-    'SELECT * FROM health_occurrences WHERE id = $1 AND health_entry_id = $2',
+    `SELECT * FROM ${careTables().occurrences} WHERE id = $1 AND health_entry_id = $2`,
     [occurrenceId, entryId],
   );
   const row = result.rows[0];
@@ -113,7 +114,7 @@ export async function findOccurrence(db, entryId, occurrenceId) {
 export async function existingSeriesSlotKeys(db, entryId, fromIso) {
   const result = await db.query(
     `SELECT COALESCE(series_date, scheduled_date) AS slot_date, scheduled_time, status
-     FROM health_occurrences
+     FROM ${careTables().occurrences}
      WHERE health_entry_id = $1 AND COALESCE(series_date, scheduled_date) >= $2`,
     [entryId, fromIso],
   );
@@ -135,7 +136,7 @@ export async function existingSeriesSlotKeys(db, entryId, fromIso) {
  */
 export async function lastRuleClosedRow(db, entryId) {
   const result = await db.query(
-    `SELECT * FROM health_occurrences
+    `SELECT * FROM ${careTables().occurrences}
      WHERE health_entry_id = $1
        AND (status = 'completed' OR status = 'skipped')
      ORDER BY scheduled_date DESC, COALESCE(scheduled_time, '00:00:00'::time) DESC,
@@ -152,7 +153,7 @@ export async function lastRuleClosedRow(db, entryId) {
  */
 export async function countClosedRows(db, entryId) {
   const result = await db.query(
-    `SELECT COUNT(*)::int AS n FROM health_occurrences
+    `SELECT COUNT(*)::int AS n FROM ${careTables().occurrences}
      WHERE health_entry_id = $1 AND status IN ('completed', 'skipped', 'not_recorded')`,
     [entryId],
   );
@@ -176,7 +177,7 @@ export async function insertOpenOccurrence(db, {
 }) {
   const id = uuidv4();
   const result = await db.query(
-    `INSERT INTO health_occurrences
+    `INSERT INTO ${careTables().occurrences}
        (id, health_entry_id, scheduled_date, scheduled_time, status, origin, series_date)
      VALUES ($1, $2, $3, $4, 'pending', $5, $6)
      ON CONFLICT DO NOTHING
@@ -197,7 +198,7 @@ export async function restoreOccurrence(db, entryId, before) {
   const existing = await findOccurrence(db, entryId, before.id);
   if (!existing && before.status === 'pending') {
     const result = await db.query(
-      `INSERT INTO health_occurrences
+      `INSERT INTO ${careTables().occurrences}
          (id, health_entry_id, scheduled_date, scheduled_time, status, origin, series_date)
        VALUES ($1, $2, $3, $4, 'pending', $5, $6)
        ON CONFLICT DO NOTHING
@@ -216,7 +217,7 @@ export async function restoreOccurrence(db, entryId, before) {
   }
   if (before.status === 'pending') {
     const clash = await db.query(
-      `SELECT 1 FROM health_occurrences
+      `SELECT 1 FROM ${careTables().occurrences}
        WHERE health_entry_id = $1 AND status = 'pending' AND id <> $2
          AND scheduled_date = $3
          AND COALESCE(scheduled_time, '00:00:00'::time) = COALESCE($4::time, '00:00:00'::time)
@@ -226,7 +227,7 @@ export async function restoreOccurrence(db, entryId, before) {
     if (clash.rows.length > 0) return null;
   }
   const result = await db.query(
-    `UPDATE health_occurrences SET status = $1, completed_on = $2,
+    `UPDATE ${careTables().occurrences} SET status = $1, completed_on = $2,
        completion_timing = $3, marked_at = $4, marked_by_user_id = $5, notes = $6,
        performed_by_user_id = $7, marked_by_snapshot = $8::jsonb, performed_by_snapshot = $9::jsonb,
        provider_contact_id = $10, provider_typed_name = $11, provider_contact_snapshot = $12::jsonb,
@@ -266,8 +267,8 @@ export async function moveOpenOccurrence(db, {
 }) {
   // The open-slot unique index would abort the transaction; check first.
   const clash = await db.query(
-    `SELECT 1 FROM health_occurrences target
-     JOIN health_occurrences moving ON moving.id = $2
+    `SELECT 1 FROM ${careTables().occurrences} target
+     JOIN ${careTables().occurrences} moving ON moving.id = $2
      WHERE target.health_entry_id = $1 AND target.status = 'pending' AND target.id <> $2
        AND target.scheduled_date = $3
        AND COALESCE(target.scheduled_time, '00:00:00'::time)
@@ -277,7 +278,7 @@ export async function moveOpenOccurrence(db, {
   );
   if (clash.rows.length > 0) return null;
   const result = await db.query(
-    `UPDATE health_occurrences SET scheduled_date = $1,
+    `UPDATE ${careTables().occurrences} SET scheduled_date = $1,
        scheduled_time = CASE WHEN $2::boolean THEN $3::time ELSE scheduled_time END,
        origin = COALESCE($4, origin), updated_at = NOW()
      WHERE id = $5 AND health_entry_id = $6 AND status = 'pending'
@@ -299,7 +300,7 @@ export async function moveOpenOccurrence(db, {
 export async function deleteOpenOccurrences(db, entryId, ids, onlyOrigin = null) {
   if (!ids.length) return [];
   const result = await db.query(
-    `DELETE FROM health_occurrences
+    `DELETE FROM ${careTables().occurrences}
      WHERE health_entry_id = $1 AND id = ANY($2::uuid[]) AND status = 'pending'
        AND ($3::text IS NULL OR origin = $3)
      RETURNING id`,
@@ -329,7 +330,7 @@ export async function updateCompletedDetails(db, {
   }
   params.push(occurrenceId, entryId);
   const result = await db.query(
-    `UPDATE health_occurrences SET ${sets.join(', ')}
+    `UPDATE ${careTables().occurrences} SET ${sets.join(', ')}
      WHERE id = $${params.length - 1} AND health_entry_id = $${params.length}
        AND status = 'completed'
      RETURNING *`,
@@ -349,7 +350,7 @@ export async function updateCompletedOn(db, {
   entryId, occurrenceId, completedOn, completionTiming,
 }) {
   const result = await db.query(
-    `UPDATE health_occurrences SET completed_on = $1, completion_timing = $2, updated_at = NOW()
+    `UPDATE ${careTables().occurrences} SET completed_on = $1, completion_timing = $2, updated_at = NOW()
      WHERE id = $3 AND health_entry_id = $4 AND status = 'completed'
      RETURNING *`,
     [completedOn, completionTiming, occurrenceId, entryId],
@@ -421,7 +422,7 @@ export async function closeAllOpen(db, entryId, userId, closeReason = 'system', 
   if (!asOf) {
     const status = closeReason === 'user' ? 'skipped' : 'not_recorded';
     const result = await db.query(
-      `UPDATE health_occurrences SET status = $1,
+      `UPDATE ${careTables().occurrences} SET status = $1,
          marked_at = NOW(), marked_by_user_id = $2, updated_at = NOW()
        WHERE health_entry_id = $3 AND status = 'pending'
        RETURNING id`,
@@ -449,7 +450,7 @@ export async function closeAllOpen(db, entryId, userId, closeReason = 'system', 
  */
 export async function reopenClosedOccurrence(db, occurrenceId) {
   const result = await db.query(
-    `UPDATE health_occurrences SET status = 'pending', completed_on = NULL,
+    `UPDATE ${careTables().occurrences} SET status = 'pending', completed_on = NULL,
        completion_timing = NULL, marked_at = NULL, marked_by_user_id = NULL, notes = '',
        updated_at = NOW()
      WHERE id = $1 AND status IN ('completed', 'skipped', 'not_recorded')
@@ -469,7 +470,7 @@ export async function reopenClosedOccurrence(db, occurrenceId) {
  */
 export async function deleteNotRecordedScheduleOccurrence(db, entryId, occurrenceId) {
   const result = await db.query(
-    `DELETE FROM health_occurrences
+    `DELETE FROM ${careTables().occurrences}
      WHERE id = $1 AND health_entry_id = $2 AND origin = 'schedule'
        AND status = 'not_recorded'
      RETURNING id`,

@@ -11,10 +11,16 @@ const { resolvePipelineMode } = require('./issue_pipeline_v2_mode');
 const { bodySha } = require('./issue_pipeline_v2_hash');
 const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
-const { resolveDispatchTarget, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
+const { validatePipelineDispatch, resolveRunMode } = require('./issue_pipeline_v2_dispatch');
 const { decide, canonicalStage } = require('./issue_pipeline_v2_decide');
 const { loadOrgFields, parseIssueFields } = require('./issue_pipeline_v2_fields');
-const { deliveryMethod, deriveLaunchFacts, launchIssue, doorbellRingFailed } = require('./issue_pipeline_v2_launch');
+const {
+  deliveryMethod,
+  deliveryMethodProgrammeMismatch,
+  deriveLaunchFacts,
+  launchIssue,
+  doorbellRingFailed,
+} = require('./issue_pipeline_v2_launch');
 const {
   deployContains,
   deriveDeliveryFacts,
@@ -23,6 +29,7 @@ const {
   reopenedByEngine,
 } = require('./issue_pipeline_v2_release');
 const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
+const { umbrellaRollup, makeStageReader } = require('./issue_pipeline_v2_umbrella');
 const { deriveAatState, implementationFailActive, loadImplementationFollowUps } = require('./issue_pipeline_v2_acceptance');
 const { applyAction, buildWrites } = require('./issue_pipeline_v2_apply');
 const { checkEngineIdentity, writesAllowed } = require('./issue_pipeline_v2_identity');
@@ -31,11 +38,11 @@ const {
   latestHumanComment,
   wokenCommentIds,
   listIssueComments,
-  listCommentReactions,
 } = require('./issue_pipeline_v2_comments');
-const { deriveReviewFacts, findReviewRequests } = require('./issue_pipeline_v2_review');
-const { fetchBodyEdits, fetchCommentEditor } = require('./issue_pipeline_v2_graphql');
+const { deriveReviewFacts } = require('./issue_pipeline_v2_review');
+const { fetchBodyEdits, fetchCommentEditor, fetchIssueBlockedBy } = require('./issue_pipeline_v2_graphql');
 const { memoComments, countEngineWip, lastAssignedAgent } = require('./issue_pipeline_v2_tick_facts');
+const { noopBlockedBy } = require('./issue_pipeline_v2_test_fixtures');
 const { planRounds } = require('./issue_pipeline_v2_round_plan');
 const { deriveHoldFacts, sinceRelease } = require('./issue_pipeline_v2_holds');
 
@@ -46,7 +53,7 @@ function mode() {
 }
 
 /** Facts available from the issue itself; later phases add comments, reactions and PRs. */
-function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
+function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode, mission }) {
   const facts = {
     mode: runMode,
     now,
@@ -56,6 +63,7 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode }) {
     blocked: parsed.blocked,
     bodyHash: bodySha(issue.body),
     wip,
+    mission: mission || 'board',
   };
   if (parsed.acceptance !== undefined) facts.acceptance = parsed.acceptance;
   if (parsed.acceptanceFailReason !== undefined) facts.acceptanceFailReason = parsed.acceptanceFailReason;
@@ -84,6 +92,9 @@ async function resolveEditors({ comments, config, token, io }) {
  */
 async function buildReleaseFacts({ owner, repo, entry, canonical, comments, config, token, io }) {
   const prs = await (io.listLinkedPrs || listLinkedPrs)({ owner, repo, issueNumber: entry.number, token });
+  const labels = (entry.issue.labels || []).map((label) => (typeof label === 'string' ? label : label.name));
+  const pipelineAuthors = new Set(['pawpet-claude', 'pawpet-bot']);
+  const openPipelinePrs = prs.filter((pr) => pr.state === 'open' && pipelineAuthors.has(pr.author));
   const facts = {
     deliveryMethod: deliveryMethod(entry.issue.body),
     ...deriveDeliveryFacts({ issue: entry.issue, prs, comments, engineLogins: config.engine.logins }),
@@ -91,7 +102,24 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
       comments,
       engineLogins: config.engine.logins,
     }),
+    launch: deriveLaunchFacts({
+      comments,
+      engineLogins: config.engine.logins,
+      labels,
+      attempts: entry.parsed.attempts,
+    }),
+    pipelineOpenPrs: openPipelinePrs.length,
   };
+  if (canonical === 'In progress' || canonical === 'In Main') {
+    // PIPE-UMB-D-001: an umbrella moves only when every sub-issue is at In Main, In UAT or Done.
+    facts.umbrella = await (io.umbrellaRollup || umbrellaRollup)({
+      owner,
+      repo,
+      issueNumber: entry.number,
+      token,
+      readStage: makeStageReader({ owner, repo, token, fields: io.fields || null }),
+    });
+  }
   const environment = { 'In Main': 'UAT', 'In UAT': 'PROD' }[canonical];
   if (environment) {
     const deploySha = await (io.deploySha || ((env) => deploys.get(env, () => latestDeploySha({ owner, repo, environment: env, token }))))(environment);
@@ -185,6 +213,7 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
   if (canonical === 'Ready') {
     return {
       deliveryMethod: deliveryMethod(entry.issue.body),
+      deliveryProgrammeMismatch: deliveryMethodProgrammeMismatch(entry.issue.body),
       launch: deriveLaunchFacts({
         comments,
         engineLogins: config.engine.logins,
@@ -202,13 +231,9 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
     limits: config.limits,
     now,
   };
-  const reactionsOf = (commentId) =>
-    (io.listCommentReactions || listCommentReactions)({ owner, repo, commentId, token });
-
   if (canonical === 'To do') {
-    const probe = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, ...verdictCtx });
-    const reactions = probe.commentId ? await reactionsOf(probe.commentId) : [];
-    facts.spec = deriveSpecFacts({ comments, reactions, config, engineLogins, editors, ...verdictCtx });
+    // Reactions are never votes (PIPE-V2-D-REV4-001): the spec pass is read from signed verdicts only.
+    facts.spec = deriveSpecFacts({ comments, reactions: [], config, engineLogins, editors, ...verdictCtx });
     if (facts.spec.assignedTo && runMode === 'on') {
       facts.spec.ringFailed = await doorbellRingFailed({
         comments,
@@ -226,11 +251,8 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
     return facts;
   }
 
-  const requests = findReviewRequests(comments, engineLogins, editors);
+  // Reactions are not read: votes are signed verdicts only (PIPE-V2-D-REV4-001).
   const reactionsByComment = {};
-  for (const request of requests) {
-    reactionsByComment[request.comment.id] = await reactionsOf(request.comment.id);
-  }
   const history = await (io.fetchBodyEdits || fetchBodyEdits)({
     owner,
     repo,
@@ -281,11 +303,13 @@ async function buildStageFacts({ owner, repo, entry, canonical, comments, config
   return merged;
 }
 
-async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, io = {} }) {
+async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId, only, mission = 'board', io = {} }) {
   const runMode = mode();
   if (runMode === 'off') {
-    return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [] };
+    return { mode: runMode, skipped: true, reason: 'ISSUE_PIPELINE_V2 off', actions: [], errors: [], summary: { decisions: 0, confirmedEffects: 0, deferrals: 0 } };
   }
+  const summary = { decisions: 0, confirmedEffects: 0, deferrals: 0 };
+  const readFailures = [];
   deploys.reset();
   // WIP_LIMIT=off (repo variable) lifts the Ready queue cap for this run; see applyWipOverride.
   const config = applyWipOverride(io.config || loadConfig(), process.env.WIP_LIMIT);
@@ -303,7 +327,19 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     console.log(JSON.stringify({ event: 'acceptance.field-missing' }));
   }
 
-  const rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true, owner, repo });
+  let rows;
+  try {
+    rows = await list({ projectId, statusFieldId, projectsPat, includeClosed: true, owner, repo });
+  } catch (error) {
+    return {
+      mode: runMode,
+      boardListFailed: true,
+      actions: [],
+      errors: [{ issue: null, message: error?.message ?? String(error) }],
+      summary,
+      readFailures,
+    };
+  }
   const numbers = rows
     .map((row) => row.issue)
     .filter((issue) => issue && issue.state === 'OPEN')
@@ -311,15 +347,19 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
 
   const entries = [];
   for (const number of numbers) {
-    const issue = await getIssue(number);
-    const parsed = parseIssueFields(issue, fields);
-    entries.push({
-      number,
-      issue,
-      parsed,
-      stage: parsed.stage,
-      labels: (issue.labels || []).map((label) => label.name || label),
-    });
+    try {
+      const issue = await getIssue(number);
+      const parsed = parseIssueFields(issue, fields);
+      entries.push({
+        number,
+        issue,
+        parsed,
+        stage: parsed.stage,
+        labels: (issue.labels || []).map((label) => label.name || label),
+      });
+    } catch (error) {
+      readFailures.push({ issue: number, message: error?.message ?? String(error) });
+    }
   }
   // Closed board items still on a delivery column (Status In progress / In Main / In UAT): a merge
   // may have auto-closed an issue that is still being delivered. Only those whose Stage is a
@@ -333,7 +373,13 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     )
     .map((row) => row.issue.number);
   for (const number of closedNumbers) {
-    const issue = await getIssue(number);
+    let issue;
+    try {
+      issue = await getIssue(number);
+    } catch (error) {
+      readFailures.push({ issue: number, message: error?.message ?? String(error) });
+      continue;
+    }
     if (!issue) {
       continue;
     }
@@ -349,7 +395,8 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
   }
   // One comment read per issue per tick, shared by the board pass below and the per-issue facts.
   const listComments = memoComments(io.listIssueComments || listIssueComments);
-  const tickIo = { ...io, listIssueComments: listComments };
+  // The org fields are already loaded for this tick; the umbrella stage reads reuse them.
+  const tickIo = { ...io, listIssueComments: listComments, fields };
   const commentsOf = (entry) => listComments({ owner, repo, issueNumber: entry.number, token: projectsPat });
   // WIP: In progress issues the engine started, plus Ready issues with a delivery launch in flight,
   // each issue once. Hand-driven work takes no pipeline slot; an unreadable issue holds one.
@@ -389,6 +436,7 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
           wip,
           now,
           runMode,
+          mission,
         }),
         roundRobinAfter,
         roundRobinOrder,
@@ -396,6 +444,19 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         isFollowUp: Boolean(parseFollowUp(entry.issue.body)),
         ...(await buildCommentFacts({ owner, repo, entry, config, token: projectsPat, io: tickIo, runMode, now, roundRobinAfter, roundRobinOrder })),
       };
+      const loadBlockedBy =
+        io.fetchIssueBlockedBy || (projectsPat === 'p' ? noopBlockedBy : fetchIssueBlockedBy);
+      const blockedBy = await loadBlockedBy({
+        owner,
+        repo,
+        issueNumber: entry.number,
+        token: projectsPat,
+      });
+      if (blockedBy.error) {
+        facts.blockedByReadError = blockedBy.error;
+      } else {
+        facts.blockedByOpen = blockedBy.open;
+      }
       if (entry.closed) {
         const comments = await commentsOf(entry);
         facts.closed = true;
@@ -406,15 +467,34 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
         facts.followUp = { depth: await followUpDepth({ body: entry.issue.body, getIssue }) };
       }
       const action = decide(facts, config);
-      if (facts.roundPlan) {
+      summary.decisions += 1;
+      if (action.row === 'blocked-by' || action.row === 'blocked-by.read-failed') {
         console.log(
-          JSON.stringify({ event: 'pipeline_v2_round_plan', mode: runMode, issue: entry.number, plan: facts.roundPlan, live: action.row || action.type }),
+          JSON.stringify({
+            event: 'pipeline_v2_skip',
+            issue: entry.number,
+            row: action.row,
+            blockers: action.blockers || [],
+            readError: facts.blockedByReadError || null,
+          }),
         );
       }
       if (inScope && action.agent) {
         roundRobinAfter = action.agent;
       }
       actions.push({ issue: entry.number, stage: entry.parsed.stage || 'Backlog', action });
+      const decisionKey = action.row || action.type;
+      if (facts.roundPlan) {
+        console.log(
+          JSON.stringify({
+            event: 'pipeline_v2_round_plan',
+            mode: runMode,
+            issue: entry.number,
+            plan: facts.roundPlan,
+            decision: decisionKey,
+          }),
+        );
+      }
       if (action.boardError) {
         // No agent can take this work: one board-level error per row, never a flag on each issue.
         const known = boardErrors.get(action.reason) || [];
@@ -472,6 +552,12 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
       if (result.applied.length > 0) {
         const event = live && inScope ? 'pipeline_v2_applied' : 'pipeline_v2_planned';
         console.log(JSON.stringify({ event, issue: entry.number, [event === 'pipeline_v2_applied' ? 'applied' : 'planned']: result.applied }));
+        if (live && inScope) {
+          summary.confirmedEffects += result.applied.length;
+        }
+        if (result.applied.some((line) => line.startsWith('runner-queued:'))) {
+          summary.deferrals += 1;
+        }
       }
       if (inScope && result.applied.some((entry) => entry.startsWith('launch:'))) {
         wip += 1; // a started run takes a slot; a failed launch or an out-of-scope simulation does not
@@ -496,14 +582,43 @@ async function tick({ owner, repo, token, projectsPat, projectId, statusFieldId,
     console.error(JSON.stringify({ event: 'pipeline_v2_error', message }));
     errors.push({ issue: null, message });
   }
-  return { mode: runMode, issueCount: entries.length, wip, actions, errors };
+  return {
+    mode: runMode,
+    issueCount: entries.length,
+    wip,
+    actions,
+    errors,
+    summary,
+    readFailures,
+    boardReadPartial: readFailures.length > 0,
+  };
 }
 
 async function main() {
+  const startedAt = Date.now();
+  const runId = randomNonceHex();
   // #2553 P4: validate the issue filter and resolve the mode before any board read or write.
-  const target = resolveDispatchTarget(process.env.ISSUE_NUMBER);
-  if (!target.ok) {
-    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: target.reason }));
+  const dispatch = validatePipelineDispatch({
+    issueNumberRaw: process.env.ISSUE_NUMBER,
+    missionRaw: process.env.PIPELINE_V2_MISSION,
+  });
+  if (!dispatch.ok) {
+    console.error(JSON.stringify({ event: 'pipeline_v2_error', message: dispatch.reason }));
+    console.log(
+      JSON.stringify({
+        event: 'pipeline_v2_tick_summary',
+        runId,
+        mode: null,
+        target: dispatch.only ?? 'board',
+        mission: dispatch.mission ?? 'board',
+        boardReadComplete: false,
+        decisions: 0,
+        confirmedEffects: 0,
+        deferrals: 0,
+        errors: 1,
+        durationMs: Date.now() - startedAt,
+      }),
+    );
     process.exitCode = 1;
     return;
   }
@@ -514,7 +629,15 @@ async function main() {
   });
   process.env.ISSUE_PIPELINE_V2 = run.mode;
   console.log(
-    JSON.stringify({ event: 'pipeline_v2_run', mode: run.mode, source: run.source, target: target.only ?? 'board', writes: run.mode === 'on' }),
+    JSON.stringify({
+      event: 'pipeline_v2_run',
+      runId,
+      mode: run.mode,
+      source: run.source,
+      target: dispatch.only ?? 'board',
+      mission: dispatch.mission,
+      writes: run.mode === 'on',
+    }),
   );
   const { owner, repo } = parseRepo(process.env.GITHUB_REPOSITORY || '');
   const projectsPat = process.env.GH_PROJECTS_PAT;
@@ -523,7 +646,7 @@ async function main() {
   if (mode() !== 'off' && (!projectsPat || !projectId || !statusFieldId)) {
     throw new Error('GH_PROJECTS_PAT, GH_PROJECT_ID and GH_STATUS_FIELD_ID are required');
   }
-  const only = target.only;
+  const only = dispatch.only;
   const result = await tick({
     owner,
     repo,
@@ -532,9 +655,27 @@ async function main() {
     projectId,
     statusFieldId,
     only,
+    mission: dispatch.mission,
   });
   console.log(JSON.stringify({ event: 'pipeline_v2_tick', ...result, actions: result.actions?.length }));
-  if (result.errors?.length > 0) {
+  const boardReadComplete = !result.boardListFailed && !result.boardReadPartial;
+  console.log(
+    JSON.stringify({
+      event: 'pipeline_v2_tick_summary',
+      runId,
+      mode: run.mode,
+      target: dispatch.only ?? 'board',
+      mission: dispatch.mission,
+      boardReadComplete,
+      readFailures: result.readFailures || [],
+      decisions: result.summary?.decisions ?? 0,
+      confirmedEffects: result.summary?.confirmedEffects ?? 0,
+      deferrals: result.summary?.deferrals ?? 0,
+      errors: result.errors?.length ?? 0,
+      durationMs: Date.now() - startedAt,
+    }),
+  );
+  if (result.errors?.length > 0 || result.boardListFailed) {
     process.exitCode = 1;
   }
 }

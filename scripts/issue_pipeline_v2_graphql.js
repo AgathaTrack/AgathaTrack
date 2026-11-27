@@ -60,4 +60,28 @@ async function fetchCommentEditor({ nodeId, token, graphqlFn = graphql }) {
   return node?.lastEditedAt ? node.editor?.login || null : null;
 }
 
-module.exports = { fetchBodyEdits, fetchCommentEditor };
+/** Open issues that block `issueNumber` (GitHub issue dependencies). */
+async function fetchIssueBlockedBy({ owner, repo, issueNumber, token, graphqlFn = graphql }) {
+  try {
+    const data = await graphqlFn(
+      token,
+      `query($owner: String!, $repo: String!, $number: Int!) {
+        repository(owner: $owner, name: $repo) {
+          issue(number: $number) {
+            blockedBy(first: 50) {
+              nodes { number state }
+            }
+          }
+        }
+      }`,
+      { owner, repo, number: Number(issueNumber) },
+    );
+    const nodes = data?.repository?.issue?.blockedBy?.nodes || [];
+    const open = nodes.filter((node) => String(node.state || '').toUpperCase() === 'OPEN').map((node) => node.number);
+    return { open, error: null };
+  } catch (error) {
+    return { open: null, error: String(error?.message ?? error) };
+  }
+}
+
+module.exports = { fetchBodyEdits, fetchCommentEditor, fetchIssueBlockedBy };

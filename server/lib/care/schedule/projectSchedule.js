@@ -373,14 +373,14 @@ export function projectCareForPeriod(entries, occurrencesByEntryId, startsOn, en
  */
 export async function loadScheduleDataForProjection(pool, petId, startsOn, endsOn) {
   const entriesResult = await pool.query(
-    'SELECT * FROM health_entries WHERE pet_id = $1 ORDER BY created_at ASC',
+    'SELECT * FROM care_items WHERE pet_id = $1 ORDER BY created_at ASC',
     [petId]
   );
 
   const occurrencesResult = await pool.query(
     `SELECT ho.*
-     FROM health_occurrences ho
-     INNER JOIN health_entries he ON he.id = ho.health_entry_id
+     FROM care_occurrences ho
+     INNER JOIN care_items he ON he.id = ho.health_entry_id
      WHERE he.pet_id = $1
        AND (
          (ho.scheduled_date >= $2::date AND ho.scheduled_date <= $3::date)

@@ -20,8 +20,8 @@ function stubAccountExistenceQuery(sql) {
 
 function stubCareOccurrenceEngineQueries(sql) {
   if (sql.includes('SELECT home_timezone FROM pets')) return { rows: [{ home_timezone: 'UTC' }] };
-  if (sql.includes('FROM health_occurrences') && sql.includes('ANY($1::uuid[])')) return { rows: [] };
-  if (sql.includes('SELECT * FROM health_occurrences') && sql.includes("WHERE health_entry_id = $1 AND status = 'pending'")) {
+  if (sql.includes('FROM care_occurrences') && sql.includes('ANY($1::uuid[])')) return { rows: [] };
+  if (sql.includes('SELECT * FROM care_occurrences') && sql.includes("WHERE health_entry_id = $1 AND status = 'pending'")) {
     return { rows: [] };
   }
   if (sql.includes('AS slot_date')) return { rows: [] };
@@ -93,12 +93,12 @@ describe('Health Entries API', () => {
           return { rows: [{ '?column?': 1 }] };
         }
 
-        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'health_entries he' });
+        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'care_items he' });
         if (manageEntry) return manageEntry;
 
         const occurrenceStub = stubCareOccurrenceEngineQueries(sql);
         if (occurrenceStub) return occurrenceStub;
-        if (sql.includes('UPDATE health_entries SET') && sql.includes('RETURNING *') && !sql.includes('SET name')) {
+        if (sql.includes('UPDATE care_items SET') && sql.includes('RETURNING *') && !sql.includes('SET name')) {
           const id = params[params.length - 1];
           if (lastInsertedEntry && lastInsertedEntry.id === id) return { rows: [lastInsertedEntry] };
           return { rows: [makeHealthRow({ id })] };
@@ -121,11 +121,11 @@ describe('Health Entries API', () => {
           return { rows: [makeHealthRow({ id: params[0] })] };
         }
 
-        if (sql.includes('SELECT he.*') && sql.includes('FROM health_entries')) {
+        if (sql.includes('SELECT he.*') && sql.includes('FROM care_items')) {
           return { rows: [makeHealthRow(), makeHealthRow({ id: 'he-2', name: 'Vaccination' })] };
         }
 
-        if (sql.includes('SELECT care_family, care_source, recurrence_anchor') && sql.includes('FROM health_entries WHERE id')) {
+        if (sql.includes('SELECT care_family, care_source, recurrence_anchor') && sql.includes('FROM care_items WHERE id')) {
           if (params && params[0] === 'nonexistent') return { rows: [] };
           if (params && params[0] === 'he-uncat') {
             return {
@@ -160,14 +160,14 @@ describe('Health Entries API', () => {
           };
         }
 
-        if (sql.includes('SELECT * FROM health_entries WHERE id = $1 FOR UPDATE')) {
+        if (sql.includes('SELECT * FROM care_items WHERE id = $1 FOR UPDATE')) {
           if (lastInsertedEntry && lastInsertedEntry.id === params[0]) {
             return { rows: [lastInsertedEntry] };
           }
           return { rows: [makeHealthRow({ id: params[0] })] };
         }
 
-        if (sql.includes('SELECT * FROM health_entries WHERE id')) {
+        if (sql.includes('SELECT * FROM care_items WHERE id')) {
           if (params && params[0] === 'nonexistent') return { rows: [] };
           if (params && params[0] === 'he-uncat') {
             return {
@@ -187,7 +187,7 @@ describe('Health Entries API', () => {
           return { rows: [makeHealthRow({ id: params[0] })] };
         }
 
-        if (sql.includes('INSERT INTO health_entries')) {
+        if (sql.includes('INSERT INTO care_items')) {
           lastInsertedEntry = makeHealthRow({
             id: params[0],
             pet_id: params[1],
@@ -223,11 +223,11 @@ describe('Health Entries API', () => {
           return { rows: [lastInsertedEntry] };
         }
 
-        if (sql.includes('INSERT INTO health_occurrences')) {
+        if (sql.includes('INSERT INTO care_occurrences')) {
           return { rows: [{ id: params[0] }] };
         }
 
-        if (sql.includes('UPDATE health_entries SET next_due_date')) {
+        if (sql.includes('UPDATE care_items SET next_due_date')) {
           if (lastInsertedEntry && lastInsertedEntry.id === params[1]) {
             lastInsertedEntry = {
               ...lastInsertedEntry,
@@ -237,7 +237,7 @@ describe('Health Entries API', () => {
           return { rows: [makeHealthRow({ id: params[1], next_due_date: params[0] ? new Date(params[0]) : null })] };
         }
 
-        if (sql.includes('SELECT id FROM health_occurrences') && sql.includes('status = \'pending\'')) {
+        if (sql.includes('SELECT id FROM care_occurrences') && sql.includes('status = \'pending\'')) {
           if (sql.includes('LIMIT 1')) {
             if (params && params[0] === 'he-no-pending') return { rows: [] };
             return { rows: [{ id: 'occ-pending-1' }] };
@@ -246,7 +246,7 @@ describe('Health Entries API', () => {
         }
 
         if (
-          sql.includes('SELECT * FROM health_occurrences')
+          sql.includes('SELECT * FROM care_occurrences')
           && sql.includes("status = 'pending'")
           && sql.includes('WHERE id = $1')
         ) {
@@ -262,7 +262,7 @@ describe('Health Entries API', () => {
         }
 
         if (
-          sql.includes('UPDATE health_occurrences SET status = \'completed\'')
+          sql.includes('UPDATE care_occurrences SET status = \'completed\'')
           && sql.includes('completion_timing')
         ) {
           return {
@@ -277,11 +277,11 @@ describe('Health Entries API', () => {
           };
         }
 
-        if (sql.includes('SELECT scheduled_date FROM health_occurrences') && sql.includes("status = 'pending'")) {
+        if (sql.includes('SELECT scheduled_date FROM care_occurrences') && sql.includes("status = 'pending'")) {
           return { rows: [] };
         }
 
-        if (sql.includes('SELECT scheduled_date, completed_on FROM health_occurrences')) {
+        if (sql.includes('SELECT scheduled_date, completed_on FROM care_occurrences')) {
           return {
             rows: [{
               scheduled_date: new Date('2026-01-01'),
@@ -290,7 +290,7 @@ describe('Health Entries API', () => {
           };
         }
 
-        if (sql.includes('SELECT 1 FROM health_occurrences WHERE health_entry_id = $1 AND status = \'pending\'')) {
+        if (sql.includes('SELECT 1 FROM care_occurrences WHERE health_entry_id = $1 AND status = \'pending\'')) {
           return { rows: [] };
         }
 
@@ -299,7 +299,7 @@ describe('Health Entries API', () => {
         }
 
         if (
-          sql.includes('SELECT * FROM health_occurrences')
+          sql.includes('SELECT * FROM care_occurrences')
           && sql.includes("status IN ('completed', 'skipped')")
           && sql.includes('ORDER BY marked_at DESC')
         ) {
@@ -349,7 +349,7 @@ describe('Health Entries API', () => {
         }
 
         if (
-          sql.includes('UPDATE health_occurrences SET status = \'pending\'')
+          sql.includes('UPDATE care_occurrences SET status = \'pending\'')
           && sql.includes('completion_timing = NULL')
         ) {
           return {
@@ -364,42 +364,42 @@ describe('Health Entries API', () => {
           };
         }
 
-        if (sql.includes('SELECT scheduled_date, scheduled_time FROM health_occurrences')) {
+        if (sql.includes('SELECT scheduled_date, scheduled_time FROM care_occurrences')) {
           return { rows: [{ scheduled_date: new Date('2026-06-30'), scheduled_time: null }] };
         }
 
-        if (sql.includes("UPDATE health_entries SET status = 'completed', completed_on")) {
+        if (sql.includes("UPDATE care_items SET status = 'completed', completed_on")) {
           if (params && params[2] === 'nonexistent') return { rows: [] };
           return { rows: [makeHealthRow({ id: params[2], status: 'completed', completed_at: params[1], completed_on: params[0], next_due_date: null })] };
         }
 
-        if (sql.includes("UPDATE health_entries SET status = 'active', completed_on = NULL, completed_at = $1")) {
+        if (sql.includes("UPDATE care_items SET status = 'active', completed_on = NULL, completed_at = $1")) {
           if (params && params[2] === 'nonexistent') return { rows: [] };
           return { rows: [makeHealthRow({ id: params[2], status: 'active', completed_on: null, completed_at: params[0], next_due_date: params[1] })] };
         }
 
-        if (sql.includes('UPDATE health_entries SET status = \'active\', completed_on = NULL, completed_at = NULL')) {
+        if (sql.includes('UPDATE care_items SET status = \'active\', completed_on = NULL, completed_at = NULL')) {
           if (params && params[1] === 'nonexistent') return { rows: [] };
           return { rows: [makeHealthRow({ id: params[1], status: 'active', completed_at: null, completed_on: null })] };
         }
 
-        if (sql.includes("UPDATE health_entries SET status = 'completed', repeat_end_date")) {
+        if (sql.includes("UPDATE care_items SET status = 'completed', repeat_end_date")) {
           if (params && params[1] === 'nonexistent') return { rows: [] };
           return { rows: [makeHealthRow({ id: params[1], status: 'completed', repeat_end_date: params[0] })] };
         }
 
-        if (sql.includes("UPDATE health_entries SET status = 'active', repeat_end_date = NULL")) {
+        if (sql.includes("UPDATE care_items SET status = 'active', repeat_end_date = NULL")) {
           if (params && params[0] === 'nonexistent') return { rows: [] };
           return { rows: [makeHealthRow({ id: params[0], status: 'active', repeat_end_date: null, next_due_date: null })] };
         }
 
-        if (sql.includes("UPDATE health_entries SET status = 'completed'") ||
-            sql.includes('UPDATE health_entries SET status = \'completed\'')) {
+        if (sql.includes("UPDATE care_items SET status = 'completed'") ||
+            sql.includes('UPDATE care_items SET status = \'completed\'')) {
           if (params && (params[2] === 'nonexistent' || params[3] === 'nonexistent')) return { rows: [] };
           return { rows: [makeHealthRow({ id: entryIdFromUpdate(params), status: 'active', completed_at: params[0], next_due_date: params[1] })] };
         }
 
-        if (sql.includes('UPDATE health_entries SET name')) {
+        if (sql.includes('UPDATE care_items SET name')) {
           if (params && params[25] === 'nonexistent') return { rows: [] };
           return {
             rows: [makeHealthRow({
@@ -503,7 +503,7 @@ describe('Health Entries API', () => {
           return { rows: [] };
         }
 
-        if (sql.includes('DELETE FROM health_entries')) {
+        if (sql.includes('DELETE FROM care_items')) {
           return { rows: [] };
         }
 
@@ -760,7 +760,7 @@ describe('Health Entries API', () => {
         if (existence) return existence;
         const access = handlePetAccessQuery(sql, params, { userId, ownedPetIds: ['pet-1'] });
         if (access) return access;
-        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'health_entries he' });
+        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'care_items he' });
         if (manageEntry) return manageEntry;
         const occurrenceStub = stubCareOccurrenceEngineQueries(sql);
         if (occurrenceStub) return occurrenceStub;
@@ -790,7 +790,7 @@ describe('Health Entries API', () => {
           if (existence) return existence;
           const access = handlePetAccessQuery(sql, params, { userId, ownedPetIds: ['pet-1'] });
           if (access) return access;
-          const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'health_entries he' });
+          const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'care_items he' });
           if (manageEntry) return manageEntry;
           const occurrenceStub = stubCareOccurrenceEngineQueries(sql);
           if (occurrenceStub) return occurrenceStub;
@@ -840,7 +840,7 @@ describe('Health Entries API', () => {
       expect(res.body).toHaveProperty('frequency', 'monthly');
       expect(res.body).toHaveProperty('status', 'active');
       expect(res.body.recurrence_anchor).toBe('from_completion');
-      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO health_entries')).params;
+      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO care_items')).params;
       expect(insertParams[4]).toBe('preventive');
       expect(insertParams[12]).toBe('from_completion');
       expect(insertParams[25]).toBe('1.0.0');
@@ -892,7 +892,7 @@ describe('Health Entries API', () => {
         if (existence) return existence;
         const access = handlePetAccessQuery(sql, params, { userId, ownedPetIds: ['pet-1'] });
         if (access) return access;
-        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'health_entries he' });
+        const manageEntry = handleManageEntryQuery(sql, params, { tableName: 'care_items he' });
         if (manageEntry) return manageEntry;
         const occurrenceStub = stubCareOccurrenceEngineQueries(sql);
         if (occurrenceStub) return occurrenceStub;
@@ -928,7 +928,7 @@ describe('Health Entries API', () => {
         .set('Authorization', `Bearer ${token}`)
         .send(entry);
       expect(res.statusCode).toBe(201);
-      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO health_entries')).params;
+      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO care_items')).params;
       expect(insertParams[4]).toBe('vet_visit');
       expect(insertParams[6]).toBe('once');
       expect(insertParams[10]).toBe('2025-01-01');
@@ -982,11 +982,11 @@ describe('Health Entries API', () => {
         .set('Authorization', `Bearer ${token}`)
         .send(entry);
       expect(res.statusCode).toBe(201);
-      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO health_entries')).params;
+      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO care_items')).params;
       expect(insertParams[9]).toBe('2026-06-30');
       expect(insertParams[10]).toBe('2026-06-30');
       const occurrenceDates = queryLog
-        .filter((q) => q.sql.includes('INSERT INTO health_occurrences') && q.params[1] === res.body.id)
+        .filter((q) => q.sql.includes('INSERT INTO care_occurrences') && q.params[1] === res.body.id)
         .map((q) => q.params[2]);
       expect(occurrenceDates).toContain('2026-06-30');
     });
@@ -1005,7 +1005,7 @@ describe('Health Entries API', () => {
         .set('Authorization', `Bearer ${token}`)
         .send(entry);
       expect(res.statusCode).toBe(201);
-      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO health_entries')).params;
+      const insertParams = queryLog.find(q => q.sql.includes('INSERT INTO care_items')).params;
       expect(insertParams[1]).toBe('pet-2');
       expect(insertParams[9]).toBe('2025-01-01');
       expect(insertParams[10]).toBe('2025-02-01');
@@ -1072,7 +1072,7 @@ describe('Health Entries API', () => {
         .set('Authorization', `Bearer ${token}`)
         .send(entry);
       expect(res.statusCode).toBe(201);
-      const insertParams = queryLog.find((q) => q.sql.includes('INSERT INTO health_entries')).params;
+      const insertParams = queryLog.find((q) => q.sql.includes('INSERT INTO care_items')).params;
       expect(insertParams[19]).toBe('weight_monitoring');
     });
 
@@ -1161,9 +1161,9 @@ describe('Health Entries API', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Test', next_due_date: '2026-01-01' });
       const accessQuery = queryLog.find(
-        (q) => q.sql.includes('SELECT pet_id FROM health_entries') || (q.sql.includes('SELECT 1 FROM health_entries he') && q.sql.includes('JOIN pets p')),
+        (q) => q.sql.includes('SELECT pet_id FROM care_items') || (q.sql.includes('SELECT 1 FROM care_items he') && q.sql.includes('JOIN pets p')),
       );
-      const updateQuery = queryLog.find(q => q.sql.includes('UPDATE health_entries SET name'));
+      const updateQuery = queryLog.find(q => q.sql.includes('UPDATE care_items SET name'));
       expect(accessQuery).toBeDefined();
       expect(updateQuery.params[updateQuery.params.length - 1]).toBe('he-1');
     });
@@ -1204,7 +1204,7 @@ describe('Health Entries API', () => {
       await request(app)
         .delete('/api/health-entries/he-1')
         .set('Authorization', `Bearer ${token}`);
-      expect(lastQuery.sql).toContain('DELETE FROM health_entries WHERE id = $1');
+      expect(lastQuery.sql).toContain('DELETE FROM care_items WHERE id = $1');
       expect(lastQuery.params[0]).toBe('he-1');
     });
   });

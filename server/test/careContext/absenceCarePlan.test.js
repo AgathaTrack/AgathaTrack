@@ -60,10 +60,10 @@ describe('GET /api/planned-absences/:id/care-plan', () => {
           }],
         };
       }
-      if (sql.includes('FROM health_entries WHERE pet_id = $1')) {
+      if (sql.includes('FROM care_items WHERE pet_id = $1')) {
         return { rows: [] };
       }
-      if (sql.includes('FROM health_occurrences ho')) {
+      if (sql.includes('FROM care_occurrences ho')) {
         return { rows: [] };
       }
       return { rows: [] };

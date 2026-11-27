@@ -8,6 +8,8 @@ const {
   buildLaunchRecord,
   deriveLaunchFacts,
   deliveryMethod,
+  deliveryMethodProgrammeMismatch,
+  METHOD_PROMPTS,
   doorbellRingFailed,
   launchIssue,
   STAGE_PROMPTS,
@@ -39,6 +41,36 @@ test('delivery method needs a whole token in a field position', () => {
   assert.equal(deliveryMethod('### Delivery plan\n\nWe chose the Method: light-plan because'), 'PR', 'mid-line');
   assert.equal(deliveryMethod('### Delivery plan\n\nintro\n1. **Method:** `light-plan`'), 'light-plan', 'list item');
   assert.equal(deliveryMethod('### Delivery plan\n\n> Method: execute-plan'), 'execute-plan', 'quote');
+});
+
+test('deliveryMethodProgrammeMismatch: phase checklist with Method PR', () => {
+  const body =
+    '### Delivery plan\n\nMethod: PR\n\n- [ ] P1 — first phase\n- [ ] P2 — second phase\n';
+  assert.equal(deliveryMethod(body), 'PR');
+  assert.equal(deliveryMethodProgrammeMismatch(body), true);
+  assert.equal(
+    deliveryMethodProgrammeMismatch('### Delivery plan\n\nMethod: PR\n\n- [ ] P1 — only phase\n'),
+    false,
+    'single phase is not a programme',
+  );
+  assert.equal(deliveryMethodProgrammeMismatch('### Delivery plan\n\nMethod: light-plan\n\n- [ ] P1 — x\n'), false);
+  assert.equal(deliveryMethodProgrammeMismatch('### Delivery plan\n\nMethod: PR\n\nOne PR to main.\n'), false);
+});
+
+test('METHOD_PROMPTS.PR names babysit-plus driver routing', () => {
+  assert.match(METHOD_PROMPTS.PR, /§Driver routing/);
+  assert.match(METHOD_PROMPTS.PR, /babysit-plus/);
+  assert.doesNotMatch(METHOD_PROMPTS.PR, /babysit-uat/);
+});
+
+test('parseLaunchComment accepts purpose=babysit', () => {
+  const comment = note(
+    '<!-- v2:launch run=r1 agent=claude-a purpose=babysit stage=babysit -->',
+    1,
+  );
+  const parsed = require('./issue_pipeline_v2_launch').parseLaunchComment(comment);
+  assert.equal(parsed.purpose, 'babysit');
+  assert.equal(parsed.stage, 'babysit');
 });
 
 test('delivery method comes from the Delivery plan section, defaulting to PR', () => {
@@ -205,7 +237,7 @@ test('launchIssue (real preflight): a Ready issue with none of the retired appro
   assert.equal(launches.length, 1);
 });
 
-test('launchIssue (real preflight): the blocking-label and risky-scope checks still stop a delivery', async () => {
+test('launchIssue (real preflight): the blocking-label check still stops a delivery', async () => {
   const launches = [];
   const blocked = { number: 7, title: 't', body: 'b', labels: [{ name: 'blocked' }] };
   await assert.rejects(
@@ -337,7 +369,7 @@ test('runner: one failing issue does not stop the board, and two Ready issues re
   }
 });
 
-test('launch prompt carries the delivery method; PR adds nothing', async () => {
+test('launch prompt carries the delivery method; PR names babysit drivers', async () => {
   const prompts = [];
   const deps = {
     safety: { preflightIssue: () => ({ ok: true }) },
@@ -366,7 +398,7 @@ test('launch prompt carries the delivery method; PR adds nothing', async () => {
       deps,
     });
   }
-  assert.equal(prompts[0], '');
+  assert.match(prompts[0], /babysit-plus/);
   assert.match(prompts[1], /light-plan\/SKILL\.md/);
   assert.match(prompts[2], /execute-plan\/SKILL\.md/);
 });

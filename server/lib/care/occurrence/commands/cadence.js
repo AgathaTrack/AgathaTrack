@@ -40,7 +40,7 @@ export async function adjustCadenceCommand(ctx, {
     : entry.recurrence_anchor;
 
   const updated = await db.query(
-    `UPDATE health_entries SET frequency = $1, frequency_interval = $2, frequency_days = $3,
+    `UPDATE care_items SET frequency = $1, frequency_interval = $2, frequency_days = $3,
        recurrence_anchor = $4, updated_at = NOW()
      WHERE id = $5 RETURNING *`,
     [

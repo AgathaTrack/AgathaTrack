@@ -13,7 +13,7 @@ import {
 export function registerDocumentsRoutes(router, pool) {
   async function canManageHealthDocuments(pool, entryId, userId) {
     const row = await pool.query(
-      'SELECT pet_id FROM health_entries WHERE id = $1 LIMIT 1',
+      'SELECT pet_id FROM care_items WHERE id = $1 LIMIT 1',
       [entryId],
     );
     const petId = row.rows[0]?.pet_id;
@@ -59,7 +59,7 @@ export function registerDocumentsRoutes(router, pool) {
         return res.status(404).json({ error: 'Entry not found' });
       }
       const entryRow = await pool.query(
-        'SELECT pet_id FROM health_entries WHERE id = $1',
+        'SELECT pet_id FROM care_items WHERE id = $1',
         [req.params.id],
       );
       const body = req.body || {};
@@ -67,7 +67,7 @@ export function registerDocumentsRoutes(router, pool) {
         body.health_occurrence_id || body.healthOccurrenceId || null;
       if (occurrenceId) {
         const occ = await pool.query(
-          `SELECT id FROM health_occurrences
+          `SELECT id FROM care_occurrences
            WHERE id = $1 AND health_entry_id = $2`,
           [occurrenceId, req.params.id],
         );

@@ -70,6 +70,7 @@
       120
     ],
     "stalledInactivityHours": 24,
+    "babysitFallbackHours": 4,
     "noConvergenceVotes": 6,
     "followUpMaxDepth": 2
   },

@@ -2,10 +2,9 @@ import express from 'express';
 import { createApiLimiter } from '../config/rateLimit.js';
 import { publicError } from '../config/security.js';
 import { extractUserId } from '../lib/requireAuth.js';
-import {
-  buildNotificationDeepLink,
-  checkDueNotifications,
-} from '../lib/checkDueNotifications.js';
+import { checkDueNotifications } from '../lib/checkDueNotifications.js';
+import { buildNotificationDeepLink } from '../lib/notifications/deepLink.js';
+import { enrichNotificationsWithOccurrenceId } from '../lib/notifications/occurrenceDeepLink.js';
 import { careClockFromRequest } from '../lib/care/occurrence/careAsOf.js';
 import {
   normaliseKind,
@@ -30,13 +29,15 @@ import {
 export function notificationToMap(row) {
   const petId = row.pet_id || null;
   const healthEntryId = row.health_entry_id || null;
+  const healthOccurrenceId = row.health_occurrence_id || null;
   return {
     id: row.id,
     user_id: row.user_id,
     pet_id: petId,
     pet_name: row.pet_name || null,
     health_entry_id: healthEntryId,
-    deep_link: buildNotificationDeepLink(petId, healthEntryId),
+    health_occurrence_id: healthOccurrenceId,
+    deep_link: buildNotificationDeepLink(petId, healthEntryId, healthOccurrenceId),
     organization_id: row.organization_id || null,
     title: row.title || '',
     message: row.message || '',
@@ -79,7 +80,8 @@ export default function notificationsRoutes(pool) {
         `SELECT * FROM notifications WHERE user_id = $1 AND ${NOTIFICATION_INBOX_ACTIVE_WHERE}${petFilter} ORDER BY created_at DESC`,
         params,
       );
-      res.json(result.rows.map(notificationToMap));
+      const enriched = await enrichNotificationsWithOccurrenceId(pool, result.rows);
+      res.json(enriched.map(notificationToMap));
     } catch (err) {
       res.status(500).json({ error: publicError(err) });
     }
@@ -102,7 +104,8 @@ export default function notificationsRoutes(pool) {
          ORDER BY created_at DESC`,
         params,
       );
-      res.json(result.rows.map(notificationToMap));
+      const enriched = await enrichNotificationsWithOccurrenceId(pool, result.rows);
+      res.json(enriched.map(notificationToMap));
     } catch (err) {
       res.status(500).json({ error: publicError(err) });
     }

@@ -136,7 +136,7 @@ describe('vet visit completion (AC-FB-02)', () => {
       });
       if (access) return access;
 
-      if (sql.includes('UPDATE health_occurrences')) {
+      if (sql.includes('UPDATE care_occurrences')) {
         occurrenceUpdates.push({ sql, params });
         return { rows: [] };
       }

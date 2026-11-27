@@ -61,7 +61,7 @@ describe('petDataLifecycle', () => {
       expect(result.files_scheduled).toBe(1);
       expect(result.files_removed).toBe(1);
       expect(result.file_cleanup).toBe('scheduled');
-      expect(deletedTables.some((s) => s.includes('health_entries'))).toBe(true);
+      expect(deletedTables.some((s) => s.includes('care_items'))).toBe(true);
       expect(deletedTables.some((s) => s.includes('weight_entries'))).toBe(true);
       expect(fs.existsSync(path.join(process.env.PRIVATE_HEALTH_UPLOAD_DIR, `${fileId}.png`))).toBe(true);
 

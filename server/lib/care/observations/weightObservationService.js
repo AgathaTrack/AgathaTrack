@@ -154,7 +154,7 @@ export async function updateWeight(pool, params) {
 
   if (linkedOccurrenceId && dateVal !== previousDate) {
     const careLink = await pool.query(
-      'SELECT health_entry_id FROM health_occurrences WHERE id = $1',
+      'SELECT health_entry_id FROM care_occurrences WHERE id = $1',
       [linkedOccurrenceId],
     );
     const careEntryId = careLink.rows[0]?.health_entry_id;
@@ -222,7 +222,7 @@ export async function deleteWeight(pool, params) {
   const deleteWeightFn = (db) => deleteWeightEntryById(db, params.entryId);
   const linked = existing.health_occurrence_id
     ? await pool.query(
-      'SELECT health_entry_id FROM health_occurrences WHERE id = $1',
+      'SELECT health_entry_id FROM care_occurrences WHERE id = $1',
       [existing.health_occurrence_id],
     )
     : { rows: [] };
@@ -413,7 +413,7 @@ export async function completeWeightOccurrence(pool, {
   if (existingWeight) {
     if (weightPayloadsSemanticallyEqual(existingWeight, payload)) {
       const refreshedEntry = await pool.query(
-        'SELECT next_due_date FROM health_entries WHERE id = $1',
+        'SELECT next_due_date FROM care_items WHERE id = $1',
         [entryId],
       );
       runPostCommitWeightCompletionSideEffects(pool, {
@@ -507,7 +507,7 @@ export async function completeWeightOccurrence(pool, {
       const linked = await findWeightEntryByOccurrenceId(pool, occurrenceId);
       if (linked && weightPayloadsSemanticallyEqual(linked, payload)) {
         const refreshedEntry = await pool.query(
-          'SELECT next_due_date FROM health_entries WHERE id = $1',
+          'SELECT next_due_date FROM care_items WHERE id = $1',
           [entryId],
         );
         const idempotentResponse = {

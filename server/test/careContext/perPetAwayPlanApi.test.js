@@ -67,7 +67,7 @@ describe('per-pet away plan read API (phase 1)', () => {
     if (sql.includes('home_timezone FROM pets')) {
       return { rows: [{ home_timezone: 'Europe/Paris' }] };
     }
-    if (sql.includes('FROM health_entries')) {
+    if (sql.includes('FROM care_items')) {
       return { rows: [] };
     }
     if (sql.includes('health_entry_occurrences')) {

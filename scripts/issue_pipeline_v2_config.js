@@ -15,6 +15,7 @@ const LIMIT_KEYS = [
   'reviewTimeoutMin',
   'ackWindowMin',
   'stalledInactivityHours',
+  'babysitFallbackHours',
   'noConvergenceVotes',
   'followUpMaxDepth',
 ];

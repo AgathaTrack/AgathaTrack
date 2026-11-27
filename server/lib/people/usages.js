@@ -53,7 +53,7 @@ export async function listUsages(pool, contactId) {
 
   const careProviders = await pool.query(
     `SELECT he.id, he.pet_id, he.name
-     FROM health_entries he
+     FROM care_items he
      WHERE he.provider_contact_id = $1`,
     [contactId],
   );

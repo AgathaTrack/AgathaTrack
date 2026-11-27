@@ -45,7 +45,7 @@ export async function loadEstablishmentsForPet(pool, petId) {
 export async function loadWeightEstablishmentFacts(pool, petId, healthEntryId) {
   const entryResult = await pool.query(
     `SELECT id, pet_id, care_family, status, frequency, frequency_interval, frequency_days
-     FROM health_entries
+     FROM care_items
      WHERE id = $1 AND pet_id = $2`,
     [healthEntryId, petId],
   );
@@ -67,7 +67,7 @@ export async function loadWeightEstablishmentFacts(pool, petId, healthEntryId) {
     const occResult = await pool.query(
       `SELECT ho.id, ho.status, ho.completed_on, ho.scheduled_date,
               we.id AS weight_id, we.date, we.weight, we.unit, we.measurement_source
-       FROM health_occurrences ho
+       FROM care_occurrences ho
        LEFT JOIN weight_entries we ON we.health_occurrence_id = ho.id
        WHERE ho.health_entry_id = $1
        ORDER BY COALESCE(ho.completed_on, ho.scheduled_date)`,
@@ -194,7 +194,7 @@ export async function reEvaluateWeightEstablishments(pool, petId, healthEntryId)
   const entryIds = healthEntryId
     ? [healthEntryId]
     : (await pool.query(
-      `SELECT id FROM health_entries
+      `SELECT id FROM care_items
        WHERE pet_id = $1 AND care_family = 'weight_monitoring'`,
       [petId],
     )).rows.map((row) => row.id);
