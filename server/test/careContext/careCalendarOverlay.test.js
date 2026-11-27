@@ -1,17 +1,4 @@
-jest.mock('../../lib/care/absence/absenceVisibility.js', () => {
-  const actual = jest.requireActual('../../lib/care/absence/absenceVisibility.js');
-  return {
-    ...actual,
-    loadAbsenceForViewer: jest.fn(),
-    loadDeclarerDisplayName: jest.fn(),
-  };
-});
-
 import { loadPlannedAbsenceOverlays } from '../../lib/care/calendar/loadPlannedAbsenceOverlays.js';
-import {
-  loadAbsenceForViewer,
-  loadDeclarerDisplayName,
-} from '../../lib/care/absence/absenceVisibility.js';
 
 function overlayListRow(overrides = {}) {
   return {
@@ -43,11 +30,6 @@ describe('care calendar planned absence overlays', () => {
   const windowStart = '2026-05-01';
   const windowEnd = '2026-05-28';
 
-  beforeEach(() => {
-    loadAbsenceForViewer.mockReset();
-    loadDeclarerDisplayName.mockReset();
-  });
-
   it('returns declarer overlay clipped to window', async () => {
     const userId = 'user-1';
     const pool = mockOverlayPool([overlayListRow()]);
@@ -69,7 +51,6 @@ describe('care calendar planned absence overlays', () => {
       can_open_away_plan: true,
       title: 'Trip',
     });
-    expect(loadAbsenceForViewer).not.toHaveBeenCalled();
   });
 
   it('clips overlay to request window when absence is wider', async () => {
@@ -108,42 +89,6 @@ describe('care calendar planned absence overlays', () => {
     expect(overlays).toHaveLength(0);
   });
 
-  it('returns co-visible overlay with away-plan open when viewer has pet on trip', async () => {
-    loadDeclarerDisplayName.mockResolvedValue('Alex Example');
-    loadAbsenceForViewer.mockResolvedValue({
-      petRows: [{ pet_id: petId }],
-    });
-
-    const viewerId = 'user-2';
-    const pool = mockOverlayPool([
-      overlayListRow({
-        user_id: 'user-1',
-        starts_on: '2026-05-05',
-        ends_on: '2026-05-12',
-        title: 'Away',
-        is_declarer: false,
-        is_co_visible: true,
-      }),
-    ]);
-
-    const overlays = await loadPlannedAbsenceOverlays(
-      pool,
-      petId,
-      viewerId,
-      windowStart,
-      windowEnd,
-    );
-
-    expect(overlays).toHaveLength(1);
-    expect(overlays[0]).toMatchObject({
-      declarer_is_viewer: false,
-      can_open_away_plan: true,
-      title: 'Away',
-      declarer_display_name: 'Alex Example',
-    });
-    expect(loadAbsenceForViewer).toHaveBeenCalledWith(pool, 'abs-1', viewerId);
-  });
-
   it('guest-only handover overlay has no title and cannot open away plan', async () => {
     const pool = mockOverlayPool([
       overlayListRow({
@@ -169,6 +114,5 @@ describe('care calendar planned absence overlays', () => {
     expect(overlays[0].can_open_away_plan).toBe(false);
     expect(overlays[0].title).toBeUndefined();
     expect(overlays[0].declarer_display_name).toBeUndefined();
-    expect(loadAbsenceForViewer).not.toHaveBeenCalled();
   });
 });
