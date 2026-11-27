@@ -138,6 +138,55 @@ test('guards: a Blocked issue only wakes on a human comment and is never cleared
   assert.equal(rowOf({ blocked: 'question', humanCommentSinceBlock: true, humanCommentId: 8, wokenFor: [7] }).type, 'wake-stage-agent');
 });
 
+test('blocked wake: queued retries ring-doorbell before wake marker', () => {
+  const queued = decide(
+    facts({
+      blocked: 'question',
+      labels: ['queued'],
+      humanCommentSinceBlock: true,
+      humanCommentId: 7,
+      humanCommentAt: NOW - 5 * MIN,
+      assignees: ['pawpet-claude'],
+      spec: { assignedTo: 'claude-a' },
+    }),
+    config,
+  );
+  assert.deepEqual([queued.type, queued.agent, queued.row], ['ring-doorbell', 'claude-a', 'blocked.runner-queued']);
+});
+
+test('blocked wake: queued with busy waits', () => {
+  const busy = decide(
+    facts({
+      blocked: 'question',
+      labels: ['queued', 'busy'],
+      humanCommentSinceBlock: true,
+      humanCommentId: 7,
+      humanCommentAt: NOW - 5 * MIN,
+      assignees: ['pawpet-claude'],
+      spec: { assignedTo: 'claude-a' },
+    }),
+    config,
+  );
+  assert.equal(busy.reason, 'blocked.waiting-busy');
+});
+
+test('blocked wake: queued past pickup falls through to wake-stage-agent', () => {
+  const late = decide(
+    facts({
+      blocked: 'question',
+      labels: ['queued'],
+      humanCommentSinceBlock: true,
+      humanCommentId: 7,
+      humanCommentAt: NOW - 31 * MIN,
+      assignees: ['pawpet-claude'],
+      spec: { assignedTo: 'claude-a' },
+    }),
+    config,
+  );
+  assert.equal(late.type, 'wake-stage-agent');
+  assert.equal(late.agent, 'cursor-a');
+});
+
 test('empty Stage reads as Backlog; follow-ups get To do within depth 2, Backlog beyond', () => {
   assert.equal(rowOf({ stage: '' }).reason, 'stage-backlog');
   assert.equal(rowOf({ stage: '', followUp: { depth: 1 } }).to, 'To do');

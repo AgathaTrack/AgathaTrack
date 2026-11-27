@@ -289,15 +289,22 @@ async function applyAction({ action: decided, ctx }) {
         }
         break;
       case 'ring-doorbell': {
+        const blockedQueued = action.row === 'blocked.runner-queued';
         const inReview = action.stage === 'In analysis';
         const current = inReview ? currentRound(reviewsSoFar) : { round: 'R1', tier: 'a' };
-        await ring(action.agent, action.stage, {
-          round: current?.round ?? null,
-          tier: current?.tier ?? null,
-          attempt: ((inReview ? ctx.facts.review?.timedOut : ctx.facts.spec?.timedOut)?.length ?? 0) + 1,
-          hash: inReview ? ctx.facts.review?.requestedHash : ctx.facts.bodyHash,
-          author: inReview ? authorLabel(ctx.facts.review?.requestedHash) : 'none',
-        });
+        await ring(
+          action.agent,
+          action.stage,
+          blockedQueued
+            ? null
+            : {
+                round: current?.round ?? null,
+                tier: current?.tier ?? null,
+                attempt: ((inReview ? ctx.facts.review?.timedOut : ctx.facts.spec?.timedOut)?.length ?? 0) + 1,
+                hash: inReview ? ctx.facts.review?.requestedHash : ctx.facts.bodyHash,
+                author: inReview ? authorLabel(ctx.facts.review?.requestedHash) : 'none',
+              },
+        );
         break;
       }
       case 'launch': {

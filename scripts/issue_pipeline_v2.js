@@ -64,6 +64,7 @@ function buildBaseFacts({ issue, parsed, onBoard, wip, now, runMode, mission }) 
     bodyHash: bodySha(issue.body),
     wip,
     mission: mission || 'board',
+    assignees: (issue.assignees || []).map((a) => a.login),
   };
   if (parsed.acceptance !== undefined) facts.acceptance = parsed.acceptance;
   if (parsed.acceptanceFailReason !== undefined) facts.acceptanceFailReason = parsed.acceptanceFailReason;
@@ -190,6 +191,8 @@ async function buildCommentFacts({ owner, repo, entry, config, token, io, runMod
     const human = latestHumanComment(allComments, config);
     holdFacts.humanCommentSinceBlock = Boolean(human);
     holdFacts.humanCommentId = human ? human.id : null;
+    // Pickup window for a blocked wake: when the engine first saw this qualifying human comment (no timeline fetch).
+    holdFacts.humanCommentAt = human ? Date.parse(human.created_at) : null;
     holdFacts.wokenFor = wokenCommentIds(allComments, config.engine.logins);
     // Owner holds decide nothing: spend no more calls. Every other hold gets full stage facts, so an
     // engine hold can be re-evaluated and a wake can ring the current holder.
