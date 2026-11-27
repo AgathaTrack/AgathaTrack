@@ -53,7 +53,7 @@ direct call from a sandbox gets `401 Bad credentials`. A script that an agent ru
 must call `reexecWithEnvProxy()` from `scripts/lib/env_proxy_reexec.js` **only when** `require.main === module`, and **before**
 any module that calls GitHub with `fetch` is loaded.
 
-Regression: `node --test scripts/lib/env_proxy_agent_clis.test.js` asserts the guard on every **agent-invoked** CLI below.
+Regression: `./scripts/pre-push-changed.sh` runs `node --test scripts/lib/env_proxy_agent_clis.test.js`, which follows transitive `require` chains (not only literal `github-project-lib` imports in the CLI file) and asserts the guard on every **agent-invoked** CLI below.
 The list lives in `scripts/lib/env_proxy_agent_clis.js` (also referenced by that test).
 
 | Script | GitHub access | Runner | Proxy status |
