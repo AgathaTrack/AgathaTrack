@@ -47,4 +47,48 @@ void main() {
       );
     });
   });
+
+  group('shouldPromptPlannedVetCompletion', () {
+    test('returns true for planned vet entry without health issue', () {
+      expect(
+        shouldPromptPlannedVetCompletion(
+          careSetting: CareSetting.vet,
+          carePlanning: CarePlanningMode.planned,
+          healthIssueId: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('returns false when health issue already linked', () {
+      expect(
+        shouldPromptPlannedVetCompletion(
+          careSetting: CareSetting.vet,
+          carePlanning: CarePlanningMode.planned,
+          healthIssueId: 'issue-1',
+        ),
+        isFalse,
+      );
+    });
+
+    test('returns false for unplanned vet entry', () {
+      expect(
+        shouldPromptPlannedVetCompletion(
+          careSetting: CareSetting.vet,
+          carePlanning: CarePlanningMode.unplanned,
+        ),
+        isFalse,
+      );
+    });
+
+    test('returns false for home setting', () {
+      expect(
+        shouldPromptPlannedVetCompletion(
+          careSetting: CareSetting.home,
+          carePlanning: CarePlanningMode.planned,
+        ),
+        isFalse,
+      );
+    });
+  });
 }

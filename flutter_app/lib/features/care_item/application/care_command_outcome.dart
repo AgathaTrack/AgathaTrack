@@ -73,6 +73,9 @@ class CareCommandResult {
     this.resolvedGiven = const [],
     this.resolvedNotGiven = const [],
     this.ignoredIds = const [],
+    this.careSettingWire,
+    this.carePlanningWire,
+    this.healthIssueId,
   });
 
   final String entryId;
@@ -88,6 +91,12 @@ class CareCommandResult {
   final List<String> ignoredIds;
 
   int get stackChangedCount => resolvedGiven.length + resolvedNotGiven.length;
+
+  /// Taxonomy on the entry when the completion response includes `entry`
+  /// (§10.2 planned vet prompt eligibility).
+  final String? careSettingWire;
+  final String? carePlanningWire;
+  final String? healthIssueId;
 
   /// The care item after the command, when the route returns it (the weight
   /// route does not; reload the item then).

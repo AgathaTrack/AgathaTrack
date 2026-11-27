@@ -65,3 +65,4 @@ export 'domain/services/care_family/care_family_write.dart';
 export 'domain/services/care_family/care_entry_filter.dart';
 export 'presentation/controllers/health_issues_controller.dart';
 export 'presentation/controllers/health_events_controller.dart';
+export 'presentation/widgets/health_issue_prompt/care_completion_vet_prompt_hook.dart';

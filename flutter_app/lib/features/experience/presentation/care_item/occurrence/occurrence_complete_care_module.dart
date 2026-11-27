@@ -6,6 +6,7 @@ import 'package:pet_profile_app/core/utils/calendar_date_picker.dart';
 import 'package:pet_profile_app/core/weight/weight_unit.dart';
 import 'package:pet_profile_app/core/weight/weight_unit_preference.dart';
 import 'package:pet_profile_app/features/care_item/care_item.dart';
+import 'package:pet_profile_app/features/health_tracking/health_tracking.dart';
 import 'package:pet_profile_app/features/pet_care/pet_care.dart';
 import 'package:pet_profile_app/l10n/app_localizations.dart';
 
@@ -182,6 +183,8 @@ class _OccurrenceCompleteCareModuleState
           onOccurrenceScreen: true,
           inputs: _inputs,
           completedOn: _date,
+          ref: ref,
+          vetPromptAfterDone: careCompletionPlannedVetPromptAfterDone,
         ),
   );
 

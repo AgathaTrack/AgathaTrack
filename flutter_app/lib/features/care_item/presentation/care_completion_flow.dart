@@ -22,6 +22,18 @@ import 'sheets/early_completion_dialog.dart';
 /// Reports what a command changed so the caller refreshes its data.
 typedef CareChanged = Future<void> Function();
 
+/// Optional post-success hook (e.g. taxonomy §10.2 vet prompt) from a layer
+/// that may import health_tracking.
+typedef CareDoneVetPromptHook = Future<void> Function(
+  BuildContext context,
+  WidgetRef ref,
+  CareItemSchedule schedule,
+  CareCommandResult result, {
+  String? careSettingWire,
+  String? carePlanningWire,
+  String? healthIssueId,
+});
+
 /// The only entry point for Done (§18.8). Applies [decideDone], opens at most
 /// one modal (SH-1), sends one request, and shows the server-confirmed
 /// result with Undo (UIR-2). Nothing changes on screen before the server
@@ -53,6 +65,11 @@ class CareCompletionFlow {
     required CareItemSchedule schedule,
     required CareChanged onChanged,
     required CareCommandSource source,
+    WidgetRef? ref,
+    CareDoneVetPromptHook? vetPromptAfterDone,
+    String? careSettingWire,
+    String? carePlanningWire,
+    String? healthIssueId,
     OpenOccurrence? occurrence,
     bool onOccurrenceScreen = false,
     CompletionInputs inputs = const CompletionInputs(),
@@ -157,6 +174,17 @@ class CareCompletionFlow {
           source: source,
           changeDateOccurrenceId: offerChangeDate ? target.id : null,
         );
+        if (ref != null && vetPromptAfterDone != null && context.mounted) {
+          await vetPromptAfterDone(
+            context,
+            ref,
+            schedule,
+            value,
+            careSettingWire: careSettingWire,
+            carePlanningWire: carePlanningWire,
+            healthIssueId: healthIssueId,
+          );
+        }
       case CareFailed(:final failure):
         _track('care_done_failed', {
           ...props,
@@ -170,6 +198,11 @@ class CareCompletionFlow {
             schedule: schedule,
             onChanged: onChanged,
             source: source,
+            ref: ref,
+            vetPromptAfterDone: vetPromptAfterDone,
+            careSettingWire: careSettingWire,
+            carePlanningWire: carePlanningWire,
+            healthIssueId: healthIssueId,
             occurrence: target,
             onOccurrenceScreen: true,
             inputs: inputs,

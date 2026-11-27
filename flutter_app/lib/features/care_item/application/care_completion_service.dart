@@ -294,6 +294,15 @@ class CareCompletionService {
       schedule: entry is Map<String, dynamic> && entry['as_of'] is Map
           ? careItemScheduleFromJson(entry)
           : null,
+      careSettingWire: entry is Map<String, dynamic>
+          ? entry['care_setting'] as String?
+          : null,
+      carePlanningWire: entry is Map<String, dynamic>
+          ? entry['care_planning'] as String?
+          : null,
+      healthIssueId: entry is Map<String, dynamic>
+          ? entry['health_issue_id'] as String?
+          : null,
       undoToken: body['undo_token'] as String?,
       nextChoiceApplied: body['next_choice_applied'] as String?,
       nextDueDate: parseCalendarDate(body['next_due_date']),

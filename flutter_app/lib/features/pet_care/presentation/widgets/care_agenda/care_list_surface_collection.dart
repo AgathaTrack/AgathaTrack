@@ -117,6 +117,11 @@ class _CareListSurfaceCollectionState
           schedule: schedule,
           onChanged: _refreshAfterCareCommand,
           source: widget.source,
+          ref: ref,
+          vetPromptAfterDone: careCompletionPlannedVetPromptAfterDone,
+          careSettingWire: entry.careSetting?.name,
+          carePlanningWire: entry.carePlanning?.name,
+          healthIssueId: entry.healthIssueId,
         );
   }
 

@@ -2018,6 +2018,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get vetHealthIssuePromptNotRelated => 'Not related';
 
   @override
+  String get vetPlannedCompletionHealthIssuePromptTitle =>
+      'Did the vet identify anything new to track?';
+
+  @override
+  String get vetHealthIssuePromptNo => 'No';
+
+  @override
+  String get vetHealthIssuePlanNextVisit => 'Plan the next visit';
+
+  @override
   String get healthIssueQuickPickInjury => 'Injury or illness';
 
   @override

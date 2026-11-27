@@ -104,6 +104,7 @@ class _CareAgendaCollectionState extends ConsumerState<CareAgendaCollection> {
   }
 
   Future<void> _done(CareAgendaRow<HealthEntry> row) {
+    final entry = row.item;
     return ref
         .read(careCompletionFlowProvider)
         .done(
@@ -111,6 +112,11 @@ class _CareAgendaCollectionState extends ConsumerState<CareAgendaCollection> {
           schedule: row.schedule,
           onChanged: _refreshAfterCareCommand,
           source: widget.source,
+          ref: ref,
+          vetPromptAfterDone: careCompletionPlannedVetPromptAfterDone,
+          careSettingWire: entry.careSetting?.name,
+          carePlanningWire: entry.carePlanning?.name,
+          healthIssueId: entry.healthIssueId,
         );
   }
 
