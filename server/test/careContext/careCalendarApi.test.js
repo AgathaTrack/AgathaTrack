@@ -52,6 +52,8 @@ describe('care calendar API', () => {
   });
 
   it('GET returns calendar payload for viewable pet', async () => {
+    const requestStartsOn = todayCalendarIso();
+    const requestEndsOn = addCalendarDaysIso(requestStartsOn, 27);
     const app = createTestApp(async (sql) => {
       if (sql.includes('FROM pets WHERE id')) {
         return { rows: [{ id: petId, user_id: userId, home_timezone: 'UTC' }] };
@@ -72,7 +74,7 @@ describe('care calendar API', () => {
             frequency: 'monthly',
             frequency_interval: 1,
             recurrence_anchor: 'from_due_date',
-            next_due_date: startsOn,
+            next_due_date: requestStartsOn,
             status: 'active',
             schedule_times: null,
             care_family: 'medication',
@@ -86,20 +88,18 @@ describe('care calendar API', () => {
     });
 
     const res = await request(app)
-      .get(`/api/pets/${petId}/care-calendar?starts_on=${startsOn}&ends_on=${endsOn}`)
+      .get(`/api/pets/${petId}/care-calendar?starts_on=${requestStartsOn}&ends_on=${requestEndsOn}`)
       .set(authHeader());
 
     expect(res.statusCode).toBe(200);
     expect(res.body.pet_id).toBe(petId);
-    expect(res.body.starts_on).toBe(startsOn);
-    expect(res.body.ends_on).toBe(endsOn);
+    expect(res.body.starts_on).toBe(requestStartsOn);
+    expect(res.body.ends_on).toBe(requestEndsOn);
     expect(res.body.before_month).toEqual({ items: [] });
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
-    expect(res.body.as_of).toMatchObject({
-      date: todayCalendarIso(),
-      timezone: 'UTC',
-    });
+    expect(res.body.as_of).toMatchObject({ timezone: 'UTC' });
+    expect(res.body.as_of.date).toBe(res.body.starts_on);
   });
 
   it('honours X-Care-As-Of in test env', async () => {
