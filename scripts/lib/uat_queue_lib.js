@@ -29,6 +29,16 @@ function createEmptyState() {
   };
 }
 
+/** True when the ledger snapshot carries operational queue data (not an empty bootstrap). */
+function ledgerHasLiveContent(state) {
+  return Boolean(
+    (state.entries && state.entries.length > 0)
+    || state.main_barrier_sha
+    || state.promote_hold
+    || state.active_watcher,
+  );
+}
+
 function normalizeState(raw) {
   if (!raw || typeof raw !== 'object') {
     return createEmptyState();
@@ -459,6 +469,7 @@ module.exports = {
   applyRemedialFreeze,
   barrierCheck,
   createEmptyState,
+  ledgerHasLiveContent,
   enqueueEntry,
   expectedUatTag,
   findActiveEntry,

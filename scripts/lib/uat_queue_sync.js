@@ -13,6 +13,7 @@ const {
 const {
   UatQueueError,
   createEmptyState,
+  ledgerHasLiveContent,
   normalizeState,
   parseStateFromCommentBody,
   renderStateCommentBody,
@@ -150,10 +151,26 @@ async function commitStateMutation({
       return finishCommit(outcome, fresh, false, attempt, issueNumber);
     }
 
+    // Re-read immediately before save — another writer may have created the marker
+    // after the pre-save check (bootstrap empty init vs concurrent enqueue).
+    const preSave = await loadState(issueNumber, token);
+    if (revisionOf(preSave) !== baseline) {
+      continue;
+    }
+    if (!ledgerHasLiveContent(nextState) && ledgerHasLiveContent(preSave.state)) {
+      return finishCommit(
+        { ...outcome, skipped: true, reason: 'marker_already_live', initialized: false },
+        preSave,
+        false,
+        attempt,
+        issueNumber,
+      );
+    }
+
     // Patch the comment this attempt read. upsertMarkerComment edits the
     // oldest marker, while load reads the newest, so a duplicate pair would
     // never converge.
-    await saveState(issueNumber, nextState, token, fresh.commentId ?? null);
+    await saveState(issueNumber, nextState, token, preSave.commentId ?? null);
     const confirmed = await loadState(issueNumber, token);
     if (fingerprintState(confirmed.state) === fingerprintState(nextState)) {
       return finishCommit(outcome, confirmed, true, attempt, issueNumber);
