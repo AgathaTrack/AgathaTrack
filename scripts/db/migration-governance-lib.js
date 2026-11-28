@@ -111,22 +111,36 @@ export function readPrBaseShaFromGithubEvent() {
   }
 }
 
+function deepenShallowCheckout(cwd) {
+  // PR jobs use shallow checkout; a depth-1 fetch of the base SHA alone is not always
+  // reachable from HEAD for two-dot diffs until history is deepened.
+  const deepen = spawnSync('git', ['fetch', '--deepen', '250', 'origin'], { cwd, encoding: 'utf8' });
+  if (deepen.status !== 0) {
+    const msg = deepen.stderr || deepen.stdout || '';
+    if (!/not a shallow|unshallow/i.test(msg)) {
+      throw new Error(`migration-canonical-freshness: cannot deepen shallow checkout (${msg.trim()})`);
+    }
+  }
+}
+
 export function ensureCommitAvailable(sha, cwd) {
   if (!SHA40.test(String(sha))) {
     throw new Error(`migration-canonical-freshness: expected 40-char commit SHA, got "${sha}"`);
   }
   let verify = spawnSync('git', ['rev-parse', '--verify', sha], { cwd, encoding: 'utf8' });
-  if (verify.status === 0) return sha;
-  const fetch = spawnSync('git', ['fetch', '--depth=1', 'origin', sha], { cwd, encoding: 'utf8' });
-  if (fetch.status !== 0) {
-    throw new Error(
-      `migration-canonical-freshness: cannot fetch PR base commit ${sha} (${fetch.stderr || fetch.stdout || ''})`
-    );
-  }
-  verify = spawnSync('git', ['rev-parse', '--verify', sha], { cwd, encoding: 'utf8' });
   if (verify.status !== 0) {
-    throw new Error(`migration-canonical-freshness: PR base commit ${sha} not available after fetch`);
+    const fetch = spawnSync('git', ['fetch', '--depth=1', 'origin', sha], { cwd, encoding: 'utf8' });
+    if (fetch.status !== 0) {
+      throw new Error(
+        `migration-canonical-freshness: cannot fetch PR base commit ${sha} (${fetch.stderr || fetch.stdout || ''})`
+      );
+    }
+    verify = spawnSync('git', ['rev-parse', '--verify', sha], { cwd, encoding: 'utf8' });
+    if (verify.status !== 0) {
+      throw new Error(`migration-canonical-freshness: PR base commit ${sha} not available after fetch`);
+    }
   }
+  deepenShallowCheckout(cwd);
   return sha;
 }
 
