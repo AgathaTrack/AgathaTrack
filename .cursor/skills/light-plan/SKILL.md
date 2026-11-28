@@ -103,7 +103,7 @@ Merge to `main` alone does **not** jump to **In UAT** — the issue sits in **In
 
 ## Recovery
 
-If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When pipeline v2 launched the run (a `v2:launch` comment on the issue), the engine may issue one `resume` action on a later tick, then `Blocked: stalled` if delivery still does not progress (`github-issue-workflow.md` §Pipeline v2, In progress row). Outside v2, `agent-monitor.yml` still handles terminal Cursor runs while `ISSUE_PIPELINE_V2` is not `on`.
+If the run is cut off (platform limit, crash, or the owner stops it), resume with `continue light-plan #<issue>`. Read the checklist and branch heads first. The agent never ends a turn just to use this. When pipeline v2 launched the run (a `v2:launch` comment on the issue), the engine may issue one `resume` action on a later tick, then `Blocked: stalled` if delivery still does not progress (`github-issue-workflow.md` §Pipeline v2, In progress row). With run D landed, legacy `agent-monitor.yml` is removed; stalled In progress recovery is engine-driven under v2 (`issue-pipeline-v2.yml` tick and `resume` actions). For hand-driven work, clear `busy` and `Blocked` per `github-issue-workflow-behaviour.md`.
 
 ## Stop and ask
 

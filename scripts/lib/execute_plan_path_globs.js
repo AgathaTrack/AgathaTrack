@@ -2,7 +2,7 @@
 
 /**
  * Planned-path gate for execute-plan approve (run D, T1).
- * Moved verbatim from `scripts/lib/pipeline_path_gate.js`. The old module keeps its export until T3.
+ * Moved from `scripts/lib/pipeline_path_gate.js` in run D (T1); `pipeline_path_gate.js` was deleted in T3.
  */
 
 const { isForbiddenPath } = require('../../.github/scripts/agent-safety-lib');
