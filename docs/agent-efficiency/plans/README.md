@@ -16,6 +16,7 @@ tags: [agent-efficiency,plans]
 | — | Superseded issue-pipeline automation plans removed in run D ([#2411](https://github.com/AgathaTrack/AgathaTrack/issues/2411)); see [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385) and [github-issue-workflow.md](../github-issue-workflow.md) |
 | [issue-pipeline-babysit-gap.md](./issue-pipeline-babysit-gap.md) | Proposal — agent-opened pipeline PRs have no babysit driver; policy, prompt, trigger and engine fallback |
 | [issue-pipeline-babysit-gap.md](./issue-pipeline-babysit-gap.md) | Proposal — agent-opened pipeline PRs have no babysit driver; policy, prompt, trigger and engine fallback |
+| [issue-pipeline-babysit-gap.md](./issue-pipeline-babysit-gap.md) | Proposal — agent-opened pipeline PRs have no babysit driver; policy, prompt, trigger and engine fallback |
 
 Index: [../README.md](../README.md) — engines, issue lifecycle split, policies. Execute-plan operating docs: [../execute-plan-runtime.md](../execute-plan-runtime.md) · [../execute-plan-schema.md](../execute-plan-schema.md).
 
