@@ -29,4 +29,4 @@ See pr-review-cost-efficiency.md §Cloud Agent model policy. During active execu
 
 ## Babysit session scope
 
-When the user invoked **`/babysit-plus`**, **`/babysit`**, or **`/babysit-uat`** on the PR (`AGENTS.md` §Autonomy), CI green alone does not complete the task. Subscription or workflow pings while the PR is open mean **continue** the babysit workflow (wait, triage, gate, merge), not end the turn.
+When the user invoked **`/babysit-plus`** or **`/babysit-uat`** on the PR (`AGENTS.md` §Autonomy), CI green alone does not complete the task. Subscription or workflow pings while the PR is open mean **continue** that skill (wait, triage, gate, merge for plus/uat), not end the turn. Lightweight **`/babysit`** stops at merge-ready per its skill unless the user explicitly asks to merge.

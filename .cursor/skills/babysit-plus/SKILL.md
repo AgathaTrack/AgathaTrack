@@ -24,7 +24,7 @@ During `/execute-plan` (v1), use **/babysit-plus** for intermediate phase PRs an
 
 ## Session completion (user invoked babysit+ on this PR)
 
-When the task names **/babysit-plus** (or `/babysit`) on a PR:
+When the task names **/babysit-plus** on a PR (not lightweight `/babysit` — that skill stops at merge-ready unless the user separately asks to merge):
 
 | Done | Not done |
 |------|----------|

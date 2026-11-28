@@ -11,7 +11,7 @@ tags: [agent, engineering, cursor, environment]
 
 Cursor Cloud Agents only. Shared toolchain and commands: [`AGENTS.md`](../../AGENTS.md) §Toolchain.
 
-**Babysit+ on a PR:** When the task invokes `/babysit-plus` (or `/babysit`) on that PR, run the skill through squash merge when gates pass — see `AGENTS.md` §Autonomy (deliver vs babysit) and `.cursor/skills/babysit-plus/SKILL.md` §Session completion. CI or review subscriptions are continue signals, not turn boundaries.
+**Babysit+ on a PR:** When the task invokes `/babysit-plus` on that PR, run the skill through squash merge when gates pass — see `AGENTS.md` §Autonomy (deliver vs babysit) and `.cursor/skills/babysit-plus/SKILL.md` §Session completion. CI or review subscriptions are continue signals, not turn boundaries. Lightweight `/babysit` is merge-ready only unless the user separately asks to merge.
 
 ## Repository URL (org)
 
