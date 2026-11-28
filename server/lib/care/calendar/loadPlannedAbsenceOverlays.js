@@ -5,10 +5,10 @@
 
 import { dateToIsoDate } from '../../calendarDate.js';
 import {
-  loadAbsenceForViewer,
   loadDeclarerDisplayName,
   petProfileAccessSql,
 } from '../absence/absenceVisibility.js';
+import { userCanManageProfile } from '../../petAccess.js';
 import { GUEST_GRANT_ACTIVE } from '../../people/absenceGuestGrants.js';
 import {
   PLANNED_ABSENCE_STATUS_ACTIVE,
@@ -119,10 +119,10 @@ export async function loadPlannedAbsenceOverlays(pool, petId, viewerUserId, star
   );
 
   const overlays = [];
+  const viewerManagesProfile = await userCanManageProfile(pool, petId, viewerUserId);
   for (const row of result.rows) {
-    const viewed = await loadAbsenceForViewer(pool, row.id, viewerUserId);
-    const canOpen =
-      viewed != null && viewed.petRows.some((petRow) => petRow.pet_id === petId);
+    const declarerIsViewer = row.user_id === viewerUserId;
+    const canOpen = declarerIsViewer || viewerManagesProfile;
 
     let declarerDisplayName = null;
     if (row.user_id !== viewerUserId) {

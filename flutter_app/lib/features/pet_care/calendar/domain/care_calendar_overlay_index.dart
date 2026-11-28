@@ -35,7 +35,7 @@ Map<String, List<CareCalendarOverlayRef>> mergeCareCalendarOverlayMaps(
 
 String _nextIsoDay(String iso) {
   final parts = iso.split('-').map(int.parse).toList();
-  final dt = DateTime(parts[0], parts[1], parts[2]);
+  final dt = DateTime.utc(parts[0], parts[1], parts[2]);
   final next = dt.add(const Duration(days: 1));
   final mm = next.month.toString().padLeft(2, '0');
   final dd = next.day.toString().padLeft(2, '0');

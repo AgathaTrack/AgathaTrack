@@ -126,7 +126,7 @@ test.describe('Care calendar @care', () => {
 
   test('Planned absence overlay band', async ({ page, testUser }) => {
     const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
-    const today = '2026-11-25';
+    const today = new Date().toISOString().slice(0, 10);
     await withCareClock(`${today}T10:00`, page);
     try {
       const pet = await createPetApi(baseURL, testUser.accessToken, 'Overlay Pet');

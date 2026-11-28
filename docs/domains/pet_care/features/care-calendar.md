@@ -76,7 +76,9 @@ Wire shape (indicative):
     "ends_on": "YYYY-MM-DD",
     "overlay_starts_on": "YYYY-MM-DD",
     "overlay_ends_on": "YYYY-MM-DD",
-    "declarer_is_viewer": true,
+    "title": "City trip",
+    "declarer_is_viewer": false,
+    "declarer_display_name": "Alex",
     "can_open_away_plan": true
   }]
 }
