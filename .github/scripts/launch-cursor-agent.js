@@ -15,6 +15,10 @@ const {
   buildDispatchComment,
 } = require('./agent-payload-lib');
 const { workerLaunchEnvVars, envVarsForCursorLaunch } = require('./execute-plan-launch');
+const {
+  resolveImplementationLaunchModel,
+  logLaunchModel,
+} = require('../../scripts/lib/cursor_implementation_model');
 
 const CURSOR_API_BASE = 'https://api.cursor.com';
 
@@ -61,9 +65,9 @@ async function launchAgent({ apiKey, repoUrl, promptText, model, envVars, autoCr
     workOnCurrentBranch: false,
   };
 
-  if (model) {
-    body.model = { id: model };
-  }
+  const modelId = resolveImplementationLaunchModel(model);
+  logLaunchModel(modelId, { launcher: 'launch-cursor-agent' });
+  body.model = { id: modelId };
 
   const launchEnv = envVarsForCursorLaunch(envVars ?? botLaunchEnvVars());
   if (launchEnv) {
@@ -139,12 +143,11 @@ async function main() {
     });
   }
 
-  const model = process.env.CURSOR_AGENT_MODEL || undefined;
   const launched = await launchAgent({
     apiKey,
     repoUrl,
     promptText,
-    model,
+    model: process.env.CURSOR_AGENT_MODEL,
   });
 
   const agentId = launched.agent?.id;

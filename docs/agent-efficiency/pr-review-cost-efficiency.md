@@ -90,7 +90,9 @@ Usage data showed thinking models on babysit-scale work burn disproportionate to
 | Deep architecture / ambiguous product trade-offs | Thinking models **only when explicitly needed**; switch back after |
 | `/babysit`, `/babysit-plus`, `/babysit-uat`, triage, CI loop, merge | **`composer-2.5` only** |
 
-Controls: this section (SSOT), `.cursor/rules/pr-hygiene.mdc` pointer, dashboard default, separate cloud agent for babysit-only sessions. During execute-plan gate `0`, model mismatch alone is not a chat stop — autonomous-pr-policy §Execute-plan overrides.
+Controls: this section (SSOT), `.cursor/rules/pr-hygiene.mdc` pointer, **`scripts/lib/cursor_implementation_model.js`** on every automated `POST /v1/agents` (always sends an explicit model id; refuses `*-fast` ids from config or env), structured `cursor_launch_model` log lines, and `scripts/cursor_launch_model_audit.js` (GET agent + run; exit `2` when the API exposes no model field) to compare API metadata with the dashboard. Do not rely on the Cursor workspace default. Separate cloud agent for babysit-only sessions. During execute-plan gate `0`, model mismatch alone is not a chat stop — autonomous-pr-policy §Execute-plan overrides.
+
+Automated **implementation** launches (pipeline v2 `cursor-a`, execute-plan workers, dependabot batch) must not pass `composer-2.5-fast` or other fast-variant ids. Sending `composer-2.5` does not guarantee the dashboard shows the non-fast SKU — if the UI still labels a run “fast” after launch logs show `model: composer-2.5`, treat it as a Cursor platform id/display issue and use the audit script before changing repo policy.
 
 ---
 
@@ -119,6 +121,7 @@ Copilot credits and Actions minutes are separate meters. Levers: batch pushes, i
 | AEC-D-003 | Babysit skills wait for Copilot before triage, re-check reviews after every push and gate merge on `babysit_pr_reviews.js gate` (PR #2017 merged 1 s before Copilot's 3 threads; `collect` also failed under the `repo`-only bot token) | Live |
 | AEC-D-004 | Agent-authored PRs: request Copilot with the owner's token, fall back to a review-only `composer-2.5` Cursor agent when Copilot does not start within 8 min (§Agent-authored PRs). Cursor Bugbot rejected (separate subscription, no review-only fallback trigger) | Live |
 | AEC-D-005 | Claude Code cloud sessions (GraphQL blocked by the session proxy) run the babysit scripts unchanged through `scripts/ccr-bin/gh`. It answers the review-thread query from the CCR `review_threads` route joined to REST review comments; `gh pr view` base/head (sync-base); and merge-preflight snapshot reads (`gh repo view` nameWithOwner, snapshot `gh pr view`, `gh pr list`) from REST. It fails closed when any comment is unaccounted for. Chosen over porting the scripts so the review-gate logic stays single-path (owner, 2026-11-22) | Live |
+| AEC-D-006 | Automated Cursor launches always send an explicit implementation model id via `cursor_implementation_model.js`; fast-variant ids from env or config are refused. Proof-run evidence showed the dashboard could label `composer-2.5` requests as “Composer 2.5 fast”, so enforcement is on the request id and logging — post-launch SKU verification uses `cursor_launch_model_audit.js` | Live |
 
 ---
 

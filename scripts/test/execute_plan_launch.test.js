@@ -79,7 +79,7 @@ test('launch sends envVars in the request body when given, and omits them otherw
   assert.equal('envVars' in bodies[2], false);
 });
 
-test('launch omits model when not provided', async () => {
+test('launch always sends the default implementation model when not provided', async () => {
   let capturedBody;
   const fetchImpl = fakeFetch({
     '/v1/agents': async (_path, options) => {
@@ -103,7 +103,7 @@ test('launch omits model when not provided', async () => {
     fetchImpl,
   });
 
-  assert.equal(capturedBody.model, undefined);
+  assert.deepEqual(capturedBody.model, { id: 'composer-2.5' });
 });
 
 test('launch returns ids from the response', async () => {

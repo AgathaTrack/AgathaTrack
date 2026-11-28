@@ -1,6 +1,7 @@
 'use strict';
 
 const { envVarsForCursorLaunch, workerLaunchEnvVars } = require('../../.github/scripts/execute-plan-launch');
+const { resolveImplementationLaunchModel } = require('../lib/cursor_implementation_model');
 
 const PUBLIC_RUN_ENV = [
   'PIPELINE_AGENT_ID',
@@ -68,7 +69,7 @@ async function launch({
     apiKey,
     repoUrl,
     promptText,
-    model: agent.model || undefined,
+    model: resolveImplementationLaunchModel(agent.model),
     envVars: pipelineRunEnvVars({
       issueNumber: issue.number,
       agentId: agent.id,

@@ -4,7 +4,7 @@ const { buildSafetyConstraints } = require('../../.github/scripts/agent-safety-l
 
 const SKILL_PATH = '.cursor/skills/dependabot-batch/SKILL.md';
 const RUN_AS_ME_SKILL_PATH = '.cursor/skills/run-as-me/SKILL.md';
-const REQUIRED_MODEL = 'composer-2.5';
+const { IMPLEMENTATION_MODEL: REQUIRED_MODEL } = require('./cursor_implementation_model');
 
 /**
  * Structured payload for weekly dependabot-batch Cloud Agent dispatch.

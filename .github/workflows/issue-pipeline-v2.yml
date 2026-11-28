@@ -96,6 +96,7 @@ jobs:
           GH_PROJECT_ID: ${{ secrets.GH_PROJECT_ID }}
           GH_STATUS_FIELD_ID: ${{ secrets.GH_STATUS_FIELD_ID }}
           cursor_api_key: ${{ secrets.cursor_api_key }}
+          CURSOR_AGENT_MODEL: composer-2.5
           EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
           ISSUE_PIPELINE_V2: ${{ vars.ISSUE_PIPELINE_V2 }}
           # Soak scope: when set (e.g. pipeline-beta), `on` writes only to issues with this label.
