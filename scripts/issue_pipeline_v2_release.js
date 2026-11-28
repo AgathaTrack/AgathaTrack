@@ -11,8 +11,11 @@
  */
 
 const { rest } = require('../.github/scripts/github-project-lib');
+const { PullFilesOverflow } = require('./lib/execute_plan_github');
 const { fetchAllPages } = require('./issue_pipeline_v2_comments');
 const { parseLaunchComment } = require('./issue_pipeline_v2_launch');
+
+const PULL_FILES_LIMIT = 3000;
 
 const RESUME = 'v2:resume';
 const REOPENED = 'v2:reopened';
@@ -255,12 +258,52 @@ async function deployContains({ owner, repo, mergeSha, deploySha, token, restFn 
   }
 }
 
+/**
+ * Every changed file of every merged PR linked to the issue (#2514 P3). Fail closed on overflow or API errors.
+ */
+async function loadMergedPrChangedPaths({ owner, repo, prNumbers, token, restFn = rest, listPullFiles }) {
+  if (!prNumbers?.length) {
+    return { changedPaths: [], changedPathsError: 'no-merged-prs' };
+  }
+  const list = listPullFiles || (async (number) => {
+    const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    const files = await fetchAllPages({ path: `${base}/pulls/${number}/files`, token, restFn });
+    if (files.length >= PULL_FILES_LIMIT) {
+      const pull = await restFn('GET', `${base}/pulls/${number}`, token);
+      const total = Math.max(files.length, Number(pull?.changed_files) || 0);
+      if (total > PULL_FILES_LIMIT) {
+        throw new PullFilesOverflow(
+          `PR #${number} changes ${total} files; the API lists at most ${PULL_FILES_LIMIT}`,
+        );
+      }
+    }
+    return files;
+  });
+  try {
+    const paths = new Set();
+    for (const number of prNumbers) {
+      const files = await list(number);
+      for (const file of files) {
+        if (file?.filename) paths.add(file.filename);
+        if (file?.previous_filename) paths.add(file.previous_filename);
+      }
+    }
+    return { changedPaths: [...paths] };
+  } catch (error) {
+    if (error instanceof PullFilesOverflow || error?.name === 'PullFilesOverflow') {
+      return { changedPathsError: 'overflow' };
+    }
+    return { changedPathsError: String(error?.message || error || 'files-api-error') };
+  }
+}
+
 module.exports = {
   RESUME,
   engineStartedRun,
   INTENT_REVIEW,
   linksIssue,
   listLinkedPrs,
+  loadMergedPrChangedPaths,
   dodComplete,
   isDeferredSoakDoDLine,
   deriveDeliveryFacts,

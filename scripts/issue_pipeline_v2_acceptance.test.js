@@ -442,7 +442,7 @@ test('apply: thrown acceptance launch posts failed=1 and a rewind does not ack',
   });
   assert.equal(failed.applied[0], `aat-launch-failed:${AGENT}`);
   assert.equal(failed.applied.some((entry) => entry.startsWith('launch:')), false);
-  assert.match(sent[0].body.body, /v2:aat-launch merge=a{40} failed=1/);
+  assert.match(sent[0].body.body, /v2:aat-launch merge=a{40} failed=1 agent=pawpet-bot/);
   assert.equal(sent.some((call) => call.body?.issue_field_values), false);
   sent.length = 0;
   const rewind = await applyAction({
@@ -458,8 +458,12 @@ test('apply: thrown acceptance launch posts failed=1 and a rewind does not ack',
   });
   assert.equal(started.applied[0], `aat-launch:${AGENT}`);
   const launchComment = sent.find((call) => /v2:aat-launch/.test(call.body?.body || ''));
+  assert.match(launchComment.body.body, /agent=pawpet-bot/);
   const patch = sent.find((call) => call.body?.issue_field_values);
   assert.ok(sent.indexOf(launchComment) < sent.indexOf(patch));
+  const stateMarker = sent.find((call) => /v2:aat-state/.test(call.body?.body || ''));
+  assert.ok(stateMarker, 'acceptance field write posts v2:aat-state');
+  assert.ok(sent.indexOf(stateMarker) < sent.indexOf(patch), 'v2:aat-state is posted before the field PATCH');
 });
 
 test('acceptance launch prompt names the skill, the issue and the sha', async () => {
@@ -500,6 +504,87 @@ test('acceptance launch prompt names the skill, the issue and the sha', async ()
   });
   assert.deepEqual(labels[0], ['busy']);
   assert.equal(launches[0], SHA);
+});
+
+const AUTO_SKIP = {
+  enabled: true,
+  globs: ['docs/**', 'scripts/pipeline_runners/**', '.cursor/skills/**'],
+};
+
+test('auto-skip: eligible paths waive then intent review; prod gate satisfied', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  const autoskip = gate({
+    delivery: {
+      lastMergeSha: SHA,
+      changedPaths: ['docs/agent-efficiency/x.md'],
+      mergedPrNumbers: [1],
+    },
+  }, cfg);
+  assert.equal(autoskip.type, 'aat-waive');
+  assert.equal(autoskip.source, 'paths');
+  assert.equal(autoskip.row, 'aat.autoskip');
+  assert.equal(autoskip.acceptance, 'Skipped');
+  const waived = gate({
+    acceptance: 'Skipped',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped source=paths -->`, 1)],
+    delivery: { lastMergeSha: SHA, changedPaths: ['docs/x.md'] },
+    uatContainsLatestMerge: true,
+    intentReview: { requested: false },
+  }, cfg);
+  assert.equal(waived.type, 'request-intent-review');
+  const { aatSatisfied } = require('./issue_pipeline_v2_acceptance');
+  assert.equal(
+    aatSatisfied({
+      acceptance: 'Skipped',
+      aat: aat([comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped source=paths -->`, 1)]),
+    }, SHA),
+    true,
+  );
+});
+
+test('auto-skip: ineligible merge resets stale paths waive; human Skipped still persists', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  const reset = gate({
+    acceptance: 'Skipped',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA2} acceptance=skipped source=paths -->`, 20)],
+    delivery: {
+      lastMergeSha: SHA,
+      changedPaths: ['server/routes/x.js'],
+      mergedPrNumbers: [2],
+    },
+  }, cfg);
+  assert.equal(reset.type, 'aat-reset');
+  assert.equal(reset.row, 'aat.autoskip-reset');
+  const human = gate({
+    acceptance: 'Skipped',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped -->`, 5)],
+    uatContainsLatestMerge: true,
+    delivery: { lastMergeSha: SHA, changedPaths: ['server/x.js'] },
+  }, cfg);
+  assert.equal(human.to, 'In UAT');
+  assert.notEqual(human.type, 'aat-reset');
+});
+
+test('auto-skip: Acceptance=Passed bypasses paths-waive intent shortcut; acceptance row still runs', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  const action = gate({
+    acceptance: 'Passed',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped source=paths -->`, 1)],
+    delivery: { lastMergeSha: SHA, changedPaths: ['docs/x.md'] },
+  }, cfg);
+  assert.notEqual(action.type, 'request-intent-review');
+});
+
+test('auto-skip: files error and empty paths fail closed to launch', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  assert.equal(
+    gate({ delivery: { lastMergeSha: SHA, changedPathsError: 'overflow' }, comments: [] }, cfg).type,
+    'launch-aat',
+  );
+  assert.equal(
+    gate({ delivery: { lastMergeSha: SHA, changedPaths: [] }, comments: [] }, cfg).type,
+    'launch-aat',
+  );
 });
 
 test('a missing acceptance field logs once and keeps intent review; an empty value does not', async () => {
@@ -622,7 +707,7 @@ test('apply: a failed acceptance launch names the reason and never posts the non
   });
   assert.equal(result.applied[0], 'aat-launch-failed:claude-a');
   const body = sent[0].body.body;
-  assert.match(body, /v2:aat-launch merge=a{40} failed=1/);
+  assert.match(body, /v2:aat-launch merge=a{40} failed=1 agent=claude-a/);
   assert.match(body, /Starting acceptance failed: claude launch refused for \[redacted\]\./);
   assert.ok(nonceSeen && !body.includes(nonceSeen), 'the nonce stays secret until the run verdict');
 });

@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { validateAutoSkipGlobs } = require('./lib/pipeline_path_gate');
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, '..', '.github', 'pipeline-agents.json');
 const KNOWN_METHODS = new Set(['PR', 'light-plan', 'execute-plan']);
@@ -143,6 +144,18 @@ function validateConfig(config) {
   }
   if (!aat || !Number.isFinite(aat.maxInconclusive) || aat.maxInconclusive <= 0) {
     problems.push('aat.maxInconclusive must be a positive number');
+  }
+  const autoSkip = aat?.autoSkip;
+  if (autoSkip !== undefined) {
+    if (!autoSkip || typeof autoSkip !== 'object' || typeof autoSkip.enabled !== 'boolean') {
+      problems.push('aat.autoSkip.enabled must be a boolean when aat.autoSkip is present');
+    }
+    const globs = autoSkip?.globs;
+    if (!Array.isArray(globs) || globs.length === 0 || globs.some((g) => typeof g !== 'string' || !g.trim())) {
+      problems.push('aat.autoSkip.globs must be a non-empty list of strings when aat.autoSkip is present');
+    } else {
+      problems.push(...validateAutoSkipGlobs(globs));
+    }
   }
   const launchRunnerSet = new Set(runners || []);
   const runnerWip = limits.runnerWip;

@@ -4,7 +4,8 @@ const test = require('node:test');
 const { buildLaunchRecord } = require('./issue_pipeline_v2_launch');
 const assert = require('node:assert/strict');
 const { loadConfig, validateConfig } = require('./issue_pipeline_v2_config');
-const { checkDor, parseSections } = require('./issue_pipeline_v2_dor');
+const path = require('path');
+const { checkDor, parseSections, resolveDocsMarkdown } = require('./issue_pipeline_v2_dor');
 const {
   buildSpecRequest,
   parseSpecRequest,
@@ -85,6 +86,36 @@ test('DoR: headings inside code fences are not sections; checkbox text must be n
 test('DoR: a real light-plan style issue body passes (the shape of #2385)', () => {
   const body = TASK + '\n### Delivery plan\n\nMethod: light-plan\n';
   assert.equal(checkDor(body, ['task']).ok, true);
+});
+
+test('DoR: Definition of Done doc paths must exist under docs/ and cannot escape', () => {
+  const withDoc = `${TASK.replace(
+    '- [ ] tests pass',
+    '- [ ] update docs/agent-efficiency/github-labels.md',
+  )}`;
+  assert.equal(checkDor(withDoc, ['task']).ok, true);
+  const missing = checkDor(
+    `${TASK.replace('- [ ] tests pass', '- [ ] cite docs/agent-efficiency/no-such-file.md')}`,
+    ['task'],
+  );
+  assert.equal(missing.ok, false);
+  assert.equal(missing.missing.some((row) => row.reason === 'missing-doc:docs/agent-efficiency/no-such-file.md'), true);
+  const repoRoot = path.join(__dirname, '..');
+  assert.equal(resolveDocsMarkdown(repoRoot, 'docs/../README.md'), null);
+  const escape = checkDor(
+    `${TASK.replace('- [ ] tests pass', '- [ ] cite docs/agent-efficiency/../outside.md')}`,
+    ['task'],
+  );
+  assert.equal(escape.ok, false);
+  assert.equal(
+    escape.missing.some((row) => row.reason === 'missing-doc:docs/agent-efficiency/../outside.md'),
+    true,
+  );
+  const dup = `${TASK.replace(
+    '- [ ] tests pass',
+    '- [ ] a docs/agent-efficiency/github-labels.md\n- [ ] b docs/agent-efficiency/github-labels.md',
+  )}`;
+  assert.equal(checkDor(dup, ['task']).ok, true);
 });
 
 test('spec request: the marker round-trips assignee and history', () => {
