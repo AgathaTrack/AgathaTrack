@@ -8,6 +8,10 @@ const TERMINAL_STATUSES = new Set(['FINISHED', 'ERROR', 'CANCELLED', 'EXPIRED'])
 const RUNNING_STATUSES = new Set(['CREATING', 'RUNNING']);
 
 const BLANKED_LAUNCH_KEYS = Object.freeze(['OWNER_GH_TOKEN', 'BOT_GH_TOKEN']);
+const {
+  resolveImplementationLaunchModel,
+  logLaunchModel,
+} = require('../../scripts/lib/cursor_implementation_model');
 
 /**
  * Cursor launch envVars for plan workers and issue/dispatch agents.
@@ -128,9 +132,9 @@ async function launchPlanAgent({
     workOnCurrentBranch,
   };
 
-  if (model) {
-    body.model = { id: model };
-  }
+  const modelId = resolveImplementationLaunchModel(model);
+  logLaunchModel(modelId, { launcher: 'execute-plan-launch' });
+  body.model = { id: modelId };
   const launchEnv = envVarsForCursorLaunch(envVars);
   if (launchEnv) {
     body.envVars = launchEnv;

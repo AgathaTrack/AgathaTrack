@@ -137,7 +137,7 @@ Optional:
 
 | Variable / secret | Default |
 |-------------------|---------|
-| `CURSOR_AGENT_MODEL` | Cursor default model |
+| `CURSOR_AGENT_MODEL` | Optional override for legacy launch workflows; when unset, launch scripts use the implementation model id from [pr-review-cost-efficiency.md §Cloud Agent model policy](./pr-review-cost-efficiency.md#cloud-agent-model-policy) (never the dashboard default) |
 | `AGENT_ASSIGNEE` | `KanopeeKa` |
 
 #### Cursor API key setup

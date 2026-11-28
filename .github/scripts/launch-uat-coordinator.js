@@ -43,12 +43,11 @@ async function launchUatCoordinator({
     throw new Error('cursor_api_key secret is required to launch UAT coordinator');
   }
 
-  const model = process.env.CURSOR_AGENT_MODEL || undefined;
   const launched = await launchAgent({
     apiKey,
     repoUrl,
     promptText,
-    model,
+    model: process.env.CURSOR_AGENT_MODEL,
   });
 
   const agentId = launched.agent?.id;

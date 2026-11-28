@@ -55,6 +55,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXECUTE_PLAN_BOT_TOKEN: ${{ secrets.EXECUTE_PLAN_BOT_TOKEN }}
           CURSOR_API_KEY: ${{ secrets.cursor_api_key }}
+          CURSOR_AGENT_MODEL: composer-2.5
           EXECUTE_PLAN_DRIVER: ${{ vars.EXECUTE_PLAN_DRIVER }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_PATH: ${{ github.event_path }}
