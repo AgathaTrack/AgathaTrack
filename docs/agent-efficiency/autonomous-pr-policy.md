@@ -134,7 +134,7 @@ Detect when `main` (or the PR base branch) has moved; do **not** rebase the whol
 
 Script: `scripts/babysit_sync_base.sh` — fetches `origin/<base>`, rebases when behind, optional `--push` with `--force-with-lease`. Use `--pr <url>` so the rebase uses the PR's base, not always `main`. A head ref matching `cursor/*-integration-*` is not rebased and is not caught up to `main` because it is behind ([merge-policy](../../.cursor/rules/merge-policy.mdc)).
 
-**Rebase-once-at-merge (babysit+):** During triage and CI fix loops (§0–§5), **`--check` only`** when the base moved — exit `1` (behind) alone is **not** a `--push` trigger. Defer the **authoritative** catch-up rebase to §7 (§Merge coordination, under `merge-lease`).
+**Rebase-once-at-merge (babysit+):** During triage and CI fix loops (§0–§5), run `--check` only when the base moved — exit `1` (behind) alone is **not** a `--push` trigger. Defer the **authoritative** catch-up rebase to §7 (§Merge coordination, under `merge-lease`).
 
 **§0–§5 `--push` exceptions** (still never on `cursor/*-integration-*` heads):
 
