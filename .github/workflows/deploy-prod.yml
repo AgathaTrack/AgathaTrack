@@ -79,7 +79,6 @@ jobs:
             scripts/issue_pipeline_v2_intent.js
             scripts/issue_pipeline_v2_launch.js
             scripts/issue_pipeline_v2_release.js
-            scripts/issue_pipeline_v2_rounds.js
             scripts/issue_pipeline_v2_secrets.js
             scripts/issue_pipeline_v2_verdict.js
             scripts/pipeline_runners/claude.js
