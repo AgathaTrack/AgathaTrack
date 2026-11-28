@@ -70,6 +70,8 @@ Operational workflows for prod export/restore before any destructive reset are t
 | P3 | Destructive reset / truncate refuses when env is missing or `production` (including `server/.env`). | `require-non-prod.sh` on `uat-reset.sh`, `uat-refresh-demo.sh`, and DB-drop equivalence scripts; Node `assertNonProduction` in `seed.js` / `truncate-data.js` |
 | P4 | Regenerating `canonical.sql` is dev/CI tooling — not prod deploy. | `require-non-prod.sh` on `regenerate-canonical.sh`, `bootstrap-legacy-db.sh`; prod deploy audit (same as P2) |
 | P5 | Synthetic seeds never run in production. | Shell guard before `seed.js`; `assertNonProduction` in `seed.js` and `truncate-data.js` |
+| P6 | `code_migrations` in the manifest matches `CODE_MIGRATIONS` in `server/scripts/migrate.js`. | `scripts/db/check-migration-manifest.js` (pre-push, governance CI via schema-equivalence smoke) |
+| P7 | Up-migration SQL changes in a PR include `migration-manifest.json` + `canonical.sql` updates. Data-only SQL may use `-- canonical: no-schema-change` in the file header. | `scripts/db/check-migration-canonical-freshness.js` (pre-push; PR startup smoke via `check-schema-equivalence.sh`) |
 
 **Anti-pattern:** Running `uat-reset`, drop-and-recreate, or `canonical.sql` against a database that holds or held production data without an approved backup and migration plan.
 
@@ -208,7 +210,8 @@ Set an explicit non-production `APP_ENV` (e.g. `development`, `ci`, `uat`) befor
 
 | Command | Postgres? | When |
 |---------|-----------|------|
-| `node scripts/db/check-migration-manifest.js` | No | Every schema PR; governance |
+| `node scripts/db/check-migration-manifest.js` | No | Every schema PR; governance (+ `code_migrations` ↔ `migrate.js`) |
+| `node scripts/db/check-migration-canonical-freshness.js --base-ref <ref>` | No | Pre-push + PR startup smoke (with merge base) |
 | `scripts/db/check-schema-equivalence.sh` | Yes | After schema changes; CI Phase 2 |
 | `scripts/db/regenerate-canonical.sh` | Yes | After new migration committed |
 | `node scripts/migrate.js up` | Yes | **Prod/UAT deploy only** |
@@ -219,11 +222,12 @@ Set an explicit non-production `APP_ENV` (e.g. `development`, `ci`, `uat`) befor
 ### Schema change checklist (every PR)
 
 1. Add forward-only `db/migrations/NNN_*.sql` for production (`migrate.js up` never runs `*_down.sql`; committed `*_down.sql` files are for optional local rollback only).
-2. Register JS hook in `migrate.js` when needed; add name to manifest `code_migrations`.
+2. Register JS hook in `migrate.js` when needed; add name to manifest `code_migrations` (must match `CODE_MIGRATIONS` keys exactly).
 3. Append filename to `db/schema/migration-manifest.json` (sorted).
 4. Run `scripts/db/regenerate-canonical.sh`; commit `db/schema/canonical.sql`.
-5. Run `scripts/db/check-bootstrap-paths-equivalence.sh` and `scripts/db/check-schema-equivalence.sh` when Postgres is available.
-6. Update demo scenarios under `server/db/seeds/scenarios/` only when **uat-demo** data must change.
+5. Data-only migration with no schema impact: add `-- canonical: no-schema-change` as its own header line (see P7); otherwise freshness gate requires manifest + canonical in the same PR.
+6. Run `scripts/db/check-bootstrap-paths-equivalence.sh` and `scripts/db/check-schema-equivalence.sh` when Postgres is available.
+7. Update demo scenarios under `server/db/seeds/scenarios/` only when **uat-demo** data must change.
 
 ---
 

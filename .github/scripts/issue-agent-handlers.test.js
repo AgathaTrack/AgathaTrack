@@ -395,7 +395,11 @@ test('handleProdDeployResult closes In UAT issues when merge is in deploy', asyn
     }),
     compareCommits: async () => ({ status: 'ahead' }),
     setIssueStage: async () => calls.push('stage'),
-    setLabels: async () => calls.push('labels'),
+    setLabels: async (_owner, _repo, _issue, add, remove) => {
+      calls.push('labels');
+      assert.deepEqual(add, []);
+      assert.deepEqual(remove, ['busy']);
+    },
     closeIssue: async () => calls.push('close'),
     upsertMarkerComment: async () => calls.push('comment'),
   };
@@ -439,7 +443,11 @@ test('handleProdDeployResult matches org Stage, not the board Status column', as
     }),
     compareCommits: async () => ({ status: 'ahead' }),
     setIssueStage: async () => calls.push('stage'),
-    setLabels: async () => calls.push('labels'),
+    setLabels: async (_owner, _repo, _issue, add, remove) => {
+      calls.push('labels');
+      assert.deepEqual(add, []);
+      assert.deepEqual(remove, ['busy']);
+    },
     closeIssue: async () => calls.push('close'),
     upsertMarkerComment: async (args) => {
       calls.push('comment');

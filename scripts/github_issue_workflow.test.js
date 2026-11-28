@@ -9,7 +9,6 @@ const os = require('os');
 const path = require('path');
 const { parseFlags, readBody } = require('./lib/github_issue_workflow_lib');
 const {
-  aatLabelPlan,
   buildAatMarker,
   appendAatMarker,
   normalizeAatFailReason,
@@ -36,25 +35,6 @@ test('readBody prefers --body over --body-file', () => {
   assert.equal(body, 'inline');
 });
 
-test('aatLabelPlan clears opposing labels on pass and fail', () => {
-  assert.deepEqual(aatLabelPlan('start'), {
-    add: ['AAT-progress'],
-    remove: ['AAT-passed', 'AAT-failed'],
-  });
-  assert.deepEqual(aatLabelPlan('pass'), {
-    add: ['AAT-passed'],
-    remove: ['AAT-progress', 'AAT-failed'],
-  });
-  assert.deepEqual(aatLabelPlan('fail'), {
-    add: ['AAT-failed'],
-    remove: ['AAT-progress', 'AAT-passed'],
-  });
-  assert.deepEqual(aatLabelPlan('inconclusive'), {
-    add: [],
-    remove: ['AAT-progress', 'AAT-passed', 'AAT-failed'],
-  });
-});
-
 test('buildAatMarker and appendAatMarker', () => {
   const marker = buildAatMarker('pass', SAMPLE_SHA);
   assert.match(marker, /^<!-- v2:aat verdict=pass merge=a{40} -->$/);
@@ -65,6 +45,39 @@ test('buildAatMarker and appendAatMarker', () => {
   assert.throws(() => buildAatMarker('fail', SAMPLE_SHA), /--reason=scope\|implementation\|quality/);
   assert.throws(() => normalizeAatFailReason('inconclusive'), /--reason/);
   assert.throws(() => normalizeAatFailReason(''), /--reason/);
+});
+
+test('aat-start is removed from the CLI', () => {
+  const script = path.join(__dirname, 'github_issue_workflow.js');
+  const result = spawnSync(process.execPath, [script, 'aat-start', '--issue', '1'], { encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+});
+
+test('aatVerdict posts a comment with marker and does not touch labels', async () => {
+  const workflowPath = require.resolve('./github_issue_workflow');
+  const project = require('./lib/execute_plan_project');
+  const posts = [];
+  const original = project.postIssueComment;
+  project.postIssueComment = async (issueNumber, body) => {
+    posts.push({ issueNumber, body });
+    return { ok: true };
+  };
+  delete require.cache[workflowPath];
+  const { aatVerdict } = require('./github_issue_workflow');
+  try {
+    const result = await aatVerdict({
+      issueNumber: 42,
+      verdict: 'pass',
+      flags: { body: 'AAT summary', merge: SAMPLE_SHA },
+    });
+    assert.equal(result.mergeSha, SAMPLE_SHA);
+    assert.equal(posts.length, 1);
+    assert.match(posts[0].body, /AAT summary/);
+    assert.match(posts[0].body, /v2:aat verdict=pass/);
+  } finally {
+    project.postIssueComment = original;
+    delete require.cache[workflowPath];
+  }
 });
 
 test('aat-fail exits non-zero without a known --reason', () => {
@@ -143,29 +156,28 @@ test('editIssueLabels uses REST add and remove', async () => {
   const R = '/repos/o/r';
   const fake = createFakeFetch({
     [`POST ${R}/issues/9/labels`]: { body: [] },
-    [`DELETE ${R}/issues/9/labels/AAT-passed`]: { status: 204, body: null },
-    [`DELETE ${R}/issues/9/labels/AAT-failed`]: { status: 204, body: null },
+    [`DELETE ${R}/issues/9/labels/busy`]: { status: 204, body: null },
+    [`DELETE ${R}/issues/9/labels/queued`]: { status: 204, body: null },
   });
   const client = createGitHubClient({ repo: 'o/r', token: 't', fetchImpl: fake });
-  const plan = aatLabelPlan('start');
-  const result = await editIssueLabels(client, 9, plan);
+  const result = await editIssueLabels(client, 9, { add: ['busy'], remove: ['queued'] });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.added, plan.add);
-  assert.deepEqual(result.removed, plan.remove);
+  assert.deepEqual(result.added, ['busy']);
+  assert.deepEqual(result.removed, ['queued']);
   assert.equal(fake.calls.filter((c) => c.method === 'POST').length, 1);
-  assert.equal(fake.calls.filter((c) => c.method === 'DELETE').length, 2);
+  assert.equal(fake.calls.filter((c) => c.method === 'DELETE').length, 1);
 });
 
 test('ensureRepoLabels calls ensureLabel per spec', async () => {
   const R = '/repos/o/r';
   const fake = createFakeFetch({
-    [`GET ${R}/labels/AAT-progress`]: { status: 404, body: null },
-    [`POST ${R}/labels`]: { body: { name: 'AAT-progress' } },
+    [`GET ${R}/labels/busy`]: { status: 404, body: null },
+    [`POST ${R}/labels`]: { body: { name: 'busy' } },
   });
   const client = createGitHubClient({ repo: 'o/r', token: 't', fetchImpl: fake });
   const result = await ensureRepoLabels(client, [
-    { name: 'AAT-progress', color: 'fbca04', description: 'in progress' },
+    { name: 'busy', color: 'fbca04', description: 'work in progress' },
   ]);
   assert.equal(result.ok, true);
-  assert.deepEqual(result.labels, ['AAT-progress']);
+  assert.deepEqual(result.labels, ['busy']);
 });

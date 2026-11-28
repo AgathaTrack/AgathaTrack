@@ -645,7 +645,7 @@ async function closeIssueAfterProd({
     await api.setIssueStage({ owner, repo, issueNumber, stageName: 'Done', projectsPat });
   }
 
-  await api.setLabels(owner, repo, issueNumber, ['in-prod'], ['busy'], token);
+  await api.setLabels(owner, repo, issueNumber, [], ['busy'], token);
   await api.closeIssue(owner, repo, issueNumber, token);
 
   await api.upsertMarkerComment({

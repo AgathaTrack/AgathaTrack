@@ -447,9 +447,7 @@ async function applyAction({ action: decided, ctx }) {
       }
       case 'set-stage':
         if (action.to === 'Done') {
-          await request('POST', `${base}/labels`, { labels: ['in-prod'] });
           await deleteBusyLabel();
-          applied.push('labels:in-prod');
         } else if (action.to !== 'In progress') {
           // Doorbell work (spec, review) ends on stage advance; delivery keeps `busy` until In progress ack.
           await deleteBusyLabel();
