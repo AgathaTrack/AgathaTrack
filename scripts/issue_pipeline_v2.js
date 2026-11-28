@@ -26,6 +26,7 @@ const {
   deriveDeliveryFacts,
   latestDeploySha,
   listLinkedPrs,
+  loadMergedPrChangedPaths,
   reopenedByEngine,
 } = require('./issue_pipeline_v2_release');
 const { followUpDepth, parseFollowUp } = require('./issue_pipeline_v2_intent');
@@ -148,6 +149,23 @@ async function buildReleaseFacts({ owner, repo, entry, canonical, comments, conf
     Object.assign(facts, await loadImplementationFollowUps({
       owner, repo, issueNumber: entry.number, token, restFn: io.restFn || rest, log: console.log,
     }));
+  }
+  if (
+    canonical === 'In Main' &&
+    config.aat?.autoSkip?.enabled &&
+    facts.delivery?.mergedPrNumbers?.length
+  ) {
+    Object.assign(
+      facts.delivery,
+      await loadMergedPrChangedPaths({
+        owner,
+        repo,
+        prNumbers: facts.delivery.mergedPrNumbers,
+        token,
+        restFn: io.restFn || rest,
+        listPullFiles: io.listPullFiles,
+      }),
+    );
   }
   return facts;
 }

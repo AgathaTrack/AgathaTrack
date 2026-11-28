@@ -10,6 +10,7 @@
  */
 
 const { agentActsAs, launchableAgents, nextInLine, startableIds } = require('./issue_pipeline_v2_config');
+const { autoSkipEligible } = require('./lib/aat_autoskip_eligibility');
 const { launchBackoffMs } = require('./issue_pipeline_v2_holds');
 
 const FAIL_REASONS = new Set(['scope', 'implementation', 'quality']);
@@ -65,7 +66,8 @@ function deriveAatState({ comments, engineLogins, agentLogins }) {
       state.resets.push(item);
     } else if (kind === 'v2:aat-waive') {
       const acceptance = String(attr.acceptance || '').toLowerCase();
-      if (acceptance === 'manual' || acceptance === 'skipped') state.waives.push({ ...item, acceptance });
+      const source = attr.source === 'paths' ? 'paths' : null;
+      if (acceptance === 'manual' || acceptance === 'skipped') state.waives.push({ ...item, acceptance, source });
     } else if (kind === 'v2:aat-relaunch') {
       state.relaunches.push({ ...item, failed: attr.failed === '1' });
     }
@@ -145,8 +147,25 @@ function acceptanceValue(facts) {
   return String(facts.acceptance || '').trim().toLowerCase();
 }
 
-function waiveBinds(state, sha, acceptance) {
-  return state.waives.some((waive) => waive.sha === sha && waive.acceptance === acceptance);
+function waiveBinds(state, sha, acceptance, { source } = {}) {
+  return state.waives.some((waive) => {
+    if (waive.sha !== sha || waive.acceptance !== acceptance) return false;
+    if (source === 'paths') return waive.source === 'paths';
+    if (source === 'human') return waive.source !== 'paths';
+    return true;
+  });
+}
+
+function pathsWaiveBinds(state, sha) {
+  return waiveBinds(state, sha, 'skipped', { source: 'paths' });
+}
+
+function newestPathsWaive(state) {
+  return (state.waives || []).filter((waive) => waive.source === 'paths').sort(byTime).at(-1) || null;
+}
+
+function autoSkipActive(config) {
+  return Boolean(config?.aat?.autoSkip?.enabled);
 }
 
 function pickAgent(candidates, facts) {
@@ -222,6 +241,41 @@ function acceptanceInMain(facts, config) {
   if (!sha) return none('main.no-merge');
   const state = stateOf(facts);
   const value = acceptanceValue(facts);
+
+  if (autoSkipActive(config)) {
+    const pathsWaive = newestPathsWaive(state);
+    if (pathsWaive && pathsWaive.sha !== sha && !autoSkipEligible(facts, config).eligible) {
+      return {
+        type: 'aat-reset',
+        mergeSha: sha,
+        row: 'aat.autoskip-reset',
+        acceptance: 'Pending',
+        acceptanceFailReason: null,
+      };
+    }
+    const skipCheck = autoSkipEligible(facts, config);
+    if (skipCheck.eligible) {
+      if (value === '') {
+        return {
+          type: 'aat-waive',
+          mergeSha: sha,
+          waiveAcceptance: 'skipped',
+          acceptance: 'Skipped',
+          source: 'paths',
+          row: 'aat.autoskip',
+        };
+      }
+      if (value === 'skipped' && !pathsWaiveBinds(state, sha)) {
+        return {
+          type: 'aat-waive',
+          mergeSha: sha,
+          waiveAcceptance: 'skipped',
+          source: 'paths',
+          row: 'aat.autoskip',
+        };
+      }
+    }
+  }
 
   if (value === 'skipped' && !waiveBinds(state, sha, 'skipped')) {
     return { type: 'aat-waive', mergeSha: sha, acceptance: 'skipped', row: 'aat.waive-skipped' };
@@ -389,8 +443,9 @@ function buildAatReset({ mergeSha }) {
   return `<!-- v2:aat-reset merge=${mergeSha} -->\nThe latest merge into \`main\` changed. Acceptance for the previous merge no longer applies.`;
 }
 
-function buildAatWaive({ mergeSha, acceptance }) {
-  return `<!-- v2:aat-waive merge=${mergeSha} acceptance=${acceptance} -->\nAcceptance \`${acceptance}\` is recorded for this merge.`;
+function buildAatWaive({ mergeSha, acceptance, source }) {
+  const src = source === 'paths' ? ' source=paths' : '';
+  return `<!-- v2:aat-waive merge=${mergeSha} acceptance=${acceptance}${src} -->\nAcceptance \`${acceptance}\` is recorded for this merge.`;
 }
 
 function buildAatStateMarker({ acceptance, acceptanceFailReason }) {
@@ -453,6 +508,8 @@ module.exports = {
   aatSatisfied,
   deriveAatState,
   newestActionable,
+  pathsWaiveBinds,
+  waiveBinds,
   acceptanceInMain,
   acceptanceInProgress,
   implementationFailActive,

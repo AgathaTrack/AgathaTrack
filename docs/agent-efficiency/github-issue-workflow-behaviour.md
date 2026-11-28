@@ -74,7 +74,7 @@ rule (PIPE-V2-D-TICK-001). The planned tick changes are in
 | In Main | `aat.enabled` is off, or an acceptance field is missing, or the issue is a follow-up: an agent that did not author the PRs reviews what shipped against the issue's intent (does not gate) | stays |
 | In Main | umbrella: a sub-issue is not In Main, In UAT or Done | stays, `main.umbrella-waiting`. Checked before intent review, acceptance and the UAT check, so none of them runs for it |
 | In Main | that same flag-off path, and the newest successful `deploy-uat.yml` run's commit contains the latest merge into `main` | → In UAT |
-| In Main | `aat.enabled` is on, both fields exist, and the issue is not a follow-up | acceptance must pass for the latest merge into `main` (`aatSatisfied`) and that merge must be in the newest successful UAT deploy. No intent-review doorbell |
+| In Main | `aat.enabled` is on, both fields exist, and the issue is not a follow-up | acceptance must pass for the latest merge into `main` (`aatSatisfied`) and that merge must be in the newest successful UAT deploy. No intent-review doorbell unless `Acceptance=Skipped` is bound by an engine `source=paths` auto-skip for that merge (PIPE-AAT-D-018) |
 | In UAT | the newest successful `deploy-prod.yml` run's commit contains it | → Done, issue closed |
 | none | a follow-up (see below) of depth 1 or 2 | → To do; deeper → Backlog |
 | In progress / In Main / In UAT | the issue was closed (as completed) before Done, for example by a merge | reopened once (`v2:reopened` comment); a second close, a `not_planned` close and a `manual-only` issue are left alone |
@@ -149,7 +149,8 @@ issue (`ownedByV2Engine` in `issue-agent-handlers.js`).
   new issue attached as a GitHub sub-issue of #n and starting `<!-- v2:follow-up of=#n -->`, without `Stage`. The engine counts the chain depth from the parents'
   bodies and puts depth 1–2 in To do, deeper in Backlog. A review counts for one merge; a later merge needs its own.
   When `aat.enabled` is on and both `Acceptance` and `Acceptance fail reason` exist, a non-follow-up does not get this
-  doorbell: that check is part of agent acceptance. Follow-ups still get it. If either field is missing, the tick logs
+  doorbell: that check is part of agent acceptance, except when `Acceptance=Skipped` is bound to the latest merge by an
+  engine `source=paths` auto-skip (`aat.autoSkip`, PIPE-AAT-D-017/018). Follow-ups still get it. If either field is missing, the tick logs
   `acceptance.field-missing` once and keeps this doorbell. In `.github/pipeline-agents.json`, `aat.enabled` is true (Refs #2448). The flag stays true if a field later disappears; the acceptance gate is active only while both org fields are present.
 
 ### Blocked reasons

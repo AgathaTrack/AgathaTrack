@@ -414,12 +414,14 @@ async function applyAction({ action: decided, ctx }) {
         applied.unshift(`${failure ? 'aat-relaunch-failed' : 'aat-relaunch'}:${action.agent}`);
         break;
       }
-      case 'aat-waive':
+      case 'aat-waive': {
+        const waiveAcceptance = action.waiveAcceptance || action.acceptance;
         await comment(
-          buildAatWaive({ mergeSha: action.mergeSha, acceptance: action.acceptance }),
+          buildAatWaive({ mergeSha: action.mergeSha, acceptance: waiveAcceptance, source: action.source }),
           'comment:aat-waive',
         );
         break;
+      }
       case 'aat-reset':
         await comment(buildAatReset({ mergeSha: action.mergeSha }), 'comment:aat-reset');
         break;
