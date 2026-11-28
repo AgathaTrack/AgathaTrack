@@ -35,6 +35,13 @@ fi
 echo "==> migration manifest"
 node "${ROOT}/scripts/db/check-migration-manifest.js"
 
+echo "==> migration / canonical freshness (git diff vs base)"
+SCHEMA_BASE_REF="${MIGRATION_LINT_BASE_SHA:-${GITHUB_BASE_REF:-}}"
+if [[ -z "$SCHEMA_BASE_REF" ]]; then
+  SCHEMA_BASE_REF="$(RESOLVE_MERGE_BASE_LABEL=check-schema-equivalence bash "${ROOT}/scripts/db/lib/resolve-schema-merge-base.sh")"
+fi
+node "${ROOT}/scripts/db/check-migration-canonical-freshness.js" --base-ref "${SCHEMA_BASE_REF}"
+
 echo "==> build schema via bootstrap path (baseline + incremental migrations)"
 RESET_DB="${RESET_DB:-true}"
 if [[ "$RESET_DB" == "true" ]]; then

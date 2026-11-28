@@ -6,6 +6,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  assertCodeMigrationsParity,
+  parseCodeMigrationKeysFromMigrateSource,
+} from './migration-governance-lib.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -78,12 +82,33 @@ function main() {
     );
   }
 
-  if (Array.isArray(manifest.code_migrations)) {
-    for (const name of manifest.code_migrations) {
-      if (!listedSet.has(name)) {
-        fail(`code_migrations entry not in incremental_migrations: ${name}`);
-      }
+  const codeMigrations = manifest.code_migrations;
+  if (!Array.isArray(codeMigrations) || codeMigrations.length === 0) {
+    fail('code_migrations must be a non-empty array');
+  }
+  for (const name of codeMigrations) {
+    if (typeof name !== 'string' || !name.trim()) {
+      fail('code_migrations must contain non-empty migration filenames');
     }
+    if (!listedSet.has(name)) {
+      fail(`code_migrations entry not in incremental_migrations: ${name}`);
+    }
+  }
+  const migratePath = path.join(ROOT, 'server/scripts/migrate.js');
+  if (!fs.existsSync(migratePath)) {
+    fail('server/scripts/migrate.js missing');
+  }
+  const migrateSource = fs.readFileSync(migratePath, 'utf8');
+  let migrateKeys;
+  try {
+    migrateKeys = parseCodeMigrationKeysFromMigrateSource(migrateSource);
+  } catch (err) {
+    fail(err.message);
+  }
+  try {
+    assertCodeMigrationsParity(codeMigrations, migrateKeys);
+  } catch (err) {
+    fail(err.message);
   }
 
   console.log(

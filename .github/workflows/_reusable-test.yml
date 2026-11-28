@@ -296,6 +296,9 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
+      - name: Fetch PR base commit (canonical freshness diff)
+        if: github.event_name == 'pull_request'
+        run: git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
       - name: Begin job timing
         run: echo "JOB_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
       - name: Set up Node.js
@@ -315,6 +318,7 @@ jobs:
           PGPORT: 5432
           PGDATABASE: agatha_db
           APP_ENV: ci
+          MIGRATION_LINT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           chmod +x e2e/scripts/bootstrap-db.sh
           ./e2e/scripts/bootstrap-db.sh
@@ -325,6 +329,7 @@ jobs:
           PGHOST: localhost
           PGPORT: 5432
           PGDATABASE: agatha_db
+          MIGRATION_LINT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         working-directory: server
         run: npx jest -c jest.config.active.cjs --env=node --runInBand --forceExit test/db
       - name: Care DB integration under Europe/Paris (AC-TZ2)
@@ -335,6 +340,7 @@ jobs:
           PGHOST: localhost
           PGPORT: 5432
           PGDATABASE: agatha_db
+          MIGRATION_LINT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         working-directory: server
         run: npx jest -c jest.config.active.cjs --env=node --runInBand --forceExit test/db
       - name: Write integration job summary
