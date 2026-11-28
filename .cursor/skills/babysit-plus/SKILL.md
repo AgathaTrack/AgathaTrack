@@ -22,6 +22,18 @@ During `/execute-plan` (v1), use **/babysit-plus** for intermediate phase PRs an
 
 **Execute-plan v2:** After phase PR merge, return to the tick loop — not a routine babysit+ stop. See autonomous-pr-policy §Execute-plan (v2).
 
+## Session completion (user invoked babysit+ on this PR)
+
+When the task names **/babysit-plus** (or `/babysit`) on a PR:
+
+| Done | Not done |
+|------|----------|
+| Squash merge after `babysit_pr_reviews.js gate` exit `0` or allowed `3` (§7) | First green CI |
+| §9 halt with evidence on PR | Single review fix then stop |
+| | "Merge when ready" / "say the word" handoff |
+
+Minimum before final message: `wait` → triage comment if threads → resolve all → `babysit_merge_preflight.sh --claim` → `gate` → merge (or §9). GitHub CI/review subscription events continue §0–§7 while the PR is open.
+
 ---
 
 ## Router (babysit+)
