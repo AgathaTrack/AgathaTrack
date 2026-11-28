@@ -8,15 +8,6 @@ function authHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
-function calendarTodayInZone(timeZone) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
-}
-
 describe('care calendar API', () => {
   const today = todayCalendarIso();
   const startsOn = today;
@@ -106,7 +97,7 @@ describe('care calendar API', () => {
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
     expect(res.body.as_of).toMatchObject({
-      date: calendarTodayInZone('UTC'),
+      date: new Date().toISOString().slice(0, 10),
       timezone: 'UTC',
     });
   });
