@@ -157,7 +157,7 @@ prompt does not enforce.
 | In Main, AAT fail `quality` | Monitor. Small `Refs <parent>` PR is delivered by its own run | Parent stays In Main until a newer merge SHA; AAT re-runs |
 | In Main, AAT pending or inconclusive | Monitor. Clear nothing | `aat.maxInconclusive` budget, then `Blocked=stalled` |
 | In Main, AAT pass | **Nothing** (corrected, V9). `delivery-issue` stays | `uatContainsLatestMerge` → In UAT |
-| In UAT | Nothing. `delivery-issue` stays | Prod deploy → Done, `in-prod`, close |
+| In UAT | Nothing. `delivery-issue` stays | Prod deploy → Done, close (`busy` removed; no `in-prod`, PIPE-AAT-D-016) |
 | Done | Remove `delivery-issue`; the orchestrator's run is complete | — |
 | Blocked = `launch-failed` or `stalled` (engine hold) | Diagnose only. Re-wake `deliver` after the cause is fixed. Never clear the hold | Engine clears when the stage rule no longer ends in a hold |
 
@@ -190,8 +190,8 @@ Before `finish-work` (the delivery leg ends):
 - [ ] `## Docs` on every behaviour PR, and canonical-docs sync cited on the issue.
 - [ ] Self-review recorded on the issue (atomic PR) or the release PR (programme).
 
-After `finish-work`, the orchestrator only monitors until Done. On Done: `in-prod` is present, the issue is closed,
-and `busy`, `delivery-issue` and `analyse-only` are not set.
+After `finish-work`, the orchestrator only monitors until Done. On Done: the issue is closed, `busy`, `delivery-issue`
+and `analyse-only` are not set (no `in-prod` label; PIPE-AAT-D-016).
 
 Must not: close the issue; write `Stage`, `Acceptance` or `Acceptance fail reason`; run `/AgentAcceptance` in the same
 session that shipped; use `Closes`, `Fixes` or `Resolves`; use `composer-2.5`.

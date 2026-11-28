@@ -5,17 +5,16 @@ audience: owner
 status: proposed
 status_since: 2026-11-26
 folds_into: docs/domains/cross-domain/features/github-issue-workflow.md
-last_updated: 2026-11-26
+last_updated: 2026-11-27
 tags: [agent, pipeline, acceptance, aat, labels]
 ---
 
 # Pipeline v2: acceptance simplification
 
-**Proposal, not agreed.** Every decision below is `Proposed` and needs an owner decision before any code. Nothing in this
-document changes behaviour. On agreement the decisions move to
-[github-issue-workflow-wire.md §Decision log](../github-issue-workflow-wire.md#decision-log) and the behaviour rows to
-[github-issue-workflow-behaviour.md](../github-issue-workflow-behaviour.md); this file is then deleted (deletion guard in
-`/canonical-docs`).
+**Proposal, not fully agreed.** Rows stay `Proposed` until their phase merges. **P2 shipped** in PR #2701: `PIPE-AAT-D-016`
+and the behaviour rows live in [github-issue-workflow-wire.md](../github-issue-workflow-wire.md) and
+[github-issue-workflow-behaviour.md](../github-issue-workflow-behaviour.md). Delete this file only when every phase below is
+delivered (deletion guard in `/canonical-docs`).
 
 Trigger: a review of [#2514](https://github.com/AgathaTrack/AgathaTrack/issues/2514) (a scripts-only change that went
 In Main → In UAT → Done) found one acceptance outcome recorded in several places that can disagree, and a gate that cost an
@@ -144,7 +143,7 @@ Rows to append to the wire doc's decision log on agreement.
 | ID | Decision | Status |
 |----|----------|--------|
 | PIPE-AAT-D-015 | The `Acceptance` field is the only acceptance state. The `AAT-progress`, `AAT-passed`, `AAT-failed` labels are retired; the `v2:aat` marker stays the verdict record | Proposed |
-| PIPE-AAT-D-016 | `in-prod` is retired on v2 issues. Done plus close is the signal; the engine and legacy handler stop adding the label | Proposed |
+| PIPE-AAT-D-016 | `in-prod` is retired on v2 issues. Done plus close is the signal; the engine and legacy handler stop adding the label | **Accepted** (P2, PR #2701) |
 | PIPE-AAT-D-017 | AAT is skipped per merge when every merged PR's changed files match `aat.autoSkip.globs` and none is sensitive; any read failure runs AAT. A human `Skipped` is unchanged (PIPE-AAT-D-007) | Proposed |
 | PIPE-AAT-D-018 | Auto-skipped issues get the non-gating intent-review doorbell. Amends PIPE-AAT-D-005 | Proposed |
 | PIPE-AAT-D-019 | `aat-launch` names the launched agent; every engine `Acceptance` write posts a marker | Proposed |
@@ -168,7 +167,7 @@ start once Q1 or Q2 is answered. P3 needs the owner's Q3 and Q4 answers and the 
 Verification: `node --test scripts/github_issue_workflow.test.js scripts/issue_pipeline_v2_acceptance.test.js`, then
 `./scripts/pre-push-changed.sh`.
 
-### P2. Retire `in-prod`
+### P2. Retire `in-prod` (**delivered**, PR #2701)
 
 | Area | Change |
 |------|--------|
