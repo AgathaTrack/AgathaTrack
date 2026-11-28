@@ -125,7 +125,7 @@ Required when the issue changes user-visible or API behaviour.
 5. **Exercise** acceptance flows within the scope budget.
 6. **Evidence:** Save screenshots or recordings under `/opt/cursor/artifacts/`. In the GitHub comment, describe each flow (steps, expected, actual) as text and link the **Cursor agent run URL** (artifacts live there — do not cite `/opt/cursor/…` paths on the issue).
 
-Skip live UI only when the issue is strictly non-behavioural (docs/CI-only) and you prove that from the issue text.
+Skip live UI when the issue is strictly non-behavioural (docs/CI-only, internal tooling, agent instructions) and you prove that from the issue text and changed paths.
 
 If the stack cannot start after reasonable repair → **INCONCLUSIVE**, not FAIL.
 
@@ -153,7 +153,7 @@ Post **exactly one** final comment, then run the CLI (marker appended by the scr
 ## Agent Acceptance Test (AAT)
 
 **Merge under test:** `<sha>`
-**Cursor run:** <url>
+**Run:** <url>
 
 ### Intent
 …

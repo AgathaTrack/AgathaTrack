@@ -442,7 +442,7 @@ test('apply: thrown acceptance launch posts failed=1 and a rewind does not ack',
   });
   assert.equal(failed.applied[0], `aat-launch-failed:${AGENT}`);
   assert.equal(failed.applied.some((entry) => entry.startsWith('launch:')), false);
-  assert.match(sent[0].body.body, /v2:aat-launch merge=a{40} failed=1/);
+  assert.match(sent[0].body.body, /v2:aat-launch merge=a{40} failed=1 agent=pawpet-bot/);
   assert.equal(sent.some((call) => call.body?.issue_field_values), false);
   sent.length = 0;
   const rewind = await applyAction({
@@ -458,8 +458,12 @@ test('apply: thrown acceptance launch posts failed=1 and a rewind does not ack',
   });
   assert.equal(started.applied[0], `aat-launch:${AGENT}`);
   const launchComment = sent.find((call) => /v2:aat-launch/.test(call.body?.body || ''));
+  assert.match(launchComment.body.body, /agent=pawpet-bot/);
   const patch = sent.find((call) => call.body?.issue_field_values);
   assert.ok(sent.indexOf(launchComment) < sent.indexOf(patch));
+  const stateMarker = sent.find((call) => /v2:aat-state/.test(call.body?.body || ''));
+  assert.ok(stateMarker, 'acceptance field write posts v2:aat-state');
+  assert.ok(sent.indexOf(stateMarker) < sent.indexOf(patch), 'v2:aat-state is posted before the field PATCH');
 });
 
 test('acceptance launch prompt names the skill, the issue and the sha', async () => {
@@ -622,7 +626,7 @@ test('apply: a failed acceptance launch names the reason and never posts the non
   });
   assert.equal(result.applied[0], 'aat-launch-failed:claude-a');
   const body = sent[0].body.body;
-  assert.match(body, /v2:aat-launch merge=a{40} failed=1/);
+  assert.match(body, /v2:aat-launch merge=a{40} failed=1 agent=claude-a/);
   assert.match(body, /Starting acceptance failed: claude launch refused for \[redacted\]\./);
   assert.ok(nonceSeen && !body.includes(nonceSeen), 'the nonce stays secret until the run verdict');
 });

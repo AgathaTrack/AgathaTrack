@@ -15,7 +15,13 @@ const { buildReviewRequest } = require('./issue_pipeline_v2_review');
 const { buildIntentReviewRequest } = require('./issue_pipeline_v2_intent');
 const { buildReopened, buildResume } = require('./issue_pipeline_v2_release');
 const { buildLaunchAcked, buildLaunchFailed, buildLaunchPending, buildLaunchRecord } = require('./issue_pipeline_v2_launch');
-const { buildAatLaunch, buildAatRelaunch, buildAatReset, buildAatWaive } = require('./issue_pipeline_v2_acceptance');
+const {
+  buildAatLaunch,
+  buildAatRelaunch,
+  buildAatReset,
+  buildAatStateMarker,
+  buildAatWaive,
+} = require('./issue_pipeline_v2_acceptance');
 const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { isRunnerQueuedError } = require('./pipeline_runners/claude');
 const { buildRoundMarker, roundFor } = require('./issue_pipeline_v2_round_markers');
@@ -375,12 +381,18 @@ async function applyAction({ action: decided, ctx }) {
         if (failure) {
           // The reason is public, so the nonce is removed from it before it is posted.
           const reason = String(failure?.message ?? failure).split(nonce).join('[redacted]');
-          await comment(buildAatLaunch({ mergeSha: action.mergeSha, failed: true, reason }), 'comment:aat-launch-failed');
+          await comment(
+            buildAatLaunch({ mergeSha: action.mergeSha, failed: true, reason, agent: action.agent }),
+            'comment:aat-launch-failed',
+          );
           applied.unshift(`aat-launch-failed:${action.agent}`);
           const { acceptance, acceptanceFailReason, ...rest } = action;
           action = rest;
         } else {
-          await comment(buildAatLaunch({ mergeSha: action.mergeSha, runId: run.runId }), 'comment:aat-launch');
+          await comment(
+            buildAatLaunch({ mergeSha: action.mergeSha, runId: run.runId, agent: action.agent }),
+            'comment:aat-launch',
+          );
           applied.unshift(`aat-launch:${action.agent}`);
         }
         break;
@@ -523,6 +535,15 @@ async function applyAction({ action: decided, ctx }) {
       patch.state_reason = 'completed';
     }
     if (Object.keys(patch).length > 0) {
+      if (Object.prototype.hasOwnProperty.call(writes, 'acceptance')) {
+        await comment(
+          buildAatStateMarker({
+            acceptance: writes.acceptance,
+            acceptanceFailReason: writes.acceptanceFailReason,
+          }),
+          'comment:aat-state',
+        );
+      }
       await request('PATCH', base, patch);
       applied.push(`fields:${Object.keys(writes).join(',') || 'state'}`);
     }
