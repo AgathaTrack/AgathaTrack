@@ -98,6 +98,7 @@ class _CareListCollectionState extends ConsumerState<CareListCollection> {
           schedule: schedule,
           onChanged: _refreshAfterCareCommand,
           source: widget.source,
+          ref: ref,
         );
   }
 

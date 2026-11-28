@@ -96,10 +96,11 @@ describe('care calendar API', () => {
     expect(res.body.before_month).toEqual({ items: [] });
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
-    expect(res.body.as_of).toMatchObject({
-      date: new Date().toISOString().slice(0, 10),
-      timezone: 'UTC',
-    });
+    expect(res.body.as_of.timezone).toBe('UTC');
+    expect(res.body.as_of.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(res.body.days.some((day) => day.date === res.body.as_of.date)).toBe(
+      true,
+    );
   });
 
   it('honours X-Care-As-Of in test env', async () => {

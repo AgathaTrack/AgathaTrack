@@ -16,6 +16,7 @@ import '../domain/care_occurrence.dart';
 import '../domain/completion_requirements.dart';
 import '../domain/done_decision.dart';
 import '../domain/leading_occurrence.dart';
+import 'care_planned_vet_prompt_hook.dart';
 import 'sheets/completion_date_sheet.dart';
 import 'sheets/early_completion_dialog.dart';
 
@@ -31,12 +32,15 @@ class CareCompletionFlow {
     this._service, {
     void Function(String, Map<String, Object>)? track,
     PetCareSync? petCareSync,
+    CarePlannedVetPromptHook? onPlannedVetPrompt,
   }) : _track = track ?? ((_, _) {}),
-       _petCareSync = petCareSync;
+       _petCareSync = petCareSync,
+       _onPlannedVetPrompt = onPlannedVetPrompt ?? ((_, __, ___) async {});
 
   final CareCompletionService _service;
   final void Function(String event, Map<String, Object> properties) _track;
   final PetCareSync? _petCareSync;
+  final CarePlannedVetPromptHook _onPlannedVetPrompt;
 
   void _refreshWeightIfWeighIn(CareItemSchedule schedule) {
     if (schedule.careFamily != kWeightMonitoringFamily) return;
@@ -57,6 +61,7 @@ class CareCompletionFlow {
     bool onOccurrenceScreen = false,
     CompletionInputs inputs = const CompletionInputs(),
     DateTime? completedOn,
+    WidgetRef? ref,
   }) async {
     if (_busy.contains(schedule.entryId)) return;
     final props = <String, Object>{
@@ -157,6 +162,14 @@ class CareCompletionFlow {
           source: source,
           changeDateOccurrenceId: offerChangeDate ? target.id : null,
         );
+        if (ref != null) {
+          await _maybePromptPlannedVetHealthIssue(
+            context,
+            ref,
+            schedule: schedule,
+            result: value,
+          );
+        }
       case CareFailed(:final failure):
         _track('care_done_failed', {
           ...props,
@@ -174,9 +187,32 @@ class CareCompletionFlow {
             onOccurrenceScreen: true,
             inputs: inputs,
             completedOn: date,
+            ref: ref,
           ),
         );
     }
+  }
+
+  Future<void> _maybePromptPlannedVetHealthIssue(
+    BuildContext context,
+    WidgetRef ref, {
+    required CareItemSchedule schedule,
+    required CareCommandResult result,
+  }) async {
+    if (!context.mounted) return;
+    await _onPlannedVetPrompt(
+      context,
+      ref,
+      CarePlannedVetPromptContext(
+        petId: schedule.petId,
+        entryId: schedule.entryId,
+        careSettingWire: result.entryCareSettingWire,
+        carePlanningWire: result.entryCarePlanningWire,
+        healthIssueId: result.entryHealthIssueId,
+        careFamily: schedule.careFamily,
+        entryClassificationComplete: result.entryClassificationComplete,
+      ),
+    );
   }
 
   void _showDone(
@@ -323,9 +359,11 @@ String _analyticsSource(CareCommandSource source) =>
 final careCompletionFlowProvider = Provider<CareCompletionFlow>((ref) {
   final analytics = ref.watch(analyticsServiceProvider);
   final sync = ref.watch(petCareSyncProvider);
+  final onPlannedVetPrompt = ref.watch(carePlannedVetPromptHookProvider);
   return CareCompletionFlow(
     ref.watch(careCompletionServiceProvider),
     track: (event, properties) => analytics.capture(event, properties),
     petCareSync: sync,
+    onPlannedVetPrompt: onPlannedVetPrompt,
   );
 });

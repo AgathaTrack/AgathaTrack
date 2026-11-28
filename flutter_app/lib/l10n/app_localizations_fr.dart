@@ -2042,6 +2042,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get vetHealthIssuePromptNotRelated => 'Sans lien';
 
   @override
+  String get vetPlannedCompletionHealthIssuePromptTitle =>
+      'Le vétérinaire a-t-il identifié quelque chose de nouveau à suivre ?';
+
+  @override
+  String get vetHealthIssuePromptNo => 'Non';
+
+  @override
+  String get vetHealthIssuePlanNextVisit => 'Planifier la prochaine visite';
+
+  @override
   String get healthIssueQuickPickInjury => 'Blessure ou maladie';
 
   @override

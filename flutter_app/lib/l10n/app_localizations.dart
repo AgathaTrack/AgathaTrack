@@ -3541,6 +3541,24 @@ abstract class AppLocalizations {
   /// **'Not related'**
   String get vetHealthIssuePromptNotRelated;
 
+  /// No description provided for @vetPlannedCompletionHealthIssuePromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Did the vet identify anything new to track?'**
+  String get vetPlannedCompletionHealthIssuePromptTitle;
+
+  /// No description provided for @vetHealthIssuePromptNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get vetHealthIssuePromptNo;
+
+  /// No description provided for @vetHealthIssuePlanNextVisit.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan the next visit'**
+  String get vetHealthIssuePlanNextVisit;
+
   /// No description provided for @healthIssueQuickPickInjury.
   ///
   /// In en, this message translates to:

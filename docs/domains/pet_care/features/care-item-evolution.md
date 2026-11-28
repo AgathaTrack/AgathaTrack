@@ -6,7 +6,7 @@ domain: pet_care
 feature_id: care_item
 status: active
 last_updated: 2026-11-27
-related_prs: [1797, 1805, 1812, 1817, 2129, 2145, 2420, 2056, 1541]
+related_prs: [1797, 1805, 1812, 1817, 2129, 2145, 2420, 2056, 1541, 2689]
 ---
 
 # Care Item — functional spec
@@ -140,8 +140,9 @@ Four principles:
 | D-CIE-045 | **Persistence names stay `health_*`; product says Care Item** | PostgreSQL tables `health_entries` and `health_occurrences` are the authoritative store for a Care Item and its scheduled occurrences. **Wire/API/GDPR names stay `health_*` indefinitely** (`/api/health-entries`, `health_entry_id`, export keys) unless a **separate** breaking-API programme is approved. Optional deferred work ([#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)) is **physical table rename only** — it must not change HTTP paths, DTOs or export keys. DEBT-D-RENAME closed Option B ([#1542](https://github.com/AgathaTrack/AgathaTrack/issues/1542)); do not rename tables opportunistically in other PRs. | Superseded by D-CIE-048 | 2026-11-17 | D-CIE-048 |
 | D-CIE-048 | **Physical `care_items` / `care_occurrences` (DEBT-D-RENAME)** | Deploy 1 ([#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)): `107_care_items_table_rename.sql` renames physical tables to `care_items` and `care_occurrences` and exposes compatibility **views** `health_entries` / `health_occurrences` so legacy server SQL and rolling deploy coexist. Deploy 2 (pending): cut server SQL to physical names and drop views. HTTP paths, DTOs, and GDPR **export keys** remain `health_*`. Erasure map tracks **physical** table names. | Superseded by D-CIE-049 | 2026-11-25 | #2611 |
 | D-CIE-049 | **DEBT-D-RENAME Deploy 2** | `108_drop_health_entry_compat_views.sql` drops compatibility views; all server SQL targets physical `care_items` / `care_occurrences`. Wire/API/GDPR export keys unchanged (`health_*`). Closes Deploy 2 ([#2405](https://github.com/AgathaTrack/AgathaTrack/issues/2405)). | Live | 2026-11-25 | #2630 |
-| D-CIE-046 | Planned vet **completion** health-issue + re-plan prompt | **Not on `CareCompletionFlow`.** Unplanned vet **save** still prompts via the health entry form (§10.1). After marking a planned vet occurrence done on Care Item, no health-issue sheet runs until a future wire-up issue. Orphan health_tracking implementation removed ([#2335](https://github.com/AgathaTrack/AgathaTrack/issues/2335)). Product delivery for completion prompt: **Planned**. | Live | 2026-11-17 | — |
-| D-CIE-047 | Planned vet completion prompt — delivery issue | Completion-path health-issue + re-plan prompt for planned vet is **not shipped**; delivery tracked in [#2419](https://github.com/AgathaTrack/AgathaTrack/issues/2419). | Live | 2026-11-17 | — |
+| D-CIE-046 | Planned vet **completion** health-issue + re-plan prompt | **Not on `CareCompletionFlow`.** Unplanned vet **save** still prompts via the health entry form (§10.1). After marking a planned vet occurrence done on Care Item, no health-issue sheet runs until a future wire-up issue. Orphan health_tracking implementation removed ([#2335](https://github.com/AgathaTrack/AgathaTrack/issues/2335)). Product delivery for completion prompt: **Planned**. | Superseded by D-CIE-050 | 2026-11-17 | D-CIE-050 |
+| D-CIE-047 | Planned vet completion prompt — delivery issue | Completion-path health-issue + re-plan prompt for planned vet is **not shipped**; delivery tracked in [#2419](https://github.com/AgathaTrack/AgathaTrack/issues/2419). | Superseded by D-CIE-050 | 2026-11-17 | D-CIE-050 |
+| D-CIE-050 | Planned vet **completion** prompt on `CareCompletionFlow` | After server-confirmed **Done**, eligible items (`care_setting=vet`, `care_planning=planned`, no `health_issue_id`) show the §10.2 sheet (add, link, no, plan next visit). Unplanned vet save unchanged (§10.1). v1 gate: vet setting only ([#2419](https://github.com/AgathaTrack/AgathaTrack/issues/2419)). | Live | 2026-11-27 | #2419 |
 
 ## Vet visit schema (API slice — PR-14)
 
@@ -163,7 +164,7 @@ Much of the target behaviour exists. This table maps each area to what is live.
 | Category defaults for the schedule type | Vaccination and parasite prevention default to fixed; everything else after completion (D-CSM-001) | **Amends (timing):** medication → Fixed schedule; every other category → After it's done (D-CSM-020) |
 | One-off change vs schedule change | Change date moves one occurrence; changing the cadence is separate (D-CSM-006, D-ACP-007) | Preserve the separation. **Amends (timing):** Fixed schedule asks **This date only** / **This and following** (D-CSM-027) |
 | Several overdue occurrences | Triage sheet, "Skip all missed", "skip earlier missed doses" when completing | **Amends (timing):** only Fixed schedule stacks; one row "3 doses not recorded" → **Record earlier doses** (Given / Not given); older than three days → recordable from History (D-CSM-023) |
-| Completion | "Mark Completed" opens a sheet with a date and a note. Weight care opens the weight sheet. Unplanned vet **save** may offer a health-issue link; planned vet **completion** prompt is not live on Care Item yet (D-CIE-046) | UX change (D-CIE-009) |
+| Completion | "Mark Completed" opens a sheet with a date and a note. Weight care opens the weight sheet. Unplanned vet **save** may offer a health-issue link; planned vet **completion** may offer §10.2 health-issue + re-plan prompt on `CareCompletionFlow` (D-CIE-050) | UX change (D-CIE-009) |
 | Moves around an absence | "Suggested by Agatha", the change-date sheet with gap, preview and caution warnings, undo | Preserve |
 | Flexibility | Worked out per item: fixed, earlier only, carer task, flexible, with a maximum shift (D-ACP-006) | Preserve |
 | Absence notes | A note for the whole trip, and a note per pet per trip | Preserve. Per-item resolutions are new |
