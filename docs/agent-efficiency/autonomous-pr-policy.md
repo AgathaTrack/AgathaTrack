@@ -3,7 +3,7 @@ title: Autonomous PR Policy
 owner: Documentation Team
 audience: both
 status: active
-last_updated: 2026-11-26
+last_updated: 2026-11-28
 tags: [agent-efficiency, policy]
 ---
 # Autonomous PR policy (canonical)
@@ -124,19 +124,24 @@ Driver per §Driver routing rows 10–11. Plain `/babysit` is not a driver for a
 
 ## Proactive base sync
 
-Do **not** wait for CI to fail before rebasing when `main` (or the PR base branch) has moved.
+Detect when `main` (or the PR base branch) has moved; do **not** rebase the whole fleet on every poll.
 
 | When | Command |
 |------|---------|
 | Start of babysit / babysit-plus | `./scripts/babysit_sync_base.sh --pr <url> --check` |
-| Before every push | `--check`; `--push` only when behind (exit `1`) |
-| Before entering CI wait loop | Same |
-| After long automatic-review poll | Same |
-| Immediately before merge (§7) | One authoritative `./scripts/babysit_sync_base.sh --pr <url> --push` after merge preflight `--claim` |
+| Before every push, CI wait, long review poll (§0–§5) | `--check` only — see **§0–§5 `--push` exceptions** below |
+| Immediately before merge (§7) | After `--claim`: one authoritative `./scripts/babysit_sync_base.sh --pr <url> --push` when action `rebase` (§Merge coordination) |
 
 Script: `scripts/babysit_sync_base.sh` — fetches `origin/<base>`, rebases when behind, optional `--push` with `--force-with-lease`. Use `--pr <url>` so the rebase uses the PR's base, not always `main`. A head ref matching `cursor/*-integration-*` is not rebased and is not caught up to `main` because it is behind ([merge-policy](../../.cursor/rules/merge-policy.mdc)).
 
-**Rebase-once-at-merge (babysit+):** During triage and CI fix loops (§0–§5), prefer `--check` only — rebase when behind, not on every poll. Defer the **single** authoritative rebase to immediately before merge (§Merge coordination).
+**Rebase-once-at-merge (babysit+):** During triage and CI fix loops (§0–§5), **`--check` only`** when the base moved — exit `1` (behind) alone is **not** a `--push` trigger. Defer the **authoritative** catch-up rebase to §7 (§Merge coordination, under `merge-lease`).
+
+**§0–§5 `--push` exceptions** (still never on `cursor/*-integration-*` heads):
+
+1. Sync cannot proceed without rebasing (rebase/merge conflict while resolving the PR branch onto the base).
+2. Required CI is red and the failure is **attributable to being behind** the base — not an unrelated failure under §CI retry budget.
+
+When another PR holds `merge-lease`, do **not** `--push` in §0–§5; wait (preflight exit `2`).
 
 ---
 
@@ -152,7 +157,8 @@ Serialize merge attempts when multiple PRs reach the CI gate at the same time. D
 |------|---------|
 | Before merge (babysit+ §7) | `./scripts/babysit_merge_preflight.sh --pr <url> --claim` |
 | `--claim` exit `0` | Up to date on the base; proceed to review gate and merge |
-| `--claim` exit `1` (`behind_base` or `integration_mergeability_unknown`) | Lease held — `./scripts/babysit_sync_base.sh --pr <url> --push` once when action is `rebase` (not on an integration head); re-run CI if checks re-trigger; then review gate and merge. Do **not** release the lease between rebase and merge. `recheck_mergeable`: refresh `mergeable`; do not rebase an integration head. |
+| `--claim` exit `1` (`behind_base` or `integration_mergeability_unknown`) | Lease held — `./scripts/babysit_sync_base.sh --pr <url> --push` once when action is `rebase` (not on an integration head); re-run CI if checks re-trigger; then review gate and merge. Do **not** release the lease between rebase and green required CI + merge except when required CI fails (next row). `recheck_mergeable`: refresh `mergeable`; do not rebase an integration head. |
+| Required CI red while this PR holds `merge-lease` (after §7 rebase or while merging) | `./scripts/babysit_merge_preflight.sh --pr <url> --release`; fix in babysit+ §5; `--claim` again when required CI is green |
 | Preflight exit `2` (wait) | Another PR holds `merge-lease` or FIFO yield — subscribe (`cursor-subscriptions` → `subscribe_github_pr` on lease holder or `subscribe_github_ci` on base) and wait; not a halt — **do not rebase** |
 | Preflight exit `4` (integration conflict) | One PR that merges the base into the integration head and resolves the conflict. Do not rebase. |
 | After successful merge | `./scripts/babysit_merge_preflight.sh --pr <url> --release` (no-op if PR closed) |
@@ -174,7 +180,7 @@ Linux runner usage scales with **open PR count**, **pushes per PR**, and **jobs 
 
 See [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) § GitHub Actions minutes.
 
-**§0–§5 sync:** `./scripts/babysit_sync_base.sh --pr <url> --check` at preflight and before push; `--push` only when `--check` exits `1` (behind) and the head is not `cursor/*-integration-*`. **§7:** `--claim` → one `--push` rebase if needed (skip on an integration head) → review `gate` → `gh pr merge` → `--release`. A `MERGEABLE` integration release squash-merges while `BEHIND`.
+**§0–§5 sync:** `--check` at preflight and before push; `--push` only per §Proactive base sync exceptions (not on `cursor/*-integration-*`). **§7:** `--claim` → one `--push` rebase if needed (skip on an integration head) → required CI green (release lease if red) → review `gate` → `gh pr merge` → `--release`. A `MERGEABLE` integration release squash-merges while `BEHIND`.
 
 ---
 
@@ -339,6 +345,7 @@ Run merge coordination first (§Merge coordination):
 # Exit 2 → wait (do not rebase). Exit 1 after --claim → lease held; rebase once below, then merge without releasing until squash succeeds.
 # Integration head (`cursor/*-integration-*`): do not --push; MERGEABLE while BEHIND is OK. Exit 4 → merge base into release.
 ./scripts/babysit_sync_base.sh --pr <url> --push    # when action rebase and head is not an integration release; skip if up to date
+# Required CI red while holding merge-lease → --release, §5 fixes, --claim when green (§Merge coordination)
 node scripts/babysit_pr_reviews.js gate --pr <url>  # must exit 0 — after the last push; 2 → release the lease, back to triage
 gh pr merge <url> --squash
 ./scripts/babysit_merge_preflight.sh --pr <url> --release
