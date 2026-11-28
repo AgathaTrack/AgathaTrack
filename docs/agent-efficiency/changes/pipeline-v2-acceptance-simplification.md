@@ -144,15 +144,9 @@ Rows to append to the wire doc's decision log on agreement.
 |----|----------|--------|
 | PIPE-AAT-D-015 | The `Acceptance` field is the only acceptance state. The `AAT-progress`, `AAT-passed`, `AAT-failed` labels are retired; the `v2:aat` marker stays the verdict record | Proposed |
 | PIPE-AAT-D-016 | `in-prod` is retired on v2 issues. Done plus close is the signal; the engine and legacy handler stop adding the label | **Accepted** (P2, PR #2701) |
-<<<<<<< HEAD
-| PIPE-AAT-D-017 | AAT is skipped per merge when every merged PR's changed files match `aat.autoSkip.globs` and none is sensitive; any read failure runs AAT. A human `Skipped` is unchanged (PIPE-AAT-D-007) | Proposed |
-| PIPE-AAT-D-018 | Auto-skipped issues get the non-gating intent-review doorbell. Amends PIPE-AAT-D-005 | Proposed |
-| PIPE-AAT-D-019 | `aat-launch` names the launched agent; every engine `Acceptance` write posts a marker | Accepted |
-=======
 | PIPE-AAT-D-017 | AAT is skipped per merge when every merged PR's changed files match `aat.autoSkip.globs` and none is sensitive; any read failure runs AAT. A human `Skipped` is unchanged (PIPE-AAT-D-007) | **Accepted** (P3, PR #2703) |
 | PIPE-AAT-D-018 | Auto-skipped issues get the non-gating intent-review doorbell. Amends PIPE-AAT-D-005 | **Accepted** (P3, PR #2703) |
 | PIPE-AAT-D-019 | `aat-launch` names the launched agent; every engine `Acceptance` write posts a marker | Proposed |
->>>>>>> 7419ad98 (feat(pipeline): risk-tiered AAT auto-skip (disabled by default))
 
 ## Phases and implementation
 

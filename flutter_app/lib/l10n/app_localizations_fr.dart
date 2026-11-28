@@ -1445,6 +1445,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get careCalendarAbsenceOverlayDay => 'Période d\'absence';
+
+  @override
   String careForPet(String petName) {
     return 'Soins pour $petName';
   }

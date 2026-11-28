@@ -2,6 +2,7 @@
  * @bdd care_calendar.feature
  * Scenario: Dashboard calendar tab
  * Scenario: Open Care date from calendar
+ * Scenario: Planned absence overlay on calendar grid
  */
 import { test, expect, loginAs } from '../fixtures/auth.fixture';
 import { GuardianDashboardPage } from '../pages/guardian-dashboard.page';
@@ -11,13 +12,24 @@ import {
   listHealthEntryOccurrences,
   withCareClock,
 } from '../support/care-api';
-import { createPet as createPetApi } from '../support/api';
+import {
+  createPet as createPetApi,
+  createPlannedAbsence,
+} from '../support/api';
 import type { Page } from '@playwright/test';
 import {
   enableFlutterAccessibility,
   refreshFlutterAccessibility,
   waitForFlutterRoutePattern,
 } from '../support/flutter';
+
+function addCalendarDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${dt.getUTCFullYear()}-${mm}-${dd}`;
+}
 
 async function openCareCalendarTab(page: Page): Promise<void> {
   const toggle = page.locator(
@@ -119,6 +131,35 @@ test.describe('Care calendar @care', () => {
       }
       await occurrence.expectLoaded();
       expect(entry.id).toBeTruthy();
+    } finally {
+      await withCareClock(null, page);
+    }
+  });
+
+  test('Planned absence overlay on calendar grid', async ({ page, testUser }) => {
+    const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+    const today = new Date().toISOString().slice(0, 10);
+    const endsOn = addCalendarDays(today, 5);
+    await withCareClock(`${today}T09:00`, page);
+    try {
+      const pet = await createPetApi(baseURL, testUser.accessToken, 'Away overlay');
+      await createPlannedAbsence(baseURL, testUser.accessToken, {
+        startsOn: today,
+        endsOn,
+        petIds: [pet.id],
+      });
+      await enableFlutterAccessibility(page);
+      await loginAs(page, testUser, { experience: 'guardian' });
+      const dashboard = new GuardianDashboardPage(page);
+      await dashboard.open();
+      await dashboard.careRegion().scrollIntoViewIfNeeded();
+      await openCareCalendarTab(page);
+      await refreshFlutterAccessibility(page);
+      const dayCell = page.locator(
+        `[flt-semantics-identifier="care_calendar_day_${today}"]`,
+      );
+      await expect(dayCell).toBeVisible({ timeout: 60_000 });
+      await expect(dayCell).toContainText(/away plan window|période d'absence/i);
     } finally {
       await withCareClock(null, page);
     }

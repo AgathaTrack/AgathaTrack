@@ -473,7 +473,8 @@
   },
   "care_calendar.feature": {
     "Dashboard calendar tab": "P2",
-    "Open Care date from calendar": "P2"
+    "Open Care date from calendar": "P2",
+    "Planned absence overlay on calendar grid": "P2"
   },
   "care_booster.feature": {
     "PL-1 first dose then booster then yearly recurrence": "P1"

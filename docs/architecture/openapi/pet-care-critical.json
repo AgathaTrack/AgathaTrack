@@ -1405,6 +1405,41 @@
           }
         }
       }
+    },
+    "/pets/{petId}/care-calendar": {
+      "get": {
+        "operationId": "getPetCareCalendar",
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "starts_on",
+            "in": "query",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/CalendarDate" }
+          },
+          {
+            "name": "ends_on",
+            "in": "query",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/CalendarDate" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only care calendar month projection (D-CAL-002, D-CAL-010)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CareCalendarResponse" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2698,6 +2733,59 @@
           "next_unchanged": {
             "type": "boolean",
             "description": "After it's done: the next date was moved by a person and stays"
+          }
+        }
+      },
+      "PlannedAbsenceOverlay": {
+        "type": "object",
+        "required": [
+          "absence_id",
+          "starts_on",
+          "ends_on",
+          "overlay_starts_on",
+          "overlay_ends_on",
+          "declarer_is_viewer",
+          "can_open_away_plan"
+        ],
+        "properties": {
+          "absence_id": { "type": "string", "format": "uuid" },
+          "starts_on": { "$ref": "#/components/schemas/CalendarDate" },
+          "ends_on": { "$ref": "#/components/schemas/CalendarDate" },
+          "overlay_starts_on": { "$ref": "#/components/schemas/CalendarDate" },
+          "overlay_ends_on": { "$ref": "#/components/schemas/CalendarDate" },
+          "declarer_is_viewer": { "type": "boolean" },
+          "can_open_away_plan": { "type": "boolean" },
+          "title": { "type": "string" },
+          "declarer_display_name": { "type": "string" }
+        }
+      },
+      "CareCalendarResponse": {
+        "type": "object",
+        "required": [
+          "pet_id",
+          "as_of",
+          "starts_on",
+          "ends_on",
+          "projection_status",
+          "before_month",
+          "days"
+        ],
+        "properties": {
+          "pet_id": { "type": "string", "format": "uuid" },
+          "starts_on": { "$ref": "#/components/schemas/CalendarDate" },
+          "ends_on": { "$ref": "#/components/schemas/CalendarDate" },
+          "projection_status": {
+            "type": "string",
+            "enum": ["complete", "partially_indeterminate"]
+          },
+          "before_month": { "type": "object" },
+          "days": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "planned_absence_overlays": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PlannedAbsenceOverlay" }
           }
         }
       }

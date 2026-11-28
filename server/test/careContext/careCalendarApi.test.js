@@ -1,7 +1,8 @@
 import request from 'supertest';
 
 import { createApp } from '../../bin/server.js';
-import { addCalendarDaysIso, todayCalendarIso } from '../../lib/calendarDate.js';
+import { addCalendarDaysIso } from '../../lib/calendarDate.js';
+import { wallClockInTimeZone } from '../../lib/petHomeTimezone.js';
 import { createMockPool, petId, token, userId } from '../pets/helpers.js';
 
 function authHeader() {
@@ -9,9 +10,16 @@ function authHeader() {
 }
 
 describe('care calendar API', () => {
-  const today = todayCalendarIso();
-  const startsOn = today;
-  const endsOn = addCalendarDaysIso(today, 27);
+  let today;
+  let startsOn;
+  let endsOn;
+
+  beforeEach(() => {
+    // Pet home timezone is UTC in these mocks — not process TZ (see AC-TZ2 Paris job).
+    today = wallClockInTimeZone('UTC').todayIso;
+    startsOn = today;
+    endsOn = addCalendarDaysIso(today, 27);
+  });
 
   function createTestApp(handler) {
     return createApp(createMockPool(handler));
@@ -96,11 +104,12 @@ describe('care calendar API', () => {
     expect(res.body.before_month).toEqual({ items: [] });
     expect(Array.isArray(res.body.days)).toBe(true);
     expect(res.body.days.length).toBe(28);
-    expect(res.body.as_of.timezone).toBe('UTC');
+    expect(res.body.as_of).toMatchObject({ date: today, timezone: 'UTC' });
     expect(res.body.as_of.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(res.body.days.some((day) => day.date === res.body.as_of.date)).toBe(
       true,
     );
+    expect(Array.isArray(res.body.planned_absence_overlays)).toBe(true);
   });
 
   it('honours X-Care-As-Of in test env', async () => {
