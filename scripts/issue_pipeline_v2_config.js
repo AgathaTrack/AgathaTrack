@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { globToRegExp } = require('./lib/execute_plan_schema');
 const { validateAutoSkipGlobs } = require('./lib/pipeline_path_gate');
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, '..', '.github', 'pipeline-agents.json');
