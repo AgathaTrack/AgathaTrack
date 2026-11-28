@@ -3,8 +3,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  linksIssue, listLinkedPrs, dodComplete, deriveDeliveryFacts, latestDeploySha, deployContains, buildResume, RESUME, INTENT_REVIEW,
+  linksIssue,
+  listLinkedPrs,
+  dodComplete,
+  deriveDeliveryFacts,
+  latestDeploySha,
+  deployContains,
+  buildResume,
+  loadMergedPrChangedPaths,
+  RESUME,
+  INTENT_REVIEW,
 } = require('./issue_pipeline_v2_release');
+const { PullFilesOverflow } = require('./lib/execute_plan_github');
 const { applyAction } = require('./issue_pipeline_v2_apply');
 const { decide } = require('./issue_pipeline_v2_decide');
 const { loadConfig } = require('./issue_pipeline_v2_config');
@@ -373,6 +383,46 @@ test('two-PR table: In Main only after the last linked PR merges into main, with
   assert.equal(reachesInMain(decideFor({ prs: [pr(1, { base: 'cursor/x-integration-1' })] })), false, 'an integration-branch merge is not a merge into main');
   assert.equal(reachesInMain(decideFor({ labels: ['busy'], prs: [pr(1)] })), false, 'busy is still set');
   assert.equal(reachesInMain(decideFor({ prs: [] })), false, 'no linked PR merged');
+});
+
+test('loadMergedPrChangedPaths: merges PR file lists, rename old paths, dedupes', async () => {
+  const listPullFiles = async (number) => {
+    if (number === 1) {
+      return [
+        { filename: 'docs/a.md' },
+        { filename: 'docs/b.md', previous_filename: 'server/legacy.js' },
+      ];
+    }
+    if (number === 2) {
+      return [{ filename: 'docs/a.md' }];
+    }
+    return [];
+  };
+  const result = await loadMergedPrChangedPaths({
+    owner: 'o',
+    repo: 'r',
+    prNumbers: [1, 2],
+    token: 't',
+    listPullFiles,
+  });
+  assert.deepEqual([...result.changedPaths].sort(), ['docs/a.md', 'docs/b.md', 'server/legacy.js'].sort());
+});
+
+test('loadMergedPrChangedPaths: overflow and API errors fail closed', async () => {
+  const overflow = async () => {
+    throw new PullFilesOverflow('PR changes too many files');
+  };
+  assert.deepEqual(
+    await loadMergedPrChangedPaths({ owner: 'o', repo: 'r', prNumbers: [1], token: 't', listPullFiles: overflow }),
+    { changedPathsError: 'overflow' },
+  );
+  const fail = async () => {
+    throw new Error('files-api-down');
+  };
+  assert.match(
+    (await loadMergedPrChangedPaths({ owner: 'o', repo: 'r', prNumbers: [1], token: 't', listPullFiles: fail })).changedPathsError,
+    /files-api-down/,
+  );
 });
 
 test('Refs-only mentions link a PR to the issue; a bare number mention does not', () => {

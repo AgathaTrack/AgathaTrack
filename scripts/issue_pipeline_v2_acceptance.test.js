@@ -506,6 +506,87 @@ test('acceptance launch prompt names the skill, the issue and the sha', async ()
   assert.equal(launches[0], SHA);
 });
 
+const AUTO_SKIP = {
+  enabled: true,
+  globs: ['docs/**', 'scripts/pipeline_runners/**', '.cursor/skills/**'],
+};
+
+test('auto-skip: eligible paths waive then intent review; prod gate satisfied', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  const autoskip = gate({
+    delivery: {
+      lastMergeSha: SHA,
+      changedPaths: ['docs/agent-efficiency/x.md'],
+      mergedPrNumbers: [1],
+    },
+  }, cfg);
+  assert.equal(autoskip.type, 'aat-waive');
+  assert.equal(autoskip.source, 'paths');
+  assert.equal(autoskip.row, 'aat.autoskip');
+  assert.equal(autoskip.acceptance, 'Skipped');
+  const waived = gate({
+    acceptance: 'Skipped',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped source=paths -->`, 1)],
+    delivery: { lastMergeSha: SHA, changedPaths: ['docs/x.md'] },
+    uatContainsLatestMerge: true,
+    intentReview: { requested: false },
+  }, cfg);
+  assert.equal(waived.type, 'request-intent-review');
+  const { aatSatisfied } = require('./issue_pipeline_v2_acceptance');
+  assert.equal(
+    aatSatisfied({
+      acceptance: 'Skipped',
+      aat: aat([comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped source=paths -->`, 1)]),
+    }, SHA),
+    true,
+  );
+});
+
+test('auto-skip: ineligible merge resets stale paths waive; human Skipped still persists', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  const reset = gate({
+    acceptance: 'Skipped',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA2} acceptance=skipped source=paths -->`, 20)],
+    delivery: {
+      lastMergeSha: SHA,
+      changedPaths: ['server/routes/x.js'],
+      mergedPrNumbers: [2],
+    },
+  }, cfg);
+  assert.equal(reset.type, 'aat-reset');
+  assert.equal(reset.row, 'aat.autoskip-reset');
+  const human = gate({
+    acceptance: 'Skipped',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped -->`, 5)],
+    uatContainsLatestMerge: true,
+    delivery: { lastMergeSha: SHA, changedPaths: ['server/x.js'] },
+  }, cfg);
+  assert.equal(human.to, 'In UAT');
+  assert.notEqual(human.type, 'aat-reset');
+});
+
+test('auto-skip: Acceptance=Passed bypasses paths-waive intent shortcut; acceptance row still runs', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  const action = gate({
+    acceptance: 'Passed',
+    comments: [comment(ENGINE, `<!-- v2:aat-waive merge=${SHA} acceptance=skipped source=paths -->`, 1)],
+    delivery: { lastMergeSha: SHA, changedPaths: ['docs/x.md'] },
+  }, cfg);
+  assert.notEqual(action.type, 'request-intent-review');
+});
+
+test('auto-skip: files error and empty paths fail closed to launch', () => {
+  const cfg = { ...both, aat: { ...config.aat, autoSkip: AUTO_SKIP } };
+  assert.equal(
+    gate({ delivery: { lastMergeSha: SHA, changedPathsError: 'overflow' }, comments: [] }, cfg).type,
+    'launch-aat',
+  );
+  assert.equal(
+    gate({ delivery: { lastMergeSha: SHA, changedPaths: [] }, comments: [] }, cfg).type,
+    'launch-aat',
+  );
+});
+
 test('a missing acceptance field logs once and keeps intent review; an empty value does not', async () => {
   const prior = process.env.ISSUE_PIPELINE_V2;
   process.env.ISSUE_PIPELINE_V2 = 'dry-run';

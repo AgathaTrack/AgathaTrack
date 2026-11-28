@@ -77,6 +77,14 @@
   "aat": {
     "enabled": true,
     "timeoutMin": 120,
-    "maxInconclusive": 2
+    "maxInconclusive": 2,
+    "autoSkip": {
+      "enabled": false,
+      "globs": [
+        "docs/**",
+        "scripts/pipeline_runners/**",
+        ".cursor/skills/**"
+      ]
+    }
   }
 }

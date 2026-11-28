@@ -8,6 +8,7 @@ const PROTECTED_GLOBS = ['.github/**', '.cursor/agent-kernel/**'];
 /** Sample paths used to detect globs that could hit protected or forbidden areas. */
 const PATH_GATE_SAMPLES = [
   '.github/workflows/evil.yml',
+  '.github/workflows/evil.yaml',
   '.github/scripts/hack.js',
   '.cursor/agent-kernel/ROUTER.md',
   'server/config/security.js',
@@ -104,8 +105,46 @@ function evaluatePlannedPathGlobs(globs, trackedFiles) {
   return { ok: true, expanded: [...expanded] };
 }
 
+/**
+ * Fail-closed checks for low-risk auto-skip globs (no repo file-tree expansion).
+ * @param {string[]} globs
+ * @returns {string[]} problem messages
+ */
+function validateAutoSkipGlobs(globs) {
+  const problems = [];
+  if (!Array.isArray(globs) || globs.length === 0) {
+    return problems;
+  }
+  for (const glob of globs) {
+    for (const sample of PATH_GATE_SAMPLES) {
+      if (globToRegExp(glob).test(sample)) {
+        if (isForbiddenPath(sample)) {
+          problems.push(`aat.autoSkip glob ${glob} must not match forbidden path ${sample}`);
+        }
+        for (const prot of PROTECTED_GLOBS) {
+          if (globToRegExp(prot).test(sample)) {
+            problems.push(`aat.autoSkip glob ${glob} must not match protected path ${sample}`);
+          }
+        }
+      }
+    }
+    const literalPrefix = String(glob).replace(/\*+$/, '').replace(/\/$/, '');
+    for (const prot of PROTECTED_GLOBS) {
+      const protRoot = prot.replace(/\/\*\*$/, '');
+      if (literalPrefix.startsWith(`${protRoot}/`) || literalPrefix === protRoot) {
+        problems.push(`aat.autoSkip glob ${glob} must not cover ${prot}`);
+      }
+    }
+    if (isForbiddenPath(literalPrefix)) {
+      problems.push(`aat.autoSkip glob ${glob} must not cover forbidden prefix ${literalPrefix}`);
+    }
+  }
+  return problems;
+}
+
 module.exports = {
   PROTECTED_GLOBS,
   PATH_GATE_SAMPLES,
   evaluatePlannedPathGlobs,
+  validateAutoSkipGlobs,
 };

@@ -33,7 +33,7 @@
 
 const { missionGuard } = require('./issue_pipeline_mission');
 const { launchableAgents, resolveAgent, nextInLine, startableIds, reviewPoolIds } = require('./issue_pipeline_v2_config');
-const { aatGateOn, acceptanceInMain, acceptanceInProgress } = require('./issue_pipeline_v2_acceptance');
+const { aatGateOn, acceptanceInMain, acceptanceInProgress, pathsWaiveBinds } = require('./issue_pipeline_v2_acceptance');
 const { decideRound, cursorLastUsed } = require('./issue_pipeline_v2_rounds');
 const { decideEngineHold, holdCleared, launchBackoffMs } = require('./issue_pipeline_v2_holds');
 
@@ -496,7 +496,13 @@ function umbrellaWait(reason, facts) {
 function decideInMain(facts, config) {
   // First, so no acceptance run or intent review starts for an umbrella whose sub-issues are not done.
   if (umbrellaBlocked(facts)) return umbrellaWait('main.umbrella-waiting', facts);
-  if (aatGateOn(facts, config)) return acceptanceInMain(facts, config);
+  const sha = facts.delivery?.lastMergeSha;
+  const acceptance = String(facts.acceptance || '').trim().toLowerCase();
+  const pathsSkipped = aatGateOn(facts, config)
+    && sha
+    && acceptance === 'skipped'
+    && pathsWaiveBinds(facts.aat || { waives: [] }, sha);
+  if (aatGateOn(facts, config) && !pathsSkipped) return acceptanceInMain(facts, config);
   // An issue moved to In Main by hand may have no linked PR merged into `main`. There is then no
   // merge to review or to find in a deploy, and a request could never be satisfied: it would repeat
   // on every tick. Wait until a merge exists.
