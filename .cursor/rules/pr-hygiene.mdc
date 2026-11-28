@@ -26,3 +26,7 @@ Only after this review passes: commit, push, create/update the PR.
 ## Model for PR babysitting
 
 See pr-review-cost-efficiency.md §Cloud Agent model policy. During active execute-plan (gate `0`), do not end the turn for model mismatch alone — autonomous-pr-policy §Execute-plan overrides.
+
+## Babysit session scope
+
+When the user invoked **`/babysit-plus`** or **`/babysit-uat`** on the PR (`AGENTS.md` §Autonomy), CI green alone does not complete the task. Subscription or workflow pings while the PR is open mean **continue** that skill (wait, triage, gate, merge for plus/uat), not end the turn. Lightweight **`/babysit`** stops at merge-ready per its skill unless the user explicitly asks to merge.
