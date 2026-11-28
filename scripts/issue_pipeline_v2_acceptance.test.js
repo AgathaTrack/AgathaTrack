@@ -463,6 +463,7 @@ test('apply: thrown acceptance launch posts failed=1 and a rewind does not ack',
   assert.ok(sent.indexOf(launchComment) < sent.indexOf(patch));
   const stateMarker = sent.find((call) => /v2:aat-state/.test(call.body?.body || ''));
   assert.ok(stateMarker, 'acceptance field write posts v2:aat-state');
+  assert.ok(sent.indexOf(stateMarker) < sent.indexOf(patch), 'v2:aat-state is posted before the field PATCH');
 });
 
 test('acceptance launch prompt names the skill, the issue and the sha', async () => {

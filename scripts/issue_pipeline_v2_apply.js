@@ -535,8 +535,6 @@ async function applyAction({ action: decided, ctx }) {
       patch.state_reason = 'completed';
     }
     if (Object.keys(patch).length > 0) {
-      await request('PATCH', base, patch);
-      applied.push(`fields:${Object.keys(writes).join(',') || 'state'}`);
       if (Object.prototype.hasOwnProperty.call(writes, 'acceptance')) {
         await comment(
           buildAatStateMarker({
@@ -546,6 +544,8 @@ async function applyAction({ action: decided, ctx }) {
           'comment:aat-state',
         );
       }
+      await request('PATCH', base, patch);
+      applied.push(`fields:${Object.keys(writes).join(',') || 'state'}`);
     }
     return { applied, calls };
   } catch (error) {

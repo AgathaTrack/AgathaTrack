@@ -32,9 +32,25 @@ const TEMPLATES = {
   ],
 };
 
+const path = require('path');
+const fs = require('fs');
+
 const CHECKBOX = /^\s*[-*]\s+\[[ xX]\]\s*\S/m;
 const EMPTY = /^(?:_?no response_?|n\/a|tbd|todo|\.\.\.)?$/i;
 const DOC_PATH = /\b(docs\/[A-Za-z0-9_./-]+\.md)\b/g;
+
+function resolveDocsMarkdown(root, rel) {
+  const normalized = String(rel).replace(/\\/g, '/');
+  if (!/^docs\/[^/].*\.md$/.test(normalized) || normalized.split('/').includes('..')) {
+    return null;
+  }
+  const abs = path.resolve(root, normalized);
+  const docsRoot = path.resolve(root, 'docs');
+  if (abs !== docsRoot && !abs.startsWith(`${docsRoot}${path.sep}`)) {
+    return null;
+  }
+  return abs;
+}
 
 function normalise(heading) {
   return String(heading).trim().toLowerCase().replace(/\s+/g, ' ');
@@ -94,15 +110,19 @@ function checkDor(body, labels = []) {
     } else if (rule.checkbox && !CHECKBOX.test(text)) {
       missing.push({ section: rule.section, reason: 'no-checkbox' });
     } else if (rule.section === 'Definition of Done') {
-      const path = require('path');
       const root = path.join(__dirname, '..');
       const seen = new Set();
       for (const match of text.matchAll(DOC_PATH)) {
         const rel = match[1];
         if (seen.has(rel)) continue;
         seen.add(rel);
+        const abs = resolveDocsMarkdown(root, rel);
+        if (!abs) {
+          missing.push({ section: rule.section, reason: `missing-doc:${rel}` });
+          continue;
+        }
         try {
-          if (!require('fs').statSync(path.join(root, rel)).isFile()) {
+          if (!fs.statSync(abs).isFile()) {
             missing.push({ section: rule.section, reason: `missing-doc:${rel}` });
           }
         } catch {
@@ -136,4 +156,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { TEMPLATES, parseSections, detectTemplate, checkDor };
+module.exports = { TEMPLATES, parseSections, detectTemplate, checkDor, resolveDocsMarkdown };
