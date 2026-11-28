@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { validateAutoSkipGlobs } = require('./lib/pipeline_path_gate');
+const { validateAutoSkipGlobs } = require('./lib/execute_plan_path_globs');
 
 const DEFAULT_CONFIG_PATH = path.join(__dirname, '..', '.github', 'pipeline-agents.json');
 const KNOWN_METHODS = new Set(['PR', 'light-plan', 'execute-plan']);
