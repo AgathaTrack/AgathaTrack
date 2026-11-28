@@ -146,7 +146,7 @@ Rows to append to the wire doc's decision log on agreement.
 | PIPE-AAT-D-016 | `in-prod` is retired on v2 issues. Done plus close is the signal; the engine and legacy handler stop adding the label | **Accepted** (P2, PR #2701) |
 | PIPE-AAT-D-017 | AAT is skipped per merge when every merged PR's changed files match `aat.autoSkip.globs` and none is sensitive; any read failure runs AAT. A human `Skipped` is unchanged (PIPE-AAT-D-007) | Proposed |
 | PIPE-AAT-D-018 | Auto-skipped issues get the non-gating intent-review doorbell. Amends PIPE-AAT-D-005 | Proposed |
-| PIPE-AAT-D-019 | `aat-launch` names the launched agent; every engine `Acceptance` write posts a marker | Proposed |
+| PIPE-AAT-D-019 | `aat-launch` names the launched agent; every engine `Acceptance` write posts a marker | Accepted |
 
 ## Phases and implementation
 

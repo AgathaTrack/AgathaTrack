@@ -34,6 +34,7 @@ const TEMPLATES = {
 
 const CHECKBOX = /^\s*[-*]\s+\[[ xX]\]\s*\S/m;
 const EMPTY = /^(?:_?no response_?|n\/a|tbd|todo|\.\.\.)?$/i;
+const DOC_PATH = /\b(docs\/[A-Za-z0-9_./-]+\.md)\b/g;
 
 function normalise(heading) {
   return String(heading).trim().toLowerCase().replace(/\s+/g, ' ');
@@ -92,6 +93,22 @@ function checkDor(body, labels = []) {
       missing.push({ section: rule.section, reason: 'empty' });
     } else if (rule.checkbox && !CHECKBOX.test(text)) {
       missing.push({ section: rule.section, reason: 'no-checkbox' });
+    } else if (rule.section === 'Definition of Done') {
+      const path = require('path');
+      const root = path.join(__dirname, '..');
+      const seen = new Set();
+      for (const match of text.matchAll(DOC_PATH)) {
+        const rel = match[1];
+        if (seen.has(rel)) continue;
+        seen.add(rel);
+        try {
+          if (!require('fs').statSync(path.join(root, rel)).isFile()) {
+            missing.push({ section: rule.section, reason: `missing-doc:${rel}` });
+          }
+        } catch {
+          missing.push({ section: rule.section, reason: `missing-doc:${rel}` });
+        }
+      }
     }
   }
   return { ok: missing.length === 0, template, missing };

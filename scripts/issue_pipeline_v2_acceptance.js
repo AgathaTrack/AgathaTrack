@@ -59,7 +59,8 @@ function deriveAatState({ comments, engineLogins, agentLogins }) {
     }
     if (!engine.has(item.login)) continue;
     if (kind === 'v2:aat-launch') {
-      state.launches.push({ ...item, failed: attr.failed === '1', runId: attr.run || null });
+      const agentId = attr.agent || null;
+      state.launches.push({ ...item, failed: attr.failed === '1', runId: attr.run || null, agentId });
     } else if (kind === 'v2:aat-reset') {
       state.resets.push(item);
     } else if (kind === 'v2:aat-waive') {
@@ -372,10 +373,11 @@ function implementationFailActive(facts) {
   return Boolean(newest && newest.verdict === 'fail' && newest.reason === 'implementation');
 }
 
-function buildAatLaunch({ mergeSha, runId, failed, reason }) {
+function buildAatLaunch({ mergeSha, runId, failed, reason, agent }) {
+  const who = agent ? ` agent=${agent}` : '';
   const marker = failed
-    ? `<!-- v2:aat-launch merge=${mergeSha} failed=1 -->`
-    : `<!-- v2:aat-launch merge=${mergeSha} run=${runId} -->`;
+    ? `<!-- v2:aat-launch merge=${mergeSha} failed=1${who} -->`
+    : `<!-- v2:aat-launch merge=${mergeSha} run=${runId}${who} -->`;
   const detail = failed && reason ? `: ${String(reason).slice(0, 300)}` : '';
   const text = failed
     ? `Starting acceptance failed${detail}. It is retried on the launch backoff and does not use the acceptance attempt budget.`
@@ -389,6 +391,11 @@ function buildAatReset({ mergeSha }) {
 
 function buildAatWaive({ mergeSha, acceptance }) {
   return `<!-- v2:aat-waive merge=${mergeSha} acceptance=${acceptance} -->\nAcceptance \`${acceptance}\` is recorded for this merge.`;
+}
+
+function buildAatStateMarker({ acceptance, acceptanceFailReason }) {
+  const reason = acceptanceFailReason ? ` reason=${acceptanceFailReason}` : '';
+  return `<!-- v2:aat-state acceptance=${String(acceptance).toLowerCase()}${reason} -->\nAcceptance field set to **${acceptance}**.`;
 }
 
 function buildAatRelaunch({ mergeSha, failed }) {
@@ -454,5 +461,6 @@ module.exports = {
   buildAatLaunch,
   buildAatReset,
   buildAatWaive,
+  buildAatStateMarker,
   buildAatRelaunch,
 };
