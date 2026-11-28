@@ -8,6 +8,7 @@ const PROTECTED_GLOBS = ['.github/**', '.cursor/agent-kernel/**'];
 /** Sample paths used to detect globs that could hit protected or forbidden areas. */
 const PATH_GATE_SAMPLES = [
   '.github/workflows/evil.yml',
+  '.github/workflows/evil.yaml',
   '.github/scripts/hack.js',
   '.cursor/agent-kernel/ROUTER.md',
   'server/config/security.js',

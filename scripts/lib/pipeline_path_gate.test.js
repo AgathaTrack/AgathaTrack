@@ -29,7 +29,7 @@ test('evaluatePlannedPathGlobs passes safe scoped globs', () => {
 });
 
 test('validateAutoSkipGlobs rejects globs that hit protected or forbidden samples', () => {
-  const problems = validateAutoSkipGlobs(['**/*.yaml', 'docs/**']);
+  const problems = validateAutoSkipGlobs(['**/*.yaml']);
   assert.ok(problems.some((p) => p.includes('protected') || p.includes('forbidden')));
   assert.equal(validateAutoSkipGlobs(['docs/**', 'scripts/pipeline_runners/**']).length, 0);
 });
