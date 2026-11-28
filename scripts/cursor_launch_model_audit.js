@@ -2,13 +2,14 @@
 'use strict';
 
 /**
- * Phase-0 probe: read a Cursor agent run and print model-related fields from the API response.
+ * Phase-0 probe: read agent + run metadata and print any model-related API fields.
  * Usage: node scripts/cursor_launch_model_audit.js --agent <id> --run <runId>
  *
  * Requires cursor_api_key or CURSOR_API_KEY in the environment.
+ * Exit 0 when model hints exist; exit 2 when both GETs succeed but no model field is present.
  */
 
-const { CURSOR_API_BASE } = require('../.github/scripts/execute-plan-launch');
+const { auditCursorLaunchModel } = require('./lib/cursor_launch_model_audit_lib');
 
 function parseFlags(argv) {
   const out = { agent: null, run: null };
@@ -33,49 +34,16 @@ async function main() {
     console.error('cursor_api_key or CURSOR_API_KEY is required');
     process.exit(1);
   }
-  const path = `/v1/agents/${agent}/runs/${run}`;
-  const response = await fetch(`${CURSOR_API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-  const text = await response.text();
-  let payload;
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch {
-    payload = { raw: text };
-  }
-  if (!response.ok) {
-    console.error(`GET ${path} failed (${response.status}):`, payload);
+
+  const report = await auditCursorLaunchModel({ apiKey, agentId: agent, runId: run });
+  if (!report.requests.agent.ok && !report.requests.run.ok) {
+    console.error(JSON.stringify(report, null, 2));
     process.exit(1);
   }
-  const modelHints = {};
-  for (const key of ['model', 'modelId', 'model_id']) {
-    if (payload[key] != null) {
-      modelHints[key] = payload[key];
-    }
+  console.log(JSON.stringify(report, null, 2));
+  if (!report.servedModelAvailable) {
+    process.exit(2);
   }
-  if (payload.agent && typeof payload.agent === 'object') {
-    for (const key of ['model', 'modelId']) {
-      if (payload.agent[key] != null) {
-        modelHints[`agent.${key}`] = payload.agent[key];
-      }
-    }
-  }
-  console.log(
-    JSON.stringify(
-      {
-        event: 'cursor_launch_model_audit',
-        agent,
-        run,
-        status: payload.status ?? null,
-        modelHints,
-        topLevelKeys: Object.keys(payload).sort(),
-      },
-      null,
-      2,
-    ),
-  );
 }
 
 if (require.main === module) {
@@ -85,4 +53,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = { main, parseFlags };
