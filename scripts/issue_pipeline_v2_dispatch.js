@@ -11,7 +11,7 @@
  * - Mission scope (`PIPELINE_V2_MISSION`) is validated in `issue_pipeline_mission.js`; see analyse-issue skill.
  */
 
-const { resolvePipelineMode } = require('./issue_pipeline_mode');
+const { resolvePipelineMode } = require('./issue_pipeline_v2_mode');
 const { resolveMission } = require('./issue_pipeline_mission');
 
 const POSITIVE_INTEGER = /^[1-9]\d*$/;

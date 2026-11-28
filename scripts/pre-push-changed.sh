@@ -220,9 +220,7 @@ run_governance() {
   node --test scripts/lib/env_proxy_reexec.test.js
   node --test scripts/lib/env_proxy_agent_clis.test.js
   node --test scripts/lib/pipeline_path_gate.test.js
-  node --test scripts/lib/pipeline_state_trust.test.js
-  node --test scripts/issue_pipeline_state.test.js
-  node --test scripts/issue_pipeline_mode.test.js
+  node --test scripts/lib/execute_plan_trusted_state.test.js
   run_prepush_gate issue-pipeline-v2-tests
   node --test scripts/pipeline_runners/claude.test.js
   node --test scripts/pipeline_claude_run_lib.test.js

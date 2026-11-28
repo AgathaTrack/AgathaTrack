@@ -7,8 +7,8 @@
  */
 
 const { listProjectIssues, rest, parseRepo } = require('../.github/scripts/github-project-lib');
-const { resolvePipelineMode } = require('./issue_pipeline_mode');
-const { bodySha } = require('./issue_pipeline_state');
+const { resolvePipelineMode } = require('./issue_pipeline_v2_mode');
+const { bodySha } = require('./issue_pipeline_v2_hash');
 const { randomNonceHex } = require('./issue_pipeline_v2_secrets');
 const { agentLogins, applyWipOverride, loadConfig, startableIds } = require('./issue_pipeline_v2_config');
 const { validatePipelineDispatch, resolveRunMode } = require('./issue_pipeline_v2_dispatch');

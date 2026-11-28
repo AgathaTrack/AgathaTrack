@@ -18,8 +18,8 @@ One table for every pipeline-related repo variable and JSON limit that used to b
 
 | Switch | Where | Read by (on `main`) | Values | Effect by combination |
 |--------|-------|---------------------|--------|------------------------|
-| `ISSUE_PIPELINE` | repo variable (retired) | **Nothing** — safe to delete on GitHub | was `off` / `dry-run` / `on` | v1 assignee dispatcher removed ([#2598](https://github.com/AgathaTrack/AgathaTrack/issues/2598)); history in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md). Never the cutover switch. |
-| `ISSUE_PIPELINE_V2` | repo variable | [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) gate and tick; merge/UAT/prod handlers; `agent-dispatch` / `agent-monitor` / `triage-human-reviewed` job guards; `issue_pipeline_v2.js` | `off` (default), `dry-run`, `on` | `off`: no v2 jobs. `dry-run`: decide + log only. `on`: live writes when `ENGINE_PAT` matches `engine.logins`. Legacy label workflows skip when `on`. |
+| `ISSUE_PIPELINE` | repo variable (retired) | **Nothing** — safe to delete on GitHub | was `off` / `dry-run` / `on` | v1 assignee dispatcher removed ([#2598](https://github.com/AgathaTrack/AgathaTrack/issues/2598)); plan docs removed run D ([#2411](https://github.com/AgathaTrack/AgathaTrack/issues/2411)). Never the cutover switch. |
+| `ISSUE_PIPELINE_V2` | repo variable | [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml) gate and tick; merge/UAT/prod handlers; `issue_pipeline_v2.js` | `off` (default), `dry-run`, `on` | `off`: no v2 jobs. `dry-run`: decide + log only. `on`: live writes when `ENGINE_PAT` matches `engine.logins`. Legacy label workflows skip when `on`. |
 | `ISSUE_PIPELINE_V2_LABEL` | repo variable | Same as `ISSUE_PIPELINE_V2` | e.g. `pipeline-beta`, `soak4`, or empty | With `on`: only labelled issues get live writes; others stay dry-run on the same tick. Empty = whole board. |
 | `WIP_LIMIT` | repo variable | `issue_pipeline_v2.js` | `off` or unset | `off` lifts the Ready queue cap (`limits.wip`) for the run. Any other value keeps the JSON limit. |
 | `limits.wip` | `.github/pipeline-agents.json` | `issue_pipeline_v2.js` | positive integer (default 2) | Delivery slot count while `WIP_LIMIT` is not `off`. Not the Stage column. |
@@ -32,10 +32,10 @@ One table for every pipeline-related repo variable and JSON limit that used to b
 
 | `ISSUE_PIPELINE_V2` | `ISSUE_PIPELINE_V2_LABEL` | What runs |
 |---------------------|---------------------------|-----------|
-| `off` | any | Legacy label flow (until #2411 removes it); handlers use legacy `Stage` rules; v2 workflow skipped. |
+| `off` | any | v2 workflow skipped; no live Stage writes from the engine. |
 | `dry-run` | e.g. `soak4` | v2 ticks decide and log; scoped issues show what *would* be written; legacy flows still run. |
-| `on` | set | Live v2 writes on labelled issues only; legacy dispatch/triage/monitor skipped; handlers skip v2-owned issues. |
-| `on` | empty | Full board cutover: v2 owns all issues in scope; legacy flows off. |
+| `on` | set | Live v2 writes on labelled issues only; handlers skip v2-owned issues. |
+| `on` | empty | Full board cutover: v2 owns all issues in scope. |
 
 #### Identity and pool (`pipeline-agents.json`)
 

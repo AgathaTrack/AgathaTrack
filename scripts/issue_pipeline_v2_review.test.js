@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadConfig } = require('./issue_pipeline_v2_config');
 const { decide } = require('./issue_pipeline_v2_decide');
-const { bodySha } = require('./issue_pipeline_state');
+const { bodySha } = require('./issue_pipeline_v2_hash');
 const { isTrustedRequest } = require('./issue_pipeline_v2_comments');
 const {
   buildReviewRequest,

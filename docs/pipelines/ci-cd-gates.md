@@ -168,7 +168,7 @@ every shard keeps the domain coverage gate and cross-domain widget tests on ever
 skipped on narrow PRs, and CI does not run on push to `main`). `pre-push-changed.sh` still narrows locally
 by running `flutter test` under `test/features/<domain>/`.
 
-**Drift backstop:** non-blocking **`CI full audit (main)`** (`ci-full-audit.yml`) runs the **full** suite on `main` every **12 merges** (counter in Actions cache `.ci-full-audit-state`) or when the last audit is older than **7 days**. Failures open an `agent-approved` issue for `agent-dispatch.yml`. Weekly `audit-advisory.yml` runs raw `npm audit --audit-level=high` on `main` (unfiltered; opens debt issues).
+**Drift backstop:** non-blocking **`CI full audit (main)`** (`ci-full-audit.yml`) runs the **full** suite on `main` every **12 merges** (counter in Actions cache `.ci-full-audit-state`) or when the last audit is older than **7 days**. Failures open a `ci-audit` issue for manual triage (`scripts/ci/spawn-ci-audit-agent-issue.sh`). Weekly `audit-advisory.yml` runs raw `npm audit --audit-level=high` on `main` (unfiltered; opens debt issues).
 
 #### npm audit gate (blocking PR / pre-push)
 

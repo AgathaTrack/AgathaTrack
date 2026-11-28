@@ -53,6 +53,10 @@ jobs:
           node scripts/check_cpanel_startup_entry.js
           node --test scripts/check_cpanel_startup_entry.test.js
 
+      - name: Fetch PR base commit (canonical freshness diff)
+        if: github.event_name == 'pull_request'
+        run: git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+
       - name: Run PR startup smoke
         env:
           PGUSER: user
@@ -61,6 +65,7 @@ jobs:
           PGPORT: 5432
           PGDATABASE: agatha_db
           E2E: '1'
+          MIGRATION_LINT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash scripts/ci/pr-startup-smoke.sh
 
       - name: Write startup smoke job summary

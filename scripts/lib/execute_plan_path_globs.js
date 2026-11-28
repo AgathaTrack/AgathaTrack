@@ -1,5 +1,10 @@
 'use strict';
 
+/**
+ * Planned-path gate for execute-plan approve (run D, T1).
+ * Moved from `scripts/lib/pipeline_path_gate.js` in run D (T1); `pipeline_path_gate.js` was deleted in T3.
+ */
+
 const { isForbiddenPath } = require('../../.github/scripts/agent-safety-lib');
 const { globToRegExp } = require('./execute_plan_schema');
 
@@ -105,11 +110,6 @@ function evaluatePlannedPathGlobs(globs, trackedFiles) {
   return { ok: true, expanded: [...expanded] };
 }
 
-/**
- * Fail-closed checks for low-risk auto-skip globs (no repo file-tree expansion).
- * @param {string[]} globs
- * @returns {string[]} problem messages
- */
 function validateAutoSkipGlobs(globs) {
   const problems = [];
   if (!Array.isArray(globs) || globs.length === 0) {

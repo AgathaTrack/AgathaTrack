@@ -113,7 +113,7 @@ test('preflight owner-approved-delivery bypasses risky scope', () => {
 test('findForbiddenPaths allows workflow edits', () => {
   const forbidden = findForbiddenPaths([
     'flutter_app/lib/main.dart',
-    '.github/workflows/agent-dispatch.yml',
+    '.github/workflows/ci.yml',
   ]);
   assert.deepEqual(forbidden, []);
 });

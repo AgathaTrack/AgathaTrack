@@ -1,10 +1,48 @@
 'use strict';
 
-const {
-  parseStateMarker,
-  STATE_MARKER,
-  PIPELINE_STATE_MARKER,
-} = require('../issue_pipeline_state');
+/**
+ * Trusted pipeline-state comments for the execute-plan approve path (run D, T1).
+ * Moved verbatim from `scripts/issue_pipeline_state.js` and `scripts/lib/pipeline_state_trust.js`.
+ * This module must not require `issue_pipeline_state.js`: the old module is deleted in T3.
+ *
+ * Fail-closed: when no trusted comment exists, the approve path returns `no-pipeline-state`
+ * (see `execute_plan_pipeline_approve.js`).
+ */
+
+const STATE_MARKER = '<!-- agent-state:';
+const PIPELINE_STATE_MARKER = '<!-- pipeline-state -->';
+
+function parseStateMarker(text) {
+  const haystack = String(text);
+  const idx = haystack.indexOf(STATE_MARKER);
+  if (idx === -1) {
+    return null;
+  }
+  const start = idx + STATE_MARKER.length;
+  const end = haystack.indexOf('-->', start);
+  if (end === -1) {
+    return null;
+  }
+  try {
+    return JSON.parse(haystack.slice(start, end).trim());
+  } catch {
+    return null;
+  }
+}
+
+function defaultState() {
+  return {
+    round: 0,
+    stuck: 0,
+    last_assignee: null,
+    body_sha: null,
+    delivery: null,
+    owner_reason: null,
+    run_id: null,
+    verdicts: {},
+    converged_at: null,
+  };
+}
 
 const TRUSTED_PIPELINE_STATE_AUTHORS = new Set(['pawpet-bot', 'pawpet-claude']);
 
@@ -67,53 +105,14 @@ function findLatestTrustedStateComment(comments) {
   return latest;
 }
 
-function isTrustedStateAuthor(comment) {
-  const author = commentAuthorLogin(comment);
-  return Boolean(author && TRUSTED_PIPELINE_STATE_AUTHORS.has(author));
-}
-
-/**
- * Comments worth an editor lookup: trusted author, carries the dedicated marker, was edited.
- */
-function isEditorLookupCandidate(comment) {
-  const body = String(comment?.body || '');
-  return isTrustedStateAuthor(comment) && body.includes(PIPELINE_STATE_MARKER);
-}
-
-/**
- * Pre-dedicated-comment state (#2363 §3.4 migration): a lane comment from a trusted author that
- * carries `agent-state` without the `pipeline-state` marker. Newest by update time wins.
- */
-function findLatestLegacyStateComment(comments) {
-  let latest = null;
-  for (const comment of comments || []) {
-    const body = String(comment?.body || '');
-    if (!isTrustedStateAuthor(comment)) {
-      continue;
-    }
-    if (body.includes(PIPELINE_STATE_MARKER) || !body.includes(STATE_MARKER)) {
-      continue;
-    }
-    const state = parseStateMarker(body);
-    if (!state) {
-      continue;
-    }
-    const updatedAt =
-      comment.updated_at || comment.updatedAt || comment.created_at || comment.createdAt || '';
-    if (!latest || updatedAt >= latest.updatedAt) {
-      latest = { state, commentId: comment.id, updatedAt, author: commentAuthorLogin(comment) };
-    }
-  }
-  return latest;
-}
-
 module.exports = {
+  STATE_MARKER,
+  PIPELINE_STATE_MARKER,
+  parseStateMarker,
+  defaultState,
   TRUSTED_PIPELINE_STATE_AUTHORS,
-  isTrustedStateAuthor,
-  isEditorLookupCandidate,
-  findLatestLegacyStateComment,
+  commentAuthorLogin,
   assessPipelineStateCommentTrust,
   isTrustedPipelineStateComment,
   findLatestTrustedStateComment,
-  commentAuthorLogin,
 };

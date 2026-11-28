@@ -2,12 +2,12 @@
 
 /**
  * Coded auto-approve policy for issue-pipeline-started execute-plan programmes (D-001).
- * Spec: docs/agent-efficiency/plans/issue-pipeline-automation.md §8
+ * Spec: docs/agent-efficiency/github-issue-workflow.md (execute-plan approve / pipeline programmes)
  */
 
-const { bodySha, defaultState } = require('../issue_pipeline_state');
-const { findLatestTrustedStateComment } = require('./pipeline_state_trust');
-const { evaluatePlannedPathGlobs } = require('./pipeline_path_gate');
+const { bodySha } = require('../issue_pipeline_v2_hash');
+const { defaultState, findLatestTrustedStateComment } = require('./execute_plan_trusted_state');
+const { evaluatePlannedPathGlobs } = require('./execute_plan_path_globs');
 const { listActivePlans } = require('./execute_plan_plans');
 
 const PIPELINE_BOTS = new Set(['pawpet-claude', 'pawpet-bot']);

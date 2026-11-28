@@ -17,11 +17,10 @@ Start here for **automation engines**, agent policies, and programme delivery on
 |--------|--------|-----------------|---------------|
 | **Issue pipeline v2** | `ISSUE_PIPELINE_V2`, `ISSUE_PIPELINE_V2_LABEL`, `WIP_LIMIT` | [`issue-pipeline-v2.yml`](../../.github/workflows/issue-pipeline-v2.yml), `scripts/issue_pipeline_v2*.js` | [github-issue-workflow.md](./github-issue-workflow.md) (entry) — [behaviour](./github-issue-workflow-behaviour.md) · [wire](./github-issue-workflow-wire.md) · [operations](./github-issue-workflow-operations.md) |
 | **Execute-plan v2 driver** | `EXECUTE_PLAN_DRIVER` | [`execute-plan-driver.yml`](../../.github/workflows/execute-plan-driver.yml), `scripts/execute_plan_runtime.js` | [execute-plan-runtime.md](./execute-plan-runtime.md) — spec in [plans/execute-plan-v2.md](./plans/execute-plan-v2.md) |
-| **Legacy label flow** | (until v2 `on`) | `agent-dispatch`, `triage-human-reviewed`, `agent-monitor` | [github-issue-workflow.md § Legacy](./github-issue-workflow.md#live-workflow-legacy-until-issue_pipeline_v2on) |
 | **Cursor dispatch (legacy)** | — | `launch-cursor-agent.js` | [github-issue-workflow.md § Cursor layer](./github-issue-workflow.md#cursor-agent-execution-layer) |
 | **PR / docs babysit** | — | `scripts/universal_babysit.sh`, Copilot review | [autonomous-pr-policy.md](./autonomous-pr-policy.md), [pr-review-cost-efficiency.md](./pr-review-cost-efficiency.md) |
 
-Retired: assignee **v1 dispatcher** (`ISSUE_PIPELINE`, `issue-pipeline-dispatcher.yml`) — removed; history in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md).
+Retired: assignee **v1 dispatcher** (`ISSUE_PIPELINE`, `issue-pipeline-dispatcher.yml`) and label-driven dispatch workflows — removed in run D ([#2411](https://github.com/AgathaTrack/AgathaTrack/issues/2411)); superseded plan docs deleted from the tree (git history retains them).
 
 ## Issue lifecycle (v2)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Open a GitHub issue to spawn agent-dispatch on CI full-audit failure.
+# Open a GitHub issue for human triage on CI full-audit failure (no legacy dispatch).
 set -euo pipefail
 
 SHA="${AUDIT_SHA:-${GITHUB_SHA:-unknown}}"
@@ -32,8 +32,7 @@ ensure_label() {
     || gh label create "$name" --color "$color" --description "$desc"
 }
 
-ensure_label "ci-audit" "B60205" "CI full audit failure — agent may auto-fix"
-ensure_label "agent-approved" "0E8A16" "Passed deterministic triage"
+ensure_label "ci-audit" "B60205" "CI full audit failure — triage manually or via pipeline v2"
 
 existing="$(gh issue list --state open --label ci-audit --search "in:title ${SHA:0:7}" --json number --jq '.[0].number' 2>/dev/null || true)"
 if [[ -n "$existing" && "$existing" != "null" ]]; then
@@ -41,4 +40,4 @@ if [[ -n "$existing" && "$existing" != "null" ]]; then
   exit 0
 fi
 
-gh issue create --title "$title" --body "$body" --label ci-audit --label agent-approved
+gh issue create --title "$title" --body "$body" --label ci-audit

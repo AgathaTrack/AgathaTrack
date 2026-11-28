@@ -10,10 +10,7 @@ tags: [documentation, github-issues, automation]
 
 This document describes how issues are filed, triaged, and moved through delivery for Agatha Track.
 
-It covers two layers:
-
-- **Issue pipeline v2** (shipped behind `ISSUE_PIPELINE_V2`): the org issue field **`Stage`** is the engine’s authoritative state; an engine moves issues through eight stages. Behaviour, wire contract, and operations are split under [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). The assignee-driven v1 dispatcher is **removed**; history lives in [plans/issue-pipeline-automation.md](./plans/issue-pipeline-automation.md) and [plans/issue-pipeline-dispatcher-spec.md](./plans/issue-pipeline-dispatcher-spec.md).
-- **Legacy label flow** (until `ISSUE_PIPELINE_V2=on`): the `human-reviewed` label triggers deterministic triage, `agent-approved` triggers Cursor dispatch. See [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipeline_v2on).
+**Issue pipeline v2** (`ISSUE_PIPELINE_V2`): the org issue field **`Stage`** is the engine’s authoritative state; an engine moves issues through eight stages. The Pawpet project **Status** column is separate (humans drag cards; release jobs may still update **Status**). There is no automatic two-way sync between **Status** and **`Stage`** ([#2345](https://github.com/AgathaTrack/AgathaTrack/issues/2345)). Behaviour, wire contract, and operations are split under [§Pipeline v2](#pipeline-v2-the-stage-machine). Plan of record: [#2385](https://github.com/AgathaTrack/AgathaTrack/issues/2385). Legacy label-flow workflows (`agent-dispatch`, `agent-monitor`, `triage-human-reviewed`) and the v1 dispatcher were removed in run D ([#2411](https://github.com/AgathaTrack/AgathaTrack/issues/2411)); superseded plan docs were deleted from the tree (git history retains them).
 
 ## Issue forms
 
@@ -31,7 +28,7 @@ New issues from these forms receive type labels (`bug`, `feature`, or `task`) an
 
 ## Planned workflows by status
 
-When `ISSUE_PIPELINE_V2` is `on`, lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and the v2 engine dispatchers — not the legacy label flow in [§Live workflow (legacy)](#live-workflow-legacy-until-issue_pipeline_v2on).
+Lane behaviour is defined in [§Pipeline v2](#pipeline-v2-the-stage-machine) and the v2 tick (`issue-pipeline-v2.yml`). Release and merge handlers in [§Cursor agent execution layer](#cursor-agent-execution-layer) still run for issues the engine does not own.
 
 ## Pipeline v2: the Stage machine
 
@@ -58,97 +55,31 @@ Delivery agents (`PR`, `light-plan`, `execute-plan`) must follow the rules in [�
 
 Authoritative **PIPE-*** and **PIPE-V2-*** rows (Accepted soak outcomes through soak4, REV3, holds, analyse-issue, #2560) live in [§Decision log](./github-issue-workflow-wire.md#decision-log). Change proposals under `changes/` fold accepted rows into that table.
 
-## Live workflow (legacy, until `ISSUE_PIPELINE_V2=on`)
+Run D removed legacy dispatch workflows and retired superseded plan docs ([#2411](https://github.com/AgathaTrack/AgathaTrack/issues/2411)); **PIPE-V2-D-DISPATCH-001** is updated in the wire decision log.
 
-When `ISSUE_PIPELINE_V2` is `on`, this section is **historical only** — use [§Pipeline v2](#pipeline-v2-the-stage-machine). After cutover, remove stale `human-reviewed` / `agent-approved` / `Agent1:*` labels from open issues where they no longer apply.
-
-```
-Backlog → In Analysis (+ human-reviewed) → [Auto Check] → Ready → In progress → In Main → In UAT → Done
-                                    ↓
-              remove human-reviewed (pause) — re-add when answered
-```
-
-1. **Backlog** — New issues enter here after filing via a form.
-2. **In Analysis** — A maintainer reviews the issue: confirms clarity, priority, and that it belongs in the backlog. Move Project status to **In Analysis** and add the `human-reviewed` label.
-3. **Auto Check** (process, not a status) — The [triage workflow](/.github/workflows/triage-human-reviewed.yml) runs when `human-reviewed` is applied:
-   - If the issue is complete and safe → move to **Ready** and apply `agent-approved`.
-   - If more information is needed → add `question`, **remove `human-reviewed`** (pauses the workflow), comment on what is missing, and move the issue to **Backlog** until resolved.
-   - If the issue must not be automated → add `manual-only` and leave status **In Analysis**.
-4. **Ready** — Issue is approved for implementation. The [agent dispatch workflow](/.github/workflows/agent-dispatch.yml) picks it up automatically when `agent-approved` is present and status is **Ready**.
-5. **In progress** — Cursor agent dispatched (`busy` added). Stays here while the PR is open. If blocked, add `blocked` + `question`, **remove `human-reviewed`** (pauses dispatch), but keep **In progress**.
-6. **In Main** — After the agent PR merges to `main` ([merge handler](/.github/workflows/issue-agent-pr-merge.yml)).
-7. **In UAT** — After UAT deploy succeeds for the linked `uat-YYMMDD-PR#` tag (`deploy-uat.yml` notify job).
-8. **Done** — Validation complete; close the issue.
-
-Throughout the workflow, use `busy` to signal active work. Use `question` for visibility when more information is needed; **workflow pause is controlled by removing `human-reviewed`**.
-
-To re-run triage after updating an issue, re-add `human-reviewed` (triage clears `question` and `blocked` automatically when checks pass).
-
-`busy` is removed when the agent PR merges to `main`.
 
 ## Cursor agent execution layer
 
-**Legacy dispatch** applies while `ISSUE_PIPELINE_V2` is not `on`. With `ISSUE_PIPELINE_V2=on`, triage, dispatch, and monitor label workflows are skipped; delivery and release run only through `issue-pipeline-v2.yml` and the handlers that respect v2 ownership.
-
-GitHub remains the source of truth. Cursor Cloud Agents are workers that implement `agent-approved` issues.
+GitHub remains the source of truth. The v2 engine (`issue-pipeline-v2.yml`) decides when to ring doorbells and launch Cursor or Claude workers; there is no label-driven `agent-dispatch` workflow after run D ([#2411](https://github.com/AgathaTrack/AgathaTrack/issues/2411)). Release automation (merge → UAT → prod) still uses the handlers below for issues the engine does not own.
 
 ### Components
 
 | File | Purpose |
 |------|---------|
-| [`.github/workflows/agent-dispatch.yml`](/.github/workflows/agent-dispatch.yml) | Find eligible issues and launch Cursor agents |
-| [`.github/workflows/agent-monitor.yml`](/.github/workflows/agent-monitor.yml) | Poll agent runs; comment; apply `blocked` / success handoff |
+| [`.github/workflows/issue-pipeline-v2.yml`](/.github/workflows/issue-pipeline-v2.yml) | Scheduled and manual pipeline v2 tick |
 | [`.github/workflows/issue-agent-pr-merge.yml`](/.github/workflows/issue-agent-pr-merge.yml) | On merged `cursor/**` PR → **In Main**, record expected UAT tag |
 | [`.github/workflows/promote-uat.yml`](/.github/workflows/promote-uat.yml) | On push to `main` → create `uat-YYMMDD-PR#` tag |
 | [`.github/workflows/deploy-uat.yml`](/.github/workflows/deploy-uat.yml) | UAT deploy + **Notify linked agent issue** job → **In UAT** or escalate |
 | `execute-plan-scope.yml` (forbidden paths on all PRs to `main`) | Required commit status; owner review clears forbidden hits ([#1980](https://github.com/AgathaTrack/AgathaTrack/issues/1980)) |
 | [`.github/scripts/agent-payload-lib.js`](/.github/scripts/agent-payload-lib.js) | Sanitized task payload + prompt |
-| [`.github/scripts/agent-safety-lib.js`](/.github/scripts/agent-safety-lib.js) | Preflight + forbidden path rules |
+| [`.github/scripts/agent-safety-lib.js`](/.github/scripts/agent-safety-lib.js) | Preflight + forbidden path rules (`agent-approved` / `human-reviewed` checks for launches) |
 | [`.github/scripts/launch-cursor-agent.js`](/.github/scripts/launch-cursor-agent.js) | Calls Cursor Cloud Agents API v1 | <!-- pragma: allowlist secret -->
-| [`.github/scripts/monitor-cursor-agent.js`](/.github/scripts/monitor-cursor-agent.js) | Polls run status via Cursor API | <!-- pragma: allowlist secret -->
-| [`.github/scripts/issue-agent-handlers.js`](/.github/scripts/issue-agent-handlers.js) | Merge + UAT status transitions |
+| [`.github/scripts/issue-agent-handlers.js`](/.github/scripts/issue-agent-handlers.js) | Merge + UAT / prod **Stage** transitions |
 
-### Eligibility
+### Delivery launches (v2)
 
-An issue is dispatched when **all** are true:
+Ready issues with capacity receive a `v2:launch` doorbell from the engine. `launch-cursor-agent.js` runs the preflight in `agent-safety-lib.js`, builds a payload with `agent-payload-lib.js`, and records run metadata on the issue. Agents must run `./scripts/pre-push-changed.sh` and open a PR with `Refs #<n>` (**not** `Fixes`/`Closes`) on success.
 
-- Project status **Ready** (when project secrets are configured; otherwise label-only fallback)
-- Labels: `agent-approved`
-- Labels **not** present: `busy`, `manual-only`, `blocked`
-- Labels **required**: `human-reviewed` (workflow pause when removed)
-- `question` is informational and does not block dispatch
-- Passes deterministic preflight (re-checks risky scope; the v2 launch skips the keyword scan, PIPE-V2-D-REV4-004)
-- No active `<!-- cursor-agent-run: ... -->` marker with status `running`
-
-Dispatch is **single-threaded** (`concurrency: agent-dispatch`) — one issue at a time.
-
-Triggers:
-
-- `agent-approved` label added (immediate, after triage)
-- Manual `workflow_dispatch` (optional `issue_number`, `dry_run`)
-
-### Sanitized task payload
-
-Raw issue comments are **never** sent to Cursor. The dispatch script:
-
-1. Parses issue form sections via `triage-lib.js` (`### Heading` markdown).
-2. Builds a structured JSON payload (summary, objective, scope, acceptance, reproduction for bugs).
-3. Renders a prompt with explicit allowed/forbidden paths and verification commands.
-
-The agent must run `./scripts/pre-push-changed.sh` and open a PR with `Refs #<n>` on success (**not** `Fixes`/`Closes` — the issue stays open until UAT is validated).
-
-### Agent outcomes
-
-| Outcome | Labels | Project status | Assignee |
-|---------|--------|----------------|----------|
-| Dispatched | +`busy` | **In progress** | — |
-| PR opened | keep `busy` | **In progress** | — |
-| Blocked / failed | +`blocked`, +`question`, −`busy`, −`human-reviewed` | **In progress** | `KanopeeKa` |
-| PR merged | −`busy` | **In Main** | — |
-| UAT deploy OK | — | **In UAT** | — |
-| UAT deploy fail | +`question`, −`human-reviewed` | unchanged | `KanopeeKa` |
-
-To retry after a block: update the issue, then re-add `human-reviewed` (triage clears `question` / `blocked` when checks pass).
 
 ### Safety boundaries
 
@@ -171,7 +102,7 @@ Encoded in the sanitized prompt **and** enforced in CI:
 - Modify auth, billing, or permissions code
 - Weaken CI gates to pass
 
-Triage already blocks risky issues with `manual-only` before dispatch.
+Issues with `manual-only` are not auto-launched; the engine respects the same blocking labels at decision time.
 
 ### Branch and PR conventions
 
@@ -228,11 +159,10 @@ Pick the **Pawpet** project from the script output (not **ATSupport**). Legacy u
 ### Monitoring and debugging
 
 - **Weekly dependabot batch:** Actions → **Dependabot batch dispatch** (Tuesday cron; `workflow_dispatch` with `dry_run` for payload-only). Agent URL is written to the workflow job summary. Dispatched agents receive **`/run-as-me`** in the launch prompt (owner `gh` for merge and cleanup).
-- **Dispatch logs:** Actions → **Agent dispatch**
-- **Run polling:** Actions → **Agent monitor** (manual `workflow_dispatch` only; scheduled polling disabled)
-- **Issue comment marker:** `<!-- cursor-agent-run: {...} -->` stores `agentId`, `runId`, status
-- **Cursor UI:** follow the agent URL posted in the dispatch comment
-- **Dry run:** `workflow_dispatch` on **Agent dispatch** with `dry_run: true`
+- **Pipeline v2 tick:** Actions → **Issue pipeline v2**; each run logs one summary line per tick (`scripts/issue_pipeline_v2.js`).
+- **Issue comment markers:** `v2:launch` doorbells and `<!-- cursor-agent-run: {...} -->` on legacy paths store run ids
+- **Cursor UI:** follow the agent URL on the doorbell comment
+- **Dry run:** set `ISSUE_PIPELINE_V2=dry-run` or use workflow `workflow_dispatch` dry-run inputs
 
 ### UAT CD notes
 
@@ -283,110 +213,6 @@ or auto-migrate is off. **In UAT** is set only after all `deploy-uat.yml` gates 
 full FTP + SSH deploy when `true`). Manual **`workflow_dispatch`** remains available
 for overrides. See [promotion-contract.md](../pipelines/promotion-contract.md).
 
-## To do — triage and intake (pawpet-claude)
-
-Planned lane: the same deterministic form checks run at the start of **To do** before delivery dispatch; keyword risk stays a triage hint and is not a delivery gate (PIPE-V2-D-REV4-004).
-
-## Deterministic triage automation
-
-**Live** on `human-reviewed`. **Planned:** see [§To do — triage and intake (pawpet-claude)](#to-do--triage-and-intake-pawpet-claude).
-
-The triage workflow is implemented in:
-
-- [`.github/workflows/triage-human-reviewed.yml`](/.github/workflows/triage-human-reviewed.yml) — GitHub Actions entry point
-- [`.github/scripts/triage-lib.js`](/.github/scripts/triage-lib.js) — rules-based validation logic
-- [`.github/scripts/triage-human-reviewed.js`](/.github/scripts/triage-human-reviewed.js) — applies labels, comments, and Project status updates
-- [`.github/scripts/discover-project-ids.js`](/.github/scripts/discover-project-ids.js) — helper to find Project and Status field IDs
-
-### Trigger
-
-The workflow runs on `issues: labeled` when the label name is exactly `human-reviewed`.
-
-The workflow also ensures these labels exist if missing: `human-reviewed`, `question`, `busy`, `manual-only`, `agent-approved`.
-
-### Validation rules
-
-The checker is **deterministic and policy-based** — same inputs produce the same decision. No LLM is used.
-
-#### All issue types
-
-- Title/summary must be present and at least 10 characters.
-- Body must be long enough to be actionable.
-- Placeholder or injection-like text (for example `TBD`, `fix later`, prompt-injection patterns) is rejected.
-- Issues without a `bug`, `feature`, or `task` label are flagged for missing type.
-
-#### Bug (`bug` label)
-
-Required sections (from the issue form):
-
-- Current Behavior
-- Expected Behavior
-- Steps To Reproduce
-- Environment
-
-#### Feature (`feature` label)
-
-Required sections:
-
-- Problem to Solve
-- Proposed Solution
-- Acceptance Criteria
-
-#### Task (`task` label)
-
-Required sections:
-
-- Objective
-- Scope
-- Definition of Done
-
-#### Risky scope (`manual-only`)
-
-The issue is flagged for manual handling if the title or body matches sensitive keywords such as authentication, billing, payments, secrets, credentials, API keys, infrastructure, Terraform, Pulumi, migrations, `.github/workflows`, GitHub Actions, CI/CD, permissions, roles, or access control.
-
-The **Security or Sensitive Area** form field also flags the issue when the answer is not a plain `No`.
-
-### Outcomes
-
-| Result | Labels | Project status | Comment |
-|--------|--------|----------------|---------|
-| Pass | add `agent-approved`; remove `question`, `manual-only` | **Ready** | Approval summary |
-| Missing info | add `question`; remove `agent-approved` | **Backlog** | Lists missing fields; asks author to update and re-add `human-reviewed` |
-| Risky scope | add `manual-only`; remove `agent-approved` | **In Analysis** | Explains sensitive scope; do not send to Cursor |
-
-### Required secrets
-
-Configure these in **GitHub → Settings → Secrets and variables → Actions**:
-
-| Secret | Purpose |
-|--------|---------|
-| `GH_PROJECTS_PAT` | Classic PAT with `repo` and `project` (or `read:project` + `project`) scopes for Project GraphQL updates |
-| `GH_PROJECT_ID` | Node ID of the GitHub Project v2 board |
-| `GH_STATUS_FIELD_ID` | Node ID of the Project **Status** single-select field |
-
-`GITHUB_TOKEN` is used for issue labels and comments only. Project field updates require `GH_PROJECTS_PAT` because `GITHUB_TOKEN` does not have sufficient Project scope.
-
-#### Create the PAT
-
-1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**.
-2. Generate a token with at least `repo` and `project` scopes (or fine-grained equivalent with Project read/write on the organization).
-3. Store it as repository secret `GH_PROJECTS_PAT`.
-
-Use a machine/bot account PAT where possible rather than a personal developer token.
-
-#### Find Project and Status field IDs
-
-From a clone of this repository:
-
-```bash
-GH_PROJECTS_PAT=ghp_... node .github/scripts/discover-project-ids.js --org AgathaTrack
-```
-
-The script prints `GH_PROJECT_ID`, `GH_STATUS_FIELD_ID`, and the option IDs for each status value.
-
-**Repository ownership:** `AgathaTrack/AgathaTrack` is **org-owned**; the engineering board is org Project **Pawpet**. Use `--org AgathaTrack` when discovering project IDs.
-
-If secrets are not configured, triage and agent workflows still update labels and comments but skip Project status changes and log a warning.
 
 ## Execute-plan v2 driver
 
